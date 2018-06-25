@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * A {@code ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
@@ -24,12 +23,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @param <V>  value type
  * @param <VR> transformed value type
  * @see ValueTransformer
+ * @see ValueTransformerWithKey
+ * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
+ * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-@InterfaceStability.Unstable
 public interface ValueTransformerSupplier<V, VR> {
 
     /**

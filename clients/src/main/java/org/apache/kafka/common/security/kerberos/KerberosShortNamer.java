@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.kerberos;
 
 import java.io.IOException;
@@ -35,7 +33,7 @@ public class KerberosShortNamer {
     /**
      * A pattern for parsing a auth_to_local rule.
      */
-    private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?))");
+    private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|((RULE:\\[(\\d*):([^\\]]*)](\\(([^)]*)\\))?(s/([^/]*)/([^/]*)/(g)?)?/?(L)?)))");
 
     /* Rules for the translation of the principal name into an operating system name */
     private final List<KerberosRule> principalToLocalRules;
@@ -62,12 +60,13 @@ public class KerberosShortNamer {
                 result.add(new KerberosRule(defaultRealm));
             } else {
                 result.add(new KerberosRule(defaultRealm,
-                        Integer.parseInt(matcher.group(4)),
-                        matcher.group(5),
-                        matcher.group(7),
-                        matcher.group(9),
+                        Integer.parseInt(matcher.group(5)),
+                        matcher.group(6),
+                        matcher.group(8),
                         matcher.group(10),
-                        "g".equals(matcher.group(11))));
+                        matcher.group(11),
+                        "g".equals(matcher.group(12)),
+                        "L".equals(matcher.group(13))));
 
             }
         }

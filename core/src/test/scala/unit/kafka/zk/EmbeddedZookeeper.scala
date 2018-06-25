@@ -19,13 +19,23 @@ package kafka.zk
 
 import org.apache.zookeeper.server.ZooKeeperServer
 import org.apache.zookeeper.server.NIOServerCnxnFactory
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import java.net.InetSocketAddress
 
-import kafka.utils.CoreUtils
 import org.apache.kafka.common.utils.Utils
 
-class EmbeddedZookeeper() {
+/**
+ * ZooKeeperServer wrapper that starts the server with temporary directories during construction and deletes
+ * the directories when `shutdown()` is called.
+ *
+ * This is an internal class and it's subject to change. We recommend that you implement your own simple wrapper
+ * if you need similar functionality.
+ */
+// This should be named EmbeddedZooKeeper for consistency with other classes, but since this is widely used by other
+// projects (even though it's internal), we keep the name as it is until we have a publicly supported test library for
+// others to use.
+class EmbeddedZookeeper() extends Logging {
+
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
   val tickTime = 500
@@ -34,11 +44,11 @@ class EmbeddedZookeeper() {
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
   factory.configure(addr, 0)
   factory.startup(zookeeper)
-  val port = zookeeper.getClientPort()
+  val port = zookeeper.getClientPort
 
   def shutdown() {
-    CoreUtils.swallow(zookeeper.shutdown())
-    CoreUtils.swallow(factory.shutdown())
+    CoreUtils.swallow(zookeeper.shutdown(), this)
+    CoreUtils.swallow(factory.shutdown(), this)
 
     def isDown(): Boolean = {
       try {

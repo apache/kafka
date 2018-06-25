@@ -18,6 +18,7 @@
 
 import java.io._
 import java.nio.channels._
+import java.nio.file.{FileAlreadyExistsException, Files}
 
 /**
  * A file lock a la flock/funlock
@@ -25,7 +26,10 @@ import java.nio.channels._
  * The given path will be created and opened if it doesn't exist.
  */
 class FileLock(val file: File) extends Logging {
-  file.createNewFile() // create the file if it doesn't exist
+
+  try Files.createFile(file.toPath) // create the file if it doesn't exist
+  catch { case _: FileAlreadyExistsException => }
+
   private val channel = new RandomAccessFile(file, "rw").getChannel()
   private var flock: java.nio.channels.FileLock = null
 

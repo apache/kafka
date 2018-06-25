@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -149,11 +149,26 @@ public interface Herder {
     void restartTask(ConnectorTaskId id, Callback<Void> cb);
 
     /**
+     * Get the configuration reload action.
+     * @param connName name of the connector
+     */
+    ConfigReloadAction connectorConfigReloadAction(final String connName);
+
+    /**
      * Restart the connector.
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
      */
     void restartConnector(String connName, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 
     /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
@@ -169,6 +184,24 @@ public interface Herder {
      */
     void resumeConnector(String connector);
 
+    /**
+     * Returns a handle to the plugin factory used by this herder and its worker.
+     *
+     * @return a reference to the plugin factory.
+     */
+    Plugins plugins();
+
+
+    /**
+     * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * @return the cluster ID of the Kafka cluster backing this connect cluster
+     */
+    String kafkaClusterId();
+
+    enum ConfigReloadAction {
+        NONE,
+        RESTART
+    }
 
     class Created<T> {
         private final boolean created;

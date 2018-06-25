@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,35 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFilterTest {
 
-    private String topicName = "topic";
+    private final String topicName = "topic";
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
 
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
-
-    private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
+    private final Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
         public boolean test(Integer key, String value) {
             return (key % 3) == 0;
@@ -51,46 +48,48 @@ public class KStreamFilterTest {
 
     @Test
     public void testFilter() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
-        stream.filter(isMultipleOfThree).process(processor);
+        supplier = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.filter(isMultipleOfThree).process(supplier);
 
-        driver = new KStreamTestDriver(builder);
-        for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, "V" + expectedKey);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
-        assertEquals(2, processor.processed.size());
+        assertEquals(2, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test
     public void testFilterNot() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
-        stream.filterNot(isMultipleOfThree).process(processor);
+        supplier = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.filterNot(isMultipleOfThree).process(supplier);
 
-        driver = new KStreamTestDriver(builder);
-        for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, "V" + expectedKey);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
-        assertEquals(5, processor.processed.size());
+        assertEquals(5, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {
@@ -98,10 +97,11 @@ public class KStreamFilterTest {
             }
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("empty")
             .filter(numberKeyPredicate)
             .filterNot(numberKeyPredicate)
             .to("nirvana");
+        
     }
 }

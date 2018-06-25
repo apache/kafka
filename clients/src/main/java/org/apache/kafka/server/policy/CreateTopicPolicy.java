@@ -1,16 +1,19 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.Configurable;
@@ -103,7 +106,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
 
         @Override
         public String toString() {
-            return "RequestMetadata(topic=" + topic +
+            return "CreateTopicPolicy.RequestMetadata(topic=" + topic +
                     ", numPartitions=" + numPartitions +
                     ", replicationFactor=" + replicationFactor +
                     ", replicasAssignments=" + replicasAssignments +
@@ -113,12 +116,12 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
 
     /**
      * Validate the request parameters and throw a <code>PolicyViolationException</code> with a suitable error
-     * message if the create request parameters for the provided topic do not satisfy this policy.
+     * message if the create topics request parameters for the provided topic do not satisfy this policy.
      *
      * Clients will receive the POLICY_VIOLATION error code along with the exception's message. Note that validation
      * failure only affects the relevant topic, other topics in the request will still be processed.
      *
-     * @param requestMetadata the create request parameters for the provided topic.
+     * @param requestMetadata the create topics request parameters for the provided topic.
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
     void validate(RequestMetadata requestMetadata) throws PolicyViolationException;

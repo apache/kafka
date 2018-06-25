@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
@@ -24,11 +24,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -44,11 +44,10 @@ import java.util.Map;
  * to workers.
  */
 public final class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(WorkerCoordinator.class);
-
     // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
+    private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
@@ -61,7 +60,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     /**
      * Initialize the coordination manager.
      */
-    public WorkerCoordinator(ConsumerNetworkClient client,
+    public WorkerCoordinator(LogContext logContext,
+                             ConsumerNetworkClient client,
                              String groupId,
                              int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
@@ -73,15 +73,18 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener) {
-        super(client,
-                groupId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeatIntervalMs,
-                metrics,
-                metricGrpPrefix,
-                time,
-                retryBackoffMs);
+        super(logContext,
+              client,
+              groupId,
+              rebalanceTimeoutMs,
+              sessionTimeoutMs,
+              heartbeatIntervalMs,
+              metrics,
+              metricGrpPrefix,
+              time,
+              retryBackoffMs,
+              true);
+        this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
@@ -90,6 +93,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.rejoinRequested = false;
     }
 
+    @Override
     public void requestRejoin() {
         rejoinRequested = true;
     }
@@ -97,6 +101,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     public String protocolType() {
         return "connect";
+    }
+
+    // expose for tests
+    @Override
+    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+        return super.ensureCoordinatorReady(timeoutMs);
     }
 
     public void poll(long timeout) {
@@ -107,11 +117,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
+                ensureCoordinatorReady(Long.MAX_VALUE);
                 now = time.milliseconds();
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
@@ -278,8 +288,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected boolean needRejoin() {
-        return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
+    protected boolean rejoinNeededOrPending() {
+        return super.rejoinNeededOrPending() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
@@ -294,13 +304,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public String ownerUrl(String connector) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(connector);
     }
 
     public String ownerUrl(ConnectorTaskId task) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(task);
     }
@@ -312,12 +322,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.connectors().size();
                 }
             };
 
             Measurable numTasks = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.tasks().size();
                 }

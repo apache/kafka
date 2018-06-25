@@ -46,6 +46,7 @@ class StreamsSmokeTest(KafkaTest):
         self.processor3 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
         self.processor4 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
+    @ignore # ignore this test until StandbyTask supports streamTime
     @cluster(num_nodes=9)
     def test_streams(self):
         """

@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.kerberos;
 
 import javax.security.auth.kerberos.KerberosPrincipal;
 import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.kerberos.KerberosTicket;
@@ -27,19 +26,21 @@ import javax.security.auth.Subject;
 
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.Map;
 
 /**
  * This class is responsible for refreshing Kerberos credentials for
@@ -80,13 +81,15 @@ public class KerberosLogin extends AbstractLogin {
     private String serviceName;
     private long lastLogin;
 
-    public void configure(Map<String, ?> configs, JaasContext jaasContext) {
-        super.configure(configs, jaasContext);
+    @Override
+    public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                          AuthenticateCallbackHandler callbackHandler) {
+        super.configure(configs, contextName, configuration, callbackHandler);
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
-        this.serviceName = getServiceName(configs, jaasContext);
+        this.serviceName = getServiceName(configs, contextName, configuration);
     }
 
     /**
@@ -101,13 +104,13 @@ public class KerberosLogin extends AbstractLogin {
         subject = loginContext.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
 
-        List<AppConfigurationEntry> entries = jaasContext().configurationEntries();
-        if (entries.isEmpty()) {
+        AppConfigurationEntry[] entries = configuration().getAppConfigurationEntry(contextName());
+        if (entries.length == 0) {
             isUsingTicketCache = false;
             principal = null;
         } else {
             // there will only be a single entry
-            AppConfigurationEntry entry = entries.get(0);
+            AppConfigurationEntry entry = entries[0];
             if (entry.getOptions().get("useTicketCache") != null) {
                 String val = (String) entry.getOptions().get("useTicketCache");
                 isUsingTicketCache = val.equals("true");
@@ -131,7 +134,7 @@ public class KerberosLogin extends AbstractLogin {
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = Utils.newThread(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
+        t = KafkaThread.daemon(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
             public void run() {
                 log.info("[Principal={}]: TGT refresh thread started.", principal);
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -220,9 +223,8 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'; " +
-                                            "exception was: %s. Exiting refresh thread.", 
-                                            principal, kinitCmd, kinitArgs, e, e);
+                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'. " +
+                                            "Exiting refresh thread.", principal, kinitCmd, kinitArgs, e);
                                     return;
                                 }
                             }
@@ -255,7 +257,7 @@ public class KerberosLogin extends AbstractLogin {
                     }
                 }
             }
-        }, true);
+        });
         t.start();
         return loginContext;
     }
@@ -283,8 +285,9 @@ public class KerberosLogin extends AbstractLogin {
         return serviceName;
     }
 
-    private static String getServiceName(Map<String, ?> configs, JaasContext jaasContext) {
-        String jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
+    private static String getServiceName(Map<String, ?> configs, String contextName, Configuration configuration) {
+        List<AppConfigurationEntry> configEntries = Arrays.asList(configuration.getAppConfigurationEntry(contextName));
+        String jaasServiceName = JaasContext.configEntryOption(configEntries, JaasUtils.SERVICE_NAME, null);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
             String message = String.format("Conflicting serviceName values found in JAAS and Kafka configs " +
@@ -316,7 +319,7 @@ public class KerberosLogin extends AbstractLogin {
             return proposedRefresh;
     }
 
-    private synchronized KerberosTicket getTGT() {
+    private KerberosTicket getTGT() {
         Set<KerberosTicket> tickets = subject.getPrivateCredentials(KerberosTicket.class);
         for (KerberosTicket ticket : tickets) {
             KerberosPrincipal server = ticket.getServer();
@@ -343,7 +346,7 @@ public class KerberosLogin extends AbstractLogin {
      * Re-login a principal. This method assumes that {@link #login()} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private synchronized void reLogin() throws LoginException {
+    private void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }
@@ -353,8 +356,8 @@ public class KerberosLogin extends AbstractLogin {
         if (!hasSufficientTimeElapsed()) {
             return;
         }
-        log.info("Initiating logout for {}", principal);
         synchronized (KerberosLogin.class) {
+            log.info("Initiating logout for {}", principal);
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
@@ -363,7 +366,7 @@ public class KerberosLogin extends AbstractLogin {
             loginContext.logout();
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            loginContext = new LoginContext(jaasContext().name(), subject, null, jaasContext().configuration());
+            loginContext = new LoginContext(contextName(), subject, null, configuration());
             log.info("Initiating re-login for {}", principal);
             loginContext.login();
         }

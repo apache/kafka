@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.SchemaBuilderException;
@@ -292,6 +291,73 @@ public class SchemaBuilderTest {
         final Schema emptyStructSchema = emptyStructSchemaBuilder.build();
         assertEquals(0, emptyStructSchema.fields().size());
         new Struct(emptyStructSchema);
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testDuplicateFields() {
+        final Schema schema = SchemaBuilder.struct()
+                .name("testing")
+                .field("id", SchemaBuilder.string().doc("").build())
+                .field("id", SchemaBuilder.string().doc("").build())
+                .build();
+        final Struct struct = new Struct(schema)
+                .put("id", "testing");
+        struct.validate();
+    }
+
+    @Test
+    public void testDefaultFieldsSameValueOverwriting() {
+        final SchemaBuilder schemaBuilder = SchemaBuilder.string().name("testing").version(123);
+
+        schemaBuilder.name("testing");
+        schemaBuilder.version(123);
+
+        assertEquals("testing", schemaBuilder.name());
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testDefaultFieldsDifferentValueOverwriting() {
+        final SchemaBuilder schemaBuilder = SchemaBuilder.string().name("testing").version(123);
+
+        schemaBuilder.name("testing");
+        schemaBuilder.version(456);
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldNameNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldSchemaNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field("fieldName", null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testArraySchemaNull() {
+        Schema schema = SchemaBuilder.array(null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapKeySchemaNull() {
+        Schema schema = SchemaBuilder.map(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapValueSchemaNull() {
+        Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testTypeNotNull() {
+        SchemaBuilder.type(null);
     }
 
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {

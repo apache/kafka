@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -53,13 +53,13 @@ public class JaasContextTest {
     public void setUp() throws IOException {
         jaasConfigFile = File.createTempFile("jaas", ".conf");
         jaasConfigFile.deleteOnExit();
-        Configuration.setConfiguration(null);
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.toString());
+        Configuration.setConfiguration(null);
     }
 
     @After
-    public void tearDown() {
-        jaasConfigFile.delete();
+    public void tearDown() throws Exception {
+        Files.delete(jaasConfigFile.toPath());
     }
 
     @Test
@@ -175,6 +175,11 @@ public class JaasContextTest {
     }
 
     @Test
+    public void testInvalidControlFlag() throws Exception {
+        checkInvalidConfiguration("test.testInvalidControlFlag { option1=3;");
+    }
+
+    @Test
     public void testNumericOptionWithQuotes() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "3");
@@ -188,8 +193,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModuleDefault required; };",
                 "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("plaintext.KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -203,8 +208,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModule required; };",
                 "other.KafkaServer { test.LoginModuleOther requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -215,24 +220,13 @@ public class JaasContextTest {
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
-        JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
-    }
-
-    /**
-     * ListenerName can only be used with Type.SERVER.
-     */
-    @Test(expected = IllegalArgumentException.class)
-    public void testLoadForClientWithListenerName() {
-        JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),
+        JaasContext.loadServerContext(new ListenerName("plaintext"), "SOME-MECHANISM",
                 Collections.<String, Object>emptyMap());
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {
-        Map<String, Object> configs = new HashMap<>();
-        if (jaasConfigProp != null)
-            configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        JaasContext context = JaasContext.load(contextType, null, contextType.name(), configs);
+        Password saslJaasConfig = jaasConfigProp == null ? null : new Password(jaasConfigProp);
+        JaasContext context = JaasContext.load(contextType, null, contextType.name(), saslJaasConfig);
         List<AppConfigurationEntry> entries = context.configurationEntries();
         assertEquals(1, entries.size());
         return entries.get(0);

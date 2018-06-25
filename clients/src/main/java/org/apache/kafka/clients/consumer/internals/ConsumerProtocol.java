@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -23,11 +23,10 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -124,7 +123,8 @@ public class ConsumerProtocol {
         Struct struct = new Struct(ASSIGNMENT_V0);
         struct.set(USER_DATA_KEY_NAME, assignment.userData());
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : asMap(assignment.partitions()).entrySet()) {
+        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupDataByTopic(assignment.partitions());
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
@@ -144,21 +144,6 @@ public class ConsumerProtocol {
             throw new SchemaException("Unsupported subscription version: " + version);
 
         // otherwise, assume versions can be parsed as V0
-    }
-
-
-    private static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
-        Map<String, List<Integer>> partitionMap = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            String topic = partition.topic();
-            List<Integer> topicPartitions = partitionMap.get(topic);
-            if (topicPartitions == null) {
-                topicPartitions = new ArrayList<>();
-                partitionMap.put(topic, topicPartitions);
-            }
-            topicPartitions.add(partition.partition());
-        }
-        return partitionMap;
     }
 
 }

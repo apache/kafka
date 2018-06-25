@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
@@ -36,22 +38,17 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
 
-        StateStoreSupplier supplier;
-        if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().maxEntries(10).build();
-        } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().maxEntries(10).build();
-        }
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.lruMap("my-store", 10),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
+
+        return (KeyValueStore<K, V>) store;
     }
 
     @Test
@@ -137,5 +134,33 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         assertTrue(driver.flushedEntryRemoved(3));
         assertEquals(3, driver.numFlushedEntryRemoved());
     }
-    
+
+    @Test
+    public void testRestoreEvict() {
+        store.close();
+        // Add any entries that will be restored to any store
+        // that uses the driver's context ...
+        driver.addEntryToRestoreLog(0, "zero");
+        driver.addEntryToRestoreLog(1, "one");
+        driver.addEntryToRestoreLog(2, "two");
+        driver.addEntryToRestoreLog(3, "three");
+        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(5, "five");
+        driver.addEntryToRestoreLog(6, "fix");
+        driver.addEntryToRestoreLog(7, "seven");
+        driver.addEntryToRestoreLog(8, "eight");
+        driver.addEntryToRestoreLog(9, "nine");
+        driver.addEntryToRestoreLog(10, "ten");
+
+        // Create the store, which should register with the context and automatically
+        // receive the restore entries ...
+        store = createKeyValueStore(driver.context());
+        context.restore(store.name(), driver.restoredEntries());
+        // Verify that the store's changelog does not get more appends ...
+        assertEquals(0, driver.numFlushedEntryStored());
+        assertEquals(0, driver.numFlushedEntryRemoved());
+
+        // and there are no other entries ...
+        assertEquals(10, driver.sizeOf(store));
+    }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +62,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
 
                 for (String topic : topicGroup) {
                     List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
-                    if (partitions != null && partitionId < partitions.size()) {
+                    if (partitionId < partitions.size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
@@ -82,9 +81,13 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         for (String topic : topics) {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
-            if (partitions == null) {
-                log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
-                return StreamPartitionAssignor.NOT_AVAILABLE;
+            if (partitions.isEmpty()) {
+
+                log.warn("Skipping creating tasks for the topic group {} since topic {}'s metadata is not available yet;"
+                         + " no tasks for this topic group will be assigned to any client.\n"
+                         + " Make sure all supplied topics in the topology are created before starting"
+                         + " as this could lead to unexpected results", topics, topic);
+                return StreamsPartitionAssignor.NOT_AVAILABLE;
             } else {
                 int numPartitions = partitions.size();
                 if (numPartitions > maxNumPartitions)

@@ -1,44 +1,38 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.utils.CoreUtils;
 import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
-import kafka.utils.ZKStringSerializer$;
-import kafka.utils.ZkUtils;
-import org.I0Itec.zkclient.ZkClient;
-import org.I0Itec.zkclient.ZkConnection;
+import kafka.zk.AdminZkClient;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 import java.util.Properties;
 
 /**
@@ -93,7 +87,7 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) throws IOException {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "127.0.0.1");
+        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
         effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
         effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
         effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
@@ -106,12 +100,14 @@ public class KafkaEmbedded {
     }
 
     /**
-     * This broker's `metadata.broker.list` value.  Example: `127.0.0.1:9092`.
+     * This broker's `metadata.broker.list` value.  Example: `localhost:9092`.
      * <p>
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        return kafka.config().hostName() + ":" + kafka.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
+        Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
+        return kafka.config().hostName() + ":" + kafka.boundPort(
+            new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
     }
 
 
@@ -130,9 +126,12 @@ public class KafkaEmbedded {
             brokerList(), zookeeperConnect());
         kafka.shutdown();
         kafka.awaitShutdown();
-        log.debug("Removing logs.dir at {} ...", logDir);
-        final List<String> logDirs = Collections.singletonList(logDir.getAbsolutePath());
-        CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(logDirs).seq());
+        log.debug("Removing log dir at {} ...", logDir);
+        try {
+            Utils.delete(logDir);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
@@ -172,34 +171,25 @@ public class KafkaEmbedded {
                             final Properties topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
             topic, partitions, replication, topicConfig);
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
+        }
+    }
 
-        // Note: You must initialize the ZkClient with ZKStringSerializer.  If you don't, then
-        // createTopic() will only seem to work (it will return without error).  The topic will exist in
-        // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
-        // topic.
-        final ZkClient zkClient = new ZkClient(
-            zookeeperConnect(),
-            DEFAULT_ZK_SESSION_TIMEOUT_MS,
-            DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-            ZKStringSerializer$.MODULE$);
-        final boolean isSecure = false;
-        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
-        AdminUtils.createTopic(zkUtils, topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
-        zkClient.close();
+    private KafkaZkClient createZkClient() {
+        return KafkaZkClient.apply(zookeeperConnect(), false, DEFAULT_ZK_SESSION_TIMEOUT_MS,
+                DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM, "testMetricGroup", "testMetricType");
     }
 
     public void deleteTopic(final String topic) {
         log.debug("Deleting topic { name: {} }", topic);
 
-        final ZkClient zkClient = new ZkClient(
-            zookeeperConnect(),
-            DEFAULT_ZK_SESSION_TIMEOUT_MS,
-            DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-            ZKStringSerializer$.MODULE$);
-        final boolean isSecure = false;
-        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
-        AdminUtils.deleteTopic(zkUtils, topic);
-        zkClient.close();
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.deleteTopic(topic);
+            kafkaZkClient.close();
+        }
     }
 
     public KafkaServer kafkaServer() {

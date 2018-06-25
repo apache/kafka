@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
@@ -40,7 +39,6 @@ class StoreChangeLogger<K, V> {
     private final ProcessorContext context;
     private final RecordCollector collector;
 
-
     StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
         this(storeName, context, context.taskId().partition, serialization);
     }
@@ -57,8 +55,8 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            // Sending null headers to changelog topics (KIP-244)
+            collector.send(this.topic, key, value, null, this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
-
 }

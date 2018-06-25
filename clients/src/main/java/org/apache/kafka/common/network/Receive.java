@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.ScatteringByteChannel;
 
 /**
  * This interface models the in-progress reading of data from a channel to a source identified by an integer id
  */
-public interface Receive {
+public interface Receive extends Closeable {
 
     /**
      * The numeric id of the source from which we are receiving data.
@@ -42,4 +43,13 @@ public interface Receive {
      */
     long readFrom(ScatteringByteChannel channel) throws IOException;
 
+    /**
+     * Do we know yet how much memory we require to fully read this
+     */
+    boolean requiredMemoryAmountKnown();
+
+    /**
+     * Has the underlying memory required to complete reading been allocated yet?
+     */
+    boolean memoryAllocated();
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -22,11 +22,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.log4j.spi.LoggingEvent;
 
+import java.util.List;
 import java.util.Properties;
 
 public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
     private MockProducer<byte[], byte[]> mockProducer =
-            new MockProducer<byte[], byte[]>(false, new MockSerializer(), new MockSerializer());
+            new MockProducer<>(false, new MockSerializer(), new MockSerializer());
 
     @Override
     protected Producer<byte[], byte[]> getKafkaProducer(Properties props) {
@@ -41,7 +42,7 @@ public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
         super.append(event);
     }
 
-    protected java.util.List<ProducerRecord<byte[], byte[]>> getHistory() {
+    protected List<ProducerRecord<byte[], byte[]>> getHistory() {
         return mockProducer.history();
     }
 }

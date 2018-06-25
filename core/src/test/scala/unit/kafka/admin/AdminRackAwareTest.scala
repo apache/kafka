@@ -16,12 +16,11 @@
  */
 package kafka.admin
 
-import kafka.utils.{Logging, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.Logging
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.{Map, Seq}
+import scala.collection.Map
 
 class AdminRackAwareTest extends RackAwareTest with Logging {
 

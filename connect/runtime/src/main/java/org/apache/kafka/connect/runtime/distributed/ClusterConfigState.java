@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,10 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -47,6 +49,7 @@ public class ClusterConfigState {
     private final Map<String, TargetState> connectorTargetStates;
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
     private final Set<String> inconsistentConnectors;
+    private final WorkerConfigTransformer configTransformer;
 
     public ClusterConfigState(long offset,
                               Map<String, Integer> connectorTaskCounts,
@@ -54,12 +57,29 @@ public class ClusterConfigState {
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Set<String> inconsistentConnectors) {
+        this(offset,
+                connectorTaskCounts,
+                connectorConfigs,
+                connectorTargetStates,
+                taskConfigs,
+                inconsistentConnectors,
+                null);
+    }
+
+    public ClusterConfigState(long offset,
+                              Map<String, Integer> connectorTaskCounts,
+                              Map<String, Map<String, String>> connectorConfigs,
+                              Map<String, TargetState> connectorTargetStates,
+                              Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Set<String> inconsistentConnectors,
+                              WorkerConfigTransformer configTransformer) {
         this.offset = offset;
         this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
         this.connectorTargetStates = connectorTargetStates;
         this.taskConfigs = taskConfigs;
         this.inconsistentConnectors = inconsistentConnectors;
+        this.configTransformer = configTransformer;
     }
 
     /**
@@ -88,12 +108,19 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a connector.
+     * Get the configuration for a connector.  The configuration will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
+     * references replaced with the current values from external instances of
+     * {@link ConfigProvider}, and may include secrets.
      * @param connector name of the connector
      * @return a map containing configuration parameters
      */
     public Map<String, String> connectorConfig(String connector) {
-        return connectorConfigs.get(connector);
+        Map<String, String> configs = connectorConfigs.get(connector);
+        if (configTransformer != null) {
+            configs = configTransformer.transform(connector, configs);
+        }
+        return configs;
     }
 
     /**
@@ -106,12 +133,19 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a task.
+     * Get the configuration for a task.  The configuration will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
+     * references replaced with the current values from external instances of
+     * {@link ConfigProvider}, and may include secrets.
      * @param task id of the task
      * @return a map containing configuration parameters
      */
     public Map<String, String> taskConfig(ConnectorTaskId task) {
-        return taskConfigs.get(task);
+        Map<String, String> configs = taskConfigs.get(task);
+        if (configTransformer != null) {
+            configs = configTransformer.transform(task.connector(), configs);
+        }
+        return configs;
     }
 
     /**
@@ -184,5 +218,31 @@ public class ClusterConfigState {
                 ", taskConfigs=" + taskConfigs +
                 ", inconsistentConnectors=" + inconsistentConnectors +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ClusterConfigState that = (ClusterConfigState) o;
+        return offset == that.offset &&
+                Objects.equals(connectorTaskCounts, that.connectorTaskCounts) &&
+                Objects.equals(connectorConfigs, that.connectorConfigs) &&
+                Objects.equals(connectorTargetStates, that.connectorTargetStates) &&
+                Objects.equals(taskConfigs, that.taskConfigs) &&
+                Objects.equals(inconsistentConnectors, that.inconsistentConnectors) &&
+                Objects.equals(configTransformer, that.configTransformer);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                offset,
+                connectorTaskCounts,
+                connectorConfigs,
+                connectorTargetStates,
+                taskConfigs,
+                inconsistentConnectors,
+                configTransformer);
     }
 }

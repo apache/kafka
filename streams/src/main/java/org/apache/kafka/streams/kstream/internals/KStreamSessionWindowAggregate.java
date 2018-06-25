@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
@@ -27,13 +26,17 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
 
     private final String storeName;
     private final SessionWindows windows;
@@ -69,12 +72,14 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
         private SessionStore<K, T> store;
         private TupleForwarder<Windowed<K>, T> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            store = (SessionStore<K,  T>) context.getStateStore(storeName);
+            metrics = (StreamsMetricsImpl) context.metrics();
+            store = (SessionStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
@@ -83,6 +88,11 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
             }
 
@@ -92,8 +102,13 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             SessionWindow mergedWindow = newSessionWindow;
             T agg = initializer.apply();
 
-            try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(key, timestamp - windows.inactivityGap(),
-                                                                                      timestamp + windows.inactivityGap())) {
+            try (
+                final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(
+                    key,
+                    timestamp - windows.inactivityGap(),
+                    timestamp + windows.inactivityGap()
+                )
+            ) {
                 while (iterator.hasNext()) {
                     final KeyValue<Windowed<K>, T> next = iterator.next();
                     merged.add(next);
@@ -133,7 +148,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
             @Override
             public String[] storeNames() {
-                return new String[] {storeName};
+                return new String[]{storeName};
             }
         };
     }
@@ -149,7 +164,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
         @Override
         public T get(final Windowed<K> key) {
-            try (KeyValueIterator<Windowed<K>, T> iter = store.findSessions(key.key(), key.window().end(), key.window().end())) {
+            try (final KeyValueIterator<Windowed<K>, T> iter = store.findSessions(key.key(), key.window().end(), key.window().end())) {
                 if (!iter.hasNext()) {
                     return null;
                 }
@@ -159,6 +174,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 }
                 return value;
             }
+        }
+
+        @Override
+        public void close() {
         }
     }
 

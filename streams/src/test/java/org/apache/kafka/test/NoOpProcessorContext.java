@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,9 +18,13 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
@@ -33,7 +37,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map forwardedValues = new HashMap();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), "appId", streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
+        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
     }
 
     static StreamsConfig streamsConfig() {
@@ -48,13 +52,17 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override
-    public void schedule(final long interval) {
-
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        return null;
     }
 
     @Override
     public <K, V> void forward(final K key, final V value) {
+        forwardedValues.put(key, value);
+    }
+
+    @Override
+    public <K, V> void forward(final K key, final V value, final To to) {
         forwardedValues.put(key, value);
     }
 
@@ -78,7 +86,13 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }
 }

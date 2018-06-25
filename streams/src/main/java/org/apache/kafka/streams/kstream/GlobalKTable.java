@@ -1,25 +1,25 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
@@ -36,7 +36,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * All joins with the {@code GlobalKTable} require that a {@link KeyValueMapper} is provided that can map from the
  * {@link KeyValue} of the left hand side {@link KStream} to the key of the right hand side {@code GlobalKTable}.
  * <p>
- * A {@code GlobalKTable} is created via a {@link KStreamBuilder}. For example:
+ * A {@code GlobalKTable} is created via a {@link StreamsBuilder}. For example:
  * <pre>{@code
  * builder.globalTable("topic-name", "queryable-store-name");
  * }</pre>
@@ -53,16 +53,24 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * ReadOnlyKeyValueStore view = streams.store("g1-store", QueryableStoreTypes.keyValueStore());
  * view.get(key); // can be done on any key, as all keys are present
  *}</pre>
- * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy if the underlying topic and
- * thus, all keys can be queried locally.
+ * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy of the underlying topic,
+ * thus all keys can be queried locally.
+ * <p>
+ * Records from the source topic that have null keys are dropped.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
  * @see KTable
- * @see KStreamBuilder#globalTable(String, String)
+ * @see StreamsBuilder#globalTable(String)
  * @see KStream#join(GlobalKTable, KeyValueMapper, ValueJoiner)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface GlobalKTable<K, V> {
+    /**
+     * Get the name of the local state store that can be used to query this {@code GlobalKTable}.
+     *
+     * @return the underlying state store name, or {@code null} if this {@code GlobalKTable} cannot be queried.
+     */
+    String queryableStoreName();
 }

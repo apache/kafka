@@ -20,12 +20,13 @@ package kafka.api
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
+import kafka.utils.Implicits._
 import java.util.Properties
 
-import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
@@ -33,11 +34,12 @@ import scala.collection.mutable.Buffer
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
-trait IntegrationTestHarness extends KafkaServerTestHarness {
+abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerCount: Int
   val consumerCount: Int
   val serverCount: Int
+  var logDirCount: Int = 1
   lazy val producerConfig = new Properties
   lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
@@ -45,49 +47,61 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
-  override def generateConfigs() = {
+  protected def interBrokerListenerName: ListenerName = listenerName
+
+  override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     cfgs.foreach { config =>
-      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
+
+      val listenerNames = Set(listenerName, interBrokerListenerName)
+      val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")
+      val listenerSecurityMap = listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
+
+      config.setProperty(KafkaConfig.ListenersProp, listeners)
+      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
     }
-    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    val producerSecurityProps = clientSecurityProps("producer")
+    val consumerSecurityProps = clientSecurityProps("consumer")
     super.setUp()
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.putAll(producerSecurityProps)
+    producerConfig ++= producerSecurityProps
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.putAll(consumerSecurityProps)
+    consumerConfig ++= consumerSecurityProps
     for (_ <- 0 until producerCount)
-      producers += createNewProducer
+      producers += createProducer
     for (_ <- 0 until consumerCount) {
-      consumers += createNewConsumer
+      consumers += createConsumer
     }
 
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
-  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-      TestUtils.createNewProducer(brokerList,
+  def clientSecurityProps(certAlias: String): Properties = {
+    TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
+      clientSaslProperties)
+  }
+
+  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
                                   saslProperties = this.clientSaslProperties,
                                   props = Some(producerConfig))
   }
-  
-  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
-      TestUtils.createNewConsumer(brokerList,
+
+  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
                                   saslProperties = this.clientSaslProperties,

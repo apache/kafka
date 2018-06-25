@@ -1,27 +1,25 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -47,15 +45,9 @@ import java.util.Map;
  * @see SessionWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#count(Windows, String)
- * @see KGroupedStream#count(Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, Windows, String)
- * @see KGroupedStream#reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */
@@ -75,7 +67,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     /**
      * Return a window definition with the given window size, and with the advance interval being equal to the window
      * size.
-     * The time interval represented by the the N-th window is: {@code [N * size, N * size + size)}.
+     * The time interval represented by the N-th window is: {@code [N * size, N * size + size)}.
      * <p>
      * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
      * Tumbling windows are a special case of hopping windows with {@code advance == size}.
@@ -94,7 +86,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     /**
      * Return a window definition with the original size, but advance ("hop") the window by the given interval, which
      * specifies by how much a window moves forward relative to the previous one.
-     * The time interval represented by the the N-th window is: {@code [N * advance, N * advance + size)}.
+     * The time interval represented by the N-th window is: {@code [N * advance, N * advance + size)}.
      * <p>
      * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
      *
@@ -113,7 +105,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Override
     public Map<Long, TimeWindow> windowsFor(final long timestamp) {
         long windowStart = (Math.max(0, timestamp - sizeMs + advanceMs) / advanceMs) * advanceMs;
-        final Map<Long, TimeWindow> windows = new HashMap<>();
+        final Map<Long, TimeWindow> windows = new LinkedHashMap<>();
         while (windowStart <= timestamp) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + sizeMs);
             windows.put(windowStart, window);

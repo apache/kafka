@@ -12,42 +12,79 @@
  */
 package kafka.admin
 
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{ConcurrentLinkedQueue, Future, TimeUnit}
 
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
-import kafka.coordinator.GroupOverview
+import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
+import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
+/**
+  * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
+  * and configurations. This client is deprecated, and will be replaced by org.apache.kafka.clients.admin.AdminClient.
+  */
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
+                  val retryBackoffMs: Long,
                   val client: ConsumerNetworkClient,
                   val bootstrapBrokers: List[Node]) extends Logging {
+
+  @volatile var running: Boolean = true
+  val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
+
+  val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
+    override def run() {
+      try {
+        while (running)
+          client.poll(Long.MaxValue)
+      } catch {
+        case t : Throwable =>
+          error("admin-client-network-thread exited", t)
+      } finally {
+        pendingFutures.asScala.foreach { future =>
+          try {
+            future.raise(Errors.UNKNOWN_SERVER_ERROR)
+          } catch {
+            case _: IllegalStateException => // It is OK if the future has been completed
+          }
+        }
+        pendingFutures.clear()
+      }
+    }
+  }, true)
+
+  networkThread.start()
 
   private def send(target: Node,
                    api: ApiKeys,
                    request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
-    var future: RequestFuture[ClientResponse] = null
-
-    future = client.send(target, request)
-    client.poll(future)
-
+    val future: RequestFuture[ClientResponse] = client.send(target, request)
+    pendingFutures.add(future)
+    future.awaitDone(Long.MaxValue, TimeUnit.MILLISECONDS)
+    pendingFutures.remove(future)
     if (future.succeeded())
       future.value().responseBody()
     else
@@ -59,6 +96,8 @@ class AdminClient(val time: Time,
       try {
         return send(broker, api, request)
       } catch {
+        case e: AuthenticationException =>
+          throw e
         case e: Exception =>
           debug(s"Request $api failed against node $broker", e)
       }
@@ -66,11 +105,33 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  def findCoordinator(groupId: String): Node = {
-    val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
-    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
-    response.error.maybeThrow()
-    response.node
+  def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
+    val requestBuilder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
+
+    def sendRequest: Try[FindCoordinatorResponse] =
+      Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
+
+    val startTime = time.milliseconds
+    var response = sendRequest
+
+    while ((response.isFailure || response.get.error == Errors.COORDINATOR_NOT_AVAILABLE) &&
+      (time.milliseconds - startTime < timeoutMs)) {
+
+      Thread.sleep(retryBackoffMs)
+      response = sendRequest
+    }
+
+    def timeoutException(cause: Throwable) =
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", cause)
+
+    response match {
+      case Failure(exception) => throw timeoutException(exception)
+      case Success(response) =>
+        if (response.error == Errors.COORDINATOR_NOT_AVAILABLE)
+          throw timeoutException(response.error.exception)
+        response.error.maybeThrow()
+        response.node
+    }
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
@@ -107,7 +168,7 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> {
         try {
           listGroups(broker)
@@ -122,16 +183,22 @@ class AdminClient(val time: Time,
 
   def listAllConsumerGroups(): Map[Node, List[GroupOverview]] = {
     listAllGroups().mapValues { groups =>
-      groups.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+      groups.filter(isConsumerGroup)
     }
   }
 
   def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+    listAllGroups().values.flatten.toList
   }
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    listAllGroupsFlattened().filter(isConsumerGroup)
+  }
+
+  private def isConsumerGroup(group: GroupOverview): Boolean = {
+    // Consumer groups which are using group management use the "consumer" protocol type.
+    // Consumer groups which are only using offset storage will have an empty protocol type.
+    group.protocolType.isEmpty || group.protocolType == ConsumerProtocol.PROTOCOL_TYPE
   }
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
@@ -140,12 +207,12 @@ class AdminClient(val time: Time,
     val response = responseBody.asInstanceOf[OffsetFetchResponse]
     if (response.hasError)
       throw response.error.exception
-    response.maybeThrowFirstPartitionError
+    response.maybeThrowFirstPartitionError()
     response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 
@@ -165,18 +232,34 @@ class AdminClient(val time: Time,
                                   consumers: Option[List[ConsumerSummary]],
                                   coordinator: Node)
 
-  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
-    val coordinator = findCoordinator(groupId)
+  def describeConsumerGroupHandler(coordinator: Node, groupId: String): GroupMetadata = {
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
         new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)
     if (metadata == null)
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
-    if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
+    metadata
+  }
 
-    metadata.error.maybeThrow()
+  def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
+
+    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
+      metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+
+    val startTime = time.milliseconds
+    val coordinator = findCoordinator(groupId, timeoutMs)
+    var metadata = describeConsumerGroupHandler(coordinator, groupId)
+
+    while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
+      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
+      Thread.sleep(retryBackoffMs)
+      metadata = describeConsumerGroupHandler(coordinator, groupId)
+    }
+
+    if (!isValidConsumerGroupResponse(metadata))
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
+
     val consumers = metadata.members.asScala.map { consumer =>
       ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
         case "Stable" =>
@@ -190,20 +273,110 @@ class AdminClient(val time: Time,
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
+  def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
+
+    def coordinatorLookup(group: String): Either[Node, Errors] = {
+      try {
+        Left(findCoordinator(group))
+      } catch {
+        case e: Throwable =>
+          if (e.isInstanceOf[TimeoutException])
+            Right(Errors.COORDINATOR_NOT_AVAILABLE)
+          else
+            Right(Errors.forException(e))
+      }
+    }
+
+    var errors: Map[String, Errors] = Map()
+    var groupsPerCoordinator: Map[Node, List[String]] = Map()
+
+    groups.foreach { group =>
+      coordinatorLookup(group) match {
+        case Right(error) =>
+          errors += group -> error
+        case Left(coordinator) =>
+          groupsPerCoordinator.get(coordinator) match {
+            case Some(gList) =>
+              val gListNew = group :: gList
+              groupsPerCoordinator += coordinator -> gListNew
+            case None =>
+              groupsPerCoordinator += coordinator -> List(group)
+          }
+      }
+    }
+
+    groupsPerCoordinator.foreach { case (coordinator, groups) =>
+      val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))
+      val response = responseBody.asInstanceOf[DeleteGroupsResponse]
+      groups.foreach {
+        case group if response.hasError(group) => errors += group -> response.errors.get(group)
+        case group => errors += group -> Errors.NONE
+      }
+    }
+
+    errors
+  }
+
   def close() {
-    client.close()
+    running = false
+    try {
+      client.close()
+    } catch {
+      case e: IOException =>
+        error("Exception closing nioSelector:", e)
+    }
   }
 
 }
 
+/*
+ * CompositeFuture assumes that the future object in the futures list does not raise error
+ */
+class CompositeFuture[T](time: Time,
+                         defaultResults: Map[TopicPartition, T],
+                         futures: List[RequestFuture[Map[TopicPartition, T]]]) extends Future[Map[TopicPartition, T]] {
+
+  override def isCancelled = false
+
+  override def cancel(interrupt: Boolean) = false
+
+  override def get(): Map[TopicPartition, T] = {
+    get(Long.MaxValue, TimeUnit.MILLISECONDS)
+  }
+
+  override def get(timeout: Long, unit: TimeUnit): Map[TopicPartition, T] = {
+    val start: Long = time.milliseconds()
+    val timeoutMs = unit.toMillis(timeout)
+    var remaining: Long = timeoutMs
+
+    val observedResults = futures.flatMap{ future =>
+      val elapsed = time.milliseconds() - start
+      remaining = if (timeoutMs - elapsed > 0) timeoutMs - elapsed else 0L
+
+      if (future.awaitDone(remaining, TimeUnit.MILLISECONDS)) future.value()
+      else Map.empty[TopicPartition, T]
+    }.toMap
+
+    defaultResults ++ observedResults
+  }
+
+  override def isDone: Boolean = {
+    futures.forall(_.isDone)
+  }
+}
+
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 object AdminClient {
   val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
   val DefaultRequestTimeoutMs = 5000
   val DefaultMaxInFlightRequestsPerConnection = 100
   val DefaultReconnectBackoffMs = 50
+  val DefaultReconnectBackoffMax = 50
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
+
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
     val config = new ConfigDef()
@@ -218,6 +391,18 @@ object AdminClient {
         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
         ConfigDef.Importance.MEDIUM,
         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+      .define(
+        CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
+        ConfigDef.Type.INT,
+        DefaultRequestTimeoutMs,
+        ConfigDef.Importance.MEDIUM,
+        CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+      .define(
+        CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
+        ConfigDef.Type.LONG,
+        DefaultRetryBackoffMs,
+        ConfigDef.Importance.MEDIUM,
+        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
       .withClientSslSupport()
       .withClientSaslSupport()
     config
@@ -237,43 +422,54 @@ object AdminClient {
   def create(config: AdminConfig): AdminClient = {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
-    val metadata = new Metadata
+    val metadata = new Metadata(100L, 60 * 60 * 1000L, true)
     val channelBuilder = ClientUtils.createChannelBuilder(config)
+    val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+    val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, 0)
+    metadata.update(bootstrapCluster, Collections.emptySet(), 0)
+
+    val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
 
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
       "admin",
-      channelBuilder)
+      channelBuilder,
+      new LogContext(String.format("[Producer clientId=%s] ", clientId)))
 
     val networkClient = new NetworkClient(
       selector,
       metadata,
-      "admin-" + AdminClientIdSequence.getAndIncrement(),
+      clientId,
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
+      DefaultReconnectBackoffMax,
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
-      DefaultRequestTimeoutMs,
+      requestTimeoutMs,
       time,
-      true)
+      true,
+      new ApiVersions,
+      new LogContext(String.format("[NetworkClient clientId=%s] ", clientId)))
 
     val highLevelClient = new ConsumerNetworkClient(
+      new LogContext(String.format("[ConsumerNetworkClient clientId=%s] ", clientId)),
       networkClient,
       metadata,
       time,
-      DefaultRetryBackoffMs,
-      DefaultRequestTimeoutMs)
+      retryBackoffMs,
+      requestTimeoutMs,
+      Integer.MAX_VALUE)
 
     new AdminClient(
       time,
-      DefaultRequestTimeoutMs,
+      requestTimeoutMs,
+      retryBackoffMs,
       highLevelClient,
       bootstrapCluster.nodes.asScala.toList)
   }

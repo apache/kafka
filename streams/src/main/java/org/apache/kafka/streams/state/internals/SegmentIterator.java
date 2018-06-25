@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,11 +32,11 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
+    protected final Iterator<Segment> segments;
+    protected final HasNextCondition hasNextCondition;
 
-    private KeyValueStore<Bytes, byte[]> currentSegment;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    protected KeyValueStore<Bytes, byte[]> currentSegment;
+    protected KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
@@ -66,17 +66,31 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     @Override
     public boolean hasNext() {
         boolean hasNext = false;
-        while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
+        while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
                 && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {
-                currentIterator = currentSegment.range(from, to);
+                if (from == null || to == null) {
+                    currentIterator = currentSegment.all();
+                } else {
+                    currentIterator = currentSegment.range(from, to);
+                }
             } catch (InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
             }
         }
         return currentIterator != null && hasNext;
+    }
+
+    private boolean hasNextConditionHasNext() {
+        boolean hasNext = false;
+        try {
+            hasNext = hasNextCondition.hasNext(currentIterator);
+        } catch (InvalidStateStoreException e) {
+            //already closed so ignore
+        }
+        return hasNext;
     }
 
     public KeyValue<Bytes, byte[]> next() {

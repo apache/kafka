@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,24 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.authenticator;
 
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.security.sasl.RealmCallback;
 import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.Subject;
 
-import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,17 +41,22 @@ import java.util.Map;
 public abstract class AbstractLogin implements Login {
     private static final Logger log = LoggerFactory.getLogger(AbstractLogin.class);
 
-    private JaasContext jaasContext;
+    private String contextName;
+    private Configuration configuration;
     private LoginContext loginContext;
+    private AuthenticateCallbackHandler loginCallbackHandler;
 
     @Override
-    public void configure(Map<String, ?> configs, JaasContext jaasContext) {
-        this.jaasContext = jaasContext;
+    public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                          AuthenticateCallbackHandler loginCallbackHandler) {
+        this.contextName = contextName;
+        this.configuration = configuration;
+        this.loginCallbackHandler = loginCallbackHandler;
     }
 
     @Override
     public LoginContext login() throws LoginException {
-        loginContext = new LoginContext(jaasContext.name(), null, new LoginCallbackHandler(), jaasContext.configuration());
+        loginContext = new LoginContext(contextName, null, loginCallbackHandler, configuration);
         loginContext.login();
         log.info("Successfully logged in.");
         return loginContext;
@@ -62,8 +67,12 @@ public abstract class AbstractLogin implements Login {
         return loginContext.getSubject();
     }
 
-    protected JaasContext jaasContext() {
-        return jaasContext;
+    protected String contextName() {
+        return contextName;
+    }
+
+    protected Configuration configuration() {
+        return configuration;
     }
 
     /**
@@ -73,7 +82,11 @@ public abstract class AbstractLogin implements Login {
      * callback handlers which require additional user input.
      *
      */
-    public static class LoginCallbackHandler implements CallbackHandler {
+    public static class DefaultLoginCallbackHandler implements AuthenticateCallbackHandler {
+
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
 
         @Override
         public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
@@ -92,6 +105,10 @@ public abstract class AbstractLogin implements Login {
                     throw new UnsupportedCallbackException(callback, "Unrecognized SASL Login callback");
                 }
             }
+        }
+
+        @Override
+        public void close() {
         }
     }
 }

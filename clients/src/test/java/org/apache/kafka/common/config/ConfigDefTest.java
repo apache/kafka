@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.config;
 
@@ -24,13 +28,18 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
@@ -91,6 +100,12 @@ public class ConfigDefTest {
         new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>());
     }
 
+    @Test
+    public void testParsingEmptyDefaultValueForStringFieldShouldSucceed() {
+        new ConfigDef().define("a", Type.STRING, "", ConfigDef.Importance.HIGH, "docs")
+                .parse(new HashMap<String, Object>());
+    }
+
     @Test(expected = ConfigException.class)
     public void testDefinedTwice() {
         new ConfigDef().define("a", Type.STRING, Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs");
@@ -104,6 +119,7 @@ public class ConfigDefTest {
         testBadInputs(Type.STRING, new Object());
         testBadInputs(Type.LIST, 53, new Object());
         testBadInputs(Type.BOOLEAN, "hello", "truee", "fals");
+        testBadInputs(Type.CLASS, "ClassDoesNotExist");
     }
 
     private void testBadInputs(Type type, Object... values) {
@@ -131,11 +147,23 @@ public class ConfigDefTest {
     }
 
     @Test
+    public void testNestedClass() {
+        // getName(), not getSimpleName() or getCanonicalName(), is the version that should be able to locate the class
+        Map<String, Object> props = Collections.<String, Object>singletonMap("name", NestedClass.class.getName());
+        new ConfigDef().define("name", Type.CLASS, Importance.HIGH, "docs").parse(props);
+    }
+
+    @Test
     public void testValidators() {
         testValidators(Type.INT, Range.between(0, 10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11, null});
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
                 new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", null});
         testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
+        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
+        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
+        testValidators(Type.STRING, new ConfigDef.NonEmptyStringWithoutControlChars(), "defaultname",
+                new Object[]{"test", "name", "test/test", "test\u1234", "\u1324name\\", "/+%>&):??<&()?-", "+1", "\uD83D\uDE01", "\uF3B1", "     test   \n\r", "\n  hello \t"},
+                new Object[]{"nontrailing\nnotallowed", "as\u0001cii control char", "tes\rt", "test\btest", "1\t2", ""});
     }
 
     @Test
@@ -319,6 +347,92 @@ public class ConfigDefTest {
         }
     }
 
+    @Test
+    public void testCanAddInternalConfig() throws Exception {
+        final String configName = "internal.config";
+        final ConfigDef configDef = new ConfigDef().defineInternal(configName, Type.STRING, "", Importance.LOW);
+        final HashMap<String, String> properties = new HashMap<>();
+        properties.put(configName, "value");
+        final List<ConfigValue> results = configDef.validate(properties);
+        final ConfigValue configValue = results.get(0);
+        assertEquals("value", configValue.value());
+        assertEquals(configName, configValue.name());
+    }
+
+    @Test
+    public void testInternalConfigDoesntShowUpInDocs() throws Exception {
+        final String name = "my.config";
+        final ConfigDef configDef = new ConfigDef().defineInternal(name, Type.STRING, "", Importance.LOW);
+        assertFalse(configDef.toHtmlTable().contains("my.config"));
+        assertFalse(configDef.toEnrichedRst().contains("my.config"));
+        assertFalse(configDef.toRst().contains("my.config"));
+    }
+
+    @Test
+    public void testDynamicUpdateModeInDocs() throws Exception {
+        final ConfigDef configDef = new ConfigDef()
+                .define("my.broker.config", Type.LONG, Importance.HIGH, "docs")
+                .define("my.cluster.config", Type.LONG, Importance.HIGH, "docs")
+                .define("my.readonly.config", Type.LONG, Importance.HIGH, "docs");
+        final Map<String, String> updateModes = new HashMap<>();
+        updateModes.put("my.broker.config", "per-broker");
+        updateModes.put("my.cluster.config", "cluster-wide");
+        final String html = configDef.toHtmlTable(updateModes);
+        Set<String> configsInHtml = new HashSet();
+        for (String line : html.split("\n")) {
+            if (line.contains("my.broker.config")) {
+                assertTrue(line.contains("per-broker"));
+                configsInHtml.add("my.broker.config");
+            } else if (line.contains("my.cluster.config")) {
+                assertTrue(line.contains("cluster-wide"));
+                configsInHtml.add("my.cluster.config");
+            } else if (line.contains("my.readonly.config")) {
+                assertTrue(line.contains("read-only"));
+                configsInHtml.add("my.readonly.config");
+            }
+        }
+        assertEquals(configDef.names(), configsInHtml);
+    }
+
+    @Test
+    public void testNames() {
+        final ConfigDef configDef = new ConfigDef()
+                .define("a", Type.STRING, Importance.LOW, "docs")
+                .define("b", Type.STRING, Importance.LOW, "docs");
+        Set<String> names = configDef.names();
+        assertEquals(new HashSet<>(Arrays.asList("a", "b")), names);
+        // should be unmodifiable
+        try {
+            names.add("new");
+            fail();
+        } catch (UnsupportedOperationException e) {
+            // expected
+        }
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testMissingDependentConfigs() {
+        // Should not be possible to parse a config if a dependent config has not been defined
+        final ConfigDef configDef = new ConfigDef()
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
+        configDef.parse(Collections.emptyMap());
+    }
+
+    @Test
+    public void testBaseConfigDefDependents() {
+        // Creating a ConfigDef based on another should compute the correct number of configs with no parent, even
+        // if the base ConfigDef has already computed its parentless configs
+        final ConfigDef baseConfigDef = new ConfigDef().define("a", Type.STRING, Importance.LOW, "docs");
+        assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
+
+        final ConfigDef configDef = new ConfigDef(baseConfigDef)
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"))
+                .define("child", Type.STRING, Importance.HIGH, "docs");
+
+        assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
+    }
+
+
     private static class IntegerRecommender implements ConfigDef.Recommender {
 
         private boolean hasParent;
@@ -459,4 +573,72 @@ public class ConfigDefTest {
         assertEquals(expectedRst, def.toEnrichedRst());
     }
 
+    @Test
+    public void testConvertValueToStringBoolean() {
+        assertEquals("true", ConfigDef.convertToString(true, Type.BOOLEAN));
+        assertNull(ConfigDef.convertToString(null, Type.BOOLEAN));
+    }
+
+    @Test
+    public void testConvertValueToStringShort() {
+        assertEquals("32767", ConfigDef.convertToString(Short.MAX_VALUE, Type.SHORT));
+        assertNull(ConfigDef.convertToString(null, Type.SHORT));
+    }
+
+    @Test
+    public void testConvertValueToStringInt() {
+        assertEquals("2147483647", ConfigDef.convertToString(Integer.MAX_VALUE, Type.INT));
+        assertNull(ConfigDef.convertToString(null, Type.INT));
+    }
+
+    @Test
+    public void testConvertValueToStringLong() {
+        assertEquals("9223372036854775807", ConfigDef.convertToString(Long.MAX_VALUE, Type.LONG));
+        assertNull(ConfigDef.convertToString(null, Type.LONG));
+    }
+
+    @Test
+    public void testConvertValueToStringDouble() {
+        assertEquals("3.125", ConfigDef.convertToString(3.125, Type.DOUBLE));
+        assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
+    }
+
+    @Test
+    public void testConvertValueToStringString() {
+        assertEquals("foobar", ConfigDef.convertToString("foobar", Type.STRING));
+        assertNull(ConfigDef.convertToString(null, Type.STRING));
+    }
+
+    @Test
+    public void testConvertValueToStringPassword() {
+        assertEquals(Password.HIDDEN, ConfigDef.convertToString(new Password("foobar"), Type.PASSWORD));
+        assertEquals("foobar", ConfigDef.convertToString("foobar", Type.PASSWORD));
+        assertNull(ConfigDef.convertToString(null, Type.PASSWORD));
+    }
+
+    @Test
+    public void testConvertValueToStringList() {
+        assertEquals("a,bc,d", ConfigDef.convertToString(Arrays.asList("a", "bc", "d"), Type.LIST));
+        assertNull(ConfigDef.convertToString(null, Type.LIST));
+    }
+
+    @Test
+    public void testConvertValueToStringClass() throws ClassNotFoundException {
+        String actual = ConfigDef.convertToString(ConfigDefTest.class, Type.CLASS);
+        assertEquals("org.apache.kafka.common.config.ConfigDefTest", actual);
+        // Additionally validate that we can look up this class by this name
+        assertEquals(ConfigDefTest.class, Class.forName(actual));
+        assertNull(ConfigDef.convertToString(null, Type.CLASS));
+    }
+
+    @Test
+    public void testConvertValueToStringNestedClass() throws ClassNotFoundException {
+        String actual = ConfigDef.convertToString(NestedClass.class, Type.CLASS);
+        assertEquals("org.apache.kafka.common.config.ConfigDefTest$NestedClass", actual);
+        // Additionally validate that we can look up this class by this name
+        assertEquals(NestedClass.class, Class.forName(actual));
+    }
+
+    private class NestedClass {
+    }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.Metadata;
@@ -24,11 +24,12 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.GroupCoordinatorResponse;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
@@ -88,18 +89,22 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
+        LogContext loggerFactory = new LogContext();
+
         this.time = new MockTime();
         this.client = new MockClient(time);
-        this.metadata = new Metadata(0, Long.MAX_VALUE);
-        this.metadata.update(cluster, time.milliseconds());
-        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+        this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
 
         client.setNode(node);
 
-        this.coordinator = new WorkerCoordinator(consumerClient,
+        this.coordinator = new WorkerCoordinator(
+                loggerFactory,
+                consumerClient,
                 groupId,
                 rebalanceTimeoutMs,
                 sessionTimeoutMs,
@@ -203,7 +208,7 @@ public class WorkerCoordinatorTest {
         final String consumerId = "leader";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
         // normal join group
         Map<String, Long> memberConfigOffsets = new HashMap<>();
@@ -222,7 +227,7 @@ public class WorkerCoordinatorTest {
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
@@ -243,7 +248,7 @@ public class WorkerCoordinatorTest {
         final String memberId = "member";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
@@ -259,7 +264,7 @@ public class WorkerCoordinatorTest {
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
@@ -284,7 +289,7 @@ public class WorkerCoordinatorTest {
         final String memberId = "member";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
         // config mismatch results in assignment error
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
@@ -315,7 +320,7 @@ public class WorkerCoordinatorTest {
         PowerMock.replayAll();
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
@@ -459,8 +464,8 @@ public class WorkerCoordinatorTest {
     }
 
 
-    private GroupCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new GroupCoordinatorResponse(error, node);
+    private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
+        return new FindCoordinatorResponse(error, node);
     }
 
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,

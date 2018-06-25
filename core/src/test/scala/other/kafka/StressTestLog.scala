@@ -21,9 +21,11 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 
 import kafka.log._
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.Utils
 
 /**
@@ -41,11 +43,16 @@ object StressTestLog {
     logProperties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
     logProperties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
 
-    val log = new Log(dir = dir,
-                      config = LogConfig(logProperties),
-                      recoveryPoint = 0L,
-                      scheduler = time.scheduler,
-                      time = time)
+    val log = Log(dir = dir,
+      config = LogConfig(logProperties),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      brokerTopicStats = new BrokerTopicStats,
+      logDirFailureChannel = new LogDirFailureChannel(10))
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
@@ -61,47 +68,76 @@ object StressTestLog {
     })
 
     while(running.get) {
-      println("Reader offset = %d, writer offset = %d".format(reader.offset, writer.offset))
       Thread.sleep(1000)
+      println("Reader offset = %d, writer offset = %d".format(reader.currentOffset, writer.currentOffset))
+      writer.checkProgress()
+      reader.checkProgress()
     }
   }
 
   abstract class WorkerThread extends Thread {
+    val threadInfo = "Thread: " + Thread.currentThread.getName + " Class: " + getClass.getName
+
     override def run() {
       try {
         while(running.get)
           work()
       } catch {
-        case e: Exception =>
+        case e: Exception => {
           e.printStackTrace()
-          running.set(false)
+        }
+      } finally {
+        running.set(false)
       }
-      println(getClass.getName + " exiting...")
     }
+
     def work()
+    def isMakingProgress(): Boolean
   }
 
-  class WriterThread(val log: Log) extends WorkerThread {
-    @volatile var offset = 0
-    override def work() {
-      val logAppendInfo = log.append(TestUtils.singletonRecords(offset.toString.getBytes))
-      require(logAppendInfo.firstOffset == offset && logAppendInfo.lastOffset == offset)
-      offset += 1
-      if(offset % 1000 == 0)
-        Thread.sleep(500)
+  trait LogProgress {
+    @volatile var currentOffset = 0
+    private var lastOffsetCheckpointed = currentOffset
+    private var lastProgressCheckTime = System.currentTimeMillis
+
+    def isMakingProgress(): Boolean = {
+      if (currentOffset > lastOffsetCheckpointed) {
+        lastOffsetCheckpointed = currentOffset
+        return true
+      }
+
+      false
+    }
+
+    def checkProgress() {
+      // Check if we are making progress every 500ms
+      val curTime = System.currentTimeMillis
+      if ((curTime - lastProgressCheckTime) > 500) {
+        require(isMakingProgress(), "Thread not making progress")
+        lastProgressCheckTime = curTime
+      }
     }
   }
 
-  class ReaderThread(val log: Log) extends WorkerThread {
-    @volatile var offset = 0
+  class WriterThread(val log: Log) extends WorkerThread with LogProgress {
+    override def work() {
+      val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
+      require(logAppendInfo.firstOffset.forall(_ == currentOffset) && logAppendInfo.lastOffset == currentOffset)
+      currentOffset += 1
+      if (currentOffset % 1000 == 0)
+        Thread.sleep(50)
+    }
+  }
+
+  class ReaderThread(val log: Log) extends WorkerThread with LogProgress {
     override def work() {
       try {
-        log.read(offset, 1024, Some(offset+1)).records match {
+        log.read(currentOffset, 1024, Some(currentOffset + 1), isolationLevel = IsolationLevel.READ_UNCOMMITTED).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
-            val first = read.shallowEntries.iterator.next()
-            require(first.offset == offset, "We should either read nothing or the message we asked for.")
+            val first = read.batches.iterator.next()
+            require(first.lastOffset == currentOffset, "We should either read nothing or the message we asked for.")
             require(first.sizeInBytes == read.sizeInBytes, "Expected %d but got %d.".format(first.sizeInBytes, read.sizeInBytes))
-            offset += 1
+            currentOffset += 1
           }
           case _ =>
         }

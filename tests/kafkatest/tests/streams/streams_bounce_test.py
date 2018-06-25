@@ -26,7 +26,7 @@ class StreamsBounceTest(KafkaTest):
     """
 
     def __init__(self, test_context):
-        super(StreamsBounceTest, self).__init__(test_context, num_zk=1, num_brokers=2, topics={
+        super(StreamsBounceTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 2 },
             'data' : { 'partitions': 5, 'replication-factor': 2 },
             'min' : { 'partitions': 5, 'replication-factor': 2 },
@@ -42,7 +42,7 @@ class StreamsBounceTest(KafkaTest):
         self.driver = StreamsSmokeTestDriverService(test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=6)
     def test_bounce(self):
         """
         Start a smoke test client, then abort (kill -9) and restart it a few times.

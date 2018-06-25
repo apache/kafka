@@ -21,7 +21,7 @@ import joptsimple.OptionParser
 
 
 class PerfConfig(args: Array[String]) {
-  val parser = new OptionParser
+  val parser = new OptionParser(false)
   val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
     .withRequiredArg
     .describedAs("count")
@@ -37,23 +37,6 @@ class PerfConfig(args: Array[String]) {
     .describedAs("date format")
     .ofType(classOf[String])
     .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS")
-  val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-    "interval as configured by reporting-interval")
   val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
-  val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
-    .withRequiredArg
-    .describedAs("size")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(100)
-  val batchSizeOpt = parser.accepts("batch-size", "Number of messages to write in a single batch.")
-    .withRequiredArg
-    .describedAs("size")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(200)
-  val compressionCodecOpt = parser.accepts("compression-codec", "If set, messages are sent compressed")
-    .withRequiredArg
-    .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2, LZ4CompressionCodec as 3")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(0)
   val helpOpt = parser.accepts("help", "Print usage.")
 }

@@ -1,24 +1,26 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelLogEntry;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -29,6 +31,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
+import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -41,14 +44,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final int start;
     private final int end;
 
-    private final Iterable<FileChannelLogEntry> shallowEntries;
-
-    private final Iterable<LogEntry> deepEntries = new Iterable<LogEntry>() {
-        @Override
-        public Iterator<LogEntry> iterator() {
-            return deepIterator();
-        }
-    };
+    private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
 
     // mutable state
     private final AtomicInteger size;
@@ -83,7 +79,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             channel.position(limit);
         }
 
-        shallowEntries = shallowEntriesFrom(start);
+        batches = batchesFrom(start);
     }
 
     @Override
@@ -108,19 +104,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read log entries into the given buffer until there are no bytes remaining in the buffer or the end of the file
+     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of the file
      * is reached.
      *
-     * @param buffer The buffer to write the entries to
+     * @param buffer The buffer to write the batches to
      * @param position Position in the buffer to read from
-     * @return The same buffer
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
-    public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
+    public void readInto(ByteBuffer buffer, int position) throws IOException {
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
-        return buffer;
     }
 
     /**
@@ -135,23 +129,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    public FileRecords read(int position, int size) throws IOException {
+    public FileRecords slice(int position, int size) throws IOException {
         if (position < 0)
-            throw new IllegalArgumentException("Invalid position: " + position);
+            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)
-            throw new IllegalArgumentException("Invalid size: " + size);
+            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + file);
 
-        final int end;
-        // handle integer overflow
-        if (this.start + position + size < 0)
-            end = sizeInBytes();
-        else
-            end = Math.min(this.start + position + size, sizeInBytes());
+        int end = this.start + position + size;
+        // handle integer overflow or if end is beyond the end of the file
+        if (end < 0 || end >= start + sizeInBytes())
+            end = start + sizeInBytes();
         return new FileRecords(file, channel, this.start + position, end, true);
     }
 
     /**
-     * Append log entries to the buffer
+     * Append log batches to the buffer
      * @param records The records to append
      * @return the number of bytes written to the underlying file
      */
@@ -178,12 +170,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Delete this message set from the filesystem
-     * @return True iff this message set was deleted.
+     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
      */
-    public boolean delete() {
+    public void closeHandlers() throws IOException {
+        channel.close();
+    }
+
+    /**
+     * Delete this message set from the filesystem
+     * @throws IOException if deletion fails due to an I/O error
+     * @return  {@code true} if the file was deleted by this method; {@code false} if the file could not be deleted
+     *          because it did not exist
+     */
+    public boolean deleteIfExists() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
-        return file.delete();
+        return Files.deleteIfExists(file.toPath());
     }
 
     /**
@@ -208,7 +209,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void renameTo(File f) throws IOException {
         try {
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
-        }  finally {
+        } finally {
             this.file = f;
         }
     }
@@ -226,14 +227,30 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public int truncateTo(int targetSize) throws IOException {
         int originalSize = sizeInBytes();
         if (targetSize > originalSize || targetSize < 0)
-            throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
+            throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
-            channel.position(targetSize);
             size.set(targetSize);
         }
         return originalSize - targetSize;
+    }
+
+    @Override
+    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
+        ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+        if (convertedRecords.recordConversionStats().numRecordsConverted() == 0) {
+            // This indicates that the message is too large, which means that the buffer is not large
+            // enough to hold a full record batch. We just return all the bytes in this instance.
+            // Even though the record batch does not have the right format version, we expect old clients
+            // to raise an error to the user after reading the record batch size and seeing that there
+            // are not enough available bytes in the response to read it fully. Note that this is
+            // only possible prior to KIP-74, after which the broker was changed to always return at least
+            // one full record batch, even if it requires exceeding the max fetch size requested by the client.
+            return new ConvertedRecords<>(this, RecordConversionStats.EMPTY);
+        } else {
+            return convertedRecords;
+        }
     }
 
     @Override
@@ -265,35 +282,35 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetOffset The offset to search for.
      * @param startingPosition The starting position in the file to begin searching from.
      */
-    public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        for (FileChannelLogEntry entry : shallowEntriesFrom(startingPosition)) {
-            long offset = entry.offset();
+    public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
+        for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
+            long offset = batch.lastOffset();
             if (offset >= targetOffset)
-                return new LogEntryPosition(offset, entry.position(), entry.sizeInBytes());
+                return new LogOffsetPosition(offset, batch.position(), batch.sizeInBytes());
         }
         return null;
     }
 
     /**
-     * Search forward for the message whose timestamp is greater than or equals to the target timestamp.
+     * Search forward for the first message that meets the following requirements:
+     * - Message's timestamp is greater than or equals to the targetTimestamp.
+     * - Message's position in the log file is greater than or equals to the startingPosition.
+     * - Message's offset is greater than or equals to the startingOffset.
      *
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
-     * @return The timestamp and offset of the message found. None, if no message is found.
+     * @param startingOffset The starting offset to search.
+     * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition) {
-        for (LogEntry shallowEntry : shallowEntriesFrom(startingPosition)) {
-            Record shallowRecord = shallowEntry.record();
-            if (shallowRecord.timestamp() >= targetTimestamp) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
+        for (RecordBatch batch : batchesFrom(startingPosition)) {
+            if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                for (LogEntry deepLogEntry : shallowEntry) {
-                    long timestamp = deepLogEntry.record().timestamp();
-                    if (timestamp >= targetTimestamp)
-                        return new TimestampAndOffset(timestamp, deepLogEntry.offset());
+                for (Record record : batch) {
+                    long timestamp = record.timestamp();
+                    if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
+                        return new TimestampAndOffset(timestamp, record.offset());
                 }
-                throw new IllegalStateException(String.format("The message set (max timestamp = %s, max offset = %s" +
-                        " should contain target timestamp %s, but does not.", shallowRecord.timestamp(),
-                        shallowEntry.offset(), targetTimestamp));
             }
         }
         return null;
@@ -305,75 +322,67 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return The largest timestamp of the messages after the given position.
      */
     public TimestampAndOffset largestTimestampAfter(int startingPosition) {
-        long maxTimestamp = Record.NO_TIMESTAMP;
+        long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long offsetOfMaxTimestamp = -1L;
 
-        for (LogEntry shallowEntry : shallowEntriesFrom(startingPosition)) {
-            long timestamp = shallowEntry.record().timestamp();
+        for (RecordBatch batch : batchesFrom(startingPosition)) {
+            long timestamp = batch.maxTimestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
-                offsetOfMaxTimestamp = shallowEntry.offset();
+                offsetOfMaxTimestamp = batch.lastOffset();
             }
         }
         return new TimestampAndOffset(maxTimestamp, offsetOfMaxTimestamp);
     }
 
     /**
-     * Get an iterator over the shallow entries in the file. Note that the entries are
+     * Get an iterator over the record batches in the file. Note that the batches are
      * backed by the open file channel. When the channel is closed (i.e. when this instance
-     * is closed), the entries will generally no longer be readable.
-     * @return An iterator over the shallow entries
+     * is closed), the batches will generally no longer be readable.
+     * @return An iterator over the batches
      */
     @Override
-    public Iterable<FileChannelLogEntry> shallowEntries() {
-        return shallowEntries;
+    public Iterable<FileChannelRecordBatch> batches() {
+        return batches;
+    }
+
+    @Override
+    public String toString() {
+        return "FileRecords(file= " + file +
+                ", start=" + start +
+                ", end=" + end +
+                ")";
     }
 
     /**
-     * Get an iterator over the shallow entries, enforcing a maximum record size
-     * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
-     * @return An iterator over the shallow entries
+     * Get an iterator over the record batches in the file, starting at a specific position. This is similar to
+     * {@link #batches()} except that callers specify a particular position to start reading the batches from. This
+     * method must be used with caution: the start position passed in must be a known start of a batch.
+     * @param start The position to start record iteration from; must be a known position for start of a batch
+     * @return An iterator over batches starting from {@code start}
      */
-    public Iterable<FileChannelLogEntry> shallowEntries(int maxRecordSize) {
-        return shallowEntries(maxRecordSize, start);
-    }
-
-    private Iterable<FileChannelLogEntry> shallowEntriesFrom(int start) {
-        return shallowEntries(Integer.MAX_VALUE, start);
-    }
-
-    private Iterable<FileChannelLogEntry> shallowEntries(final int maxRecordSize, final int start) {
-        return new Iterable<FileChannelLogEntry>() {
+    public Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
+        return new Iterable<FileChannelRecordBatch>() {
             @Override
-            public Iterator<FileChannelLogEntry> iterator() {
-                return shallowIterator(maxRecordSize, start);
+            public Iterator<FileChannelRecordBatch> iterator() {
+                return batchIterator(start);
             }
         };
     }
 
-    private Iterator<FileChannelLogEntry> shallowIterator(int maxRecordSize, int start) {
-        final int end;
-        if (isSlice)
-            end = this.end;
-        else
-            end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, maxRecordSize, start, end);
-        return RecordsIterator.shallowIterator(inputStream);
-    }
-
     @Override
-    public Iterable<LogEntry> deepEntries() {
-        return deepEntries;
+    public AbstractIterator<FileChannelRecordBatch> batchIterator() {
+        return batchIterator(start);
     }
 
-    private Iterator<LogEntry> deepIterator() {
+    private AbstractIterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, Integer.MAX_VALUE, start, end);
-        return new RecordsIterator(inputStream, false, false, Integer.MAX_VALUE);
+        FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
+        return new RecordBatchIterator<>(inputStream);
     }
 
     public static FileRecords open(File file,
@@ -409,7 +418,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param mutable mutable
      * @param fileAlreadyExists File already exists or not
      * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
-     * @param preallocate Pre allocate file or not, gotten from configuration.
+     * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
                                            boolean mutable,
@@ -433,12 +442,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
     }
 
-    public static class LogEntryPosition {
+    public static class LogOffsetPosition {
         public final long offset;
         public final int position;
         public final int size;
 
-        public LogEntryPosition(long offset, int position, int size) {
+        public LogOffsetPosition(long offset, int position, int size) {
             this.offset = offset;
             this.position = position;
             this.size = size;
@@ -446,14 +455,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
 
-            LogEntryPosition that = (LogEntryPosition) o;
+            LogOffsetPosition that = (LogOffsetPosition) o;
 
-            if (offset != that.offset) return false;
-            if (position != that.position) return false;
-            return size == that.size;
+            return offset == that.offset &&
+                    position == that.position &&
+                    size == that.size;
 
         }
 
@@ -467,7 +478,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         @Override
         public String toString() {
-            return "LogEntryPosition(" +
+            return "LogOffsetPosition(" +
                     "offset=" + offset +
                     ", position=" + position +
                     ", size=" + size +
@@ -510,5 +521,4 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     ')';
         }
     }
-
 }

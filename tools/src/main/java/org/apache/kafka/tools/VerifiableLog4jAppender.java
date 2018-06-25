@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.tools;
 
-
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -205,6 +204,9 @@ public class VerifiableLog4jAppender {
                 props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", res.getString("kerb5ConfPath"));
             }
             props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+            // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
+            // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
+            props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
 
             if (configFile != null) {
                 try {

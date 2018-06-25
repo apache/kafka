@@ -25,8 +25,10 @@ import java.util.Date
 import java.text.SimpleDateFormat
 
 import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
-import kafka.common.Topic
 import java.io.{BufferedOutputStream, OutputStream}
+import java.nio.charset.StandardCharsets
+
+import org.apache.kafka.common.internals.Topic
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -46,7 +48,7 @@ import java.io.{BufferedOutputStream, OutputStream}
 object StateChangeLogMerger extends Logging {
 
   val dateFormatString = "yyyy-MM-dd HH:mm:ss,SSS"
-  val topicPartitionRegex = new Regex("\\[(" + Topic.legalChars + "+),( )*([0-9]+)\\]")
+  val topicPartitionRegex = new Regex("\\[(" + Topic.LEGAL_CHARS + "+),( )*([0-9]+)\\]")
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
@@ -58,7 +60,7 @@ object StateChangeLogMerger extends Logging {
   def main(args: Array[String]) {
 
     // Parse input arguments.
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names")
                               .withRequiredArg
                               .describedAs("file1,file2,...")
@@ -147,7 +149,7 @@ object StateChangeLogMerger extends Logging {
 
     while (pqueue.nonEmpty) {
       val lineItr = pqueue.dequeue()
-      output.write((lineItr.line + "\n").getBytes)
+      output.write((lineItr.line + "\n").getBytes(StandardCharsets.UTF_8))
       val nextLineItr = getNextLine(lineItr.itr)
       if (!nextLineItr.isEmpty)
         pqueue.enqueue(nextLineItr)
@@ -165,18 +167,14 @@ object StateChangeLogMerger extends Logging {
   def getNextLine(itr: Iterator[String]): LineIterator = {
     while (itr != null && itr.hasNext) {
       val nextLine = itr.next
-      dateRegex.findFirstIn(nextLine) match {
-        case Some(d) =>
-          val date = dateFormat.parse(d)
-          if ((date.equals(startDate) || date.after(startDate)) && (date.equals(endDate) || date.before(endDate))) {
-            topicPartitionRegex.findFirstMatchIn(nextLine) match {
-              case Some(matcher) =>
-                if ((topic == null || topic == matcher.group(1)) && (partitions.isEmpty || partitions.contains(matcher.group(3).toInt)))
-                  return new LineIterator(nextLine, itr)
-              case None =>
-            }
+      dateRegex.findFirstIn(nextLine).foreach { d =>
+        val date = dateFormat.parse(d)
+        if ((date.equals(startDate) || date.after(startDate)) && (date.equals(endDate) || date.before(endDate))) {
+          topicPartitionRegex.findFirstMatchIn(nextLine).foreach { matcher =>
+            if ((topic == null || topic == matcher.group(1)) && (partitions.isEmpty || partitions.contains(matcher.group(3).toInt)))
+              return new LineIterator(nextLine, itr)
           }
-        case None =>
+        }
       }
     }
     new LineIterator()

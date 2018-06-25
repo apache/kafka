@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,13 +13,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -29,17 +32,21 @@ import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.HerderRequest;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
-import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -54,9 +61,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -102,12 +111,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
+    private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
 
     private final AtomicLong requestSeqNum = new AtomicLong();
 
     private final Time time;
+    private final HerderMetrics herderMetrics;
 
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
@@ -129,7 +141,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
-    final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
+    final NavigableSet<DistributedHerderRequest> requests = new ConcurrentSkipListSet<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
     private Set<String> connectorConfigUpdates = new HashSet<>();
@@ -139,13 +151,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean needsReconfigRebalance;
     private volatile int generation;
 
+    private final DistributedConfig config;
+
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
+                             String kafkaClusterId,
                              StatusBackingStore statusBackingStore,
                              ConfigBackingStore configBackingStore,
                              String restUrl) {
-        this(config, worker, worker.workerId(), statusBackingStore, configBackingStore, null, restUrl, time);
+        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, worker.metrics(), time);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -153,14 +168,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     DistributedHerder(DistributedConfig config,
                       Worker worker,
                       String workerId,
+                      String kafkaClusterId,
                       StatusBackingStore statusBackingStore,
                       ConfigBackingStore configBackingStore,
                       WorkerGroupMember member,
                       String restUrl,
+                      ConnectMetrics metrics,
                       Time time) {
-        super(worker, workerId, statusBackingStore, configBackingStore);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
 
         this.time = time;
+        this.herderMetrics = new HerderMetrics(metrics);
         this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
@@ -175,6 +193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 });
         this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE);
+        this.config = config;
 
         stopping = new AtomicBoolean(false);
         configState = ClusterConfigState.EMPTY;
@@ -204,6 +223,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             halt();
 
             log.info("Herder stopped");
+            herderMetrics.close();
         } catch (Throwable t) {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
             Exit.exit(1);
@@ -237,7 +257,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final long now = time.milliseconds();
         long nextRequestTimeoutMs = Long.MAX_VALUE;
         while (true) {
-            final HerderRequest next = peekWithoutException();
+            final DistributedHerderRequest next = peekWithoutException();
             if (next == null) {
                 break;
             } else if (now >= next.at) {
@@ -364,7 +384,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             // Explicitly fail any outstanding requests so they actually get a response and get an
             // understandable reason for their failure.
-            HerderRequest request = requests.pollFirst();
+            DistributedHerderRequest request = requests.pollFirst();
             while (request != null) {
                 request.callback().onCompletion(new ConnectException("Worker is shutting down"), null);
                 request = requests.pollFirst();
@@ -388,9 +408,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             forwardRequestExecutor.shutdown();
             startAndStopExecutor.shutdown();
 
-            if (!forwardRequestExecutor.awaitTermination(10000L, TimeUnit.MILLISECONDS))
+            if (!forwardRequestExecutor.awaitTermination(FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS))
                 forwardRequestExecutor.shutdownNow();
-            if (!startAndStopExecutor.awaitTermination(1000L, TimeUnit.MILLISECONDS))
+            if (!startAndStopExecutor.awaitTermination(START_AND_STOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS))
                 startAndStopExecutor.shutdownNow();
         } catch (InterruptedException e) {
             // ignore
@@ -432,13 +452,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!configState.contains(connName)) {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
-                            callback.onCompletion(null, new ConnectorInfo(connName, configState.connectorConfig(connName), configState.tasks(connName)));
+                            Map<String, String> config = configState.connectorConfig(connName);
+                            callback.onCompletion(null, new ConnectorInfo(connName, config,
+                                configState.tasks(connName),
+                                connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
                         }
                         return null;
                     }
                 },
                 forwardErrorCallback(callback)
         );
+    }
+
+    @Override
+    protected Map<String, String> config(String connName) {
+        return configState.connectorConfig(connName);
     }
 
     @Override
@@ -490,7 +518,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (connector instanceof SinkConnector) {
             ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
             String name = (String) validatedName.value();
-
             if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
                 validatedName.addErrorMessage("Consumer group for sink connector named " + name +
                         " conflicts with Connect worker group " + workerGroupId);
@@ -508,10 +535,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        ConfigInfos validatedConfig = validateConnectorConfig(config);
-                        if (validatedConfig.errorCount() > 0) {
-                            callback.onCompletion(new BadRequestException("Connector configuration is invalid " +
-                                    "(use the endpoint `/{connectorType}/config/validate` to get a full list of errors)"), null);
+                        if (maybeAddConfigErrors(validateConnectorConfig(config), callback)) {
                             return null;
                         }
 
@@ -532,7 +556,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName));
+                        Map<String, String> map = configState.connectorConfig(connName);
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                            map == null ? null : connectorTypeForClass(map.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
@@ -617,8 +643,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
+        return ConfigReloadAction.valueOf(
+                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
+                        .toUpperCase(Locale.ROOT));
+    }
+
+    @Override
     public void restartConnector(final String connName, final Callback<Void> callback) {
-        addRequest(new Callable<Void>() {
+        restartConnector(0, connName, callback);
+    }
+
+    @Override
+    public HerderRequest restartConnector(final long delayMs, final String connName, final Callback<Void> callback) {
+        return addRequest(delayMs, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
                 if (checkRebalanceNeeded(callback))
@@ -691,7 +729,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     public int generation() {
         return generation;
     }
-
 
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
@@ -777,6 +814,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // We only mark this as resolved once we've actually started work, which allows us to correctly track whether
         // what work is currently active and running. If we bail early, the main tick loop + having requested rejoin
         // guarantees we'll attempt to rejoin before executing this method again.
+        herderMetrics.rebalanceSucceeded(time.milliseconds());
         rebalanceResolved = true;
         return true;
     }
@@ -834,6 +872,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.info("Starting task {}", taskId);
         return worker.startTask(
                 taskId,
+                configState,
                 configState.connectorConfig(taskId.connector()),
                 configState.taskConfig(taskId),
                 this,
@@ -921,7 +960,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             public void onCompletion(Throwable error, Void result) {
                 // If we encountered an error, we don't have much choice but to just retry. If we don't, we could get
                 // stuck with a connector that thinks it has generated tasks, but wasn't actually successful and therefore
-                // never makes progress. The retry has to run through a HerderRequest since this callback could be happening
+                // never makes progress. The retry has to run through a DistributedHerderRequest since this callback could be happening
                 // from the HTTP request forwarding thread.
                 if (error != null) {
                     log.error("Failed to reconfigure connector's tasks, retrying after backoff:", error);
@@ -957,16 +996,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             Map<String, String> configs = configState.connectorConfig(connName);
 
             ConnectorConfig connConfig;
-            List<String> sinkTopics = null;
             if (worker.isSinkConnector(connName)) {
-                connConfig = new SinkConnectorConfig(configs);
-                sinkTopics = connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG);
+                connConfig = new SinkConnectorConfig(plugins(), configs);
             } else {
-                connConfig = new SourceConnectorConfig(configs);
+                connConfig = new SourceConnectorConfig(plugins(), configs);
             }
 
-            final List<Map<String, String>> taskProps
-                    = worker.connectorTaskConfigs(connName, connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG), sinkTopics);
+            final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
             boolean changed = false;
             int currentNumTasks = configState.taskCount(connName);
             if (taskProps.size() != currentNumTasks) {
@@ -995,7 +1031,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         public void run() {
                             try {
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
-                                RestServer.httpRequest(reconfigUrl, "POST", taskProps, null);
+                                RestClient.httpRequest(reconfigUrl, "POST", taskProps, null, config);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
                                 log.error("Request to leader to reconfigure connector tasks failed", e);
@@ -1020,19 +1056,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
-    HerderRequest addRequest(Callable<Void> action, Callback<Void> callback) {
+    DistributedHerderRequest addRequest(Callable<Void> action, Callback<Void> callback) {
         return addRequest(0, action, callback);
     }
 
-    HerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
-        HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
+    DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
+        DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
         return req;
     }
 
-    private HerderRequest peekWithoutException() {
+    private DistributedHerderRequest peekWithoutException() {
         try {
             return requests.isEmpty() ? null : requests.first();
         } catch (NoSuchElementException e) {
@@ -1096,13 +1132,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    static class HerderRequest implements Comparable<HerderRequest> {
+    class DistributedHerderRequest implements HerderRequest, Comparable<DistributedHerderRequest> {
         private final long at;
         private final long seq;
         private final Callable<Void> action;
         private final Callback<Void> callback;
 
-        public HerderRequest(long at, long seq, Callable<Void> action, Callback<Void> callback) {
+        public DistributedHerderRequest(long at, long seq, Callable<Void> action, Callback<Void> callback) {
             this.at = at;
             this.seq = seq;
             this.action = action;
@@ -1118,9 +1154,28 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         @Override
-        public int compareTo(HerderRequest o) {
+        public void cancel() {
+            DistributedHerder.this.requests.remove(this);
+        }
+
+        @Override
+        public int compareTo(DistributedHerderRequest o) {
             final int cmp = Long.compare(at, o.at);
             return cmp == 0 ? Long.compare(seq, o.seq) : cmp;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof DistributedHerderRequest))
+                return false;
+            DistributedHerderRequest other = (DistributedHerderRequest) o;
+            return compareTo(other) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(at, seq);
         }
     }
 
@@ -1145,6 +1200,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    protected HerderMetrics herderMetrics() {
+        return herderMetrics;
+    }
+
     // Rebalances are triggered internally from the group member, so these are always executed in the work thread.
     public class RebalanceListener implements WorkerRebalanceListener {
         @Override
@@ -1159,6 +1218,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
                 rebalanceResolved = false;
+                herderMetrics.rebalanceStarted(time.milliseconds());
             }
 
             // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
@@ -1177,7 +1237,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
             log.info("Rebalance started");
 
-            // Note that since we don't reset the assignment, we we don't revoke leadership here. During a rebalance,
+            // Note that since we don't reset the assignment, we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.
 
             if (rebalanceResolved) {
@@ -1212,4 +1272,71 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    class HerderMetrics {
+        private final MetricGroup metricGroup;
+        private final Sensor rebalanceCompletedCounts;
+        private final Sensor rebalanceTime;
+        private volatile long lastRebalanceCompletedAtMillis = Long.MIN_VALUE;
+        private volatile boolean rebalancing = false;
+        private volatile long rebalanceStartedAtMillis = 0L;
+
+        public HerderMetrics(ConnectMetrics connectMetrics) {
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.workerRebalanceGroupName());
+
+            metricGroup.addValueMetric(registry.leaderName, new LiteralSupplier<String>() {
+                @Override
+                public String metricValue(long now) {
+                    return leaderUrl();
+                }
+            });
+            metricGroup.addValueMetric(registry.epoch, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue(long now) {
+                    return (double) generation;
+                }
+            });
+            metricGroup.addValueMetric(registry.rebalanceMode, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue(long now) {
+                    return rebalancing ? 1.0d : 0.0d;
+                }
+            });
+
+            rebalanceCompletedCounts = metricGroup.sensor("completed-rebalance-count");
+            rebalanceCompletedCounts.add(metricGroup.metricName(registry.rebalanceCompletedTotal), new Total());
+
+            rebalanceTime = metricGroup.sensor("rebalance-time");
+            rebalanceTime.add(metricGroup.metricName(registry.rebalanceTimeMax), new Max());
+            rebalanceTime.add(metricGroup.metricName(registry.rebalanceTimeAvg), new Avg());
+
+            metricGroup.addValueMetric(registry.rebalanceTimeSinceLast, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue(long now) {
+                    return lastRebalanceCompletedAtMillis == Long.MIN_VALUE ? Double.POSITIVE_INFINITY : (double) (now - lastRebalanceCompletedAtMillis);
+                }
+            });
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void rebalanceStarted(long now) {
+            rebalanceStartedAtMillis = now;
+            rebalancing = true;
+        }
+
+        void rebalanceSucceeded(long now) {
+            long duration = Math.max(0L, now - rebalanceStartedAtMillis);
+            rebalancing = false;
+            rebalanceCompletedCounts.record(1.0);
+            rebalanceTime.record(duration);
+            lastRebalanceCompletedAtMillis = now;
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
+        }
+    }
 }

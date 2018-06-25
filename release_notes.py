@@ -32,7 +32,7 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 version = sys.argv[1]
-minor_version_dotless = "".join(version.split(".")[:3]) # i.e., 0.10.0 if version == 0.10.0.1
+minor_version_dotless = "".join(version.split(".")[:2]) # i.e., 10 if version == 1.0.1
 
 JIRA_BASE_URL = 'https://issues.apache.org/jira'
 MAX_RESULTS = 100 # This is constrained for cloud instances so we need to fix this value
