@@ -24,6 +24,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
  * @param maxMetadataSize The maximum allowed metadata for any offset commit.
  * @param loadBufferSize Batch size for reading from the offsets segments when loading offsets into the cache.
  * @param offsetsRetentionMs After a consumer group loses all its consumers (i.e. becomes empty) its offsets will be kept for this retention period before getting discarded.
+ *                           For standalone consumers (using manual assignment) offset of a partition will be expired when this retention period is passed since its last commit.
  * @param offsetsRetentionCheckIntervalMs Frequency at which to check for expired offsets.
  * @param offsetsTopicNumPartitions The number of partitions for the offset commit topic (should not change after deployment).
  * @param offsetsTopicSegmentBytes The offsets topic segment bytes should be kept relatively small to facilitate faster
