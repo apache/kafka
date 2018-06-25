@@ -1069,13 +1069,13 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
 
-        val partitionsTobeLeader = partitionState.filter { case (_, stateInfo) =>
+        val partitionsToBeLeader = partitionState.filter { case (_, stateInfo) =>
           stateInfo.basePartitionState.leader == localBrokerId
         }
-        val partitionsToBeFollower = partitionState -- partitionsTobeLeader.keys
+        val partitionsToBeFollower = partitionState -- partitionsToBeLeader.keys
 
-        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
-          makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap)
+        val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
+          makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap)
         else
           Set.empty[Partition]
         val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
