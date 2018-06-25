@@ -115,7 +115,7 @@ public class RepartitionOptimizingIntegrationTest {
     }
 
     @Test
-    public void shouldSendCorrcetResults_NO_OPTIMIZATION() throws Exception {
+    public void shouldSendCorrectResults_NO_OPTIMIZATION() throws Exception {
         runIntegrationTest(StreamsConfig.NO_OPTIMIZATION,
                            "non-optimized-test-app",
                            FOUR_REPARTITION_TOPICS);
@@ -126,27 +126,36 @@ public class RepartitionOptimizingIntegrationTest {
                                     final String appId,
                                     final int expectedNumberRepartitionTopics) throws Exception {
 
-        Initializer<Integer> initializer = () -> 0;
-        Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
+        final Initializer<Integer> initializer = () -> 0;
+        final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
 
-        Reducer<String> reducer = (v1, v2) -> v1 + ":" + v2;
+        final Reducer<String> reducer = (v1, v2) -> v1 + ":" + v2;
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> sourceStream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> sourceStream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
-        KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
+        final KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
 
 
-        KStream<String, Long> countStream = mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
+        final KStream<String, Long> countStream = mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
+
         countStream.to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
 
-        mappedStream.groupByKey().aggregate(initializer, aggregator, Materialized.with(Serdes.String(), Serdes.Integer())).toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
-        mappedStream.groupByKey().reduce(reducer, Materialized.with(Serdes.String(), Serdes.String())).toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        mappedStream.groupByKey().aggregate(initializer,
+                                            aggregator,
+                                            Materialized.with(Serdes.String(), Serdes.Integer()))
+            .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
+
+        mappedStream.groupByKey().reduce(reducer,
+                                         Materialized.with(Serdes.String(), Serdes.String()))
+            .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         mappedStream.filter((k, v) -> k.equals("A"))
-            .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(), JoinWindows.of(5000), Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
+            .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
+                  JoinWindows.of(5000),
+                  Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .to(JOINED_TOPIC);
 
 
@@ -161,9 +170,13 @@ public class RepartitionOptimizingIntegrationTest {
         final Properties consumerConfig2 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, IntegerDeserializer.class);
         final Properties consumerConfig3 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
-        Topology topology = builder.build(streamsConfiguration);
-        String topologyString = topology.describe().toString();
+        final Topology topology = builder.build(streamsConfiguration);
+        final String topologyString = topology.describe().toString();
 
+
+        /*
+           confirming number of expected repartition topics here
+         */
         assertEquals(expectedNumberRepartitionTopics, getCountOfRepartitionTopicsFound(topologyString));
 
         final KafkaStreams streams = new KafkaStreams(topology, streamsConfiguration);
@@ -191,7 +204,7 @@ public class RepartitionOptimizingIntegrationTest {
     }
 
 
-    private int getCountOfRepartitionTopicsFound(String topologyString) {
+    private int getCountOfRepartitionTopicsFound(final String topologyString) {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
         while (matcher.find()) {
@@ -202,11 +215,11 @@ public class RepartitionOptimizingIntegrationTest {
 
 
     private List<KeyValue<String, String>> getKeyValues() {
-        List<KeyValue<String, String>> keyValueList = new ArrayList<>();
-        String[] keys = new String[]{"a", "b", "c"};
-        String[] values = new String[]{"foo", "bar", "baz"};
-        for (String key : keys) {
-            for (String value : values) {
+        final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
+        final String[] keys = new String[]{"a", "b", "c"};
+        final String[] values = new String[]{"foo", "bar", "baz"};
+        for (final String key : keys) {
+            for (final String value : values) {
                 keyValueList.add(KeyValue.pair(key, value));
             }
         }
