@@ -49,7 +49,7 @@ public class MockAdminClient extends AdminClient {
     private Node controller;
     private int timeoutNextRequests = 0;
 
-    private Map<MetricName, Metric> mockMetrics;
+    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     /**
      * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
@@ -394,6 +394,8 @@ public class MockAdminClient extends AdminClient {
             this.configs = configs != null ? configs : Collections.<String, String>emptyMap();
         }
     }
+
+    public void setMockMetrics(MetricName name, Metric metric) { mockMetrics.put(name, metric); }
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
