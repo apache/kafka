@@ -400,11 +400,11 @@ class Log(@volatile var dir: File,
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
-            segment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
+            recoverSegment(segment)
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            segment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
+            recoverSegment(segment)
         }
         addSegment(segment)
       }
@@ -418,8 +418,8 @@ class Log(@volatile var dir: File,
    * @return The number of bytes truncated from the segment
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
-  private def recoverSegmentAndReloadProducerState(segment: LogSegment,
-                                                   leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
+  private def recoverSegment(segment: LogSegment,
+                             leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     loadProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
@@ -449,7 +449,7 @@ class Log(@volatile var dir: File,
         time = time,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
-      swapSegment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
+      recoverSegment(swapSegment)
 
       // We create swap files for two cases:
       // (1) Log cleaning where multiple segments are merged into one, and
@@ -536,7 +536,7 @@ class Log(@volatile var dir: File,
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
-            recoverSegmentAndReloadProducerState(segment, Some(_leaderEpochCache))
+            recoverSegment(segment, Some(_leaderEpochCache))
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset
@@ -560,8 +560,14 @@ class Log(@volatile var dir: File,
                                 producerStateManager: ProducerStateManager): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
     val messageFormatVersion = config.messageFormatVersion.recordVersion.value
-    val nextLatestSegmentBaseOffset = lowerSegment(activeSegment.baseOffset).map(_.baseOffset)
-    val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
+    val segments = logSegments
+    val offsetsToSnapshot =
+      if (segments.size > 0) {
+        val nextLatestSegmentBaseOffset = lowerSegment(segments.last.baseOffset).map(_.baseOffset)
+        Seq(nextLatestSegmentBaseOffset, Some(segments.last.baseOffset), Some(lastOffset))
+      } else {
+        Seq(Some(lastOffset))
+      }
     info(s"Loading producer state from offset $lastOffset with message format version $messageFormatVersion")
 
     // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
