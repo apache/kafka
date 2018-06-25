@@ -364,7 +364,7 @@ public class Sender implements Runnable {
                 }
             } catch (IOException e) {
                 log.debug("Disconnect from {} while trying to send request {}. Going " +
-                        "to back off and retry. Encountered {}", targetNode, requestBuilder, e);
+                        "to back off and retry.", targetNode, requestBuilder, e);
                 if (nextRequestHandler.needsCoordinator()) {
                     // We break here so that we pick up the FindCoordinator request immediately.
                     transactionManager.lookupCoordinator(nextRequestHandler);
@@ -449,7 +449,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
-                log.debug("Broker {} disconnected while awaiting InitProducerId response: {}", node, e);
+                log.debug("Broker {} disconnected while awaiting InitProducerId response", node, e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
