@@ -80,7 +80,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 data.put(key, value);
             }
         } catch (NoSuchFileException | EOFException e) {
-            // FileNotFoundException: Ignore, may be new.
+            // NoSuchFileException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt
         } catch (IOException | ClassNotFoundException e) {
             throw new ConnectException(e);
