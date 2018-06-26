@@ -173,10 +173,10 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     // Visible for testing
     void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
         try {
-            Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
+            final Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
             for (Map.Entry<Segment, WriteBatch> entry: writeBatchMap.entrySet()) {
-                Segment segment = entry.getKey();
-                WriteBatch batch = entry.getValue();
+                final Segment segment = entry.getKey();
+                final WriteBatch batch = entry.getValue();
                 segment.write(batch);
             }
         } catch (final RocksDBException e) {
@@ -186,15 +186,12 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     // Visible for testing
     Map<Segment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
-        Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
+        final Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
         for (final KeyValue<byte[], byte[]> record : records) {
             final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
             final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
             if (segment != null) {
-                if (!writeBatchMap.containsKey(segment)) {
-                    writeBatchMap.put(segment, new WriteBatch());
-                }
-                WriteBatch batch = writeBatchMap.get(segment);
+                final WriteBatch batch = writeBatchMap.getOrDefault(segment, new WriteBatch());
                 if (record.value == null) {
                     batch.remove(record.key);
                 } else {
@@ -206,12 +203,12 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     private void toggleForBulkLoading(final boolean prepareForBulkload) {
-        for (Segment segment: segments.allSegments()) {
+        for (final Segment segment: segments.allSegments()) {
             segment.toggleDbForBulkLoading(prepareForBulkload);
         }
     }
 
-    class RocksDBSegmentsBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+    private class RocksDBSegmentsBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
 
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {

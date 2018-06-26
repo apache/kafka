@@ -329,19 +329,20 @@ public class RocksDBSegmentedBytesStoreTest {
     public void shouldRespectBulkloadOptionsDuringInit() {
         bytesStore.init(context, bytesStore);
         final String key = "a";
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
-        assertEquals(1, bytesStore.getSegments().size());
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
+        assertEquals(2, bytesStore.getSegments().size());
 
-        StateRestoreListener restoreListener = context.getRestoreListener(bytesStore.name());
+        final StateRestoreListener restoreListener = context.getRestoreListener(bytesStore.name());
 
         restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
 
-        for (Segment segment: bytesStore.getSegments()) {
+        for (final Segment segment: bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
         restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
-        for (Segment segment: bytesStore.getSegments()) {
+        for (final Segment segment: bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
         }
     }
