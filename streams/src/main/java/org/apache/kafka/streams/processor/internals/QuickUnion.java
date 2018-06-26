@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.NoSuchElementException;
 
 public class QuickUnion<T> {
@@ -42,17 +40,14 @@ public class QuickUnion<T> {
 
         if (parent == null)
             throw new NoSuchElementException("id: " + id.toString());
-        List<T> subNodes = new LinkedList<>();
+
         while (!parent.equals(current)) {
-            subNodes.add(current);
+            // do the path splitting
+            T grandparent = ids.get(parent);
+            ids.put(current, grandparent);
+
             current = parent;
-            parent = ids.get(current);
-            if (parent == null) {
-                throw new NoSuchElementException("id: " + current.toString());
-            }
-        }
-        for (T node : subNodes) {
-            ids.put(node, current);
+            parent = grandparent;
         }
         return current;
     }
