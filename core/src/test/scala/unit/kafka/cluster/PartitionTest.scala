@@ -88,6 +88,7 @@ class PartitionTest {
   }
 
   @Test
+  // Verify that partition.removeFutureLocalReplica() and partition.maybeReplaceCurrentWithFutureReplica() can run concurrently
   def testMaybeReplaceCurrentWithFutureReplica(): Unit = {
     val latch = new CountDownLatch(1)
 
