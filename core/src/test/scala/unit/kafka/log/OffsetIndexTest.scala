@@ -180,7 +180,8 @@ class OffsetIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testSanityWithSingleMessage(): Unit = {
+  def testSanityLastOffsetEqualToBaseOffset(): Unit = {
+    // Test index sanity for the case where the last offset appended to the index is equal to the base offset
     val baseOffset = 20L
     val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = baseOffset, maxIndexSize = 10 * 8)
     idx.append(baseOffset, 0)

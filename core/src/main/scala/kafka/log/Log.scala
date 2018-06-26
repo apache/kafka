@@ -246,8 +246,11 @@ class Log(@volatile var dir: File,
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     _leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
-    assert(producerStateManager.isEmpty, "Producer state must be empty during log initialization")
-    loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile, producerStateManager)
+    // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
+    // from scratch.
+    if (!producerStateManager.isEmpty)
+      throw new IllegalStateException("Producer state must be empty during log initialization")
+    rebuildProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile, producerStateManager)
 
     info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
@@ -421,7 +424,7 @@ class Log(@volatile var dir: File,
   private def recoverSegment(segment: LogSegment,
                              leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    loadProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
+    rebuildProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
@@ -555,20 +558,22 @@ class Log(@volatile var dir: File,
     recoveryPoint
   }
 
-  private def loadProducerState(lastOffset: Long,
-                                reloadFromCleanShutdown: Boolean,
-                                producerStateManager: ProducerStateManager): Unit = lock synchronized {
+  // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
+  // free of all side-effects, i.e. it must not update any log-specific state.
+  private def rebuildProducerState(lastOffset: Long,
+                                   reloadFromCleanShutdown: Boolean,
+                                   producerStateManager: ProducerStateManager): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
     val messageFormatVersion = config.messageFormatVersion.recordVersion.value
     val segments = logSegments
     val offsetsToSnapshot =
-      if (segments.size > 0) {
+      if (segments.nonEmpty) {
         val nextLatestSegmentBaseOffset = lowerSegment(segments.last.baseOffset).map(_.baseOffset)
         Seq(nextLatestSegmentBaseOffset, Some(segments.last.baseOffset), Some(lastOffset))
       } else {
         Seq(Some(lastOffset))
       }
-    info(s"Loading producer state from offset $lastOffset with message format version $messageFormatVersion")
+    info(s"Loading producer state till offset $lastOffset with message format version $messageFormatVersion")
 
     // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
     // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
@@ -615,9 +620,13 @@ class Log(@volatile var dir: File,
         }
       }
       producerStateManager.updateMapEndOffset(lastOffset)
-      updateFirstUnstableOffset()
       producerStateManager.takeSnapshot()
     }
+  }
+
+  private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
+    rebuildProducerState(lastOffset, reloadFromCleanShutdown, producerStateManager)
+    updateFirstUnstableOffset()
   }
 
   private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
@@ -1637,7 +1646,7 @@ class Log(@volatile var dir: File,
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
             this.logStartOffset = math.min(targetOffset, this.logStartOffset)
             _leaderEpochCache.clearAndFlushLatest(targetOffset)
-            loadProducerState(targetOffset, reloadFromCleanShutdown = false, producerStateManager)
+            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
           true
         }
