@@ -215,7 +215,7 @@ public class VerifiableProducer {
         int throughput = res.getInt("throughput");
         String configFile = res.getString("producer.config");
         Integer valuePrefix = res.getInt("valuePrefix");
-        Long createTime = (long) res.getInt("createTime");
+        Long createTime = res.getLong("createTime");
         Integer repeatingKeys = res.getInt("repeatingKeys");
 
         if (createTime == -1L)
