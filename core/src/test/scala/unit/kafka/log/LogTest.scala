@@ -438,6 +438,9 @@ class LogTest {
     EasyMock.expect(stateManager.isEmpty).andReturn(true)
     EasyMock.expectLastCall().once()
 
+    EasyMock.expect(stateManager.firstUnstableOffset).andReturn(None)
+    EasyMock.expectLastCall().once()
+
     EasyMock.replay(stateManager)
 
     val logProps = new Properties()
@@ -470,6 +473,9 @@ class LogTest {
     EasyMock.expectLastCall().anyTimes()
 
     EasyMock.expect(stateManager.isEmpty).andReturn(true)
+    EasyMock.expectLastCall().once()
+
+    EasyMock.expect(stateManager.firstUnstableOffset).andReturn(None)
     EasyMock.expectLastCall().once()
 
     EasyMock.replay(stateManager)
@@ -509,6 +515,9 @@ class LogTest {
     EasyMock.expectLastCall().anyTimes()
 
     EasyMock.expect(stateManager.isEmpty).andReturn(true)
+    EasyMock.expectLastCall().once()
+
+    EasyMock.expect(stateManager.firstUnstableOffset).andReturn(None)
     EasyMock.expectLastCall().once()
 
     EasyMock.replay(stateManager)
