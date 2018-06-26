@@ -186,9 +186,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     propsStream.close()
 
     val cgcArgs = Array("--bootstrap-server", brokerList,
-      "--describe",
-      "--group", "test.group",
-      "--command-config", propsFile.getAbsolutePath)
+                        "--describe",
+                        "--group", "test.group",
+                        "--command-config", propsFile.getAbsolutePath)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService
