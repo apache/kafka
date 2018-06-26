@@ -68,9 +68,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
     /**
      * Possible error codes:
      *
+     * COORDINATOR_LOAD_IN_PROGRESS (14)
      * COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR (16)
      * GROUP_AUTHORIZATION_FAILED (30)
+     * INVALID_REQUEST (42)
+     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
 
@@ -109,10 +111,6 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     public boolean hasError() {
         return this.error != Errors.NONE;
-    }
-
-    public boolean retriableError() {
-        return error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.COORDINATOR_LOAD_IN_PROGRESS;
     }
 
     public Errors error() {

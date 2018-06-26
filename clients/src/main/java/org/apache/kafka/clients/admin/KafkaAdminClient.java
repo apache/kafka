@@ -2395,15 +2395,9 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
-                    if (fcResponse.retriableError()) {
-                        // Retry, in case the error is temporary.
-                        throw fcResponse.error().exception();
-                    } else if (fcResponse.hasError()) {
-                        // All other errors are immediate failures.
-                        KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                        future.completeExceptionally(fcResponse.error().exception());
+
+                    if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
                         return;
-                    }
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
                     final int nodeId = fcResponse.node().id();
@@ -2473,6 +2467,17 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
+    }
+
+    private boolean handleFindCoordinatorError(FindCoordinatorResponse response, KafkaFutureImpl<?> future) {
+        Errors error = response.error();
+        if (error.exception() instanceof RetriableException) {
+            throw error.exception();
+        } else if (response.hasError()) {
+            future.completeExceptionally(error.exception());
+            return true;
+        }
+        return false;
     }
 
     private final static class ListConsumerGroupsResults {
@@ -2609,12 +2614,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                if (response.retriableError()) {
-                    throw response.error().exception();
-                } else if (response.hasError()) {
-                    groupOffsetListingFuture.completeExceptionally(response.error().exception());
+                if (handleFindCoordinatorError(response, groupOffsetListingFuture))
                     return;
-                }
 
                 final long nowListConsumerGroupOffsets = time.milliseconds();
 
@@ -2702,12 +2703,8 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                    if (response.retriableError()) {
-                        throw response.error().exception();
-                    } else if (response.hasError()) {
-                        futures.get(groupId).completeExceptionally(response.error().exception());
+                    if (handleFindCoordinatorError(response, futures.get(groupId)))
                         return;
-                    }
 
                     final long nowDeleteConsumerGroups = time.milliseconds();
 
