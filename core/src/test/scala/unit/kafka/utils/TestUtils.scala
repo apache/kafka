@@ -929,7 +929,7 @@ object TestUtils extends Logging {
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
-    new LogManager(logDirs = logDirs,
+    new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
                    initialDefaultConfig = defaultConfig,

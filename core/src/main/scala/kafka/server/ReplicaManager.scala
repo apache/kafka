@@ -577,14 +577,17 @@ class ReplicaManager(val config: KafkaConfig,
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
 
-          // Stop current replica movement if the destinationDir is different from the existing destination log directory
-          getReplica(topicPartition, Request.FutureLocalReplicaId) match {
-            case Some(futureReplica) =>
-              if (futureReplica.log.get.dir.getParent != destinationDir) {
+          getPartition(topicPartition) match {
+            case Some(partition) =>
+              if (partition eq ReplicaManager.OfflinePartition)
+                throw new KafkaStorageException(s"Partition $topicPartition is offline")
+
+              // Stop current replica movement if the destinationDir is different from the existing destination log directory
+              if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
-                getPartition(topicPartition).get.removeFutureLocalReplica()
-                logManager.asyncDelete(topicPartition, isFuture = true)
+                partition.removeFutureLocalReplica()
               }
+
             case None =>
           }
 
@@ -1418,7 +1421,7 @@ class ReplicaManager(val config: KafkaConfig,
       replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions)
       replicaAlterLogDirsManager.removeFetcherForPartitions(newOfflinePartitions ++ partitionsWithOfflineFutureReplica.map(_.topicPartition))
 
-      partitionsWithOfflineFutureReplica.foreach(partition => partition.removeFutureLocalReplica())
+      partitionsWithOfflineFutureReplica.foreach(partition => partition.removeFutureLocalReplica(deleteFromLogDir = false))
       newOfflinePartitions.foreach { topicPartition =>
         val partition = allPartitions.put(topicPartition, ReplicaManager.OfflinePartition)
         partition.removePartitionMetrics()
