@@ -28,6 +28,8 @@
         empty all its offsets will be removed after default offset retention period (or the one set by broker) has passed (unless the group becomes
         active again). Offsets associated with standalone (simple) consumers, that do not use Kafka group management, will be removed after default
         offset retention period (or the one set by broker) has passed since their last commit.</li>
+    <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
+        This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.</li>
 </ol>
 
 
@@ -77,9 +79,6 @@
         (added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>),
         until all brokers in the cluster have been updated.
         <p><b>NOTE:</b> any prefixed ACLs added to a cluster, even after the cluster is fully upgraded, will be ignored should the cluster be downgraded again.
-    </li>
-    <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
-        This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.
     </li>
 </ol>
 
