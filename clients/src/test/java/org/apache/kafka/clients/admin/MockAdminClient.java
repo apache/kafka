@@ -395,7 +395,9 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
-    public void setMockMetrics(MetricName name, Metric metric) { mockMetrics.put(name, metric); }
+    public void setMockMetrics(MetricName name, Metric metric) {
+        mockMetrics.put(name, metric);
+    }
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
