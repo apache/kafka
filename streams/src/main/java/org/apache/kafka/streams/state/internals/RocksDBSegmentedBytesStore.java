@@ -191,10 +191,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
             final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
             if (segment != null) {
-                if (!writeBatchMap.containsKey(segment)) {
-                    writeBatchMap.put(segment, new WriteBatch());
-                }
-                final WriteBatch batch = writeBatchMap.get(segment);
+                final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                 if (record.value == null) {
                     batch.remove(record.key);
                 } else {
