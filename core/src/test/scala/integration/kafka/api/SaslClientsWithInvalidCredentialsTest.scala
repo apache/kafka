@@ -13,6 +13,7 @@
 package kafka.api
 
 import java.nio.file.Files
+import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -120,12 +121,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
-    verifyAuthenticationException(consumer.poll(10000))
+    verifyAuthenticationException(consumer.poll(Duration.ofMillis(1000)))
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
     createClientCredential()
     verifyWithRetry(sendOneRecord())
-    verifyWithRetry(assertEquals(1, consumer.poll(1000).count))
+    verifyWithRetry(assertEquals(1, consumer.poll(Duration.ofMillis(1000)).count))
   }
 
   @Test
@@ -164,6 +165,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     consumer.subscribe(List(topic).asJava)
 
     verifyAuthenticationException(consumerGroupService.listGroups)
+    consumerGroupService.close()
   }
 
   @Test
@@ -174,8 +176,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     val consumer = consumers.head
     consumer.subscribe(List(topic).asJava)
 
-    verifyWithRetry(consumer.poll(1000))
+    verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
     assertEquals(1, consumerGroupService.listGroups.size)
+    consumerGroupService.close()
   }
 
   private def prepareConsumerGroupService = {
