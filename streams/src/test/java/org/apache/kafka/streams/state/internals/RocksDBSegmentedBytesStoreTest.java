@@ -302,9 +302,9 @@ public class RocksDBSegmentedBytesStoreTest {
         final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
-        Map<Segment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
+        final Map<Segment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
         assertEquals(2, writeBatchMap.size());
-        for (WriteBatch batch: writeBatchMap.values()) {
+        for (final WriteBatch batch: writeBatchMap.values()) {
             assertEquals(1, batch.count());
         }
     }
