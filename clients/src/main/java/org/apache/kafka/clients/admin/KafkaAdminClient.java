@@ -2395,14 +2395,13 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
-                    Errors error = fcResponse.error();
-                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                        // Retry COORDINATOR_NOT_AVAILABLE, in case the error is temporary.
-                        throw error.exception();
-                    } else if (error != Errors.NONE) {
+                    if (fcResponse.retriableError()) {
+                        // Retry, in case the error is temporary.
+                        throw fcResponse.error().exception();
+                    } else if (fcResponse.hasError()) {
                         // All other errors are immediate failures.
                         KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                        future.completeExceptionally(error.exception());
+                        future.completeExceptionally(fcResponse.error().exception());
                         return;
                     }
 
@@ -2610,9 +2609,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                Errors error = response.error();
-                if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                    throw error.exception();
+                if (response.retriableError()) {
+                    throw response.error().exception();
                 } else if (response.hasError()) {
                     groupOffsetListingFuture.completeExceptionally(response.error().exception());
                     return;
@@ -2704,9 +2702,8 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                    Errors error = response.error();
-                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                        throw error.exception();
+                    if (response.retriableError()) {
+                        throw response.error().exception();
                     } else if (response.hasError()) {
                         futures.get(groupId).completeExceptionally(response.error().exception());
                         return;

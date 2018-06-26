@@ -111,6 +111,10 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return this.error != Errors.NONE;
     }
 
+    public boolean retriableError() {
+        return error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.COORDINATOR_LOAD_IN_PROGRESS;
+    }
+
     public Errors error() {
         return error;
     }
