@@ -55,4 +55,9 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     public long segmentIntervalMs() {
         return Math.max(retentionPeriod / 2, 60_000L);
     }
+
+    @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
+    }
 }
