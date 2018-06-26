@@ -123,83 +123,51 @@ public class InternalTopologyBuilder {
     private Map<Integer, Set<String>> nodeGroups = null;
 
     // TODO: this is only temporary for 2.0 and should be removed
-    public final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
+    private final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
 
-    public interface StateStoreFactory {
-        Set<String> users();
-        boolean loggingEnabled();
-        StateStore build();
-        String name();
-        boolean isWindowStore();
-        Map<String, String> logConfig();
-        long retentionPeriod();
-    }
-
-    private static abstract class AbstractStateStoreFactory implements StateStoreFactory {
-        private final Set<String> users = new HashSet<>();
-        private final String name;
-        private final boolean loggingEnabled;
-        private final boolean windowStore;
-        private final Map<String, String> logConfig;
-
-        AbstractStateStoreFactory(final String name,
-                                  final boolean loggingEnabled,
-                                  final boolean windowStore,
-                                  final Map<String, String> logConfig) {
-            this.name = name;
-            this.loggingEnabled = loggingEnabled;
-            this.windowStore = windowStore;
-            this.logConfig = logConfig;
-        }
-
-        @Override
-        public Set<String> users() {
-            return users;
-        }
-
-        @Override
-        public boolean loggingEnabled() {
-            return loggingEnabled;
-        }
-
-        @Override
-        public String name() {
-            return name;
-        }
-
-        @Override
-        public boolean isWindowStore() {
-            return windowStore;
-        }
-
-        @Override
-        public Map<String, String> logConfig() {
-            return logConfig;
-        }
-    }
-
-    private static class StoreBuilderFactory extends AbstractStateStoreFactory {
+    public static class StateStoreFactory {
         private final StoreBuilder builder;
+        private final Set<String> users = new HashSet<>();
 
-        StoreBuilderFactory(final StoreBuilder<?> builder) {
-            super(builder.name(),
-                  builder.loggingEnabled(),
-                  builder instanceof WindowStoreBuilder,
-                  builder.logConfig());
+        private StateStoreFactory(final StoreBuilder<?> builder) {
             this.builder = builder;
         }
 
-        @Override
         public StateStore build() {
             return builder.build();
         }
 
-        @Override
-        public long retentionPeriod() {
-            if (!isWindowStore()) {
+        long retentionPeriod() {
+            if (isWindowStore()) {
+                return ((WindowStoreBuilder) builder).retentionPeriod();
+            } else {
                 throw new IllegalStateException("retentionPeriod is not supported when not a window store");
             }
-            return ((WindowStoreBuilder) builder).retentionPeriod();
+        }
+
+        private Set<String> users() {
+            return users;
+        }
+
+        /** Visible for testing */
+        public boolean loggingEnabled() {
+            return builder.loggingEnabled();
+        }
+
+        private String name() {
+            return builder.name();
+        }
+
+        private boolean isWindowStore() {
+            return builder instanceof WindowStoreBuilder;
+        }
+
+        // Apparently Java strips the generics from this method because we're using the raw type for builder,
+        // even though this method doesn't use builder's (missing) type parameter. Our usage seems obviously
+        // correct, though, hence the suppression.
+        @SuppressWarnings("unchecked")
+        private Map<String, String> logConfig() {
+            return builder.logConfig();
         }
     }
 
@@ -442,6 +410,11 @@ public class InternalTopologyBuilder {
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
+        if (predecessorNames.length == 0) {
+            throw new TopologyException("Sink " + name + " must have at least one parent");
+        }
+
         addSink(name, new StaticTopicNameExtractor<K, V>(topic), keySerializer, valSerializer, partitioner, predecessorNames);
         nodeToSinkTopic.put(name, topic);
     }
@@ -454,8 +427,12 @@ public class InternalTopologyBuilder {
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topicExtractor, "topic extractor must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
+        }
+        if (predecessorNames.length == 0) {
+            throw new TopologyException("Sink " + name + " must have at least one parent");
         }
 
         for (final String predecessor : predecessorNames) {
@@ -481,8 +458,12 @@ public class InternalTopologyBuilder {
                                    final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
+        }
+        if (predecessorNames.length == 0) {
+            throw new TopologyException("Processor " + name + " must have at least one parent");
         }
 
         for (final String predecessor : predecessorNames) {
@@ -513,7 +494,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
         }
 
-        stateFactories.put(storeBuilder.name(), new StoreBuilderFactory(storeBuilder));
+        stateFactories.put(storeBuilder.name(), new StateStoreFactory(storeBuilder));
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
@@ -590,21 +571,6 @@ public class InternalTopologyBuilder {
             throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
         }
         storeToSourceChangelogTopic.put(storeBuilder, topic);
-    }
-
-    public final void connectProcessors(final String... processorNames) {
-        if (processorNames.length < 2) {
-            throw new TopologyException("At least two processors need to participate in the connection.");
-        }
-
-        for (final String processorName : processorNames) {
-            Objects.requireNonNull(processorName, "processor name can't be null");
-            if (!nodeFactories.containsKey(processorName)) {
-                throw new TopologyException("Processor " + processorName + " is not added yet.");
-            }
-        }
-
-        nodeGrouper.unite(processorNames[0], Arrays.copyOfRange(processorNames, 1, processorNames.length));
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -1126,12 +1092,12 @@ public class InternalTopologyBuilder {
 
     private InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory factory,
                                                            final String name) {
-        if (!factory.isWindowStore()) {
-            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
-        } else {
+        if (factory.isWindowStore()) {
             final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig());
             config.setRetentionMs(factory.retentionPeriod());
             return config;
+        } else {
+            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
         }
     }
 
@@ -1746,18 +1712,18 @@ public class InternalTopologyBuilder {
         public String toString() {
             final StringBuilder sb = new StringBuilder();
             sb.append("Topologies:\n ");
-            final TopologyDescription.Subtopology[] sortedSubtopologies = 
+            final TopologyDescription.Subtopology[] sortedSubtopologies =
                 subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[subtopologies.size()]);
-            final TopologyDescription.GlobalStore[] sortedGlobalStores = 
+            final TopologyDescription.GlobalStore[] sortedGlobalStores =
                 globalStores.descendingSet().toArray(new TopologyDescription.GlobalStore[globalStores.size()]);
             int expectedId = 0;
             int subtopologiesIndex = sortedSubtopologies.length - 1;
             int globalStoresIndex = sortedGlobalStores.length - 1;
             while (subtopologiesIndex != -1 && globalStoresIndex != -1) {
                 sb.append("  ");
-                final TopologyDescription.Subtopology subtopology = 
+                final TopologyDescription.Subtopology subtopology =
                     sortedSubtopologies[subtopologiesIndex];
-                final TopologyDescription.GlobalStore globalStore = 
+                final TopologyDescription.GlobalStore globalStore =
                     sortedGlobalStores[globalStoresIndex];
                 if (subtopology.id() == expectedId) {
                     sb.append(subtopology);
@@ -1769,14 +1735,14 @@ public class InternalTopologyBuilder {
                 expectedId++;
             }
             while (subtopologiesIndex != -1) {
-                final TopologyDescription.Subtopology subtopology = 
+                final TopologyDescription.Subtopology subtopology =
                     sortedSubtopologies[subtopologiesIndex];
                 sb.append("  ");
                 sb.append(subtopology);
                 subtopologiesIndex--;
             }
             while (globalStoresIndex != -1) {
-                final TopologyDescription.GlobalStore globalStore = 
+                final TopologyDescription.GlobalStore globalStore =
                     sortedGlobalStores[globalStoresIndex];
                 sb.append("  ");
                 sb.append(globalStore);

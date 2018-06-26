@@ -50,8 +50,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -63,6 +66,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -70,6 +76,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@RunWith(value = Parameterized.class)
 public class TopologyTestDriverTest {
     private final static String SOURCE_TOPIC_1 = "source-topic-1";
     private final static String SOURCE_TOPIC_2 = "source-topic-2";
@@ -93,13 +100,11 @@ public class TopologyTestDriverTest {
     private final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
 
     private TopologyTestDriver testDriver;
-    private final Properties config = new Properties() {
-        {
-            put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver");
-            put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-            put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        }
-    };
+    private final Properties config = mkProperties(mkMap(
+        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
+        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
+    ));
     private KeyValueStore<String, Long> store;
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
@@ -108,6 +113,23 @@ public class TopologyTestDriverTest {
         new StringSerializer(),
         new LongSerializer());
 
+    private final boolean eosEnabled;
+
+    @Parameterized.Parameters(name = "Eos enabled = {0}")
+    public static Collection<Object[]> data() {
+        final List<Object[]> values = new ArrayList<>();
+        for (final boolean eosEnabled : Arrays.asList(true, false)) {
+            values.add(new Object[] {eosEnabled});
+        }
+        return values;
+    }
+
+    public TopologyTestDriverTest(final boolean eosEnabled) {
+        this.eosEnabled = eosEnabled;
+        if (eosEnabled) {
+            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        }
+    }
 
     private final static class Record {
         private final Object key;
@@ -353,6 +375,8 @@ public class TopologyTestDriverTest {
 
         testDriver.close();
         assertTrue(mockProcessors.get(0).closed);
+        // As testDriver is already closed, bypassing @After tearDown testDriver.close().
+        testDriver = null;
     }
 
     @Test
@@ -684,7 +708,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
-        topology.addProcessor("processor", () -> null);
+        topology.addProcessor("processor", () -> null, "source");
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),

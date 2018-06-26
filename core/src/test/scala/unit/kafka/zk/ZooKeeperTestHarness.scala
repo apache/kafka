@@ -32,6 +32,7 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
+import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
@@ -91,6 +92,7 @@ object ZooKeeperTestHarness {
   // which reset static JAAS configuration.
   val unexpectedThreadNames = Set(ControllerEventManager.ControllerEventThreadName,
                                   KafkaProducer.NETWORK_THREAD_PREFIX,
+                                  AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
                                   AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
                                   ZkClientEventThreadPrefix)
 

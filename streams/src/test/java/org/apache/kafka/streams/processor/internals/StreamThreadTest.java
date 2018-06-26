@@ -599,7 +599,7 @@ public class StreamThreadTest {
     @Test
     public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, "topic");
-        internalTopologyBuilder.addSink("out", "output", null, null, null);
+        internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -692,7 +692,7 @@ public class StreamThreadTest {
     @Test
     public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
-        internalTopologyBuilder.addSink("out", "output", null, null, null);
+        internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -84,6 +85,22 @@ public class StateSerdesTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfValueClassIsNull() {
         new StateSerdes<>("anyName", Serdes.ByteArray(), null);
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
+        Class myClass = Class.forName("java.lang.String");
+        StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        Integer myInt = 123;
+        stateSerdes.rawValue(myInt);
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
+        Class myClass = Class.forName("java.lang.String");
+        StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        Integer myInt = 123;
+        stateSerdes.rawKey(myInt);
     }
 
 }

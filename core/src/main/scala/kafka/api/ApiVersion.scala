@@ -73,7 +73,9 @@ object ApiVersion {
     // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279
     KAFKA_2_0_IV0,
     // Introduced ApiVersionsRequest V2 via KIP-219
-    KAFKA_2_0_IV1
+    KAFKA_2_0_IV1,
+    // Introduced new schemas for group offset (v2) and group metadata (v2) (KIP-211)
+    KAFKA_2_1_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -248,4 +250,11 @@ case object KAFKA_2_0_IV1 extends DefaultApiVersion {
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 16
+}
+
+case object KAFKA_2_1_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "2.1"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 18
 }

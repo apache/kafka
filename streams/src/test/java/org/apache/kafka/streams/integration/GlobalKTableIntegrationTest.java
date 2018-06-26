@@ -22,13 +22,13 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -52,6 +53,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertThat;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
@@ -220,7 +224,27 @@ public class GlobalKTableIntegrationTest {
             }
         }, 30000L, "waiting for final values");
     }
-    
+
+    @Test
+    public void shouldRestoreGlobalInMemoryKTableOnRestart() throws Exception {
+        builder = new StreamsBuilder();
+        globalTable = builder.globalTable(
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore(globalStore)));
+
+        produceInitialGlobalTableValues();
+
+        startStreams();
+        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
+        kafkaStreams.close();
+
+        startStreams();
+        store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
+    }
+
     private void createTopics() throws InterruptedException {
         streamTopic = "stream-" + testNo;
         globalTableTopic = "globalTable-" + testNo;

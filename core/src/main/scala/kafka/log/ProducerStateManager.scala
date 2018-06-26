@@ -20,11 +20,10 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 
-import kafka.common.KafkaException
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._

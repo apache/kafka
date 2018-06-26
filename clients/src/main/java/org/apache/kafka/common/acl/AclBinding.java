@@ -18,8 +18,8 @@
 package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourcePattern;
 
 import java.util.Objects;
@@ -54,7 +54,7 @@ public class AclBinding {
      */
     @Deprecated
     public AclBinding(Resource resource, AccessControlEntry entry) {
-        this(new ResourcePattern(resource.resourceType(), resource.name(), ResourceNameType.LITERAL), entry);
+        this(new ResourcePattern(resource.resourceType(), resource.name(), PatternType.LITERAL), entry);
     }
 
     /**

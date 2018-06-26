@@ -22,7 +22,7 @@ import java.util.Properties
 import joptsimple._
 import kafka.common.AdminCommandFailedException
 import kafka.utils.Implicits._
-import kafka.consumer.Whitelist
+import kafka.utils.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils._

@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**
-     * Put a key-value pair with the current wall-clock time as the timestamp
+     * Put a key-value pair with the current record time as the timestamp
      * into the corresponding window
      * @param key The key to associate the value to
      * @param value The value to update, it can be null;

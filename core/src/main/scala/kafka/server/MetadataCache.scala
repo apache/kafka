@@ -65,19 +65,29 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  private def getPartitionMetadata(topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
+  // If errorUnavailableListeners=true, return LISTENER_NOT_FOUND if listener is missing on the broker.
+  // Otherwise, return LEADER_NOT_AVAILABLE for broker unavailable and missing listener (Metadata response v5 and below).
+  private def getPartitionMetadata(topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean,
+                                   errorUnavailableListeners: Boolean): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
       partitions.map { case (partitionId, partitionState) =>
         val topicPartition = TopicAndPartition(topic, partitionId)
-        val maybeLeader = getAliveEndpoint(partitionState.basePartitionState.leader, listenerName)
+        val leaderBrokerId = partitionState.basePartitionState.leader
+        val maybeLeader = getAliveEndpoint(leaderBrokerId, listenerName)
         val replicas = partitionState.basePartitionState.replicas.asScala.map(_.toInt)
         val replicaInfo = getEndpoints(replicas, listenerName, errorUnavailableEndpoints)
         val offlineReplicaInfo = getEndpoints(partitionState.offlineReplicas.asScala.map(_.toInt), listenerName, errorUnavailableEndpoints)
 
         maybeLeader match {
           case None =>
-            debug(s"Error while fetching metadata for $topicPartition: leader not available")
-            new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, partitionId, Node.noNode(),
+            val error = if (!aliveBrokers.contains(brokerId)) { // we are already holding the read lock
+              debug(s"Error while fetching metadata for $topicPartition: leader not available")
+              Errors.LEADER_NOT_AVAILABLE
+            } else {
+              debug(s"Error while fetching metadata for $topicPartition: listener $listenerName not found on leader $leaderBrokerId")
+              if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
+            }
+            new MetadataResponse.PartitionMetadata(error, partitionId, Node.noNode(),
               replicaInfo.asJava, java.util.Collections.emptyList(), offlineReplicaInfo.asJava)
 
           case Some(leader) =>
@@ -112,10 +122,11 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
+  def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false,
+                       errorUnavailableListeners: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
     inReadLock(partitionMetadataLock) {
       topics.toSeq.flatMap { topic =>
-        getPartitionMetadata(topic, listenerName, errorUnavailableEndpoints).map { partitionMetadata =>
+        getPartitionMetadata(topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
           new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), partitionMetadata.toBuffer.asJava)
         }
       }

@@ -64,6 +64,7 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer netReadBuffer;
     private ByteBuffer netWriteBuffer;
     private ByteBuffer appReadBuffer;
+    private boolean hasBytesBuffered;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
@@ -503,13 +504,17 @@ public class SslTransportLayer implements TransportLayer {
             read = readFromAppBuffer(dst);
         }
 
+        boolean readFromNetwork = false;
         boolean isClosed = false;
         // Each loop reads at most once from the socket.
         while (dst.remaining() > 0) {
             int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
-            if (netReadBuffer.remaining() > 0)
+            if (netReadBuffer.remaining() > 0) {
                 netread = readFromSocketChannel();
+                if (netread > 0)
+                    readFromNetwork = true;
+            }
 
             while (netReadBuffer.position() > 0) {
                 netReadBuffer.flip();
@@ -563,6 +568,7 @@ public class SslTransportLayer implements TransportLayer {
             if (netread <= 0 || isClosed)
                 break;
         }
+        updateBytesBuffered(readFromNetwork || read > 0);
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
         // on a subsequent poll.
         return read;
@@ -793,6 +799,11 @@ public class SslTransportLayer implements TransportLayer {
         return netReadBuffer;
     }
 
+    // Visibility for testing
+    protected ByteBuffer appReadBuffer() {
+        return appReadBuffer;
+    }
+
     /**
      * SSL exceptions are propagated as authentication failures so that clients can avoid
      * retries and report the failure. If `flush` is true, exceptions are propagated after
@@ -826,12 +837,22 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public boolean hasBytesBuffered() {
-        return netReadBuffer.position() != 0 || appReadBuffer.position() != 0;
+        return hasBytesBuffered;
+    }
+
+    // Update `hasBytesBuffered` status. If any bytes were read from the network or
+    // if data was returned from read, `hasBytesBuffered` is set to true if any buffered
+    // data is still remaining. If not, `hasBytesBuffered` is set to false since no progress
+    // can be made until more data is available to read from the network.
+    private void updateBytesBuffered(boolean madeProgress) {
+        if (madeProgress)
+            hasBytesBuffered = netReadBuffer.position() != 0 || appReadBuffer.position() != 0;
+        else
+            hasBytesBuffered = false;
     }
 
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, this);
     }
-
 }

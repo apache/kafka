@@ -29,7 +29,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
@@ -321,7 +321,7 @@ object DumpLogSegments {
 
     private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer) = {
       val groupId = groupMetadataKey.key
-      val group = GroupMetadataManager.readGroupMessageValue(groupId, payload)
+      val group = GroupMetadataManager.readGroupMessageValue(groupId, payload, Time.SYSTEM)
       val protocolType = group.protocolType.getOrElse("")
 
       val assignment = group.allMemberMetadata.map { member =>

@@ -28,16 +28,14 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -83,7 +81,7 @@ public class PageViewTypedDemo {
         public String region;
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -151,56 +149,56 @@ public class PageViewTypedDemo {
                                                           Consumed.with(Serdes.String(), userProfileSerde));
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
-            .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
-                @Override
-                public PageViewByRegion apply(PageView view, UserProfile profile) {
-                    PageViewByRegion viewByRegion = new PageViewByRegion();
-                    viewByRegion.user = view.user;
-                    viewByRegion.page = view.page;
+            .leftJoin(users, (view, profile) -> {
+                PageViewByRegion viewByRegion = new PageViewByRegion();
+                viewByRegion.user = view.user;
+                viewByRegion.page = view.page;
 
-                    if (profile != null) {
-                        viewByRegion.region = profile.region;
-                    } else {
-                        viewByRegion.region = "UNKNOWN";
-                    }
-                    return viewByRegion;
+                if (profile != null) {
+                    viewByRegion.region = profile.region;
+                } else {
+                    viewByRegion.region = "UNKNOWN";
                 }
+                return viewByRegion;
             })
-            .map(new KeyValueMapper<String, PageViewByRegion, KeyValue<String, PageViewByRegion>>() {
-                @Override
-                public KeyValue<String, PageViewByRegion> apply(String user, PageViewByRegion viewRegion) {
-                    return new KeyValue<>(viewRegion.region, viewRegion);
-                }
-            })
+            .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
             .groupByKey(Serialized.with(Serdes.String(), pageViewByRegionSerde))
             .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(7)).advanceBy(TimeUnit.SECONDS.toMillis(1)))
             .count()
             .toStream()
-            .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {
-                @Override
-                public KeyValue<WindowedPageViewByRegion, RegionCount> apply(Windowed<String> key, Long value) {
-                    WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
-                    wViewByRegion.windowStart = key.window().start();
-                    wViewByRegion.region = key.key();
+            .map((key, value) -> {
+                WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
+                wViewByRegion.windowStart = key.window().start();
+                wViewByRegion.region = key.key();
 
-                    RegionCount rCount = new RegionCount();
-                    rCount.region = key.key();
-                    rCount.count = value;
+                RegionCount rCount = new RegionCount();
+                rCount.region = key.key();
+                rCount.count = value;
 
-                    return new KeyValue<>(wViewByRegion, rCount);
-                }
+                return new KeyValue<>(wViewByRegion, rCount);
             });
 
         // write to the result topic
         regionCount.to("streams-pageviewstats-typed-output", Produced.with(wPageViewByRegionSerde, regionCountSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.start();
+        final CountDownLatch latch = new CountDownLatch(1);
 
-        // usually the stream application would be running forever,
-        // in this example we just let it run for some time and stop since the input data is finite.
-        Thread.sleep(5000L);
+        // attach shutdown handler to catch control-c
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-pipe-shutdown-hook") {
+            @Override
+            public void run() {
+                streams.close();
+                latch.countDown();
+            }
+        });
 
-        streams.close();
+        try {
+            streams.start();
+            latch.await();
+        } catch (Throwable e) {
+            System.exit(1);
+        }
+        System.exit(0);
     }
 }

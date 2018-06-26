@@ -798,8 +798,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
                 setGenerationId(generation.generationId).
-                setMemberId(generation.memberId).
-                setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
+                setMemberId(generation.memberId);
 
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 

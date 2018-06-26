@@ -109,14 +109,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
      *
      * @param buffer The buffer to write the batches to
      * @param position Position in the buffer to read from
-     * @return The same buffer
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
-    public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
+    public void readInto(ByteBuffer buffer, int position) throws IOException {
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
-        return buffer;
     }
 
     /**

@@ -159,6 +159,16 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
+    @Test(expected = TopologyException.class)
+    public void testAddProcessorWithEmptyParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddProcessorWithNullParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier(), null);
+    }
+
     @Test
     public void testAddSinkWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
@@ -177,6 +187,17 @@ public class InternalTopologyBuilderTest {
     @Test(expected = TopologyException.class)
     public void testAddSinkWithSelfParent() {
         builder.addSink("sink", "topic-2", null, null, null, "sink");
+    }
+
+
+    @Test(expected = TopologyException.class)
+    public void testAddSinkWithEmptyParents() {
+        builder.addSink("sink", "topic", null, null, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddSinkWithNullParents() {
+        builder.addSink("sink", "topic", null, null, null, null);
     }
 
     @Test
@@ -275,7 +296,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStoreWithSink() {
-        builder.addSink("sink-1", "topic-1", null, null, null);
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
         try {
             builder.addStateStore(storeBuilder, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");

@@ -18,7 +18,7 @@
 package kafka.zk
 
 import kafka.security.auth.{Resource, Topic}
-import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

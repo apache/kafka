@@ -17,13 +17,13 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.junit.Test;
 
-import static org.apache.kafka.common.resource.ResourceNameType.LITERAL;
-import static org.apache.kafka.common.resource.ResourceNameType.PREFIXED;
+import static org.apache.kafka.common.resource.PatternType.LITERAL;
+import static org.apache.kafka.common.resource.PatternType.PREFIXED;
 import static org.apache.kafka.common.resource.ResourceType.ANY;
 import static org.apache.kafka.common.resource.ResourceType.GROUP;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
@@ -32,26 +32,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ResourcePatternFilterTest {
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfResourceTypeIsAny() {
-        new ResourcePatternFilter(ANY, null, ResourceNameType.ANY)
-            .matches(new ResourcePattern(ANY, "Name", PREFIXED));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfResourceNameTypeIsAny() {
-        new ResourcePatternFilter(ANY, null, ResourceNameType.ANY)
-            .matches(new ResourcePattern(GROUP, "Name", ResourceNameType.ANY));
-    }
-
     @Test
     public void shouldBeUnknownIfResourceTypeUnknown() {
-        assertTrue(new ResourcePatternFilter(UNKNOWN, null, ResourceNameType.LITERAL).isUnknown());
+        assertTrue(new ResourcePatternFilter(UNKNOWN, null, PatternType.LITERAL).isUnknown());
     }
 
     @Test
-    public void shouldBeUnknownIfResourceNameTypeUnknown() {
-        assertTrue(new ResourcePatternFilter(GROUP, null, ResourceNameType.UNKNOWN).isUnknown());
+    public void shouldBeUnknownIfPatternTypeUnknown() {
+        assertTrue(new ResourcePatternFilter(GROUP, null, PatternType.UNKNOWN).isUnknown());
     }
 
     @Test
@@ -73,7 +61,7 @@ public class ResourcePatternFilterTest {
     }
 
     @Test
-    public void shouldNotMatchIfDifferentNameType() {
+    public void shouldNotMatchIfDifferentPatternType() {
         assertFalse(new ResourcePatternFilter(TOPIC, "Name", LITERAL)
             .matches(new ResourcePattern(TOPIC, "Name", PREFIXED)));
     }
@@ -91,8 +79,14 @@ public class ResourcePatternFilterTest {
     }
 
     @Test
-    public void shouldMatchWhereResourceNameTypeIsAny() {
-        assertTrue(new ResourcePatternFilter(TOPIC, null, ResourceNameType.ANY)
+    public void shouldMatchWherePatternTypeIsAny() {
+        assertTrue(new ResourcePatternFilter(TOPIC, null, PatternType.ANY)
+            .matches(new ResourcePattern(TOPIC, "Name", PREFIXED)));
+    }
+
+    @Test
+    public void shouldMatchWherePatternTypeIsMatch() {
+        assertTrue(new ResourcePatternFilter(TOPIC, null, PatternType.MATCH)
             .matches(new ResourcePattern(TOPIC, "Name", PREFIXED)));
     }
 
@@ -103,14 +97,20 @@ public class ResourcePatternFilterTest {
     }
 
     @Test
-    public void shouldMatchLiteralIfNameMatchesAndFilterIsOnAnyNameType() {
-        assertTrue(new ResourcePatternFilter(TOPIC, "Name", ResourceNameType.ANY)
+    public void shouldMatchLiteralIfNameMatchesAndFilterIsOnPatternTypeAny() {
+        assertTrue(new ResourcePatternFilter(TOPIC, "Name", PatternType.ANY)
+            .matches(new ResourcePattern(TOPIC, "Name", LITERAL)));
+    }
+
+    @Test
+    public void shouldMatchLiteralIfNameMatchesAndFilterIsOnPatternTypeMatch() {
+        assertTrue(new ResourcePatternFilter(TOPIC, "Name", PatternType.MATCH)
             .matches(new ResourcePattern(TOPIC, "Name", LITERAL)));
     }
 
     @Test
     public void shouldNotMatchLiteralIfNamePrefixed() {
-        assertFalse(new ResourcePatternFilter(TOPIC, "Name-something", ResourceNameType.ANY)
+        assertFalse(new ResourcePatternFilter(TOPIC, "Name-something", PatternType.MATCH)
             .matches(new ResourcePattern(TOPIC, "Name", LITERAL)));
     }
 
@@ -133,8 +133,14 @@ public class ResourcePatternFilterTest {
     }
 
     @Test
-    public void shouldMatchLiteralWildcardIfFilterHasNameTypeOfAny() {
-        assertTrue(new ResourcePatternFilter(TOPIC, "Name", ResourceNameType.ANY)
+    public void shouldNotMatchLiteralWildcardIfFilterHasPatternTypeOfAny() {
+        assertFalse(new ResourcePatternFilter(TOPIC, "Name", PatternType.ANY)
+            .matches(new ResourcePattern(TOPIC, "*", LITERAL)));
+    }
+
+    @Test
+    public void shouldMatchLiteralWildcardIfFilterHasPatternTypeOfMatch() {
+        assertTrue(new ResourcePatternFilter(TOPIC, "Name", PatternType.MATCH)
             .matches(new ResourcePattern(TOPIC, "*", LITERAL)));
     }
 
@@ -157,8 +163,14 @@ public class ResourcePatternFilterTest {
     }
 
     @Test
-    public void shouldMatchPrefixedIfNamePrefixedAnyFilterTypeIsAny() {
-        assertTrue(new ResourcePatternFilter(TOPIC, "Name-something", ResourceNameType.ANY)
+    public void shouldNotMatchPrefixedIfNamePrefixedAnyFilterTypeIsAny() {
+        assertFalse(new ResourcePatternFilter(TOPIC, "Name-something", PatternType.ANY)
+            .matches(new ResourcePattern(TOPIC, "Name", PREFIXED)));
+    }
+
+    @Test
+    public void shouldMatchPrefixedIfNamePrefixedAnyFilterTypeIsMatch() {
+        assertTrue(new ResourcePatternFilter(TOPIC, "Name-something", PatternType.MATCH)
             .matches(new ResourcePattern(TOPIC, "Name", PREFIXED)));
     }
 }

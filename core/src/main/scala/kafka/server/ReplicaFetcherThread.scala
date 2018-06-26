@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 
 import AbstractFetcherThread.ResultWithPartitions
-import kafka.api.{FetchRequest => _, _}
+import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
@@ -112,7 +112,7 @@ class ReplicaFetcherThread(name: String,
         .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
-    partition.appendRecordsToFollower(records)
+    partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
 
     if (isTraceEnabled)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"

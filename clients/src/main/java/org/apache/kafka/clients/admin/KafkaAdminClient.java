@@ -166,6 +166,11 @@ public class KafkaAdminClient extends AdminClient {
      */
     private static final long INVALID_SHUTDOWN_TIME = -1;
 
+    /**
+     * Thread name prefix for admin client network thread
+     */
+    static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
+
     private final Logger log;
 
     /**
@@ -409,7 +414,7 @@ public class KafkaAdminClient extends AdminClient {
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
-        String threadName = "kafka-admin-client-thread | " + clientId;
+        String threadName = NETWORK_THREAD_PREFIX + " | " + clientId;
         this.thread = new KafkaThread(threadName, runnable, true);
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
