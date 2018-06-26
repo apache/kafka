@@ -165,7 +165,7 @@ public class VerifiableProducer {
                 .action(store())
                 .required(false)
                 .setDefault(-1)
-                .type(Integer.class)
+                .type(Long.class)
                 .metavar("CREATETIME")
                 .dest("createTime")
                 .help("Send messages with creation time starting at the arguments value, in milliseconds since epoch");
