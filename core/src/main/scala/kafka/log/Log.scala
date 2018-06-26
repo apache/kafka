@@ -250,7 +250,7 @@ class Log(@volatile var dir: File,
     // from scratch.
     if (!producerStateManager.isEmpty)
       throw new IllegalStateException("Producer state must be empty during log initialization")
-    rebuildProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile, producerStateManager)
+    loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
 
     info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
