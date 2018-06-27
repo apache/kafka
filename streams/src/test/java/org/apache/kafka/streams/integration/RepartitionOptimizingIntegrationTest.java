@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -131,11 +132,16 @@ public class RepartitionOptimizingIntegrationTest {
 
         final Reducer<String> reducer = (v1, v2) -> v1 + ":" + v2;
 
+        final List<String> processorValueCollector = new ArrayList<>();
+
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
+
+
+        mappedStream.filter((k, v) -> k.equals("B")).mapValues(v -> v.toUpperCase(Locale.getDefault())).process(() -> new SimpleProcessor(processorValueCollector));
 
 
         final KStream<String, Long> countStream = mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
@@ -148,7 +154,9 @@ public class RepartitionOptimizingIntegrationTest {
                                             Materialized.with(Serdes.String(), Serdes.Integer()))
             .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
-        mappedStream.groupByKey().reduce(reducer,
+
+        // adding operators for case where the repartition node is further downstream
+        mappedStream.filter((k, v) -> true).mapValues(v -> v).groupByKey().reduce(reducer,
                                          Materialized.with(Serdes.String(), Serdes.String()))
             .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
@@ -195,10 +203,15 @@ public class RepartitionOptimizingIntegrationTest {
         final List<KeyValue<String, Integer>> receivedJoinKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig3, JOINED_TOPIC, expectedJoinKeyValues.size());
 
 
+        final List<String> expectedCollectedProcessorValues = Arrays.asList("FOO", "BAR", "BAZ");
+
         assertThat(receivedCountKeyValues, equalTo(expectedCountKeyValues));
         assertThat(receivedAggKeyValues, equalTo(expectedAggKeyValues));
         assertThat(receivedReduceKeyValues, equalTo(expectedReduceKeyValues));
         assertThat(receivedJoinKeyValues, equalTo(expectedJoinKeyValues));
+
+        assertThat(3, equalTo(processorValueCollector.size()));
+        assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
 
         streams.close(5, TimeUnit.SECONDS);
     }
@@ -224,6 +237,21 @@ public class RepartitionOptimizingIntegrationTest {
             }
         }
         return keyValueList;
+    }
+
+
+    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+
+        List<String> valueList;
+
+        public SimpleProcessor(List<String> valueList) {
+            this.valueList = valueList;
+        }
+
+        @Override
+        public void process(String key, String value) {
+            valueList.add(value);
+        }
     }
 
 }

@@ -251,10 +251,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void optimize() {
-        mayOptimizeRepartitionOperations();
+        maybeOptimizeRepartitionOperations();
     }
 
-    private void mayOptimizeRepartitionOperations() {
+    private void maybeOptimizeRepartitionOperations() {
         StreamsGraphNode optimizedSingleRepartition = null;
 
         for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
@@ -371,8 +371,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
         node.setInternalStreamsBuilder(this);
-
-        LOG.debug("Adding node {}", node);
 
         if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
             throw new IllegalStateException(
