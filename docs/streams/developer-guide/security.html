@@ -67,16 +67,15 @@
             <p>Kafka clusters can use ACLs to control access to resources (like the ability to create topics), and for such clusters each client,
                 including Kafka Streams, is required to authenticate as a particular user in order to be authorized with appropriate access.
                 In particular, when Streams applications are run against a secured Kafka cluster, the principal running the application must have
-                the ACL
-                <code class="docutils literal"><span class="pre">--cluster</span> <span class="pre">--operation</span> <span class="pre">Create</span></code> set so that the application has the permissions to create
+                the ACL set so that the application has the permissions to create, read and write
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
 
             <p>Since all internal topics as well as the embedded consumer group name are prefixed with the <a class="reference internal" href="/{{version}}/documentation/streams/developer-guide/config-streams.html#required-configuration-parameters"><span class="std std-ref">application id</span></a>,
                 it is recommended to use ACLs on prefixed resource pattern
                 to configure control lists to allow client to manage all topics and consumer groups started with this prefix
+                as <code class="docutils literal"><span class="pre">--resource-pattern-type prefixed --topic your.application.id --operation All </span></code>
                 (see <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a>
                 and <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> for details).
-                For example, given the following setup of your Streams application:
             </p>
         </div>
         <div class="section" id="security-example">
