@@ -178,6 +178,15 @@ class OffsetIndexTest extends JUnitSuite {
     // mmap should be null after unmap causing lookup to throw a NPE
     intercept[NullPointerException](idx.lookup(1))
   }
+
+  @Test
+  def testSanityLastOffsetEqualToBaseOffset(): Unit = {
+    // Test index sanity for the case where the last offset appended to the index is equal to the base offset
+    val baseOffset = 20L
+    val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = baseOffset, maxIndexSize = 10 * 8)
+    idx.append(baseOffset, 0)
+    idx.sanityCheck()
+  }
   
   def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {
     try {
