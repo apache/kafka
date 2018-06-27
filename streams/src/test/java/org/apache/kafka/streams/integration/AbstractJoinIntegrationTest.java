@@ -151,7 +151,7 @@ public abstract class AbstractJoinIntegrationTest {
     }
 
     void prepareEnvironment() throws InterruptedException {
-        CLUSTER.deleteAndRecreateTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
+        CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
 
         if (!cacheEnabled)
             STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
