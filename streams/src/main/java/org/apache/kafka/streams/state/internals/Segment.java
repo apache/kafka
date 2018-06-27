@@ -44,7 +44,7 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
     public void openDB(final ProcessorContext context) {
         super.openDB(context);
         // skip the registering step
-        this.internalProcessorContext = context;
+        internalProcessorContext = context;
     }
 
     @Override

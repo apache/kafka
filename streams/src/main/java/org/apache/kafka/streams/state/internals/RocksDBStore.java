@@ -90,7 +90,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private FlushOptions fOptions;
 
     private volatile boolean prepareForBulkload = false;
-    protected ProcessorContext internalProcessorContext;
+    ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
@@ -230,7 +230,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    protected void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
 
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
@@ -310,7 +310,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    protected void write(final WriteBatch batch) throws RocksDBException {
+    void write(final WriteBatch batch) throws RocksDBException {
         db.write(wOptions, batch);
     }
 

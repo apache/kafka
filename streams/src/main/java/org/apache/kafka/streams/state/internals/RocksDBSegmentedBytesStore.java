@@ -174,7 +174,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
         try {
             final Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (Map.Entry<Segment, WriteBatch> entry: writeBatchMap.entrySet()) {
+            for (final Map.Entry<Segment, WriteBatch> entry : writeBatchMap.entrySet()) {
                 final Segment segment = entry.getKey();
                 final WriteBatch batch = entry.getValue();
                 segment.write(batch);
