@@ -64,17 +64,20 @@
         <p>For more information about the security features in Apache Kafka, see <a class="reference internal" href="../../kafka/security.html#kafka-security"><span class="std std-ref">Kafka Security</span></a>.</p>
         <div class="section" id="required-acl-setting-for-secure-kafka-clusters">
             <span id="streams-developer-guide-security-acls"></span><h2><a class="toc-backref" href="#id1">Required ACL setting for secure Kafka clusters</a><a class="headerlink" href="#required-acl-setting-for-secure-kafka-clusters" title="Permalink to this headline"></a></h2>
-            <p>When applications are run against a secured Kafka cluster, the principal running the application must have the ACL
+            <p>Kafka clusters can use ACLs to control access to resources (like the ability to create topics), and for such clusters each client,
+                including Kafka Streams, is required to authenticate as a particular user in order to be authorized with appropriate access.
+                In particular, when Streams applications are run against a secured Kafka cluster, the principal running the application must have
+                the ACL
                 <code class="docutils literal"><span class="pre">--cluster</span> <span class="pre">--operation</span> <span class="pre">Create</span></code> set so that the application has the permissions to create
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
-	    <p>To avoid providing this permission to your application, you can create the required internal topics manually.
-               If the internal topics exist, Kafka Streams will not try to recreate them.
-               Note, that the internal repartition and changelog topics must be created with the correct number of partitions&mdash;otherwise, Kafka Streams will fail on startup.
-	       The topics must be created with the same number of partitions as your input topic, or if there are multiple topics, the maximum number of partitions across all input topics.
-               Additionally, changelog topics <emph>must</emph> be created with log compaction enabled&mdash;otherwise, your application might lose data.
-               You can find out more about the names of the required internal topics via <code>Topology#describe()</code>.
-	       All internal topics follow the naming pattern <code>&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</code> where the <code>suffix</code> is either <code>repartition</code> or <code>changelog</code>.
-               Note, that there is no guarantee about this naming pattern in future releases&mdash;it's not part of the public API.</p>
+
+            <p>Since all internal topics as well as the embedded consumer group name are prefixed with the <a class="reference internal" href="/{{version}}/documentation/streams/developer-guide/config-streams.html#required-configuration-parameters"><span class="std std-ref">application id</span></a>,
+                it is recommended to use ACLs on prefixed resource pattern
+                to configure control lists to allow client to manage all topics and consumer groups started with this prefix
+                (see <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a>
+                and <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> for details).
+                For example, given the following setup of your Streams application:
+            </p>
         </div>
         <div class="section" id="security-example">
             <span id="streams-developer-guide-security-example"></span><h2><a class="toc-backref" href="#id2">Security example</a><a class="headerlink" href="#security-example" title="Permalink to this headline"></a></h2>
