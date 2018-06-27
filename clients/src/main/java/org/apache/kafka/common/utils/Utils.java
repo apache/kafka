@@ -24,7 +24,6 @@ import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -41,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
@@ -520,7 +520,7 @@ public final class Utils {
         Properties props = new Properties();
 
         if (filename != null) {
-            try (InputStream propStream = new FileInputStream(filename)) {
+            try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
                 props.load(propStream);
             }
         } else {
@@ -590,8 +590,7 @@ public final class Utils {
     public static String readFileAsString(String path, Charset charset) throws IOException {
         if (charset == null) charset = Charset.defaultCharset();
 
-        try (FileInputStream stream = new FileInputStream(new File(path))) {
-            FileChannel fc = stream.getChannel();
+        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
             MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
             return charset.decode(bb).toString();
         }

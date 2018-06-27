@@ -21,12 +21,13 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
-import javax.net.ssl.X509TrustManager
 
+import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -119,7 +120,8 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file and return an open file channel for this file
    */
-  def tempChannel(): FileChannel = new RandomAccessFile(tempFile(), "rw").getChannel()
+  def tempChannel(): FileChannel =
+    FileChannel.open(tempFile().toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
 
   /**
    * Create a kafka server instance with appropriate test settings
@@ -879,11 +881,12 @@ object TestUtils extends Logging {
     file.close()
   }
 
-  def appendNonsenseToFile(fileName: File, size: Int) {
-    val file = new FileOutputStream(fileName, true)
-    for (_ <- 0 until size)
-      file.write(random.nextInt(255))
-    file.close()
+  def appendNonsenseToFile(file: File, size: Int) {
+    val outputStream = Files.newOutputStream(file.toPath(), StandardOpenOption.APPEND)
+    try {
+      for (_ <- 0 until size)
+        outputStream.write(random.nextInt(255))
+    } finally outputStream.close()
   }
 
   def checkForPhantomInSyncReplicas(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {

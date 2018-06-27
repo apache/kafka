@@ -17,7 +17,8 @@
 
 package kafka.tools
 
-import java.io.{FileOutputStream, PrintStream}
+import java.io.PrintStream
+import java.nio.file.Files
 
 import kafka.common.MessageFormatter
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
@@ -302,7 +303,7 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseConfigsFromFile() {
     val propsFile = TestUtils.tempFile()
-    val propsStream = new FileOutputStream(propsFile)
+    val propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("request.timeout.ms=1000\n".getBytes())
     propsStream.write("group.id=group1".getBytes())
     propsStream.close()
@@ -324,7 +325,7 @@ class ConsoleConsumerTest {
 
     // different in all three places
     var propsFile = TestUtils.tempFile()
-    var propsStream = new FileOutputStream(propsFile)
+    var propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     var args: Array[String] = Array(
@@ -344,7 +345,7 @@ class ConsoleConsumerTest {
 
     // the same in all three places
     propsFile = TestUtils.tempFile()
-    propsStream = new FileOutputStream(propsFile)
+    propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("group.id=test-group".getBytes())
     propsStream.close()
     args = Array(
@@ -361,7 +362,7 @@ class ConsoleConsumerTest {
 
     // different via --consumer-property and --consumer.config
     propsFile = TestUtils.tempFile()
-    propsStream = new FileOutputStream(propsFile)
+    propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     args = Array(
@@ -395,7 +396,7 @@ class ConsoleConsumerTest {
 
     // different via --group and --consumer.config
     propsFile = TestUtils.tempFile()
-    propsStream = new FileOutputStream(propsFile)
+    propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     args = Array(

@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.{Closeable, File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
@@ -39,7 +39,7 @@ import scala.math.ceil
  * @param maxIndexSize The maximum index size in bytes.
  */
 abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Logging {
+                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable with Logging {
 
   // Length of the index file
   @volatile
