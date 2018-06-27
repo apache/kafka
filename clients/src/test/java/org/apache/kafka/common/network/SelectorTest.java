@@ -17,8 +17,10 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
@@ -580,6 +582,41 @@ public class SelectorTest {
         control.verify();
     }
 
+    @Test
+    public void testOutboundConnectionsCountInConnectionCreationMetric() throws Exception {
+        // create connections
+        int conns = 5;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        for (int i = 0; i < conns; i++)
+            connect(Integer.toString(i), addr);
+
+        selector.poll(0L);
+
+        assertEquals(getMetric("connection-creation-total").metricValue(), (double) conns);
+    }
+
+    @Test
+    public void testInboundConnectionsCountInConnectionCreationMetric() throws Exception {
+        int conns = 5;
+
+        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+            ss.bind(new InetSocketAddress(0));
+            InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
+
+            for (int i = 0; i < conns; i++) {
+                Thread sender = createSender(serverAddress, randomPayload(1));
+                sender.start();
+                sender.join(1000);
+                SocketChannel channel = ss.accept();
+                channel.configureBlocking(false);
+
+                selector.register(Integer.toString(i), channel);
+            }
+        }
+
+        assertEquals(getMetric("connection-creation-total").metricValue(), (double) conns);
+    }
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -675,4 +712,11 @@ public class SelectorTest {
             assertTrue("Field not empty: " + field + " " + obj, ((Map<?, ?>) obj).isEmpty());
     }
 
+    private KafkaMetric getMetric(String name) throws Exception {
+        for (Map.Entry<MetricName, KafkaMetric> entry : metrics.metrics().entrySet()) {
+            if (entry.getKey().name().equals(name))
+                return entry.getValue();
+        }
+        throw new Exception(String.format("Could not find metric called %s", name));
+    }
 }
