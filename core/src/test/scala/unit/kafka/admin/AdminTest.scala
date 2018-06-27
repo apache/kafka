@@ -16,8 +16,6 @@
  */
 package kafka.admin
 
-import kafka.server.DynamicConfig.Broker._
-import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
@@ -26,18 +24,15 @@ import org.junit.{After, Before, Test}
 import java.util.Properties
 
 import kafka.utils._
-import kafka.log._
 import kafka.zk.{ConfigEntityZNode, PreferredReplicaElectionZNode, ZooKeeperTestHarness}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
-import java.util
 import java.util.concurrent.LinkedBlockingQueue
 
 import kafka.utils.TestUtils._
 
 import scala.collection.{Map, Set, immutable}
-import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.JaasUtils
 
@@ -95,6 +90,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testManualReplicaAssignment() {
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -118,6 +114,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testTopicCreationInZK() {
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
@@ -165,6 +162,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testTopicCreationWithCollision() {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
@@ -179,6 +177,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testConcurrentTopicCreation() {
     val topic = "test.topic"
 
@@ -206,7 +205,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(0, 2, 3)
     val partitionToBeReassigned = 0
@@ -236,7 +235,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(1, 2, 3)
     val partitionToBeReassigned = 0
@@ -265,7 +264,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
@@ -410,128 +409,11 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   /**
-   * This test creates a topic with a few config overrides and checks that the configs are applied to the new topic
-   * then changes the config and checks that the new values take effect.
-   */
-  @Test
-  def testTopicConfigChange() {
-    val partitions = 3
-    val topic = "my-topic"
-    val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
-    servers = Seq(server)
-
-    def makeConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String) = {
-      val props = new Properties()
-      props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
-      props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
-      props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, throttledLeaders)
-      props.setProperty(LogConfig.FollowerReplicationThrottledReplicasProp, throttledFollowers)
-      props
-    }
-
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
-      def checkList(actual: util.List[String], expected: String): Unit = {
-        assertNotNull(actual)
-        if (expected == "")
-          assertTrue(actual.isEmpty)
-        else
-          assertEquals(expected.split(",").toSeq, actual.asScala)
-      }
-      TestUtils.retry(10000) {
-        for (part <- 0 until partitions) {
-          val tp = new TopicPartition(topic, part)
-          val log = server.logManager.getLog(tp)
-          assertTrue(log.isDefined)
-          assertEquals(retentionMs, log.get.config.retentionMs)
-          assertEquals(messageSize, log.get.config.maxMessageSize)
-          checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
-          checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
-          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(tp))
-        }
-      }
-    }
-
-    // create a topic with a few config overrides and check that they are applied
-    val maxMessageSize = 1024
-    val retentionMs = 1000 * 1000
-    adminZkClient.createTopic(topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
-
-    //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
-    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
-
-    //Update dynamically and all properties should be applied
-    adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
-
-    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", true)
-
-    // now double the config values for the topic and check that it is applied
-    val newConfig = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*")
-    adminZkClient.changeTopicConfig(topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*"))
-    checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*", quotaManagerIsThrottled = true)
-
-    // Verify that the same config can be read from ZK
-    val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-    assertEquals(newConfig, configInZk)
-
-    //Now delete the config
-    adminZkClient.changeTopicConfig(topic, new Properties)
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
-
-    //Add config back
-    adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
-    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
-
-    //Now ensure updating to "" removes the throttled replica list also
-    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
-  }
-
-  @Test
-  def shouldPropagateDynamicBrokerConfigs() {
-    val brokerIds = Seq(0, 1, 2)
-    servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
-
-    def checkConfig(limit: Long) {
-      retry(10000) {
-        for (server <- servers) {
-          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
-          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
-        }
-      }
-    }
-
-    val limit: Long = 1000000
-
-    // Set the limit & check it is applied to the log
-    adminZkClient.changeBrokerConfig(brokerIds, propsWith(
-      (LeaderReplicationThrottledRateProp, limit.toString),
-      (FollowerReplicationThrottledRateProp, limit.toString)))
-    checkConfig(limit)
-
-    // Now double the config values for the topic and check that it is applied
-    val newLimit = 2 * limit
-    adminZkClient.changeBrokerConfig(brokerIds,  propsWith(
-      (LeaderReplicationThrottledRateProp, newLimit.toString),
-      (FollowerReplicationThrottledRateProp, newLimit.toString)))
-    checkConfig(newLimit)
-
-    // Verify that the same config can be read from ZK
-    for (brokerId <- brokerIds) {
-      val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
-      assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
-      assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
-    }
-
-    //Now delete the config
-    adminZkClient.changeBrokerConfig(brokerIds, new Properties)
-    checkConfig(DefaultReplicationThrottledRate)
-  }
-
-  /**
    * This test simulates a client config change in ZK whose notification has been purged.
    * Basically, it asserts that notifications are bootstrapped from ZK
    */
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testBootstrapClientIdConfig() {
     val clientId = "my-client"
     val props = new Properties()
@@ -555,6 +437,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testGetBrokerMetadatas() {
     // broker 4 has no rack information
     val brokerList = 0 to 5

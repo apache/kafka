@@ -38,7 +38,7 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
-import scala.collection.Seq
+import scala.collection.{Map, Seq}
 
 /**
   * These tests were written to assert the addition of leader epochs to the replication protocol fix the problems
@@ -78,7 +78,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
     val tp = new TopicPartition(topic, 0)
 
@@ -139,9 +139,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     //A single partition topic with 2 replicas
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
-      0 -> Seq(100, 101)
-    ))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
 
     //Write 10 messages
@@ -189,9 +187,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
-      0 -> Seq(100, 101)
-    ))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createBufferingProducer
 
     //Write 100 messages
@@ -266,7 +262,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_))
 
     //A single partition topic with 2 replicas
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
 
     //Kick off with a single record
@@ -306,9 +302,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(
-      topic, Map(0 -> Seq(100, 101)), config = CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1"))
-    )
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
+      CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
+
     producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
 
     // Write one message while both brokers are up
