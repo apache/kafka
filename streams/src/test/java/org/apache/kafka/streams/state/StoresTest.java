@@ -61,6 +61,7 @@ public class StoresTest {
         Stores.persistentWindowStore("anyName", -1L, 0L, false, 60_000L);
     }
 
+    @Deprecated
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
         Stores.persistentWindowStore("anyName", 0L, 1, 0L, false);

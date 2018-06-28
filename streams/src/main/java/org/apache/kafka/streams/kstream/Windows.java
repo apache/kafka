@@ -36,7 +36,7 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    private long maintainDurationMs = 24 * 60 * 60 * 1000L; // one day
+    private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
 
     protected Windows() {}
@@ -73,11 +73,12 @@ public abstract class Windows<W extends Window> {
      *
      * @return the segment interval
      */
-    @SuppressWarnings("deprecation") // The deprecation is on the public visibility. We intend to make it private later.
+    @SuppressWarnings("deprecation") // The deprecation is on the public visibility of segments. We intend to make the field private later.
     public long segmentInterval() {
+        // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
+        final long minimumSegmentInterval = 60_000L;
         // Scaled to the (possibly overridden) retention period
-        // Also pinned to a minimum of 60 seconds
-        return Math.max(maintainMs() / (segments - 1), 60_000L);
+        return Math.max(maintainMs() / (segments - 1), minimumSegmentInterval);
     }
 
     /**

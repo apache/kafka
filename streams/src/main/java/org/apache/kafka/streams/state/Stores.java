@@ -163,12 +163,14 @@ public class Stores {
             throw new IllegalArgumentException("numSegments cannot must smaller than 2");
         }
 
+        final long legacySegmentInterval = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
+
         return persistentWindowStore(
             name,
             retentionPeriod,
             windowSize,
             retainDuplicates,
-            Math.max(retentionPeriod / (numSegments - 1), 60_000)
+            legacySegmentInterval
         );
     }
 
@@ -184,7 +186,9 @@ public class Stores {
                                                                  final long retentionPeriod,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, Math.max(retentionPeriod / 2, 60_000L));
+        // we're arbitrarily defaulting to segments no smaller than one minute.
+        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
     }
 
     /**

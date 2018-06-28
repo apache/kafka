@@ -68,11 +68,6 @@ public final class SessionWindows {
     private final long gapMs;
     private final long maintainDurationMs;
 
-    private SessionWindows(final long gapMs) {
-        this.gapMs = gapMs;
-        maintainDurationMs = 24 * 60 * 60 * 1000L; // one day
-    }
-
     private SessionWindows(final long gapMs, final long maintainDurationMs) {
         this.gapMs = gapMs;
         this.maintainDurationMs = maintainDurationMs;
@@ -90,7 +85,8 @@ public final class SessionWindows {
         if (inactivityGapMs <= 0) {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
-        return new SessionWindows(inactivityGapMs);
+        final long oneDayMs = 24 * 60 * 60_000L;
+        return new SessionWindows(inactivityGapMs, oneDayMs);
     }
 
     /**
