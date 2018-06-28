@@ -100,8 +100,9 @@ class ReplicaAlterLogDirsThread(name: String,
 
     partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
     val futureReplicaHighWatermark = futureReplica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+    val newLogStartOffset = futureReplica.logEndOffset.messageOffset.min(partitionData.logStartOffset)
     futureReplica.highWatermark = new LogOffsetMetadata(futureReplicaHighWatermark)
-    futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
+    futureReplica.maybeIncrementLogStartOffset(newLogStartOffset)
 
     if (partition.maybeReplaceCurrentWithFutureReplica())
       removePartitions(Set(topicPartition))

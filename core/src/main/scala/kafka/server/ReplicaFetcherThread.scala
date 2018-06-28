@@ -118,12 +118,15 @@ class ReplicaFetcherThread(name: String,
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
         .format(replica.logEndOffset.messageOffset, records.sizeInBytes, topicPartition))
     val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
-    val leaderLogStartOffset = partitionData.logStartOffset
+    // the fetch response from the leader may contain log start offset beyond end offset of the
+    // fetched records, because log start offset may change on the leader while the fetch
+    // response is being built. We don't move log start offset beyond LEO on the follower,
+    val newLogStartOffset = replica.logEndOffset.messageOffset.min(partitionData.logStartOffset)
     // for the follower replica, we do not need to keep
     // its segment base offset the physical position,
     // these values will be computed upon making the leader
     replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
-    replica.maybeIncrementLogStartOffset(leaderLogStartOffset)
+    replica.maybeIncrementLogStartOffset(newLogStartOffset)
     if (isTraceEnabled)
       trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
 
