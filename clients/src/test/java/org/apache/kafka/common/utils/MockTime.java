@@ -88,6 +88,10 @@ public class MockTime implements Time {
         tick();
     }
 
+    public void advanceHighRestTimeNs(long ns) {
+        highResTimeNs.addAndGet(ns);
+    }
+
     public void setCurrentTimeMs(long newMs) {
         long oldMs = timeMs.getAndSet(newMs);
 
