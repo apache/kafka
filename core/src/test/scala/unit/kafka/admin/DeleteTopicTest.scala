@@ -170,7 +170,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIncreasePartitiovnCountDuringDeleteTopic() {
+  def testIncreasePartitionCountDuringDeleteTopic() {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
@@ -283,8 +283,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // re-create topic on same replicas
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
-    // wait until leader is elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     // check if all replica logs are created
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
       "Replicas for topic test not created.")
