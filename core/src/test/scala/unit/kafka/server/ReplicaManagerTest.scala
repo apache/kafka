@@ -463,7 +463,9 @@ class ReplicaManagerTest {
 
         val tp0Status = responseStatusMap.get(tp0)
         assertTrue(tp0Status.isDefined)
-        assertEquals(1, tp0Status.get.highWatermark)
+        // the response contains high watermark on the leader before it is updated based
+        // on this fetch request
+        assertEquals(0, tp0Status.get.highWatermark)
         assertEquals(None, tp0Status.get.lastStableOffset)
         assertEquals(Errors.NONE, tp0Status.get.error)
         assertTrue(tp0Status.get.records.batches.iterator.hasNext)
