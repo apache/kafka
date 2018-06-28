@@ -32,6 +32,18 @@ public class WindowedSerdes {
         }
     }
 
+
+    static public class TimeWindowedChangelogSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+        // Default constructor needed for reflection object creation
+        public TimeWindowedChangelogSerde() {
+            super(new TimeWindowedChangelogSerializer<T>(), new TimeWindowedChangelogDeserializer<T>());
+        }
+
+        public TimeWindowedChangelogSerde(final Serde<T> inner, final long windowSize) {
+            super(new TimeWindowedChangelogSerializer<>(inner.serializer()), new TimeWindowedChangelogDeserializer<>(inner.deserializer(), windowSize));
+        }
+    }
+
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
@@ -48,6 +60,13 @@ public class WindowedSerdes {
      */
     static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
+    }
+
+    /**
+     * Construct a {@code TimeWindowedChangelogSerde} object for the specified inner class type and window size.
+     */
+    static public <T> Serde<Windowed<T>> timeWindowedChangelogSerdeFrom(final Class<T> type, long windowSize) {
+        return new TimeWindowedChangelogSerde<>(Serdes.serdeFrom(type), windowSize);
     }
 
     /**
