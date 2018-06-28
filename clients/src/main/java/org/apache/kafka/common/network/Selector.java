@@ -265,6 +265,7 @@ public class Selector implements Selectable, AutoCloseable {
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        this.sensors.connectionCreated.record();
     }
 
     private void ensureNotRegistered(String id) {
