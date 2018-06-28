@@ -252,7 +252,8 @@ private[log] object LogValidator extends Logging {
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true,
-      recordConversionStats = recordConversionStats)
+      recordConversionStats = recordConversionStats,
+      recompressApplied = false)
   }
 
   private def assignOffsetsNonCompressed(records: MemoryRecords,
@@ -319,7 +320,8 @@ private[log] object LogValidator extends Logging {
       maxTimestamp = maxTimestamp,
       shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp,
       messageSizeMaybeChanged = false,
-      recordConversionStats = RecordConversionStats.EMPTY)
+      recordConversionStats = RecordConversionStats.EMPTY,
+      recompressApplied = false)
   }
 
   /**
@@ -465,7 +467,8 @@ private[log] object LogValidator extends Logging {
         maxTimestamp = maxTimestamp,
         shallowOffsetOfMaxTimestamp = lastOffset,
         messageSizeMaybeChanged = false,
-        recordConversionStats = recordConversionStats)
+        recordConversionStats = recordConversionStats,
+        recompressApplied = false)
     }
   }
 
@@ -510,7 +513,8 @@ private[log] object LogValidator extends Logging {
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true,
-      recordConversionStats = recordConversionStats)
+      recordConversionStats = recordConversionStats,
+      recompressApplied = true)
   }
 
   private def validateKey(record: Record, batchIndex: Int, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
@@ -550,6 +554,7 @@ private[log] object LogValidator extends Logging {
                                              maxTimestamp: Long,
                                              shallowOffsetOfMaxTimestamp: Long,
                                              messageSizeMaybeChanged: Boolean,
-                                             recordConversionStats: RecordConversionStats)
+                                             recordConversionStats: RecordConversionStats,
+                                             recompressApplied: Boolean)
 
 }
