@@ -53,7 +53,7 @@ public class RocksDBSessionStoreTest {
         schema.init("topic");
 
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, schema);
+                new RocksDBSegmentedBytesStore("session-store", 10_000L, 60_000L, schema);
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),
