@@ -20,9 +20,9 @@ package org.apache.kafka.clients.consumer.internals;
  * A helper class for managing the heartbeat to the coordinator
  */
 public final class Heartbeat {
-    private final long sessionTimeout;
-    private final long heartbeatInterval;
-    private final long maxPollInterval;
+    private final int sessionTimeoutMs;
+    private final int heartbeatIntervalMs;
+    private final int maxPollIntervalMs;
     private final long retryBackoffMs;
 
     private volatile long lastHeartbeatSend; // volatile since it is read by metrics
@@ -31,16 +31,16 @@ public final class Heartbeat {
     private long lastPoll;
     private boolean heartbeatFailed;
 
-    public Heartbeat(long sessionTimeout,
-                     long heartbeatInterval,
-                     long maxPollInterval,
+    public Heartbeat(int sessionTimeoutMs,
+                     int heartbeatIntervalMs,
+                     int maxPollIntervalMs,
                      long retryBackoffMs) {
-        if (heartbeatInterval >= sessionTimeout)
+        if (heartbeatIntervalMs >= sessionTimeoutMs)
             throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
 
-        this.sessionTimeout = sessionTimeout;
-        this.heartbeatInterval = heartbeatInterval;
-        this.maxPollInterval = maxPollInterval;
+        this.sessionTimeoutMs = sessionTimeoutMs;
+        this.heartbeatIntervalMs = heartbeatIntervalMs;
+        this.maxPollIntervalMs = maxPollIntervalMs;
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -75,7 +75,7 @@ public final class Heartbeat {
         if (heartbeatFailed)
             delayToNextHeartbeat = retryBackoffMs;
         else
-            delayToNextHeartbeat = heartbeatInterval;
+            delayToNextHeartbeat = heartbeatIntervalMs;
 
         if (timeSinceLastHeartbeat > delayToNextHeartbeat)
             return 0;
@@ -84,11 +84,11 @@ public final class Heartbeat {
     }
 
     public boolean sessionTimeoutExpired(long now) {
-        return now - Math.max(lastSessionReset, lastHeartbeatReceive) > sessionTimeout;
+        return now - Math.max(lastSessionReset, lastHeartbeatReceive) > sessionTimeoutMs;
     }
 
     public long interval() {
-        return heartbeatInterval;
+        return heartbeatIntervalMs;
     }
 
     public void resetTimeouts(long now) {
@@ -98,7 +98,11 @@ public final class Heartbeat {
     }
 
     public boolean pollTimeoutExpired(long now) {
-        return now - lastPoll > maxPollInterval;
+        return now - lastPoll > maxPollIntervalMs;
+    }
+
+    public long lastPollTime() {
+        return lastPoll;
     }
 
 }
