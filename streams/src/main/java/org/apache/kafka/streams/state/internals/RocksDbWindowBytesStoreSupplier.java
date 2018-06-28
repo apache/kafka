@@ -73,7 +73,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     }
 
     @Override
-    public long segmentInterval() {
+    public long segmentIntervalMs() {
         return segmentInterval;
     }
 

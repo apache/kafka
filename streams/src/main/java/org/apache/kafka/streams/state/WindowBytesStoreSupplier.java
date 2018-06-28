@@ -33,7 +33,7 @@ public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Byte
      * It is also used to reduce the amount of data that is scanned when caching is enabled.
      *
      * @return number of segments
-     * @deprecated since 2.1. Use {@link WindowBytesStoreSupplier#segmentInterval()} instead.
+     * @deprecated since 2.1. Use {@link WindowBytesStoreSupplier#segmentIntervalMs()} instead.
      */
     @Deprecated
     int segments();
@@ -45,7 +45,7 @@ public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Byte
      *
      * @return size of the segments (in milliseconds)
      */
-    long segmentInterval();
+    long segmentIntervalMs();
 
     /**
      * The size of the windows (in milliseconds) any store created from this supplier is creating.
