@@ -1000,7 +1000,8 @@ class AbstractFetcherThreadTest {
         shallowCount = batches.size,
         validBytes = FetchResponse.recordsSize(partitionData),
         offsetsMonotonic = true,
-        lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
+        lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1),
+        recompressedBatchCount = 0))
     }
 
     override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {

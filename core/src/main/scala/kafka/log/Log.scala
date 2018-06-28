@@ -114,7 +114,8 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
                          lastOffsetOfFirstBatch: Long,
                          recordErrors: Seq[RecordError] = List(),
                          errorMessage: String = null,
-                         leaderHwChange: LeaderHwChange = LeaderHwChange.None) {
+                         leaderHwChange: LeaderHwChange = LeaderHwChange.None,
+                         var recompressedBatchCount: Long = 0) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions
@@ -831,7 +832,8 @@ class Log(@volatile private var _dir: File,
         info1.offsetsMonotonic && info2.offsetsMonotonic,
         info1.lastOffsetOfFirstBatch,
         info1.recordErrors ++ info2.recordErrors,
-        info1.errorMessage + info2.errorMessage
+        info1.errorMessage + info2.errorMessage,
+        recompressedBatchCount = info1.recompressedBatchCount + info2.recompressedBatchCount
       )
     })
   }
@@ -910,6 +912,9 @@ class Log(@volatile private var _dir: File,
             appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
             appendInfo.lastOffset = offset.value - 1
             appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
+            // update stats for compressed/decompressed batch count
+            if (validateAndOffsetAssignResult.recompressApplied)
+              appendInfo.recompressedBatchCount = 1
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
               appendInfo.logAppendTime = now
 

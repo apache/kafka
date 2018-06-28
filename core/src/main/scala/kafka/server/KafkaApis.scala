@@ -783,6 +783,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else {
               try {
                 trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+                replicaManager.incrementRecompressionCount()
                 // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
                 // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
