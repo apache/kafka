@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.Optional;
 
 import static org.easymock.EasyMock.createControl;
 import static org.easymock.EasyMock.expect;
@@ -590,9 +591,17 @@ public class SelectorTest {
         for (int i = 0; i < conns; i++)
             connect(Integer.toString(i), addr);
 
-        selector.poll(0L);
+        // Poll continuously, as we cannot guarantee that the first call will see all connections
+        for (int i = 0; i < 10; i++) {
+            selector.poll(0L);
+            if (selector.connected().size() == conns)
+                break;
 
-        assertEquals(getMetric("connection-creation-total").metricValue(), (double) conns);
+            Thread.sleep(100);
+        }
+
+        assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
+        assertEquals((double) conns, getMetric("connection-count").metricValue());
     }
 
     @Test
@@ -606,7 +615,6 @@ public class SelectorTest {
             for (int i = 0; i < conns; i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
-                sender.join(1000);
                 SocketChannel channel = ss.accept();
                 channel.configureBlocking(false);
 
@@ -614,7 +622,8 @@ public class SelectorTest {
             }
         }
 
-        assertEquals(getMetric("connection-creation-total").metricValue(), (double) conns);
+        assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
+        assertEquals((double) conns, getMetric("connection-count").metricValue());
     }
 
     private String blockingRequest(String node, String s) throws IOException {
@@ -713,10 +722,12 @@ public class SelectorTest {
     }
 
     private KafkaMetric getMetric(String name) throws Exception {
-        for (Map.Entry<MetricName, KafkaMetric> entry : metrics.metrics().entrySet()) {
-            if (entry.getKey().name().equals(name))
-                return entry.getValue();
-        }
-        throw new Exception(String.format("Could not find metric called %s", name));
+        Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
+                .filter(entry -> entry.getKey().name().equals(name))
+                .findFirst();
+        if (!metric.isPresent())
+            throw new Exception(String.format("Could not find metric called %s", name));
+
+        return metric.get().getValue();
     }
 }
