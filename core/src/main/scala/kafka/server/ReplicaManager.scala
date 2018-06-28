@@ -1336,8 +1336,8 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Update the follower's fetch state in the leader based on the last fetch request and update `readResult`,
    * if the follower replica is not recognized to be one of the assigned replicas. Do not update
-   * `readResult` otherwise, so that log start offset and high watermark is consistent with
-   * records in fetch response. Log start offset and high watermark may change not only due to
+   * `readResult` otherwise, so that log start/end offset and high watermark is consistent with
+   * records in fetch response. Log start/end offset and high watermark may change not only due to
    * this fetch request, e.g., rolling new log segment and removing old log segment may move log
    * start offset further than the last offset in the fetched records. The followers will get the
    * updated leader's state in the next fetch response.
