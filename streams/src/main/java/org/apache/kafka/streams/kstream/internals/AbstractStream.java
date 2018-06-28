@@ -64,7 +64,6 @@ public abstract class AbstractStream<K> {
     protected void addGraphNode(final StreamsGraphNode newNode) {
         streamsGraphNode.addChildNode(newNode);
         builder.maybeAddNodeForOptimizationMetadata(newNode);
-
     }
 
     // This method allows to expose the InternalTopologyBuilder instance

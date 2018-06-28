@@ -38,7 +38,6 @@ import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -486,8 +485,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         // select the aggregate key and values (old and new), it would require parent to send old values
         final ProcessorNode<K1, V1> graphNode = new ProcessorNode<>(selectName,
                                                                     processorParameters,
-                                                                    false,
-                                                                    Collections.<String>emptyList());
+                                                                    false);
 
         addGraphNode(graphNode);
 

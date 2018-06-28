@@ -26,7 +26,6 @@ import java.util.List;
  * Used to represent any type of stateless operation:
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
- *
  */
 public class ProcessorNode<K, V> extends StreamsGraphNode {
 
@@ -37,7 +36,7 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
     // There is only one parent graph node but the name of each KStream merged needs
     // to get registered with InternalStreamsBuilder
 
-    private List<String> multipleParentNames = new ArrayList<>();
+    private List<String> parentNames = new ArrayList<>();
 
 
     public ProcessorNode(final String nodeName,
@@ -52,17 +51,21 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
 
     public ProcessorNode(final String nodeName,
                          final ProcessorParameters processorParameters) {
-        this(nodeName, processorParameters, false);
+        this(nodeName,
+             processorParameters,
+             false);
     }
 
     public ProcessorNode(final String nodeName,
                          final ProcessorParameters processorParameters,
                          final boolean repartitionRequired,
-                         final List<String> multipleParentNames) {
+                         final List<String> parentNames) {
 
-        this(nodeName, processorParameters, repartitionRequired);
+        this(nodeName,
+             processorParameters,
+             repartitionRequired);
 
-        this.multipleParentNames = new ArrayList<>(multipleParentNames);
+        this.parentNames = new ArrayList<>(parentNames);
     }
 
     public ProcessorParameters processorParameters() {
@@ -71,11 +74,10 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        if (processorParameters != null) {
-            if (multipleParentNames.isEmpty()) {
-                multipleParentNames.add(parentNode().nodeName());
-            }
-            topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), multipleParentNames.toArray(new String[]{}));
+
+        if (parentNames.isEmpty()) {
+            parentNames.add(parentNode().nodeName());
         }
+        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNames.toArray(new String[]{}));
     }
 }

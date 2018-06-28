@@ -67,11 +67,16 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
-        topologyBuilder.addProcessor(thisProcessorParameters().processorName(), thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorParameters.processorName());
-        topologyBuilder.addProcessor(otherProcessorParameters().processorName(), otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorParameters.processorName());
-        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorParameters().processorName(), otherProcessorParameters().processorName());
-        topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorParameters.processorName(), otherProcessorParameters().processorName());
-        topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorParameters.processorName(), thisProcessorParameters().processorName());
+        final String thisProcessorName = thisProcessorParameters().processorName();
+        final String otherProcessorName = otherProcessorParameters().processorName();
+        final String thisWindowedStreamProcessorName = thisWindowedStreamProcessorParameters.processorName();
+        final String otherWindowedStreamProcessorName = otherWindowedStreamProcessorParameters.processorName();
+
+        topologyBuilder.addProcessor(thisProcessorName, thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorName);
+        topologyBuilder.addProcessor(otherProcessorName, otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorName);
+        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorName, otherProcessorName);
+        topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
+        topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
     }
 
     public static <K, V, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {

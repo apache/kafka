@@ -20,18 +20,19 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class TableProcessorNode<K, V> extends StreamsGraphNode {
+public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
 
-    private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal;
+    private final MaterializedInternal<K, V, S> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                              final MaterializedInternal<K, V, S> materializedInternal,
                               final String[] storeNames) {
 
         super(nodeName,
@@ -43,16 +44,18 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
 
     @Override
-    public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final boolean shouldMaterialize = materializedInternal != null && materializedInternal.isQueryable();
-        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNode().nodeName());
+        final String processorName = processorParameters.processorName();
+
+        topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNode().nodeName());
 
         if (storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorParameters.processorName(), storeNames);
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
         if (shouldMaterialize) {
-            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal).materialize(), processorParameters.processorName());
+            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
         }
     }
 }

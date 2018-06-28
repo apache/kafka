@@ -48,10 +48,10 @@ public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
         final String processorName = processorParameters.processorName();
         final ProcessorSupplier processorSupplier = processorParameters.processorSupplier();
 
-        // Stream - GlobalKTable join
+        // Stream - Table join
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNode().nodeName());
 
-        // Steam - Table join
+        // Steam - Table join only
         if (otherJoinSideNodeName != null) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }

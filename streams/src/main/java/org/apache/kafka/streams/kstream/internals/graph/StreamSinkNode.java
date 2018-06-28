@@ -47,7 +47,6 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
         final Serializer<V> valSerializer = producedInternal.valueSerde() == null ? null : producedInternal.valueSerde().serializer();
         final StreamPartitioner<? super K, ? super V> partitioner = producedInternal.streamPartitioner();
 
-
         if (partitioner == null && keySerializer instanceof WindowedSerializer) {
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
             topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, windowedPartitioner, parentNode().nodeName());

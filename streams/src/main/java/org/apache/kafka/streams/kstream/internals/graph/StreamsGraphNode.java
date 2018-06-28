@@ -27,7 +27,7 @@ import java.util.Set;
 public abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
-    private LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
     private boolean keyChangingOperation;
@@ -50,22 +50,6 @@ public abstract class StreamsGraphNode {
 
     public Set<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
-    }
-
-    public void clearChildren() {
-        for (StreamsGraphNode childNode : childNodes) {
-            if (childNode.parentNode != null && childNode.parentNode.equals(this)) {
-                childNode.setParentNode(null);
-            }
-        }
-        childNodes.clear();
-    }
-
-    public boolean removeChild(StreamsGraphNode child) {
-        if (child.parentNode != null && child.parentNode.equals(this)) {
-            child.setParentNode(null);
-        }
-        return childNodes.remove(child);
     }
 
     public void addChildNode(final StreamsGraphNode childNode) {

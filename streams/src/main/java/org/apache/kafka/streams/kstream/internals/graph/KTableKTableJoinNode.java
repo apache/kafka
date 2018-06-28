@@ -59,28 +59,32 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        topologyBuilder.addProcessor(thisProcessorParameters().processorName(),
+        final String thisProcessorName = thisProcessorParameters().processorName();
+        final String otherProcessorName = otherProcessorParameters().processorName();
+        final String mergeProcessorName = mergeProcessorParameters().processorName();
+
+        topologyBuilder.addProcessor(thisProcessorName,
                                      thisProcessorParameters().processorSupplier(),
                                      thisJoinSideNodeName());
 
-        topologyBuilder.addProcessor(otherProcessorParameters().processorName(),
+        topologyBuilder.addProcessor(otherProcessorName,
                                      otherProcessorParameters().processorSupplier(),
                                      otherJoinSideNodeName());
 
-        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(),
+        topologyBuilder.addProcessor(mergeProcessorName,
                                      mergeProcessorParameters().processorSupplier(),
-                                     thisProcessorParameters().processorName(),
-                                     otherProcessorParameters().processorName());
+                                     thisProcessorName,
+                                     otherProcessorName);
 
-        topologyBuilder.connectProcessorAndStateStores(thisProcessorParameters().processorName(),
+        topologyBuilder.connectProcessorAndStateStores(thisProcessorName,
                                                        joinOtherStoreNames);
-        topologyBuilder.connectProcessorAndStateStores(otherProcessorParameters().processorName(),
+        topologyBuilder.connectProcessorAndStateStores(otherProcessorName,
                                                        joinThisStoreNames);
 
         if (materializedInternal != null) {
             final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
                 = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
-            topologyBuilder.addStateStore(storeBuilder, mergeProcessorParameters().processorName());
+            topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
         }
     }
 
