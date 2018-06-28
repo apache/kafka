@@ -16,9 +16,10 @@
  */
 package kafka.log
 
-import java.io._
+import java.io.File
 import java.nio.ByteBuffer
-import java.nio.file.Files
+import java.nio.channels.FileChannel
+import java.nio.file.{Files, StandardOpenOption}
 
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
@@ -430,12 +431,9 @@ object ProducerStateManager {
     val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
-    val fos = new FileOutputStream(file)
-    try {
-      fos.write(buffer.array, buffer.arrayOffset, buffer.limit())
-    } finally {
-      fos.close()
-    }
+    val fileChannel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+    try fileChannel.write(buffer)
+    finally fileChannel.close()
   }
 
   private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)

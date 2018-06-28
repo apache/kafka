@@ -1600,7 +1600,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partition The partition to get the position for
      * @param timeout The maximum amount of time to await determination of the current position
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
-     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this

@@ -149,10 +149,10 @@ class Partition(val topic: String,
     * @return true iff the future replica is created
     */
   def maybeCreateFutureReplica(logDir: String): Boolean = {
-    // The readLock is needed to make sure that while the caller checks the log directory of the
+    // The writeLock is needed to make sure that while the caller checks the log directory of the
     // current replica and the existence of the future replica, no other thread can update the log directory of the
     // current replica or remove the future replica.
-    inReadLock(leaderIsrUpdateLock) {
+    inWriteLock(leaderIsrUpdateLock) {
       val currentReplica = getReplica().get
       if (currentReplica.log.get.dir.getParent == logDir)
         false
@@ -207,29 +207,52 @@ class Partition(val topic: String,
     allReplicasMap.remove(replicaId)
   }
 
-  def removeFutureLocalReplica() {
-    inWriteLock(leaderIsrUpdateLock) {
-      allReplicasMap.remove(Request.FutureLocalReplicaId)
+  def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
+    inReadLock(leaderIsrUpdateLock) {
+      getReplica(Request.FutureLocalReplicaId) match {
+        case Some(futureReplica) =>
+          if (futureReplica.log.get.dir.getParent != newDestinationDir)
+            true
+          else
+            false
+        case None => false
+      }
     }
   }
 
-  // Return true iff the future log has caught up with the current log for this partition
+  def removeFutureLocalReplica(deleteFromLogDir: Boolean = true) {
+    inWriteLock(leaderIsrUpdateLock) {
+      allReplicasMap.remove(Request.FutureLocalReplicaId)
+      if (deleteFromLogDir)
+        logManager.asyncDelete(topicPartition, isFuture = true)
+    }
+  }
+
+  // Return true iff the future replica exists and it has caught up with the current replica for this partition
   // Only ReplicaAlterDirThread will call this method and ReplicaAlterDirThread should remove the partition
   // from its partitionStates if this method returns true
   def maybeReplaceCurrentWithFutureReplica(): Boolean = {
     val replica = getReplica().get
-    val futureReplica = getReplica(Request.FutureLocalReplicaId).get
-    if (replica.logEndOffset == futureReplica.logEndOffset) {
+    val futureReplicaLEO = getReplica(Request.FutureLocalReplicaId).map(_.logEndOffset)
+    if (futureReplicaLEO.contains(replica.logEndOffset)) {
       // The write lock is needed to make sure that while ReplicaAlterDirThread checks the LEO of the
       // current replica, no other thread can update LEO of the current replica via log truncation or log append operation.
       inWriteLock(leaderIsrUpdateLock) {
-        if (replica.logEndOffset == futureReplica.logEndOffset) {
-          logManager.replaceCurrentWithFutureLog(topicPartition)
-          replica.log = futureReplica.log
-          futureReplica.log = None
-          allReplicasMap.remove(Request.FutureLocalReplicaId)
-          true
-        } else false
+        getReplica(Request.FutureLocalReplicaId) match {
+          case Some(futureReplica) =>
+            if (replica.logEndOffset == futureReplica.logEndOffset) {
+              logManager.replaceCurrentWithFutureLog(topicPartition)
+              replica.log = futureReplica.log
+              futureReplica.log = None
+              allReplicasMap.remove(Request.FutureLocalReplicaId)
+              true
+            } else false
+          case None =>
+            // Future replica is removed by a non-ReplicaAlterLogDirsThread before this method is called
+            // In this case the partition should have been removed from state of the ReplicaAlterLogDirsThread
+            // Return false so that ReplicaAlterLogDirsThread does not have to remove this partition from the state again to avoid race condition
+            false
+        }
       }
     } else false
   }
@@ -550,15 +573,22 @@ class Partition(val topic: String,
   }
 
   private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Unit = {
-      if (isFuture)
-        getReplicaOrException(Request.FutureLocalReplicaId).log.get.appendAsFollower(records)
-      else {
+    inReadLock(leaderIsrUpdateLock) {
+      if (isFuture) {
+        // The read lock is needed to handle race condition if request handler thread tries to
+        // remove future replica after receiving AlterReplicaLogDirsRequest.
+        inReadLock(leaderIsrUpdateLock) {
+          getReplica(Request.FutureLocalReplicaId) match {
+            case Some(replica) => replica.log.get.appendAsFollower(records)
+            case None => // Future replica is removed by a non-ReplicaAlterLogDirsThread before this method is called
+          }
+        }
+      } else {
         // The read lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
         // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
-        inReadLock(leaderIsrUpdateLock) {
-           getReplicaOrException().log.get.appendAsFollower(records)
-        }
+        getReplicaOrException().log.get.appendAsFollower(records)
       }
+    }
   }
 
   def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean) {

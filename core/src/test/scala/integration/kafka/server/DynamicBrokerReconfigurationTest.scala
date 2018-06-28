@@ -18,15 +18,15 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, FileInputStream, FileWriter}
-import java.nio.file.{Files, StandardCopyOption}
+import java.io.{Closeable, File, FileWriter}
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-import javax.management.ObjectName
 
+import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -57,7 +57,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.Assert._
-import org.junit.{After, Before, Test, Ignore}
+import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -1056,13 +1056,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     def load(props: Properties): KeyStore = {
       val ks = KeyStore.getInstance("JKS")
       val password = props.get(SSL_TRUSTSTORE_PASSWORD_CONFIG).asInstanceOf[Password].value
-      val in = new FileInputStream(props.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG))
+      val in = Files.newInputStream(Paths.get(props.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
       try {
         ks.load(in, password.toCharArray)
+        ks
       } finally {
         in.close()
       }
-      ks
     }
     val cert1 = load(trustStore1Props).getCertificate("kafka")
     val cert2 = load(trustStore2Props).getCertificate("kafka")

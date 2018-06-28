@@ -14,28 +14,35 @@
 package kafka.api
 
 import java.util.concurrent._
-import java.util.{Collection, Collections}
+import java.util.{Collection, Collections, Properties}
 
-import kafka.admin.AdminClient
-import kafka.server.KafkaConfig
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.Buffer
 
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
-class ConsumerBounceTest extends IntegrationTestHarness with Logging {
+class ConsumerBounceTest extends BaseRequestTest with Logging {
+
+  override def numBrokers: Int = 3
 
   val producerCount = 1
   val consumerCount = 2
-  val serverCount = 3
+
+  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   val topic = "topic"
   val part = 0
@@ -45,13 +52,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   val gracefulCloseTimeMs = 1000
   val executor = Executors.newScheduledThreadPool(2)
 
-  // configure the servers and clients
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-  this.serverConfig.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+  val producerConfig = new Properties
+  val consumerConfig = new Properties
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
@@ -59,8 +61,19 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
+  def serverConfig(): Properties = {
+    val properties = new Properties
+    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
+    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+    properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
+    properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    properties
+  }
+
   override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
@@ -68,8 +81,26 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   override def setUp() {
     super.setUp()
 
+    for (_ <- 0 until producerCount)
+      producers += createProducer
+
+    for (_ <- 0 until consumerCount)
+      consumers += createConsumer
+
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 1, serverCount)
+    createTopic(topic, 1, numBrokers)
+  }
+
+  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+        securityProtocol = SecurityProtocol.PLAINTEXT,
+        props = Some(producerConfig))
+  }
+
+  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+    TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+        securityProtocol = SecurityProtocol.PLAINTEXT,
+        props = Some(consumerConfig))
   }
 
   @After
@@ -78,6 +109,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       executor.shutdownNow()
       // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
       assertTrue("Executor did not terminate", executor.awaitTermination(5000, TimeUnit.MILLISECONDS))
+      producers.foreach(_.close())
+      consumers.foreach(_.close())
     } finally {
       super.tearDown()
     }
@@ -173,7 +206,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers.head
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = createTopic(newtopic, numPartitions = serverCount, replicationFactor = serverCount)
+        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
@@ -243,9 +276,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
     val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
 
-    val adminClient = AdminClient.createSimplePlaintext(this.brokerList)
-    killBroker(adminClient.findCoordinator(dynamicGroup).id)
-    killBroker(adminClient.findCoordinator(manualGroup).id)
+    killBroker(findCoordinator(dynamicGroup))
+    killBroker(findCoordinator(manualGroup))
 
     val future1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(gracefulCloseTimeMs))
@@ -255,8 +287,15 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     restartDeadBrokers()
     checkClosedState(dynamicGroup, 0)
     checkClosedState(manualGroup, numRecords)
-    adminClient.close()
   }
+
+  private def findCoordinator(group: String) : Int = {
+    val request = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
+    val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion())
+    response.node().id()
+  }
+
 
   /**
    * Consumer is closed while all brokers are unavailable. Cannot rebalance or commit offsets since
@@ -288,7 +327,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    createTopic(topic, 10, serverCount)
+    createTopic(topic, 10, numBrokers)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -355,7 +394,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = super.createConsumer
+    val consumer = createConsumer
     consumers += consumer
     consumer
   }

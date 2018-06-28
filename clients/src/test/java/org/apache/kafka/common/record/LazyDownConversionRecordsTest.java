@@ -26,9 +26,9 @@ import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -160,7 +160,7 @@ public class LazyDownConversionRecordsTest {
                     inputRecords, toMagic, 0L, Time.SYSTEM);
             LazyDownConversionRecordsSend lazySend = lazyRecords.toSend("foo");
             File outputFile = tempFile();
-            FileChannel channel = new RandomAccessFile(outputFile, "rw").getChannel();
+            FileChannel channel = FileChannel.open(outputFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
 
             int written = 0;
             while (written < bytesToConvert)

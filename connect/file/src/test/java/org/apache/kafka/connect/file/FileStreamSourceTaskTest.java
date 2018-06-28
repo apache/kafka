@@ -27,8 +27,9 @@ import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -81,7 +82,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
         task.start(config);
 
-        FileOutputStream os = new FileOutputStream(tempFile);
+        OutputStream os = Files.newOutputStream(tempFile.toPath());
         assertEquals(null, task.poll());
         os.write("partial line".getBytes());
         os.flush();
@@ -135,7 +136,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
 
-        FileOutputStream os = new FileOutputStream(tempFile);
+        OutputStream os = Files.newOutputStream(tempFile.toPath());
         for (int i = 0; i < 10_000; i++) {
             os.write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes());
         }
