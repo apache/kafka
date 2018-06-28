@@ -586,22 +586,22 @@ public class SelectorTest {
     @Test
     public void testOutboundConnectionsCountInConnectionCreationMetric() throws Exception {
         // create connections
-        int conns = 5;
+        int expectedConnections = 5;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        for (int i = 0; i < conns; i++)
+        for (int i = 0; i < expectedConnections; i++)
             connect(Integer.toString(i), addr);
 
         // Poll continuously, as we cannot guarantee that the first call will see all connections
+        int seenConnections = 0;
         for (int i = 0; i < 10; i++) {
-            selector.poll(0L);
-            if (selector.connected().size() == conns)
+            selector.poll(100L);
+            seenConnections += selector.connected().size();
+            if (seenConnections == expectedConnections)
                 break;
-
-            Thread.sleep(100);
         }
 
-        assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
-        assertEquals((double) conns, getMetric("connection-count").metricValue());
+        assertEquals((double) expectedConnections, getMetric("connection-creation-total").metricValue());
+        assertEquals((double) expectedConnections, getMetric("connection-count").metricValue());
     }
 
     @Test
