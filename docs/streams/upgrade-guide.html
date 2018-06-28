@@ -124,6 +124,16 @@
     </ul>
 
     <p>
+        We've also fixed the metrics name for time and session windowed store operations in 2.0. As a result, our current built-in stores
+        will have their store types in the metric names as <code>in-memory-state</code>, <code>in-memory-lru-state</code>,
+        <code>rocksdb-state</code>, <code>rocksdb-window-state</code>, and <code>rocksdb-session-state</code>. For example, a RocksDB time windowed store's
+        put operation metrics would now be
+        <code>kafka.streams:type=stream-rocksdb-window-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),rocksdb-window-state-id=([-.\w]+)</code>.
+        Users need to update their metrics collecting and reporting systems for their time and session windowed stores accordingly.
+        For more details, please read the <a href="/{{version}}/documentation/ops.html#kafka_streams_store_monitoring">State Store Metrics</a> section.
+    </p>
+
+    <p>
         We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying a single window's key-value pair.
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-261%3A+Add+Single+Value+Fetch+in+Window+Stores">KIP-261</a>.
