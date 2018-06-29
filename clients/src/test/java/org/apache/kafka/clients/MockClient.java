@@ -491,7 +491,7 @@ public class MockClient implements KafkaClient {
     }
 
     public boolean hasPendingResponses() {
-        return !responses.isEmpty();
+        return !responses.isEmpty() || !futureResponses.isEmpty();
     }
 
     @Override
