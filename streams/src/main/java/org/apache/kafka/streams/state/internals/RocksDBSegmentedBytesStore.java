@@ -33,8 +33,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
@@ -43,6 +45,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
+    private Set<Segment> bulkLoadSegments;
 
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
@@ -138,6 +141,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
         segments.openExisting(this.context);
 
+        bulkLoadSegments = new HashSet<>(segments.allSegments());
+
         // register and possibly restore the state from the logs
         context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
 
@@ -191,6 +196,13 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
             final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
             if (segment != null) {
+                // This handles the case that state store is moved to a new client and does not
+                // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
+                // will only close the database and open it again with bulk loading enabled.
+                if (!bulkLoadSegments.contains(segment)) {
+                    segment.toggleDbForBulkLoading(true);
+                    bulkLoadSegments.add(segment);
+                }
                 final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                 if (record.value == null) {
                     batch.remove(record.key);

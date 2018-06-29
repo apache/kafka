@@ -311,11 +311,21 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldRestoreToByteStore() {
+        // 0 segments initially.
+        assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
         final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
         bytesStore.restoreAllInternal(records);
+
+        // 2 segments are created during restoration.
+        assertEquals(2, bytesStore.getSegments().size());
+
+        // Bulk loading is enabled during recovery.
+        for (final Segment segment: bytesStore.getSegments()) {
+            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+        }
 
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
@@ -326,7 +336,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldRespectBulkloadOptionsDuringInit() {
+    public void shouldRespectBulkLoadOptionsDuringInit() {
         bytesStore.init(context, bytesStore);
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
