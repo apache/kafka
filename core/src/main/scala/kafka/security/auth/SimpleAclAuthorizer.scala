@@ -110,7 +110,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    val principal = session.principal
+    // ensure we compare identical classes
+    val sessionPrincipal = session.principal
+    val principal = if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
+      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
+    else
+      sessionPrincipal
+
     val host = session.clientAddress.getHostAddress
 
     def isEmptyAclAndAuthorized(acls: Set[Acl]): Boolean = {
