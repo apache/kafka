@@ -60,60 +60,60 @@ class DownconversionMemoryTest(Test):
             node.account.ssh("rm -rf %s" % self.heap_dump_path, allow_fail=False)
         super(DownconversionMemoryTest, self).tearDown()
 
-    @cluster(num_nodes=12)
-    @parametrize(version=str(LATEST_1_1))
-    @parametrize(version=str(DEV_BRANCH))
-    def test_downconversion(self, version):
-        broker_version = KafkaVersion(version)
-        producer_version = broker_version
-
-        out_of_memory = False
-        if KafkaVersion(version) <= LATEST_1_1:
-            expect_out_of_memory = True
-            consumer_timeout_sec = 60
-        else:
-            expect_out_of_memory = False
-            consumer_timeout_sec = None
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=broker_version,
+    def startBroker(self):
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=self.broker_version,
                                   topics={topic:
                                               {"partitions": self.num_partitions,
                                                "replication-factor": 1,
                                                "configs": {"min.insync.replicas": 1}}
                                           for topic in self.topics},
                                   heap_opts="-Xmx%dM -Xms%dM -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % (self.heap_size, self.heap_size, self.heap_dump_path),
-                                  do_logging=False)
+                                  do_logging=self.do_logging)
         for node in self.kafka.nodes:
             node.account.ssh("mkdir -p %s" % self.heap_dump_path, allow_fail=False)
         self.kafka.start()
 
-        # seed kafka with messages
+    def produceMessages(self):
         for topic in self.topics:
-            producer = ProducerPerformanceService(
-                self.test_context, self.num_producers, self.kafka, topic=topic,
+            producer = ProducerPerformanceService(self.test_context, self.num_producers, self.kafka, topic=topic,
                 num_records=self.max_messages, record_size=self.message_size, throughput=-1,
-                version=producer_version,
-                settings={
-                    'acks': 1,
-                    'batch.size': self.batch_size
-                }
-            )
+                version=self.producer_version, settings={'batch.size': self.batch_size})
             producer.run()
             self.logger.debug("Producer throughput for topic %s:" % topic)
             self.logger.debug(compute_aggregate_throughput(producer))
 
-        # consume
+    def consumeMessages(self):
         for topic in self.topics:
             consumer = ConsumerPerformanceService(self.test_context, self.num_consumers, self.kafka, topic=topic,
                                                   messages=self.max_messages, version=self.consumer_version,
                                                   consumer_config={"fetch.max.bytes": self.max_fetch_size},
-                                                  timeout_sec=consumer_timeout_sec)
+                                                  timeout_sec=self.consumer_timeout_sec)
             consumer.run()
+
+    @cluster(num_nodes=12)
+    @parametrize(version=str(LATEST_1_1))
+    @parametrize(version=str(DEV_BRANCH))
+    def test_downconversion(self, version):
+        self.broker_version = KafkaVersion(version)
+        self.producer_version = self.broker_version
+
+        out_of_memory = False
+        if KafkaVersion(version) <= LATEST_1_1:
+            expect_out_of_memory = True
+            self.do_logging = False
+            self.consumer_timeout_sec = 60
+        else:
+            expect_out_of_memory = False
+            self.do_logging = True
+            self.consumer_timeout_sec = None
+
+        self.startBroker()
+        self.produceMessages()
+        self.consumeMessages()
 
         for node in self.kafka.nodes:
             if self.kafka.file_exists(node, self.heap_dump_path + "*.hprof"):
                 out_of_memory = True
 
-        if (expect_out_of_memory and not out_of_memory) or (out_of_memory and not expect_out_of_memory):
-            assert False, "Unexpected state. Expected: %d Actual: %d" % (expect_out_of_memory, out_of_memory)
+        assert expect_out_of_memory == out_of_memory, "Unexpected state. Expected: %d Actual: %d" % (expect_out_of_memory, out_of_memory)
 
