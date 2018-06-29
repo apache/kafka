@@ -600,8 +600,9 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(Long.MAX_VALUE);
         time.sleep(heartbeatIntervalMs);
 
-        // Need to wait a little bit for the heartbeat thread to startup
-        Thread.sleep(500);
+        // Await the first heartbeat which forces us to find a new coordinator
+        TestUtils.waitForCondition(() -> !client.hasPendingResponses(),
+                "Failed to observe expected heartbeat from background thread");
 
         assertTrue(coordinator.coordinatorUnknown());
         assertFalse(coordinator.poll(0));
