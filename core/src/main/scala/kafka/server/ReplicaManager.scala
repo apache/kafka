@@ -475,7 +475,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-        isFromClient = isFromClient, entriesPerPartition, requiredAcks)
+        isFromClient = isFromClient, entriesPerPartition, requiredAcks, produceRequestTag)
       produceRequestTag.map(t => t.log(s"finished appendToLocalLog " +
         s"internalTopicsAllowed=${internalTopicsAllowed} " +
         s"isFromClient=${isFromClient}"))
@@ -493,7 +493,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock, produceRequestTag)
+        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock, None) //produceRequestTag)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
@@ -735,8 +735,9 @@ class ReplicaManager(val config: KafkaConfig,
   private def appendToLocalLog(internalTopicsAllowed: Boolean,
                                isFromClient: Boolean,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                               requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
-    trace(s"Append [$entriesPerPartition] to local log")
+                               requiredAcks: Short,
+                               produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None): Map[TopicPartition, LogAppendResult] = {
+    produceRequestTag.map(p => p.log(s"Appending ${entriesPerPartition.keySet.size} entries to local logs"))
     entriesPerPartition.map { case (topicPartition, records) =>
       brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
@@ -748,8 +749,10 @@ class ReplicaManager(val config: KafkaConfig,
           Some(new InvalidTopicException(s"Cannot append to internal topic ${topicPartition.topic}"))))
       } else {
         try {
+          produceRequestTag.map(p => p.log(s"getting partition and leader replica for ${topicPartition}"))
           val (partition, _) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
           val info = partition.appendRecordsToLeader(records, isFromClient, requiredAcks)
+          produceRequestTag.map(p => p.log(s"updating broker topic stats for ${topicPartition}"))
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
@@ -757,9 +760,7 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.allTopicsStats.bytesInRate.mark(records.sizeInBytes)
           brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
-
-          trace(s"${records.sizeInBytes} written to log ${topicPartition} beginning at offset " +
-            s"${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
+          produceRequestTag.map(p => p.log(s"finished appending ${topicPartition} to local logs."))
           (topicPartition, LogAppendResult(info))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions

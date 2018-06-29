@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.Semaphore
+import java.util.concurrent.{Semaphore, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 
 import org.apache.kafka.common.utils.{MockTime, Time}
@@ -44,28 +44,18 @@ class ThreadedPurgatoryTest  {
     var expired = false
     var numChecks = 0
 
-
-    override def onExpiration(): Unit = synchronized {
-      if (completed) {
-        error.compareAndSet(null, "onExpiration invoked after onComplete.")
-      } else if (expired) {
-        error.compareAndSet(null, "onExpiration invoked more than once.")
-      } else {
+    override def complete(timedOut: Boolean): Unit = synchronized {
+      if (completed)
+        error.compareAndSet(null, "complete invoked more than once.")
+      else if (expired)
+        error.compareAndSet(null, "complete invoked after expired == true.")
+      else if (timedOut) {
         expired = true
       }
+      completed = true
     }
 
-    override def onComplete(): Unit = synchronized {
-      if (completed) {
-        error.compareAndSet(null, "onComplete invoked more than once.")
-      } else if (expired) {
-        error.compareAndSet(null, "onComplete invoked after onExpiration.")
-      } else {
-        completed = true
-      }
-    }
-
-    override def canComplete() = {
+    override def check() = {
       enteredCheck.map { sem => sem.release() }
       canCompleteCheck.map { sem => sem.acquire() }
       synchronized {
@@ -169,14 +159,14 @@ class ThreadedPurgatoryTest  {
 
   @Test
   def testPurgatoryStartShutdown(): Unit = {
-    val purgatory = new ThreadedPurgatory(Time.SYSTEM, 1, 0)
+    val purgatory = new ThreadedPurgatory(Time.SYSTEM, "ThreadedPurgatory", 1)
     purgatory.close()
   }
 
   @Test
   def testPurgatoryOperations(): Unit = {
     val time = new MockTime(0, 0, 0)
-    val purgatory = new ThreadedPurgatory(time, 2, 0)
+    val purgatory = new ThreadedPurgatory(time, "ThreadedPurgatory", 2)
     val error = new AtomicReference[String](null)
     val delayable1 = new TestDelayable(error)
     val delayable2 = new TestDelayable(error)
@@ -209,7 +199,7 @@ class ThreadedPurgatoryTest  {
   @Test
   def testScheduleCheckWhileChecking(): Unit = {
     val time = new MockTime(0, 0, 0)
-    val purgatory = new ThreadedPurgatory(time, 2, 0)
+    val purgatory = new ThreadedPurgatory(time, "ThreadedPurgatory", 2)
     val error = new AtomicReference[String](null)
     val enteredCheck = new Semaphore(0)
     val canCompleteCheck = new Semaphore(0)
@@ -234,7 +224,7 @@ class ThreadedPurgatoryTest  {
   @Test
   def testScheduleByWatchKey(): Unit = {
     val time = new MockTime(0, 0, 0)
-    val purgatory = new ThreadedPurgatory(time, 2, 0)
+    val purgatory = new ThreadedPurgatory(time, "ThreadedPurgatory", 2)
     val error = new AtomicReference[String](null)
     val delayable1 = new TestDelayable(error)
     val delayable2 = new TestDelayable(error)
