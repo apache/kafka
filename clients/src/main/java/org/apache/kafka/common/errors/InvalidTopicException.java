@@ -57,7 +57,7 @@ public class InvalidTopicException extends ApiException {
         this.invalidTopics = invalidTopics;
     }
 
-    public Set<String> getInvalidTopics() {
+    public Set<String> invalidTopics() {
         return invalidTopics;
     }
 }

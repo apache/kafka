@@ -616,7 +616,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testInvalidTopicName() throws Exception {
+    public void testSendToInvalidTopic() throws Exception {
 
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");

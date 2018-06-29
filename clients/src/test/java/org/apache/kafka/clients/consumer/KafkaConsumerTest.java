@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import java.util.ArrayList;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
@@ -1859,8 +1858,8 @@ public class KafkaConsumerTest {
         EasyMock.verify(consumer);
     }
 
-    @Test
-    public void testInvalidTopicName() throws Exception {
+    @Test(expected = InvalidTopicException.class)
+    public void testSubscriptionOnInvalidTopic() throws Exception {
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster();
         Node node = cluster.nodes().get(0);
@@ -1876,23 +1875,19 @@ public class KafkaConsumerTest {
 
         Set<String> invalidTopic = new HashSet<String>();
         invalidTopic.add(invalidTopicName);
-        Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
+        Cluster metadataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
                                                             cluster.nodes(),
                                                             new ArrayList<PartitionInfo>(0),
                                                             Collections.<String>emptySet(),
                                                             invalidTopic,
                                                             cluster.internalTopics(),
                                                             cluster.controller());
-        client.prepareMetadataUpdate(metaDataUpdateResponseCluster, Collections.<String>emptySet());
+        client.prepareMetadataUpdate(metadataUpdateResponseCluster, Collections.<String>emptySet());
 
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        try {
-            consumer.updateAssignmentMetadataIfNeeded(0L);
-        } catch (InvalidTopicException e) {
-            // expected
-        }
+        consumer.poll(Duration.ZERO);
     }
 }
