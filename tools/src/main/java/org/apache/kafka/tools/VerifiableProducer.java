@@ -164,7 +164,7 @@ public class VerifiableProducer {
         parser.addArgument("--message-create-time")
                 .action(store())
                 .required(false)
-                .setDefault(-1)
+                .setDefault(-1L)
                 .type(Long.class)
                 .metavar("CREATETIME")
                 .dest("createTime")
