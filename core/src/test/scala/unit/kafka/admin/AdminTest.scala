@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -24,21 +24,16 @@ import org.junit.{After, Before, Test}
 import java.util.Properties
 
 import kafka.utils._
-import kafka.zk.{ConfigEntityZNode, PreferredReplicaElectionZNode, ZooKeeperTestHarness}
+import kafka.zk.{ConfigEntityZNode, ZooKeeperTestHarness}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
-import java.io.File
-import java.util.concurrent.LinkedBlockingQueue
 
-import kafka.utils.TestUtils._
-
-import scala.collection.{Map, Set, immutable}
-import org.apache.kafka.common.TopicPartition
+import scala.collection.{Map, immutable}
 import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   var servers: Seq[KafkaServer] = Seq()
@@ -59,38 +54,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testReplicaAssignment() {
-    val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
-
-    // test 0 replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0)
-    }
-
-    // test wrong replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6)
-    }
-
-    // correct assignment
-    val expectedAssignment = Map(
-        0 -> List(0, 1, 2),
-        1 -> List(1, 2, 3),
-        2 -> List(2, 3, 4),
-        3 -> List(3, 4, 0),
-        4 -> List(4, 0, 1),
-        5 -> List(0, 2, 3),
-        6 -> List(1, 3, 4),
-        7 -> List(2, 4, 0),
-        8 -> List(3, 0, 1),
-        9 -> List(4, 1, 2))
-
-    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0)
-    assertEquals(expectedAssignment, actualAssignment)
-  }
-
-  @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testManualReplicaAssignment() {
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -114,7 +77,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testTopicCreationInZK() {
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
@@ -162,7 +124,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testTopicCreationWithCollision() {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
@@ -192,228 +153,11 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     }
   }
 
-  private def getBrokersWithPartitionDir(servers: Iterable[KafkaServer], topic: String, partitionId: Int): Set[Int] = {
-    servers.filter(server => new File(server.config.logDirs.head, topic + "-" + partitionId).exists)
-           .map(_.config.brokerId)
-           .toSet
-  }
-
-  @Test
-  def testPartitionReassignmentWithLeaderInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
-    val topic = "test"
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-    // create the topic
-    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
-    // reassign partition 0
-    val newReplicas = Seq(0, 2, 3)
-    val partitionToBeReassigned = 0
-    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
-    assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
-    // wait until reassignment is completed
-    TestUtils.waitUntilTrue(() => {
-        val partitionsBeingReassigned = zkClient.getPartitionReassignment
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition,
-        Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
-      },
-      "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
-    // in sync replicas should not have any replica that is not in the new assigned replicas
-    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
-    assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
-    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
-                            "New replicas should exist on brokers")
-  }
-
-  @Test
-  def testPartitionReassignmentWithLeaderNotInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
-    val topic = "test"
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-    // create the topic
-    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
-    // reassign partition 0
-    val newReplicas = Seq(1, 2, 3)
-    val partitionToBeReassigned = 0
-    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
-    assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
-    // wait until reassignment is completed
-    TestUtils.waitUntilTrue(() => {
-        val partitionsBeingReassigned = zkClient.getPartitionReassignment
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition,
-          Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
-      },
-      "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
-    assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
-    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
-                            "New replicas should exist on brokers")
-  }
-
-  @Test
-  def testPartitionReassignmentNonOverlappingReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1))
-    val topic = "test"
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-    // create the topic
-    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
-    // reassign partition 0
-    val newReplicas = Seq(2, 3)
-    val partitionToBeReassigned = 0
-    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas),  adminZkClient = adminZkClient)
-    assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
-    // wait until reassignment is completed
-    TestUtils.waitUntilTrue(() => {
-        val partitionsBeingReassigned = zkClient.getPartitionReassignment
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition,
-          Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
-      },
-      "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
-    assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
-    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
-                            "New replicas should exist on brokers")
-  }
-
-  @Test
-  def testReassigningNonExistingPartition() {
-    val topic = "test"
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-    // reassign partition 0
-    val newReplicas = Seq(2, 3)
-    val partitionToBeReassigned = 0
-    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
-    assertFalse("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
-    val reassignedPartitions = zkClient.getPartitionReassignment
-    assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
-  }
-
-  @Test
-  def testResumePartitionReassignmentThatWasCompleted() {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1))
-    val topic = "test"
-    // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
-    // put the partition in the reassigned path as well
-    // reassign partition 0
-    val newReplicas = Seq(0, 1)
-    val partitionToBeReassigned = 0
-    val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
-    reassignPartitionsCommand.reassignPartitions()
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-
-    // wait until reassignment completes
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
-                            "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
-    assertEquals("Partition should have been reassigned to 0, 1", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
-    // ensure that there are no under replicated partitions
-    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
-    TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
-                            "New replicas should exist on brokers")
-  }
-
-  @Test
-  def testPreferredReplicaJsonData() {
-    // write preferred replica json data to zk path
-    val partitionsForPreferredReplicaElection = Set(new TopicPartition("test", 1), new TopicPartition("test2", 1))
-    PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
-    // try to read it back and compare with what was written
-    val preferredReplicaElectionZkData = zkUtils.readData(PreferredReplicaElectionZNode.path)._1
-    val partitionsUndergoingPreferredReplicaElection =
-      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(preferredReplicaElectionZkData)
-    assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
-      partitionsUndergoingPreferredReplicaElection)
-  }
-
-  @Test
-  def testBasicPreferredReplicaElection() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
-    val topic = "test"
-    val partition = 1
-    val preferredReplica = 0
-    // create brokers
-    val brokerRack = Map(0 -> "rack0", 1 -> "rack1", 2 -> "rack2")
-    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
-    // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
-    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
-    // broker 2 should be the leader since it was started first
-    val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = None)
-    // trigger preferred replica election
-    val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkClient, Set(new TopicPartition(topic, partition)))
-    preferredReplicaElection.moveLeaderToPreferredReplica()
-    val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader))
-    assertEquals("Preferred replica election failed", preferredReplica, newLeader)
-  }
-
-  @Test
-  def testControlledShutdown() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
-    val topic = "test"
-    val partition = 1
-    // create brokers
-    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
-    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
-    // create the topic
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
-
-    val controllerId = zkUtils.getController()
-    val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
-    val resultQueue = new LinkedBlockingQueue[Try[Set[TopicPartition]]]()
-    val controlledShutdownCallback = (controlledShutdownResult: Try[Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
-    controller.controlledShutdown(2, controlledShutdownCallback)
-    var partitionsRemaining = resultQueue.take().get
-    var activeServers = servers.filter(s => s.config.brokerId != 2)
-    // wait for the update metadata request to trickle to the brokers
-    TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
-      "Topic test not created after timeout")
-    assertEquals(0, partitionsRemaining.size)
-    var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
-    var leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
-    assertEquals(0, leaderAfterShutdown)
-    assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
-    assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
-
-    controller.controlledShutdown(1, controlledShutdownCallback)
-    partitionsRemaining = resultQueue.take().get
-    assertEquals(0, partitionsRemaining.size)
-    activeServers = servers.filter(s => s.config.brokerId == 0)
-    partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
-    leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
-    assertEquals(0, leaderAfterShutdown)
-
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
-    controller.controlledShutdown(0, controlledShutdownCallback)
-    partitionsRemaining = resultQueue.take().get
-    assertEquals(1, partitionsRemaining.size)
-    // leader doesn't change since all the replicas are shut down
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
-  }
-
   /**
    * This test simulates a client config change in ZK whose notification has been purged.
    * Basically, it asserts that notifications are bootstrapped from ZK
    */
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testBootstrapClientIdConfig() {
     val clientId = "my-client"
     val props = new Properties()
@@ -437,7 +181,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testGetBrokerMetadatas() {
     // broker 4 has no rack information
     val brokerList = 0 to 5
