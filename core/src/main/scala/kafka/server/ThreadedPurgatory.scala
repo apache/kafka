@@ -33,21 +33,17 @@ import scala.collection.mutable
 trait Delayable {
   /**
     * This function is invoked exactly once from a purgatory service thread when
-    * the delayable expires before it can be completed.  It must be thread-safe.
+    * the delayable is completed.  It must be thread-safe.
+    *
+    * @param timedOut   True if the delayable timed out.
     */
-  def onExpiration(): Unit
-
-  /**
-    * This function is invoked exactly once from a purgatory service thread when
-    * the delayable completes successfully.  It must be thread-safe.
-    */
-  def onComplete(): Unit
+  def complete(timedOut: Boolean): Unit
 
   /**
     * This function is invoked from a purgatory service thread.  It must be thread-safe.
     * It should return true if the delayable can be completed immediately.
     */
-  def canComplete(): Boolean
+  def check(): Boolean
 }
 
 /**
@@ -139,8 +135,8 @@ final class WatchMapIterator(val watchKey: Any, var iter: WatchMultiMap.Internal
 }
 
 final class ThreadedPurgatory(val time: Time,
-                              numThreads: Int = 5,
-                              brokerId: Int = 0) extends AutoCloseable with Logging {
+                              val purgatoryName: String = "ThreadedPurgatory",
+                              numThreads: Int = 5) extends AutoCloseable with Logging {
   /**
     * The lock which protects purgatory data structures.
     */
@@ -186,7 +182,7 @@ final class ThreadedPurgatory(val time: Time,
     */
   private [this] val timeoutThread = {
     val thread = new Thread(new PurgatoryTimeoutHandler(this),
-      s"PurgatoryTimeoutHandler${brokerId}")
+      s"${purgatoryName}TimeoutHandler")
     thread.start
     thread
   }
@@ -198,15 +194,26 @@ final class ThreadedPurgatory(val time: Time,
     val threads = mutable.ArrayBuffer[Thread]()
     for (threadIndex <- 0 to numThreads) {
       val thread = new Thread(new PurgatoryServiceHandler(this),
-        s"PurgatoryServiceHandler${brokerId}:${threadIndex}")
+        s"${purgatoryName}ServiceHandler${threadIndex}")
       threads += thread
       thread.start
     }
     threads
   }
 
-  def register(delayable: Delayable, watchKeys: Seq[_ <: Any], timeoutNs: Long) = {
+  def tryCompleteElseRegister(delayable: Delayable, watchKeys: Seq[_ <: Any],
+                              timeout: Long, timeUnit: TimeUnit) = {
+    if (delayable.check()) {
+      delayable.complete(false)
+    } else {
+      register(delayable, watchKeys, timeout, timeUnit)
+    }
+  }
+
+  def register(delayable: Delayable, watchKeys: Seq[_ <: Any], timeout: Long,
+               timeUnit: TimeUnit = TimeUnit.NANOSECONDS) = {
     // Get the time in nanoseconds without holding the object lock.
+    val timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit)
     var expirationTimeNs = time.nanoseconds() + timeoutNs
     lock.lock()
     try {
@@ -235,12 +242,13 @@ final class ThreadedPurgatory(val time: Time,
   }
 
   private [server] def unregisterInternal(delayable: Delayable, data: DelayableData) = {
+    logger.info(s"WATERMELON: unregisterInternal(delayable=${delayable.hashCode()}, data=${data.hashCode()})")
     watchMap.remove(data, delayable)
     next.remove(data)
     delayables.remove(delayable)
   }
 
-  def scheduleCheck(delayable: Delayable): Unit = {
+  def scheduleCheck(delayable: Delayable): Boolean = {
     lock.lock()
     try {
       scheduleCheckInternal(delayable)
@@ -249,7 +257,8 @@ final class ThreadedPurgatory(val time: Time,
     }
   }
 
-  private [server] def scheduleCheckInternal(delayable: Delayable): Unit = {
+  private [server] def scheduleCheckInternal(delayable: Delayable): Boolean = {
+    var startedCheck = false
     val data = delayables.get(delayable)
     if (data != null) {
       if (!data.shouldCheck) {
@@ -257,12 +266,15 @@ final class ThreadedPurgatory(val time: Time,
         if (!data.checking) {
           shouldCheck.add(delayable)
           serviceCond.signal()
+          startedCheck = true
         }
       }
     }
+    logger.info(s"WATERMELON: scheduleCheck(delayable=${delayable.hashCode()}, startedCheck=${startedCheck})")
+    startedCheck
   }
 
-  def scheduleWatchKeysCheck(watchKeys: Seq[Any]): Unit = {
+  def scheduleWatchKeysCheck(watchKeys: Seq[Any]): Int = {
     lock.lock()
     try {
       scheduleWatchKeysCheckInternal(watchKeys)
@@ -271,13 +283,17 @@ final class ThreadedPurgatory(val time: Time,
     }
   }
 
-  private [server] def scheduleWatchKeysCheckInternal(watchKeys: Seq[Any]): Unit = {
+  private [server] def scheduleWatchKeysCheckInternal(watchKeys: Seq[Any]): Int = {
+    var checkCount = 0
     watchKeys.foreach(watchKey => {
       var iter = watchMap.iterator(watchKey)
       while (iter.hasNext()) {
-        scheduleCheckInternal(iter.next())
+        if (scheduleCheckInternal(iter.next())) {
+          checkCount = checkCount + 1
+        }
       }
     })
+    checkCount
   }
 
   /**
@@ -328,7 +344,7 @@ final class ThreadedPurgatory(val time: Time,
     serviceThreads.foreach(thread => thread.join())
     lock.lock()
     try {
-      delayables.keySet().asScala.foreach(delayable => delayable.onExpiration())
+      delayables.keySet().asScala.foreach(delayable => delayable.complete(true))
       delayables.clear()
     } catch {
       case t: Throwable =>
@@ -362,7 +378,8 @@ final class PurgatoryTimeoutHandler(val purgatory: ThreadedPurgatory)
           }
           var entry = purgatory.next.firstEntry()
           while ((entry != null) && (entry.getKey.expirationTimeNs <= currentTimeNs)) {
-            purgatory.shouldCheck.add(entry.getValue)
+            if (!entry.getKey.shouldCheck)
+              purgatory.shouldCheck.add(entry.getValue)
             entry.getKey.expired = true
             purgatory.next.remove(entry.getKey)
             entry = purgatory.next.firstEntry()
@@ -434,10 +451,10 @@ final class PurgatoryServiceHandler(val purgatory: ThreadedPurgatory)
         val currentTimeNs = purgatory.time.nanoseconds()
         purge = if (expirationTimeNs <= currentTimeNs) {
           // Expire the delayable.  It will be purged as soon as we can grab the lock.
-          delayable.onExpiration()
+          delayable.complete(true)
           true
-        } else if (delayable.canComplete()) {
-          delayable.onComplete()
+        } else if (delayable.check()) {
+          delayable.complete(false)
           true
         } else {
           false
