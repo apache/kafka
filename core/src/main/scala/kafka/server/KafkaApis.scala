@@ -504,6 +504,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // call the replica manager to append messages to the replicas
+      produceRequestTag.log(s"invoking appendRecords. timeout=${produceRequest.timeout}, " +
+        s"entriesPerPartition.size=${authorizedRequestInfo.size}")
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
@@ -1991,7 +1993,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   throw new InvalidRequestException("Invalid empty resource name")
                 auth.addAcls(immutable.Set(acl), resource)
 
-                debug(s"Added acl $acl to $resource")
+               debug(s"Added acl $acl to $resource")
 
                 new AclCreationResponse(ApiError.NONE)
               } catch {

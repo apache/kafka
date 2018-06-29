@@ -617,8 +617,11 @@ class Partition(val topic: String,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0,
+                            produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None): LogAppendInfo = {
+    produceRequestTag.map(p => p.log(s"invoking Partition#appendRecordsToLeader for ${topicPartition}"))
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
+      produceRequestTag.map(p => p.log(s"acquired leaderIsrUpdateLock in read mode. for ${topicPartition}"))
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
           val log = leaderReplica.log.get
@@ -632,8 +635,10 @@ class Partition(val topic: String,
           }
 
           val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
+          produceRequestTag.map(p => p.log(s"finished log.appendAsLeader for ${topicPartition}"))
           // probably unblock some follower fetch requests since log end offset has been updated
           replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
+          produceRequestTag.map(p => p.log(s"finished replicaManager.tryCompleteDelayedFetch for ${topicPartition}"))
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
@@ -644,8 +649,12 @@ class Partition(val topic: String,
     }
 
     // some delayed operations may be unblocked after HW changed
-    if (leaderHWIncremented)
+    if (leaderHWIncremented) {
+      produceRequestTag.map(p => p.log(s"invoking tryCompleteDelayedRequests for ${topicPartition}"))
       tryCompleteDelayedRequests()
+    }
+    produceRequestTag.map(p => p.log(s"Partition#appendRecordsToLeader completed.  " +
+      s"leaderHWIncremented=${leaderHWIncremented}"))
 
     info
   }
