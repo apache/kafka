@@ -17,7 +17,6 @@ import itertools
 import os
 
 from ducktape.services.background_thread import BackgroundThreadService
-from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
@@ -196,12 +195,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         return cmd
 
     def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i console_consumer | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return node.account.java_pids(self.java_class_name())
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -251,7 +245,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         BackgroundThreadService.start_node(self, node)
 
     def stop_node(self, node):
-        node.account.kill_process("console_consumer", allow_fail=True)
+        self.logger.info("%s Stopping node %s" % (self.__class__.__name__, str(node.account)))
+        node.account.kill_java_processes(self.java_class_name(),
+                                         clean_shutdown=True, allow_fail=True)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
@@ -262,9 +258,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
         JmxMixin.clean_node(self, node)
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
+
+    def java_class_name(self):
+        return "ConsoleConsumer"
 
     def has_partitions_assigned(self, node):
         if self.new_consumer is False:
