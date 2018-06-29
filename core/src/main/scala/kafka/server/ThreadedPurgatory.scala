@@ -223,6 +223,7 @@ final class ThreadedPurgatory(val time: Time,
         val data = insertDelayableData(expirationTimeNs, delayable, watchKeys)
         delayables.put(delayable, data)
         watchMap.put(data, delayable)
+        logger.trace("{} registering delayable {}", purgatoryName, delayable.hashCode())
         if (data.expirationTimeNs < prevNextWakeNs) {
           timeoutCond.signal() // Wake up the timeout thread if necessary.
         }
@@ -242,7 +243,7 @@ final class ThreadedPurgatory(val time: Time,
   }
 
   private [server] def unregisterInternal(delayable: Delayable, data: DelayableData) = {
-    logger.info(s"WATERMELON: unregisterInternal(delayable=${delayable.hashCode()}, data=${data.hashCode()})")
+    logger.trace("{} unregistering delayable {}", purgatoryName, delayable.hashCode())
     watchMap.remove(data, delayable)
     next.remove(data)
     delayables.remove(delayable)
@@ -270,7 +271,7 @@ final class ThreadedPurgatory(val time: Time,
         }
       }
     }
-    logger.info(s"WATERMELON: scheduleCheck(delayable=${delayable.hashCode()}, startedCheck=${startedCheck})")
+    logger.trace("{} scheduling a check of delayable {}", purgatoryName, delayable.hashCode())
     startedCheck
   }
 
@@ -329,28 +330,31 @@ final class ThreadedPurgatory(val time: Time,
     * Shut down all threads and call onExpiration for all pending delayables.
     */
   override def close(): Unit = {
-    lock.lock()
     try {
-      if (shutdown) {
-        return
+      lock.lock()
+      try {
+        if (shutdown) {
+          return
+        }
+        logger.debug("Closing {}", purgatoryName)
+        shutdown = true
+        timeoutCond.signal()
+        serviceCond.signalAll()
+      } finally {
+        lock.unlock()
       }
-      shutdown = true
-      timeoutCond.signal()
-      serviceCond.signalAll()
-    } finally {
-      lock.unlock()
-    }
-    timeoutThread.join()
-    serviceThreads.foreach(thread => thread.join())
-    lock.lock()
-    try {
-      delayables.keySet().asScala.foreach(delayable => delayable.complete(true))
-      delayables.clear()
+      timeoutThread.join()
+      serviceThreads.foreach(thread => thread.join())
+      lock.lock()
+      try {
+        delayables.keySet().asScala.foreach(delayable => delayable.complete(true))
+        delayables.clear()
+      } finally {
+        lock.unlock()
+      }
     } catch {
       case t: Throwable =>
-        logger.error("ThreadedPurgatory#close got an onExpiration exception", t)
-    } finally {
-      lock.unlock()
+        logger.error("Error closing {}", purgatoryName, t)
     }
   }
 }
@@ -378,9 +382,14 @@ final class PurgatoryTimeoutHandler(val purgatory: ThreadedPurgatory)
           }
           var entry = purgatory.next.firstEntry()
           while ((entry != null) && (entry.getKey.expirationTimeNs <= currentTimeNs)) {
-            if (!entry.getKey.shouldCheck)
-              purgatory.shouldCheck.add(entry.getValue)
-            entry.getKey.expired = true
+            val data = entry.getKey
+            if (!data.shouldCheck) {
+              data.shouldCheck = true
+              if (!data.checking) {
+                purgatory.shouldCheck.add(entry.getValue)
+              }
+            }
+            data.expired = true
             purgatory.next.remove(entry.getKey)
             entry = purgatory.next.firstEntry()
             purgatory.serviceCond.signal() // wake up a service thread
@@ -397,7 +406,7 @@ final class PurgatoryTimeoutHandler(val purgatory: ThreadedPurgatory)
       }
     } catch {
       case t: Throwable =>
-        logger.error("PurgatoryTimeoutHandler exiting with exception", t)
+        logger.error("{} exiting with exception",  Thread.currentThread().getName(), t)
     }
   }
 }
@@ -462,7 +471,7 @@ final class PurgatoryServiceHandler(val purgatory: ThreadedPurgatory)
       }
     } catch {
       case t: Throwable =>
-        logger.error("PurgatoryServiceHandler exiting with exception", t)
+        logger.error("{} exiting with exception", Thread.currentThread().getName, t)
     }
   }
 }
