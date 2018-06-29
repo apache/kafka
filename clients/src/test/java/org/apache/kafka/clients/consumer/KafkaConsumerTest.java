@@ -137,7 +137,7 @@ public class KafkaConsumerTest {
     public ExpectedException expectedException = ExpectedException.none();
 
     @Test
-    public void testConstructorClose() throws Exception {
+    public void testConstructorClose() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "invalid-23-8409-adsfsdj");
@@ -156,7 +156,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testOsDefaultSocketBufferSizes() throws Exception {
+    public void testOsDefaultSocketBufferSizes() {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
@@ -167,7 +167,7 @@ public class KafkaConsumerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testInvalidSocketSendBufferSize() throws Exception {
+    public void testInvalidSocketSendBufferSize() {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
@@ -175,7 +175,7 @@ public class KafkaConsumerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testInvalidSocketReceiveBufferSize() throws Exception {
+    public void testInvalidSocketReceiveBufferSize() {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
@@ -358,10 +358,6 @@ public class KafkaConsumerTest {
 
         // initial fetch
         client.prepareResponseFrom(fetchResponse(tp0, 0, 0), node);
-
-        // We need two update calls:
-        // 1. the first call "sends" the metadata update requests
-        // 2. the second one gets the response we already queued up
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(singleton(tp0), consumer.assignment());

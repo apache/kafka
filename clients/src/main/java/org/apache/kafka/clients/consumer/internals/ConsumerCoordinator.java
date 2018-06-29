@@ -546,7 +546,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 return null;
             }
-        } while (!timer.isExpired());
+        } while (timer.notExpired());
         return null;
     }
 
@@ -555,7 +555,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.disableWakeups();
         try {
             maybeAutoCommitOffsetsSync(timer);
-            while (pendingAsyncCommits.get() > 0 && !timer.isExpired()) {
+            while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 client.poll(timer);
             }
@@ -673,7 +673,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw future.exception();
 
             timer.sleep(retryBackoffMs);
-        } while (!timer.isExpired());
+        } while (timer.notExpired());
 
         return false;
     }

@@ -1192,7 +1192,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
-            } while (!timer.isExpired());
+            } while (timer.notExpired());
 
             return ConsumerRecords.empty();
         } finally {
@@ -1619,7 +1619,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 updateFetchPositions(timer);
                 client.poll(timer);
-            } while (!timer.isExpired());
+            } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
                     "for partition " + partition + " could be determined");

@@ -317,7 +317,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
 
             timer.sleep(retryBackoffMs);
-        } while (!timer.isExpired());
+        } while (timer.notExpired());
 
         throw new TimeoutException("Timeout expired while fetching topic metadata");
     }
@@ -419,7 +419,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 client.awaitMetadataUpdate(timer);
             else
                 timer.sleep(retryBackoffMs);
-        } while (!timer.isExpired());
+        } while (timer.notExpired());
 
         throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms");
     }

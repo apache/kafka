@@ -162,7 +162,7 @@ public class ConsumerNetworkClient implements Closeable {
             AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
             if (ex != null)
                 throw ex;
-        } while (this.metadata.version() == version && !timer.isExpired());
+        } while (this.metadata.version() == version && timer.notExpired());
         return this.metadata.version() > version;
     }
 
@@ -213,7 +213,7 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean poll(RequestFuture<?> future, Timer timer) {
         do {
             poll(timer, future);
-        } while (!future.isDone() && !timer.isExpired());
+        } while (!future.isDone() && timer.notExpired());
         return future.isDone();
     }
 
@@ -311,7 +311,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @return true If all requests finished, false if the timeout expired first
      */
     public boolean awaitPendingRequests(Node node, Timer timer) {
-        while (hasPendingRequests(node) && !timer.isExpired()) {
+        while (hasPendingRequests(node) && timer.notExpired()) {
             poll(timer);
         }
         return !hasPendingRequests(node);

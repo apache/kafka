@@ -247,7 +247,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 markCoordinatorUnknown();
                 timer.sleep(retryBackoffMs);
             }
-        } while (coordinatorUnknown() && !timer.isExpired());
+        } while (coordinatorUnknown() && timer.notExpired());
 
         return !coordinatorUnknown();
     }

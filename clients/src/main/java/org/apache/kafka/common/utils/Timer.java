@@ -70,6 +70,14 @@ public class Timer {
     }
 
     /**
+     * Check whether the timer has not yet expired.
+     * @return true if there is still time remaining before expiration
+     */
+    public boolean notExpired() {
+        return !isExpired();
+    }
+
+    /**
      * Reset the timer to the specific timeout. This will use the underlying {@link #Timer(Time, long)}
      * implementation to update the current cached time in milliseconds and it will set a new timer
      * deadline.
