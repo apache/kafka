@@ -35,6 +35,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -2748,5 +2750,10 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 }

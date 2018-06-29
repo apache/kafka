@@ -1276,4 +1276,11 @@ public class StreamThread extends Thread {
         result.putAll(restoreConsumerMetrics);
         return result;
     }
+
+    public Map<MetricName, Metric> adminClientMetrics() {
+        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.getAdminClient().metrics();
+        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
+        result.putAll(adminClientMetrics);
+        return result;
+    }
 }
