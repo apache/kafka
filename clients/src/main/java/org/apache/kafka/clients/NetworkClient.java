@@ -869,7 +869,7 @@ public class NetworkClient implements KafkaClient {
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.debug("Error connecting to node {}", node, e);
+            log.warn("Error connecting to node {}", node, e);
         }
     }
 
