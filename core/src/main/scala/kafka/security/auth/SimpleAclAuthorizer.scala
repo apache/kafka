@@ -111,10 +111,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
 
     // ensure we compare identical classes
-    val principal = if (classOf[KafkaPrincipal] != session.principal.getClass)
-      new KafkaPrincipal(session.principal.getPrincipalType, session.principal.getName)
+    val sessionPrincipal = session.principal
+    val principal = if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
+      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
     else
-      session.principal
+      sessionPrincipal
 
     val host = session.clientAddress.getHostAddress
 
