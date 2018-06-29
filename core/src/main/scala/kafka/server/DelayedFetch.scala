@@ -20,8 +20,9 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException, KafkaStorageException}
+import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.IsolationLevel
 
@@ -56,13 +57,12 @@ case class FetchMetadata(fetchMinBytes: Int,
  * A delayed fetch operation that can be created by the replica manager and watched
  * in the fetch operation purgatory
  */
-class DelayedFetch(delayMs: Long,
-                   fetchMetadata: FetchMetadata,
-                   replicaManager: ReplicaManager,
-                   quota: ReplicaQuota,
-                   isolationLevel: IsolationLevel,
-                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(delayMs) {
+class DelayableFetch(fetchMetadata: FetchMetadata,
+                     replicaManager: ReplicaManager,
+                     quota: ReplicaQuota,
+                     isolationLevel: IsolationLevel,
+                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
+    extends Delayable with Logging {
 
   /**
    * The operation can be completed if:
@@ -75,7 +75,7 @@ class DelayedFetch(delayMs: Long,
    *
    * Upon completion, should return whatever data is available for each valid partition
    */
-  override def tryComplete() : Boolean = {
+  override def check() : Boolean = {
     var accumulatedSize = 0
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicPartition, fetchStatus) =>
@@ -98,14 +98,14 @@ class DelayedFetch(delayMs: Long,
               if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case C, this can happen when the new fetch operation is on a truncated leader
                 debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicPartition))
-                return forceComplete()
+                return true
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case C, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
                 // We will not force complete the fetch request if a replica should be throttled.
                 if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
-                  return forceComplete()
+                  return true
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
@@ -117,34 +117,30 @@ class DelayedFetch(delayMs: Long,
         } catch {
           case _: KafkaStorageException => // Case E
             debug("Partition %s is in an offline log directory, satisfy %s immediately".format(topicPartition, fetchMetadata))
-            return forceComplete()
+            return true
           case _: UnknownTopicOrPartitionException => // Case B
             debug("Broker no longer know of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
-            return forceComplete()
+            return true
           case _: NotLeaderForPartitionException =>  // Case A
             debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
-            return forceComplete()
+            return true
         }
     }
 
     // Case D
-    if (accumulatedSize >= fetchMetadata.fetchMinBytes)
-       forceComplete()
-    else
-      false
-  }
-
-  override def onExpiration() {
-    if (fetchMetadata.isFromFollower)
-      DelayedFetchMetrics.followerExpiredRequestMeter.mark()
-    else
-      DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+    (accumulatedSize >= fetchMetadata.fetchMinBytes)
   }
 
   /**
-   * Upon completion, read whatever data is available and pass to the complete callback
-   */
-  override def onComplete() {
+    * Upon completion, read whatever data is available and pass to the complete callback
+    */
+  override def complete(timedOut: Boolean) {
+    if (timedOut) {
+      if (fetchMetadata.isFromFollower)
+        DelayedFetchMetrics.followerExpiredRequestMeter.mark()
+      else
+        DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+    }
     val logReadResults = replicaManager.readFromLocalLog(
       replicaId = fetchMetadata.replicaId,
       fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,
