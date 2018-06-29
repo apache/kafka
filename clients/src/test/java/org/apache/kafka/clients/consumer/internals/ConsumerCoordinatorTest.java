@@ -90,17 +90,20 @@ import static org.junit.Assert.fail;
 
 public class ConsumerCoordinatorTest {
 
-    private String topic1 = "test1";
-    private String topic2 = "test2";
-    private String groupId = "test-group";
-    private TopicPartition t1p = new TopicPartition(topic1, 0);
-    private TopicPartition t2p = new TopicPartition(topic2, 0);
-    private int rebalanceTimeoutMs = 60000;
-    private int sessionTimeoutMs = 10000;
-    private int heartbeatIntervalMs = 5000;
-    private long retryBackoffMs = 100;
-    private int autoCommitIntervalMs = 2000;
-    private int requestTimeoutMs = 30000;
+    private final String topic1 = "test1";
+    private final String topic2 = "test2";
+    private final TopicPartition t1p = new TopicPartition(topic1, 0);
+    private final TopicPartition t2p = new TopicPartition(topic2, 0);
+    private final String groupId = "test-group";
+    private final int rebalanceTimeoutMs = 60000;
+    private final int sessionTimeoutMs = 10000;
+    private final int heartbeatIntervalMs = 5000;
+    private final long retryBackoffMs = 100;
+    private final int autoCommitIntervalMs = 2000;
+    private final int requestTimeoutMs = 30000;
+    private final Heartbeat heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs,
+            rebalanceTimeoutMs, retryBackoffMs);
+
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
     private List<PartitionAssignor> assignors = Collections.<PartitionAssignor>singletonList(partitionAssignor);
     private MockTime time;
@@ -141,6 +144,7 @@ public class ConsumerCoordinatorTest {
     @After
     public void teardown() {
         this.metrics.close();
+        this.coordinator.close(0);
     }
 
     @Test
@@ -577,6 +581,35 @@ public class ConsumerCoordinatorTest {
         assertEquals(Collections.emptySet(), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(singleton(t1p), rebalanceListener.assigned);
+    }
+
+    @Test
+    public void testUpdateLastHeartbeatPollWhenCoordinatorUnknown() throws Exception {
+        // If we are part of an active group and we cannot find the coordinator, we should nevertheless
+        // continue to update the last poll time so that we do not expire the consumer
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+
+        // Join the group, but signal a coordinator change after the first heartbeat
+        client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        client.prepareResponse(heartbeatResponse(Errors.NOT_COORDINATOR));
+
+        coordinator.poll(Long.MAX_VALUE);
+        time.sleep(heartbeatIntervalMs);
+
+        // Await the first heartbeat which forces us to find a new coordinator
+        TestUtils.waitForCondition(() -> !client.hasPendingResponses(),
+                "Failed to observe expected heartbeat from background thread");
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertFalse(coordinator.poll(0));
+        assertEquals(time.milliseconds(), heartbeat.lastPollTime());
+
+        time.sleep(rebalanceTimeoutMs - 1);
+        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
     }
 
     @Test
@@ -1695,7 +1728,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testHeartbeatThreadClose() throws Exception {
-        groupId = "testCloseTimeoutWithHeartbeatThread";
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         coordinator.ensureActiveGroup();
         time.sleep(heartbeatIntervalMs + 100);
@@ -1831,7 +1863,7 @@ public class ConsumerCoordinatorTest {
                 groupId,
                 rebalanceTimeoutMs,
                 sessionTimeoutMs,
-                heartbeatIntervalMs,
+                heartbeat,
                 assignors,
                 metadata,
                 subscriptions,

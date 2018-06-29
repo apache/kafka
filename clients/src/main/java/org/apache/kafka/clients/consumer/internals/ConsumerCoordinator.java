@@ -118,7 +118,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                String groupId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
-                               int heartbeatIntervalMs,
+                               Heartbeat heartbeat,
                                List<PartitionAssignor> assignors,
                                Metadata metadata,
                                SubscriptionState subscriptions,
@@ -136,7 +136,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               groupId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
-              heartbeatIntervalMs,
+              heartbeat,
               metrics,
               metricGrpPrefix,
               time,
@@ -306,13 +306,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
+            // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
+            // group proactively due to application inactivity even if (say) the coordinator cannot be found.
+            pollHeartbeat(currentTime);
+
             if (coordinatorUnknown()) {
                 if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                     return false;
                 }
                 currentTime = time.milliseconds();
                 elapsed = currentTime - startTime;
-
             }
 
             if (rejoinNeededOrPending()) {
@@ -333,8 +336,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 currentTime = time.milliseconds();
             }
-
-            pollHeartbeat(currentTime);
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
