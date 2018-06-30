@@ -65,16 +65,22 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot write to output stream
      */
-    public void writeTo(DataOutputStream out) throws IOException {
+    public void writeTo(DataOutputStream out, int usedVersion) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
+        if (usedVersion == 4) {
+            out.writeInt(numberOfStateStores);
+        }
     }
 
     /**
      * @throws IOException if cannot read from input stream
      */
-    public static TaskId readFrom(DataInputStream in) throws IOException {
-        return new TaskId(in.readInt(), in.readInt());
+    public static TaskId readFrom(DataInputStream in, int usedVersion) throws IOException {
+        if (usedVersion < 4) return new TaskId(in.readInt(), in.readInt());
+        final TaskId taskId = new TaskId(in.readInt(), in.readInt());
+        taskId.setNumberOfStateStores(in.readInt());
+        return taskId;
     }
 
     public void writeTo(ByteBuffer buf, final int version) {
