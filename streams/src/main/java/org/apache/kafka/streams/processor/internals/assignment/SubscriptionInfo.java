@@ -32,7 +32,7 @@ public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 3;
+    public static final int LATEST_SUPPORTED_VERSION = 4;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -124,6 +124,9 @@ public class SubscriptionInfo {
             case 3:
                 buf = encodeVersionThree();
                 break;
+            case 4:
+                buf = encodeVersionFour();
+                break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -190,8 +193,8 @@ public class SubscriptionInfo {
     private int getVersionTwoByteLength(final byte[] endPointBytes) {
         return 4 + // version
                16 + // client ID
-               4 + prevTasks.size() * 12 + // length + prev tasks
-               4 + standbyTasks.size() * 12 + // length + standby tasks
+               4 + prevTasks.size() * 8 + // length + prev tasks
+               4 + standbyTasks.size() * 8 + // length + standby tasks
                4 + endPointBytes.length; // length + userEndPoint
     }
 
@@ -222,6 +225,30 @@ public class SubscriptionInfo {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID
+               4 + prevTasks.size() * 8 + // length + prev tasks
+               4 + standbyTasks.size() * 8 + // length + standby tasks
+               4 + endPointBytes.length; // length + userEndPoint
+    }
+    
+    private ByteBuffer encodeVersionFour() {
+        final byte[] endPointBytes = prepareUserEndPoint();
+
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionFourByteLength(endPointBytes));
+
+        buf.putInt(4); // used version
+        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks, 4);
+        encodeTasks(buf, standbyTasks, 4);
+        encodeUserEndPoint(buf, endPointBytes);
+
+        return buf;
+    }
+
+    protected int getVersionFourByteLength(final byte[] endPointBytes) {
+        return 4 + // used version
+               4 + // latest supported version version
+               16 + // client ID
                4 + prevTasks.size() * 12 + // length + prev tasks
                4 + standbyTasks.size() * 12 + // length + standby tasks
                4 + endPointBytes.length; // length + userEndPoint
@@ -241,16 +268,21 @@ public class SubscriptionInfo {
         switch (usedVersion) {
             case 1:
                 subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
-                decodeVersionOneData(subscriptionInfo, data, usedVersion);
+                decodeVersionOneData(subscriptionInfo, data);
                 break;
             case 2:
                 subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
-                decodeVersionTwoData(subscriptionInfo, data, usedVersion);
+                decodeVersionTwoData(subscriptionInfo, data);
                 break;
             case 3:
                 latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
-                decodeVersionThreeData(subscriptionInfo, data, usedVersion);
+                decodeVersionThreeData(subscriptionInfo, data);
+                break;
+            case 4:
+                latestSupportedVersion = data.getInt();
+                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
+                decodeVersionFourData(subscriptionInfo, data);
                 break;
             default:
                 latestSupportedVersion = data.getInt();
@@ -262,10 +294,9 @@ public class SubscriptionInfo {
     }
 
     private static void decodeVersionOneData(final SubscriptionInfo subscriptionInfo,
-                                             final ByteBuffer data,
-                                             final int usedVersion) {
+                                             final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data, usedVersion);
+        decodeTasks(subscriptionInfo, data, 1);
     }
 
     private static void decodeClientUUID(final SubscriptionInfo subscriptionInfo,
@@ -290,10 +321,9 @@ public class SubscriptionInfo {
     }
 
     private static void decodeVersionTwoData(final SubscriptionInfo subscriptionInfo,
-                                             final ByteBuffer data,
-                                             final int usedVersion) {
+                                             final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data, usedVersion);
+        decodeTasks(subscriptionInfo, data, 2);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
@@ -308,10 +338,16 @@ public class SubscriptionInfo {
     }
 
     private static void decodeVersionThreeData(final SubscriptionInfo subscriptionInfo,
-                                               final ByteBuffer data,
-                                               final int usedVersion) {
+                                               final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data, usedVersion);
+        decodeTasks(subscriptionInfo, data, 3);
+        decodeUserEndPoint(subscriptionInfo, data);
+    }
+
+    private static void decodeVersionFourData(final SubscriptionInfo subscriptionInfo,
+                                              final ByteBuffer data) {
+        decodeClientUUID(subscriptionInfo, data);
+        decodeTasks(subscriptionInfo, data, 4);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
