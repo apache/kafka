@@ -34,11 +34,14 @@ public class TaskId implements Comparable<TaskId> {
     public final int partition;
     /** The number of State Stores in the task. */
     private int numberOfStateStores;
-
+    /** The number of Partitions in the task.*/
+    private int numberOfInputPartitions;
+    
     public TaskId(int topicGroupId, int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
         this.numberOfStateStores = 0;
+        this.numberOfInputPartitions = 0;
     }
 
     public String toString() {
@@ -70,6 +73,7 @@ public class TaskId implements Comparable<TaskId> {
         out.writeInt(partition);
         if (usedVersion == 4) {
             out.writeInt(numberOfStateStores);
+            out.writeInt(numberOfInputPartitions);
         }
     }
 
@@ -80,6 +84,7 @@ public class TaskId implements Comparable<TaskId> {
         if (usedVersion < 4) return new TaskId(in.readInt(), in.readInt());
         final TaskId taskId = new TaskId(in.readInt(), in.readInt());
         taskId.setNumberOfStateStores(in.readInt());
+        taskId.setNumberOfInputPartitions(in.readInt());
         return taskId;
     }
 
@@ -88,6 +93,7 @@ public class TaskId implements Comparable<TaskId> {
         buf.putInt(partition);
         if (version == 4) {
             buf.putInt(numberOfStateStores);
+            buf.putInt(numberOfInputPartitions);
         }
     }
 
@@ -95,6 +101,7 @@ public class TaskId implements Comparable<TaskId> {
         final TaskId result = new TaskId(buf.getInt(), buf.getInt());
         if (version == 4) {
             result.setNumberOfStateStores(buf.getInt());
+            result.setNumberOfInputPartitions(buf.getInt());
         }
         return result;
     }
@@ -134,5 +141,13 @@ public class TaskId implements Comparable<TaskId> {
 
     public void setNumberOfStateStores(int numberOfStateStores) {
         this.numberOfStateStores = numberOfStateStores;
+    }
+
+    public int numberOfInputPartitions() {
+        return numberOfInputPartitions;
+    }
+
+    public void setNumberOfInputPartitions(int numberOfInputPartitions) {
+        this.numberOfInputPartitions = numberOfInputPartitions;
     }
 }

@@ -249,8 +249,8 @@ public class SubscriptionInfo {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID
-               4 + prevTasks.size() * 12 + // length + prev tasks
-               4 + standbyTasks.size() * 12 + // length + standby tasks
+               4 + prevTasks.size() * 16 + // length + prev tasks
+               4 + standbyTasks.size() * 16 + // length + standby tasks
                4 + endPointBytes.length; // length + userEndPoint
     }
 

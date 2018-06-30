@@ -30,7 +30,9 @@ public class ClientState {
     private final Set<TaskId> prevAssignedTasks;
 
     private int capacity;
-    private int numberOfStateStores;
+    private int numberOfActiveStateStores;
+    private int numberOfStandbyStateStores;
+    private int numberOfActivePartitions;
 
 
     public ClientState() {
@@ -39,7 +41,9 @@ public class ClientState {
 
     ClientState(final int capacity) {
         this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
-        this.numberOfStateStores = 0;
+        this.numberOfActiveStateStores = 0;
+        this.numberOfStandbyStateStores = 0;
+        this.numberOfActivePartitions = 0;
     }
 
     private ClientState(final Set<TaskId> activeTasks,
@@ -72,11 +76,13 @@ public class ClientState {
     public void assign(final TaskId taskId, final boolean active) {
         if (active) {
             activeTasks.add(taskId);
+            numberOfActiveStateStores += taskId.numberOfStateStores();
+            numberOfActivePartitions += taskId.numberOfInputPartitions();
         } else {
             standbyTasks.add(taskId);
+            numberOfStandbyStateStores += taskId.numberOfStateStores();
         }
 
-        numberOfStateStores += taskId.numberOfStateStores();
         assignedTasks.add(taskId);
     }
 
@@ -143,12 +149,16 @@ public class ClientState {
             throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
         }
 
-        final double otherLoad =  ((double) other.assignedTaskCount() + (double) 0.5 * numberOfStateStores) / other.capacity;
-        final double thisLoad =  ((double) assignedTaskCount() + (double) 0.5 * numberOfStateStores) / capacity;
-
-        if (thisLoad < otherLoad)
+        final double thisActiveLoad = (numberOfActiveStateStores + 1) * numberOfActivePartitions / (double) capacity;
+        final double otherActiveLoad = (other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions / (double) other.capacity;
+        
+        if (thisActiveLoad < otherActiveLoad) 
             return true;
-        else if (thisLoad > otherLoad)
+        else if (thisActiveLoad > otherActiveLoad)
+            return false;
+        else if (this.numberOfStandbyStateStores < other.numberOfStandbyStateStores)
+            return true;
+        else if (this.numberOfStandbyStateStores > other.numberOfStandbyStateStores)
             return false;
         else
             return capacity > other.capacity;
