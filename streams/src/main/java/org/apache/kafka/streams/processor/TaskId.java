@@ -81,10 +81,11 @@ public class TaskId implements Comparable<TaskId> {
      * @throws IOException if cannot read from input stream
      */
     public static TaskId readFrom(DataInputStream in, int usedVersion) throws IOException {
-        if (usedVersion < 4) return new TaskId(in.readInt(), in.readInt());
         final TaskId taskId = new TaskId(in.readInt(), in.readInt());
-        taskId.setNumberOfStateStores(in.readInt());
-        taskId.setNumberOfInputPartitions(in.readInt());
+        if (usedVersion == 4) {
+            taskId.setNumberOfStateStores(in.readInt());
+            taskId.setNumberOfInputPartitions(in.readInt());
+        }
         return taskId;
     }
 
@@ -139,7 +140,7 @@ public class TaskId implements Comparable<TaskId> {
         return numberOfStateStores;
     }
 
-    public void setNumberOfStateStores(int numberOfStateStores) {
+    public void setNumberOfStateStores(final int numberOfStateStores) {
         this.numberOfStateStores = numberOfStateStores;
     }
 
@@ -147,7 +148,7 @@ public class TaskId implements Comparable<TaskId> {
         return numberOfInputPartitions;
     }
 
-    public void setNumberOfInputPartitions(int numberOfInputPartitions) {
+    public void setNumberOfInputPartitions(final int numberOfInputPartitions) {
         this.numberOfInputPartitions = numberOfInputPartitions;
     }
 }

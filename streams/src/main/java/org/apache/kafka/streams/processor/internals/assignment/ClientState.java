@@ -151,7 +151,7 @@ public class ClientState {
 
         final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
         final double thisLoad = (double) assignedTaskCount() / capacity;
-        
+
         if (thisLoad < otherLoad)
             return true;
         else if (thisLoad > otherLoad)
