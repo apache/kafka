@@ -583,7 +583,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minReceivedMetadataVersion == 2 || minReceivedMetadataVersion == 3) {
+        if (minReceivedMetadataVersion >= 2) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 

@@ -88,4 +88,10 @@ public class AssignmentInfoTest {
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
+    @Test
+    public void shouldEncodeAndDecodeVersion4() {
+        final AssignmentInfo info = new AssignmentInfo(4, activeTasks, standbyTasks, globalAssignment);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(4, AssignmentInfo.LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
 }
