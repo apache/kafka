@@ -1713,7 +1713,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the metrics kept by the consumer
+     * Get the metrics kept by the consumer. This method is thread-safe.
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
