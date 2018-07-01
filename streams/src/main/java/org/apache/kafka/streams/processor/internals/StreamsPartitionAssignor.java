@@ -868,9 +868,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     }
 
     private void processVersionFourAssignment(final AssignmentInfo info,
-            final List<TopicPartition> partitions,
-            final Map<TaskId, Set<TopicPartition>> activeTasks,
-            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+                                              final List<TopicPartition> partitions,
+                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
