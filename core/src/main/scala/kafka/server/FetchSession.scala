@@ -759,7 +759,7 @@ class FetchManager(private val time: Time,
       cache.synchronized {
         cache.get(reqMetadata.sessionId()) match {
           case None => {
-            info(s"Created a new error FetchContext for session id ${reqMetadata.sessionId()}: " +
+            debug(s"Created a new error FetchContext for session id ${reqMetadata.sessionId()}: " +
               "no such session ID found.")
             new SessionErrorContext(Errors.FETCH_SESSION_ID_NOT_FOUND, reqMetadata)
           }
