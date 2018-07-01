@@ -655,6 +655,12 @@ public class StickyTaskAssignorTest {
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
+    @Test
+    public void shouldAssignTasksToClientsWithImprovedBalancing() {
+        setFixedCounts();
+        // Unknown what to expect at the moment, will leave blank
+    }
+
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
         final List<TaskId> taskIds = Arrays.asList(tasks);
         Collections.shuffle(taskIds);
@@ -720,4 +726,35 @@ public class StickyTaskAssignorTest {
         return sortedAssignment;
     }
 
+    private void setFixedCounts() {
+        final Map<TaskId, Integer> stateStoreCounts = new HashMap<>();
+        final Map<TaskId, Integer> inputPartitionCounts = new HashMap<>();
+
+        stateStoreCounts.put(task00, 0);
+        stateStoreCounts.put(task01, 1);
+        stateStoreCounts.put(task02, 2);
+        stateStoreCounts.put(task03, 3);
+        stateStoreCounts.put(task04, 4);
+        stateStoreCounts.put(task05, 5);
+  
+        //reverse counts to allow some diversification
+        inputPartitionCounts.put(task00, 5);
+        inputPartitionCounts.put(task01, 4);
+        inputPartitionCounts.put(task02, 3);
+        inputPartitionCounts.put(task03, 2);
+        inputPartitionCounts.put(task04, 1);
+        inputPartitionCounts.put(task05, 0);
+
+        setStateStoreAndInputPartitionCount(stateStoreCounts, inputPartitionCounts);
+    }
+
+    private void setStateStoreAndInputPartitionCount(final Map<TaskId, Integer> stateStoreCounts,
+                                                     final Map<TaskId, Integer> inputPartitionCounts) {
+        for (final Map.Entry<TaskId, Integer> stateStoreCount : stateStoreCounts.entrySet()) {
+            stateStoreCount.getKey().setNumberOfStateStores(stateStoreCount.getValue());
+        }
+        for (final Map.Entry<TaskId, Integer> partitionCount : inputPartitionCounts.entrySet()) {
+            partitionCount.getKey().setNumberOfInputPartitions(partitionCount.getValue());
+        }
+    }
 }

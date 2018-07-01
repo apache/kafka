@@ -114,7 +114,9 @@ public class TaskId implements Comparable<TaskId> {
 
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
-            return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
+            return other.topicGroupId == this.topicGroupId && other.partition == this.partition && 
+                   other.numberOfInputPartitions == this.numberOfInputPartitions &&
+                   other.numberOfStateStores == this.numberOfStateStores;
         } else {
             return false;
         }

@@ -149,8 +149,10 @@ public class ClientState {
             throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
         }
 
-        final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
-        final double thisLoad = (double) assignedTaskCount() / capacity;
+        final double otherLoad = (double) (other.assignedTaskCount() + other.numberOfActivePartitions 
+                + other.numberOfActiveStateStores + other.numberOfStandbyStateStores) / other.capacity;
+        final double thisLoad = (double) (assignedTaskCount() + numberOfActivePartitions 
+                + numberOfActiveStateStores + numberOfStandbyStateStores) / capacity;
 
         if (thisLoad < otherLoad)
             return true;
