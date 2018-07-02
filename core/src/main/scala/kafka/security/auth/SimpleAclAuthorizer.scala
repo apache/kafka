@@ -112,11 +112,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
                       kafkaConfig.zkEnableSecureAcls)
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
+    // Start change listeners first and then populate the cache so that there is no timing window
+    // between loading cache and processing change notifications.
+    startZkChangeListeners()
     loadCache()
 
-    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
-    aclChangeListener.init()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -244,6 +244,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def toResourcePath(resource: Resource): String = {
     SimpleAclAuthorizer.AclZkPath + "/" + resource.resourceType + "/" + resource.name
+  }
+
+  private[auth] def startZkChangeListeners(): Unit = {
+    zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclChangedZkPath)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkUtils, SimpleAclAuthorizer.AclChangedZkPath, SimpleAclAuthorizer.AclChangedPrefix, AclChangedNotificationHandler)
+    aclChangeListener.init()
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
