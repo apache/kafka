@@ -229,6 +229,16 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     }
   }
 
+  def updateMaxConnectionsPerIp(maxConnectionsPerIp: Int): Unit = synchronized {
+    info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
+    connectionQuotas.updateMaxConnectionsPerIp(maxConnectionsPerIp)
+  }
+
+  def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = synchronized {
+    info(s"Updating maxConnectionsPerIpOverrides: ${overrideQuotas.map { case (k, v) => s"$k=$v" }.mkString(",")}")
+    connectionQuotas.updateMaxConnectionsPerIpOverride(overrideQuotas)
+  }
+
   /* `protected` for test usage */
   protected[network] def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                       securityProtocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
@@ -878,17 +888,26 @@ private[kafka] class Processor(val id: Int,
 
 class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
 
-  private val overrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+  private var maxConnectionsPerIp = defaultMax
+  private var overrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   private val counts = mutable.Map[InetAddress, Int]()
 
   def inc(address: InetAddress) {
     counts.synchronized {
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
-      val max = overrides.getOrElse(address, defaultMax)
+      val max = overrides.getOrElse(address, maxConnectionsPerIp)
       if (count >= max)
         throw new TooManyConnectionsException(address, max)
     }
+  }
+
+  def updateMaxConnectionsPerIp(connectionQuotas: Int): Unit = {
+    maxConnectionsPerIp = connectionQuotas
+  }
+
+  def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
+    overrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   }
 
   def dec(address: InetAddress) {
