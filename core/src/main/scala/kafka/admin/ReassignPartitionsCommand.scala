@@ -1609,7 +1609,7 @@ object ReassignPartitionsCommand extends Logging {
 
   def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     Json.tryParseFull(jsonData) match {
-      case Right(js) =>
+      case Right(Some(js)) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
