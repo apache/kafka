@@ -22,7 +22,7 @@ import java.util
 import AbstractFetcherThread.ResultWithPartitions
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
-import kafka.log.LogConfig
+import kafka.log.{Log, LogConfig}
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
 import kafka.zk.AdminZkClient
@@ -95,7 +95,9 @@ class ReplicaFetcherThread(name: String,
   private val minBytes = brokerConfig.replicaFetchMinBytes
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
-  private val shouldSendLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
+  private val brokerSupportsLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2 &&
+    brokerConfig.logMessageFormatVersion >= KAFKA_0_11_0_IV2
+
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
@@ -352,7 +354,7 @@ class ReplicaFetcherThread(name: String,
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     var result: Map[TopicPartition, EpochEndOffset] = null
-    if (shouldSendLeaderEpochRequest) {
+    if (shouldSendLeaderEpochRequest(partitions)) {
       val partitionsAsJava = partitions.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
@@ -376,6 +378,26 @@ class ReplicaFetcherThread(name: String,
       }
     }
     result
+  }
+
+  /*
+    Decides whether or not we should send a LeaderEpochRequest
+      by checking the broker message format and all topics' message format versions
+   */
+  private def shouldSendLeaderEpochRequest(partitions: Map[TopicPartition, Int]): Boolean = {
+    if (!brokerSupportsLeaderEpochRequest)
+      return false
+
+    // if all topics' message format do not support epoch requests, skip it
+    partitions.map { case (tp, _) => topicSupportsEpochRequest(tp) }.reduce(_ || _)
+  }
+
+  // protected for test mocking
+  protected def topicSupportsEpochRequest(tp: TopicPartition): Boolean = {
+    replicaMgr.getLog(tp) match {
+      case Some(log) => log.config.messageFormatVersion < KAFKA_0_11_0_IV2
+      case None => false
+    }
   }
 
   /**
