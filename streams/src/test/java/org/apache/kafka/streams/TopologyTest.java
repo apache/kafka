@@ -1143,12 +1143,17 @@ public class TopologyTest {
             processorName,
             new MockProcessorSupplier());
 
+        final Set<InternalTopologyBuilder.TopologyDescription.Node> nodes = new HashSet<>();
+        nodes.add(topology.internalTopologyBuilder.getNodeDescription(sourceName));
+        nodes.add(topology.internalTopologyBuilder.getNodeDescription(processorName));
+
         final TopologyDescription.GlobalStore expectedGlobalStore = new InternalTopologyBuilder.GlobalStore(
             sourceName,
             processorName,
             globalStoreName,
             globalTopicName,
-            id);
+            id,
+            nodes);
 
         expectedDescription.addGlobalStore(expectedGlobalStore);
     }

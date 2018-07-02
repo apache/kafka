@@ -1240,25 +1240,70 @@ public class InternalTopologyBuilder {
     }
 
     private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, int id) {
-        final Iterator<String> it = nodes.iterator();
-        while (it.hasNext()) {
-            final String node = it.next();
+        final Map<String, AbstractNode> nodesByName = new HashMap<>();
 
-            if (isGlobalSource(node)) {
-                // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
-                it.remove(); // remove sourceNode from group
-                final String processorNode = nodes.iterator().next(); // get remaining processorNode
+        // add all nodes;
+        // also find the source and update processor node names
+        String storeName = null;
+        String sourceName = null;
+        String processorName = null;
+        for (final String nodeName : nodes) {
+            NodeFactory nodeFactory = nodeFactories.get(nodeName);
+            nodesByName.put(nodeName, nodeFactory.describe());
 
-                description.addGlobalStore(new GlobalStore(
-                    node,
-                    processorNode,
-                    ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
-                    nodeToSourceTopics.get(node).get(0),
-                    id
-                ));
-                break;
+            if (isGlobalSource(nodeName)) {
+                // we found the source node
+                sourceName = nodeName;
+            }
+
+            if (nodeFactory instanceof ProcessorNodeFactory) {
+                Set<String> storeNames = new HashSet<>(((ProcessorNodeFactory) nodeFactory).stateStoreNames);
+                storeNames.retainAll(globalStateStores.keySet());
+
+                // we found the update processor node
+                if (!storeNames.isEmpty()) {
+                    if (storeNames.size() > 1) {
+                        throw new IllegalStateException("The processor node " + nodeName + " is connected to more than one global state stores: " + storeNames);
+                    }
+
+                    processorName = nodeName;
+                    storeName = storeNames.iterator().next();
+                }
+
             }
         }
+
+        if (storeName == null) {
+            throw new IllegalStateException("Cannot find the global store for global store sub-topology " + id + ": " + nodes);
+        }
+
+        if (sourceName == null) {
+            throw new IllegalStateException("Cannot find the source node for global store sub-topology " + id + ": " + nodes);
+        }
+
+        if (processorName == null) {
+            throw new IllegalStateException("Cannot find the processorName node for global store sub-topology " + id + ": " + nodes);
+        }
+
+        // connect each node to its predecessors and successors
+        for (final AbstractNode node : nodesByName.values()) {
+            for (final String predecessorName : nodeFactories.get(node.name()).predecessors) {
+                final AbstractNode predecessor = nodesByName.get(predecessorName);
+                node.addPredecessor(predecessor);
+                predecessor.addSuccessor(node);
+                updateSize(predecessor, node.size);
+            }
+        }
+
+        // find the source node
+        description.addGlobalStore(new GlobalStore(
+                sourceName,
+                processorName,
+                storeName,
+                nodeToSourceTopics.get(sourceName).get(0),
+                id,
+                new HashSet<>(nodesByName.values())
+        ));
     }
 
     private boolean nodeGroupContainsGlobalSourceNode(final Set<String> allNodesOfGroups) {
@@ -1321,66 +1366,7 @@ public class InternalTopologyBuilder {
 
         description.addSubtopology(new Subtopology(
                 subtopologyId,
-                new HashSet<TopologyDescription.Node>(nodesByName.values())));
-    }
-
-    public final static class GlobalStore implements TopologyDescription.GlobalStore {
-        private final Source source;
-        private final Processor processor;
-        private final int id;
-
-        public GlobalStore(final String sourceName,
-                           final String processorName,
-                           final String storeName,
-                           final String topicName,
-                           final int id) {
-            source = new Source(sourceName, topicName);
-            processor = new Processor(processorName, Collections.singleton(storeName));
-            source.successors.add(processor);
-            processor.predecessors.add(source);
-            this.id = id;
-        }
-
-        @Override
-        public int id() {
-            return id;
-        }
-
-        @Override
-        public TopologyDescription.Source source() {
-            return source;
-        }
-
-        @Override
-        public TopologyDescription.Processor processor() {
-            return processor;
-        }
-
-        @Override
-        public String toString() {
-            return "Sub-topology: " + id + " for global store (will not generate tasks)\n"
-                    + "    " + source.toString() + "\n"
-                    + "    " + processor.toString() + "\n";
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-
-            final GlobalStore that = (GlobalStore) o;
-            return source.equals(that.source)
-                && processor.equals(that.processor);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(source, processor);
-        }
+                new HashSet<>(nodesByName.values())));
     }
 
     public abstract static class AbstractNode implements TopologyDescription.Node {
@@ -1563,8 +1549,8 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Subtopology implements org.apache.kafka.streams.TopologyDescription.Subtopology {
-        private final int id;
+    public static class Subtopology implements org.apache.kafka.streams.TopologyDescription.Subtopology {
+        final int id;
         private final Set<TopologyDescription.Node> nodes;
 
         public Subtopology(final int id, final Set<TopologyDescription.Node> nodes) {
@@ -1593,7 +1579,7 @@ public class InternalTopologyBuilder {
             return "Sub-topology: " + id + "\n" + nodesAsString() + "\n";
         }
 
-        private String nodesAsString() {
+        String nodesAsString() {
             final StringBuilder sb = new StringBuilder();
             for (final TopologyDescription.Node node : nodes) {
                 sb.append("    ");
@@ -1620,6 +1606,59 @@ public class InternalTopologyBuilder {
         @Override
         public int hashCode() {
             return Objects.hash(id, nodes);
+        }
+    }
+
+    public final static class GlobalStore extends Subtopology implements TopologyDescription.GlobalStore {
+        private final Source source;
+        private final Processor processor;
+
+        public GlobalStore(final String sourceName,
+                           final String processorName,
+                           final String storeName,
+                           final String topicName,
+                           final int id,
+                           final Set<TopologyDescription.Node> nodes) {
+            super(id, nodes);
+
+            source = new Source(sourceName, topicName);
+            processor = new Processor(processorName, Collections.singleton(storeName));
+            source.successors.add(processor);
+            processor.predecessors.add(source);
+        }
+
+        @Override
+        public TopologyDescription.Source source() {
+            return source;
+        }
+
+        @Override
+        public TopologyDescription.Processor processor() {
+            return processor;
+        }
+
+        @Override
+        public String toString() {
+            return "Sub-topology: " + id + " for global store (will not generate tasks)\n" + nodesAsString() + "\n";
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            final GlobalStore that = (GlobalStore) o;
+            return source.equals(that.source)
+                    && processor.equals(that.processor);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(source, processor);
         }
     }
 
@@ -1831,5 +1870,9 @@ public class InternalTopologyBuilder {
 
     public synchronized Map<String, StateStoreFactory> getStateStores() {
         return stateFactories;
+    }
+
+    public synchronized TopologyDescription.Node getNodeDescription(final String nodeName) {
+        return nodeFactories.get(nodeName).describe();
     }
 }
