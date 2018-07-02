@@ -485,7 +485,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayableProduce(produceMetadata, this, responseCallback, None) //produceRequestTag)
+        val delayedProduce = new DelayableProduce(delayedProduceLock, produceMetadata, this, responseCallback, produceRequestTag)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
@@ -842,24 +842,22 @@ class ReplicaManager(val config: KafkaConfig,
     } else {
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
+      val watchKeys = new mutable.ArrayBuffer[TopicPartitionOperationKey]
       fetchInfos.foreach { case (topicPartition, partitionData) =>
         logReadResultMap.get(topicPartition).map(logReadResult => {
           val logOffsetMetadata = logReadResult.info.fetchOffsetMetadata
           fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
+          watchKeys += new TopicPartitionOperationKey(topicPartition)
         })
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
         fetchOnlyCommitted, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayableFetch(fetchMetadata, this, quota, isolationLevel, responseCallback)
 
-      // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
-
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
       // may arrive and hence make this operation completable.
-      delayedFetchPurgatory.tryCompleteElseRegister(delayedFetch, delayedFetchKeys,
-        timeout, TimeUnit.MILLISECONDS)
+      delayedFetchPurgatory.tryCompleteElseRegister(delayedFetch, watchKeys, timeout, TimeUnit.MILLISECONDS)
     }
   }
 
@@ -1288,13 +1286,14 @@ class ReplicaManager(val config: KafkaConfig,
           s"${partitionStates(partition).basePartitionState.leader}")
       }
 
-      val partitiontsToMakeFollowerOpKeys = partitionsToMakeFollower.map(partition => {
-        new TopicPartitionOperationKey(partition.topicPartition)
-      }).toSeq
-      val completedFetches = delayedFetchPurgatory.scheduleWatchKeysCheck(partitiontsToMakeFollowerOpKeys)
+      val ops = new mutable.ArrayBuffer[TopicPartitionOperationKey]
+      partitionsToMakeFollower.foreach(partition => {
+        ops += new TopicPartitionOperationKey(partition.topicPartition)
+      })
+      val completedFetches = delayedFetchPurgatory.scheduleWatchKeysCheck(ops)
       debug(s"partitionsToMakeFollower ${partitionsToMakeFollower.mkString(", ")} " +
         s"unblocked ${completedFetches} fetch requests.")
-      val completedProduces = delayedProducePurgatory.scheduleWatchKeysCheck(partitiontsToMakeFollowerOpKeys)
+      val completedProduces = delayedProducePurgatory.scheduleWatchKeysCheck(ops)
       debug(s"partitionsToMakeFollower ${partitionsToMakeFollower.mkString(", ")} " +
         s"unblocked ${completedFetches} produce requests.")
 

@@ -19,6 +19,7 @@ package kafka.server
 
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
@@ -49,7 +50,8 @@ case class ProduceMetadata(produceRequiredAcks: Short,
  * A delayed produce operation that can be created by the replica manager and watched
  * in the produce operation purgatory
  */
-class DelayableProduce(produceMetadata: ProduceMetadata,
+class DelayableProduce(lock: Option[Lock],
+                       produceMetadata: ProduceMetadata,
                        replicaManager: ReplicaManager,
                        responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                        produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None)
@@ -80,47 +82,60 @@ class DelayableProduce(produceMetadata: ProduceMetadata,
    *   B.2 - Otherwise, set the response with no error.
    */
   override def check(): Boolean = {
-    // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-      produceRequestTag.map(p => p.log(s"Checking produce satisfaction for $topicPartition, current status $status"))
-      // skip those partitions that have already been satisfied
-      if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
-          case Some(partition) =>
-            if (partition eq ReplicaManager.OfflinePartition)
-              (false, Errors.KAFKA_STORAGE_ERROR)
-            else
-              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-          case None =>
-            // Case A
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        }
-        // Case B.1 || B.2
-        if (error != Errors.NONE || hasEnough) {
-          status.acksPending = false
-          status.responseStatus.error = error
+    lock.map(l => l.lock())
+    try {
+      // check for each partition if it still has pending acks
+      produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+        //produceRequestTag.map(p => p.log(s"WATERMELON Checking produce satisfaction for $topicPartition, current status $status"))
+        // skip those partitions that have already been satisfied
+        if (status.acksPending) {
+          val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
+            case Some(partition) =>
+              if (partition eq ReplicaManager.OfflinePartition)
+                (false, Errors.KAFKA_STORAGE_ERROR)
+              else
+                partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            case None =>
+              // Case A
+              (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          }
+          // Case B.1 || B.2
+          if (error != Errors.NONE || hasEnough) {
+            status.acksPending = false
+            status.responseStatus.error = error
+          }
         }
       }
-    }
 
-    // check if every partition has satisfied at least one of case A or B
-    (!produceMetadata.produceStatus.values.exists(_.acksPending))
+      // check if every partition has satisfied at least one of case A or B
+      val out = (!produceMetadata.produceStatus.values.exists(_.acksPending))
+      produceRequestTag.map(p => p.log(s"Checking produce satisfaction for DelayableProduce ${this}, current status ${out}"))
+      out
+    } finally {
+      lock.map(l => l.unlock())
+    }
   }
 
   /**
     * Upon completion, return the current response status along with the error code per partition
     */
   override def complete(timedOut: Boolean) {
-    if (timedOut) {
-      produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-        if (status.acksPending) {
-          produceRequestTag.map(p => p.log(s"Expiring produce request for partition $topicPartition with status $status"))
-          DelayedProduceMetrics.recordExpiration(topicPartition)
+    lock.map(l => l.lock())
+    try {
+      if (timedOut) {
+        produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+          if (status.acksPending) {
+            DelayedProduceMetrics.recordExpiration(topicPartition)
+          }
         }
+        produceRequestTag.map(p => p.log(s"Expiring DelayableProduce ${this}"))
       }
+      val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
+      produceRequestTag.map(p => p.log(s"Sending response callback for DelayableProduce ${this}"))
+      responseCallback(responseStatus)
+    } finally {
+      lock.map(l => l.unlock())
     }
-    val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
-    responseCallback(responseStatus)
   }
 }
 

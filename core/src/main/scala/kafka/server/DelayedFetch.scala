@@ -128,6 +128,7 @@ class DelayableFetch(fetchMetadata: FetchMetadata,
     }
 
     // Case D
+    info(s"WATERMELON: accumulatedSize for fetch ${this} = ${accumulatedSize}.  fetchMetadata.fetchMinBytes = ${fetchMetadata.fetchMinBytes}")
     (accumulatedSize >= fetchMetadata.fetchMinBytes)
   }
 
@@ -135,6 +136,7 @@ class DelayableFetch(fetchMetadata: FetchMetadata,
     * Upon completion, read whatever data is available and pass to the complete callback
     */
   override def complete(timedOut: Boolean) {
+    info(s"WATERMELON: completing fetch ${this} with timedOut = ${timedOut}")
     if (timedOut) {
       if (fetchMetadata.isFromFollower)
         DelayedFetchMetrics.followerExpiredRequestMeter.mark()
