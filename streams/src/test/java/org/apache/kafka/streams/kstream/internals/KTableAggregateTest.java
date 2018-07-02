@@ -58,6 +58,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.SPILL_TO_DISK;
+import static org.apache.kafka.streams.kstream.Suppression.suppressLateEvents;
 import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
@@ -79,6 +80,16 @@ public class KTableAggregateTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
+    private static <K extends Windowed, V> KTable<K, V> finalResultsOnly(final KTable<K, V> windowedKTable,
+                                                                         final Duration maxAllowedLateness,
+                                                                         final Suppression.BufferFullStrategy bufferFullStrategy) {
+        return windowedKTable.suppress(
+            Suppression
+                .<K, V>suppressLateEvents(maxAllowedLateness)
+                .suppressIntermediateEvents(new IntermediateSuppression().emitAfter(maxAllowedLateness).bufferFullStrategy(bufferFullStrategy))
+        );
+    }
+
     @Test
     public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -95,14 +106,16 @@ public class KTableAggregateTest {
 
         table.toStream().process(supplier);
 
+        final KTable<String, String> suppress = table.suppress(new Suppression<>());
+
         // bound the lateness of events in your stream
         table
-            .suppress(new Suppression().suppressLateEvents(Duration.ofMinutes(10)))
+            .suppress(suppressLateEvents(Duration.ofMinutes(10)))
             .toStream();
 
         // rate-limit updates
         table.suppress(
-            new Suppression()
+            new Suppression<String, String>()
                 .suppressIntermediateEvents(
                     new IntermediateSuppression()
                         .emitAfter(Duration.ofSeconds(30))
@@ -111,16 +124,24 @@ public class KTableAggregateTest {
                 )
         ).toStream();
 
+        table.suppress(Suppression.<String, String>finalResultsOnly(Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN));
+
+//        KTable<String,String> r = finalResultsOnly(table, Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN);
+
         final KTable<Windowed<Integer>, Long> windowCounts = builder.<Integer, String>stream("events")
             .groupByKey()
             .windowedBy(TimeWindows.of(3600_000))
             .count();
 
+        windowCounts.suppress(Suppression.finalResultsOnly(Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN));
+
+        final KTable<Windowed<Integer>, Long> finalCounts = finalResultsOnly(windowCounts, Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN);
+
         // window final events option 1 : expect not to run out of memory
         final KTable<Windowed<Integer>, Long> suppressedKTable = windowCounts
             .suppress(
-                new Suppression()
-                    .suppressLateEvents(Duration.ofMinutes(10))
+                Suppression
+                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
                     .suppressIntermediateEvents(
                         new IntermediateSuppression().emitAfter(Duration.ofMinutes(10))
                     )
@@ -134,8 +155,8 @@ public class KTableAggregateTest {
         // window final events option 2 : expect not to run out of memory (gracefully)
         windowCounts
             .suppress(
-                new Suppression()
-                    .suppressLateEvents(Duration.ofMinutes(10))
+                Suppression
+                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
                     .suppressIntermediateEvents(
                         new IntermediateSuppression()
                             .emitAfter(Duration.ofMinutes(10))
@@ -147,8 +168,8 @@ public class KTableAggregateTest {
         // window final events option 3 : use the disk if we run out of memory
         windowCounts
             .suppress(
-                new Suppression()
-                    .suppressLateEvents(Duration.ofMinutes(10))
+                Suppression
+                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
                     .suppressIntermediateEvents(
                         new IntermediateSuppression()
                             .emitAfter(Duration.ofMinutes(10))

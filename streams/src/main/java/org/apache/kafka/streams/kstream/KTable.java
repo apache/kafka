@@ -397,7 +397,7 @@ public interface KTable<K, V> {
      * @param suppression Configuration object determining what, if any, updates to suppress.
      * @return A new KTable with the desired suppression characteristics.
      */
-    KTable<K, V> suppress(final Suppression suppression);
+    KTable<K, V> suppress(final Suppression<K, V> suppression);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value

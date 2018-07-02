@@ -2,7 +2,7 @@ package org.apache.kafka.streams.kstream;
 
 import java.time.Duration;
 
-public class Suppression {
+public class Suppression<K, V> {
     private Duration latenessBound = Duration.ofMillis(Long.MAX_VALUE);
     private IntermediateSuppression intermediateSuppression = new IntermediateSuppression();
 
@@ -59,12 +59,22 @@ public class Suppression {
 
     public Suppression() {}
 
-    public Suppression suppressLateEvents(final Duration maxAllowedLateness) {
-        this.latenessBound = maxAllowedLateness;
-        return this;
+    public static <K extends Windowed, V> Suppression<K, V> finalResultsOnly(final Duration maxAllowedLateness, final BufferFullStrategy bufferFullStrategy) {
+        return Suppression
+            .<K, V>suppressLateEvents(maxAllowedLateness)
+            .suppressIntermediateEvents(new IntermediateSuppression()
+                .emitAfter(maxAllowedLateness)
+                .bufferFullStrategy(bufferFullStrategy)
+            );
     }
 
-    public Suppression suppressIntermediateEvents(final IntermediateSuppression intermediateSuppression) {
+    public static <K, V> Suppression<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
+        final Suppression<K, V> kvSuppression = new Suppression<>();
+        kvSuppression.latenessBound = maxAllowedLateness;
+        return kvSuppression;
+    }
+
+    public Suppression<K, V> suppressIntermediateEvents(final IntermediateSuppression intermediateSuppression) {
         this.intermediateSuppression = intermediateSuppression;
         return this;
     }
