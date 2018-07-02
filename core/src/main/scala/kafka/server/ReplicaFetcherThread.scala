@@ -395,7 +395,7 @@ class ReplicaFetcherThread(name: String,
   // protected for test mocking
   protected def topicSupportsEpochRequest(tp: TopicPartition): Boolean = {
     replicaMgr.getLog(tp) match {
-      case Some(log) => log.config.messageFormatVersion < KAFKA_0_11_0_IV2
+      case Some(log) => log.config.messageFormatVersion >= KAFKA_0_11_0_IV2
       case None => false
     }
   }
