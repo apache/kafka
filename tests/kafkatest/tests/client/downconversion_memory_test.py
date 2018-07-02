@@ -67,10 +67,10 @@ class DownconversionMemoryTest(Test):
                                                "replication-factor": 1,
                                                "configs": {"min.insync.replicas": 1}}
                                           for topic in self.topics},
-                                  heap_opts="-Xmx%dM -Xms%dM -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % (self.heap_size, self.heap_size, self.heap_dump_path),
-                                  do_logging=self.do_logging)
+                                  heap_opts="-Xmx%dM -Xms%dM -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % (self.heap_size, self.heap_size, self.heap_dump_path))
         for node in self.kafka.nodes:
             node.account.ssh("mkdir -p %s" % self.heap_dump_path, allow_fail=False)
+        self.kafka.log_level = "INFO"
         self.kafka.start()
 
     def produceMessages(self):
@@ -100,11 +100,9 @@ class DownconversionMemoryTest(Test):
         out_of_memory = False
         if KafkaVersion(version) <= LATEST_1_1:
             expect_out_of_memory = True
-            self.do_logging = False
             self.consumer_timeout_sec = 60
         else:
             expect_out_of_memory = False
-            self.do_logging = True
             self.consumer_timeout_sec = None
 
         self.startBroker()
