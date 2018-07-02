@@ -100,9 +100,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
 
-    loadCache()
-
+    // Start change listeners first and then populate the cache so that there is no timing window
+    // between loading cache and processing change notifications.
     startZkChangeListeners()
+    loadCache()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -110,7 +111,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    val principal = session.principal
+    // ensure we compare identical classes
+    val sessionPrincipal = session.principal
+    val principal = if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
+      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
+    else
+      sessionPrincipal
+
     val host = session.clientAddress.getHostAddress
 
     def isEmptyAclAndAuthorized(acls: Set[Acl]): Boolean = {
@@ -269,7 +276,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def startZkChangeListeners(): Unit = {
+  private[auth] def startZkChangeListeners(): Unit = {
     aclChangeListeners = ZkAclChangeStore.stores
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }

@@ -532,8 +532,20 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("store1", 30000, 3, 10000, false), Serdes.String(), Serdes.String()), "processor");
-        builder.addStateStore(Stores.sessionStoreBuilder(Stores.persistentSessionStore("store2", 30000), Serdes.String(), Serdes.String()), "processor");
+        builder.addStateStore(
+            Stores.windowStoreBuilder(
+                Stores.persistentWindowStore("store1", 30_000L, 10_000L, false),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "processor"
+        );
+        builder.addStateStore(
+                Stores.sessionStoreBuilder(
+                        Stores.persistentSessionStore("store2", 30000), Serdes.String(), Serdes.String()
+                ),
+                "processor"
+        );
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");

@@ -21,12 +21,13 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.{Collections, Properties}
-import java.util.concurrent.{Callable, Executors, TimeUnit}
-import javax.net.ssl.X509TrustManager
+import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
+import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -40,7 +41,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
@@ -119,7 +120,8 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file and return an open file channel for this file
    */
-  def tempChannel(): FileChannel = new RandomAccessFile(tempFile(), "rw").getChannel()
+  def tempChannel(): FileChannel =
+    FileChannel.open(tempFile().toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
 
   /**
    * Create a kafka server instance with appropriate test settings
@@ -879,11 +881,12 @@ object TestUtils extends Logging {
     file.close()
   }
 
-  def appendNonsenseToFile(fileName: File, size: Int) {
-    val file = new FileOutputStream(fileName, true)
-    for (_ <- 0 until size)
-      file.write(random.nextInt(255))
-    file.close()
+  def appendNonsenseToFile(file: File, size: Int) {
+    val outputStream = Files.newOutputStream(file.toPath(), StandardOpenOption.APPEND)
+    try {
+      for (_ <- 0 until size)
+        outputStream.write(random.nextInt(255))
+    } finally outputStream.close()
   }
 
   def checkForPhantomInSyncReplicas(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {
@@ -1371,4 +1374,15 @@ object TestUtils extends Logging {
     (out.toString, err.toString)
   }
 
+  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit = {
+    try {
+      future.get()
+      fail("Expected CompletableFuture.get to return an exception")
+    } catch {
+      case e: ExecutionException =>
+        val cause = e.getCause()
+        assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
+            cause.getClass().getName, clazz.isInstance(cause))
+    }
+  }
 }

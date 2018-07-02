@@ -155,11 +155,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     private <VR> StoreBuilder<WindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.persistentWindowStore(materialized.storeName(),
-                                                    windows.maintainMs(),
-                                                    windows.segments,
-                                                    windows.size(),
-                                                    false);
+            supplier = Stores.persistentWindowStore(
+                materialized.storeName(),
+                windows.maintainMs(),
+                windows.size(),
+                false,
+                windows.segmentInterval()
+            );
         }
         final StoreBuilder<WindowStore<K, VR>> builder = Stores.windowStoreBuilder(supplier,
                                                                                    materialized.keySerde(),

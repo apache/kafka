@@ -63,12 +63,18 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public String metricsScope() {
-        return "rocksdb-window";
+        return "rocksdb-window-state";
     }
 
+    @Deprecated
     @Override
     public int segments() {
         return (int) (retentionPeriod / segmentInterval) + 1;
+    }
+
+    @Override
+    public long segmentIntervalMs() {
+        return segmentInterval;
     }
 
     @Override

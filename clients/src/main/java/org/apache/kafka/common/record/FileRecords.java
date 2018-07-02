@@ -25,13 +25,13 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -426,19 +426,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
         if (mutable) {
-            if (fileAlreadyExists) {
-                return new RandomAccessFile(file, "rw").getChannel();
+            if (fileAlreadyExists || !preallocate) {
+                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
+                        StandardOpenOption.WRITE);
             } else {
-                if (preallocate) {
-                    RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                    randomAccessFile.setLength(initFileSize);
-                    return randomAccessFile.getChannel();
-                } else {
-                    return new RandomAccessFile(file, "rw").getChannel();
-                }
+                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+                randomAccessFile.setLength(initFileSize);
+                return randomAccessFile.getChannel();
             }
         } else {
-            return new FileInputStream(file).getChannel();
+            return FileChannel.open(file.toPath());
         }
     }
 

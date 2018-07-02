@@ -844,12 +844,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                    final Serde<K> keySerde,
                                                                                    final Serde<V> valueSerde,
                                                                                    final String storeName) {
-        return Stores.windowStoreBuilder(Stores.persistentWindowStore(storeName,
-                                                                      windows.maintainMs(),
-                                                                      windows.segments,
-                                                                      windows.size(),
-                                                                      true), keySerde, valueSerde);
-
+        return Stores.windowStoreBuilder(
+            Stores.persistentWindowStore(
+                storeName,
+                windows.maintainMs(),
+                windows.size(),
+                true,
+                windows.segmentInterval()
+            ),
+            keySerde,
+            valueSerde
+        );
     }
 
     private class KStreamImplJoin {
