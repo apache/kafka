@@ -50,6 +50,7 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
   @Before
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both))
+    // Setup client with a non-existent service principal, so that server authentication fails on the client
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
@@ -66,6 +67,10 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
     closeSasl()
   }
 
+  /**
+   * Test that when client fails to verify authenticity of the server, the resulting failed authentication exception
+   * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
+   */
   @Test
   def testServerAuthenticationFailure(): Unit = {
     val consumer = consumers.head

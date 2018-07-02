@@ -136,6 +136,8 @@ public class Selector implements Selectable, AutoCloseable {
      * Create a new nioSelector
      * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
+     * @param failedAuthenticationDelayMs Minimum time by which failed authentication repsonse and channel close should be delayed by.
+     *                                    Use {@link #NO_FAILED_AUTHENTICATION_DELAY} to disable this delay.
      * @param metrics Registry for Selector metrics
      * @param time Time implementation
      * @param metricGrpPrefix Prefix for the group of metrics registered by Selector
@@ -184,6 +186,21 @@ public class Selector implements Selectable, AutoCloseable {
         this.log = logContext.logger(Selector.class);
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedList<>() : null;
+    }
+
+    public Selector(int maxReceiveSize,
+                    long connectionMaxIdleMs,
+                    Metrics metrics,
+                    Time time,
+                    String metricGrpPrefix,
+                    Map<String, String> metricTags,
+                    boolean metricsPerConnection,
+                    boolean recordTimePerConnection,
+                    ChannelBuilder channelBuilder,
+                    MemoryPool memoryPool,
+                    LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags,
+                metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool, logContext);
     }
 
     public Selector(int maxReceiveSize,
@@ -667,15 +684,13 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void completeDelayedChannelClose() {
-        if (delayedClosingChannels == null)
+        if (delayedClosingChannels == null || delayedClosingChannels.isEmpty())
             return;
 
         DelayedChannelClose delayedClose;
-        if (delayedClosingChannels.size() > 0) {
-            long now = System.currentTimeMillis();
-            while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.tryClose(now))
-                delayedClosingChannels.remove();
-        }
+        long now = time.milliseconds();
+        while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.tryClose(now))
+            delayedClosingChannels.remove();
     }
 
     private void maybeCloseOldestConnection(long currentTimeNanos) {
