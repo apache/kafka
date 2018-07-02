@@ -100,9 +100,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
 
-    loadCache()
-
+    // Start change listeners first and then populate the cache so that there is no timing window
+    // between loading cache and processing change notifications.
     startZkChangeListeners()
+    loadCache()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -275,7 +276,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def startZkChangeListeners(): Unit = {
+  private[auth] def startZkChangeListeners(): Unit = {
     aclChangeListeners = ZkAclChangeStore.stores
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }
