@@ -80,16 +80,6 @@ public class KTableAggregateTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private static <K extends Windowed, V> KTable<K, V> finalResultsOnly(final KTable<K, V> windowedKTable,
-                                                                         final Duration maxAllowedLateness,
-                                                                         final Suppression.BufferFullStrategy bufferFullStrategy) {
-        return windowedKTable.suppress(
-            Suppression
-                .<K, V>suppressLateEvents(maxAllowedLateness)
-                .suppressIntermediateEvents(new IntermediateSuppression().emitAfter(maxAllowedLateness).bufferFullStrategy(bufferFullStrategy))
-        );
-    }
-
     @Test
     public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -112,6 +102,13 @@ public class KTableAggregateTest {
         table
             .suppress(suppressLateEvents(Duration.ofMinutes(10)))
             .toStream();
+KTable<String, String> table1 = builder.table(topic1, consumed);
+        KTable<String, String> table = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+            stringSerialzied
+        ).aggregate(MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         // rate-limit updates
         table.suppress(
@@ -135,7 +132,6 @@ public class KTableAggregateTest {
 
         windowCounts.suppress(Suppression.finalResultsOnly(Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN));
 
-        final KTable<Windowed<Integer>, Long> finalCounts = finalResultsOnly(windowCounts, Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN);
 
         // window final events option 1 : expect not to run out of memory
         final KTable<Windowed<Integer>, Long> suppressedKTable = windowCounts

@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -68,6 +69,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private static final String MERGE_NAME = "KTABLE-MERGE-";
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
+
+    private static final String SUPPRESS_NAME = "KTABLE-SUPPRESS-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
@@ -362,7 +365,23 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> suppress(final Suppression<K, V> suppression) {
-        return null;
+        final String name = builder.newProcessorName(SUPPRESS_NAME);
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(
+            () -> new KTableSuppressProcessor<>(suppression),
+            name
+        );
+        final StatelessProcessorNode<K, V> node = new StatelessProcessorNode<>(name, processorParameters, false);
+        return new KTableImpl<K, S, V>(
+            builder,
+            name,
+            processorSupplier,
+            keySerde,
+            valSerde,
+            Collections.singleton(this.name),
+            null,
+            false,
+            node
+        );
     }
 
     @Override
@@ -523,7 +542,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
-        return this.groupBy(selector, Serialized.<K1, V1>with(null, null));
+        return groupBy(selector, Serialized.<K1, V1>with(null, null));
     }
 
     @Override

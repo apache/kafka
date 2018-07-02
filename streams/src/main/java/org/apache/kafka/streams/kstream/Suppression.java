@@ -20,7 +20,11 @@ public class Suppression<K, V> {
 
         public IntermediateSuppression() {}
 
-        public IntermediateSuppression emitAfter(final Duration timeToWaitForMoreEvents) {
+        public static IntermediateSuppression emitAfter(final Duration timeToWaitForMoreEvents) {
+            return new IntermediateSuppression().withEmitAfter(timeToWaitForMoreEvents);
+        }
+
+        public IntermediateSuppression withEmitAfter(final Duration timeToWaitForMoreEvents) {
             this.timeToWaitForMoreEvents = timeToWaitForMoreEvents;
             return this;
         }
@@ -74,9 +78,10 @@ public class Suppression<K, V> {
         return kvSuppression;
     }
 
-    public Suppression<K, V> suppressIntermediateEvents(final IntermediateSuppression intermediateSuppression) {
-        this.intermediateSuppression = intermediateSuppression;
-        return this;
+    public static <K, V> Suppression<K, V> suppressIntermediateEvents(final IntermediateSuppression intermediateSuppression) {
+        final Suppression<K, V> suppression = new Suppression<>();
+        suppression.intermediateSuppression = intermediateSuppression;
+        return suppression;
     }
 
     public Duration getLatenessBound() {
