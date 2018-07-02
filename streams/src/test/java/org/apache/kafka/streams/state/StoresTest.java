@@ -28,7 +28,6 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.fail;
 
 public class StoresTest {
 
@@ -54,22 +53,28 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
-        Stores.persistentWindowStore(null, 0, 1, 0, false);
+        Stores.persistentWindowStore(null, 0L, 0L, false, 60_000L);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
-        Stores.persistentWindowStore("anyName", -1, 1, 0, false);
+        Stores.persistentWindowStore("anyName", -1L, 0L, false, 60_000L);
     }
 
+    @Deprecated
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
-        Stores.persistentWindowStore("anyName", 0, 0, 0, false);
+        Stores.persistentWindowStore("anyName", 0L, 1, 0L, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
-        Stores.persistentWindowStore("anyName", 0, 1, -1, false);
+        Stores.persistentWindowStore("anyName", 0L, -1L, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreIfSegmentIntervalIsTooSmall() {
+        Stores.persistentWindowStore("anyName", 1L, 1L, false, 59_999L);
     }
 
     @Test(expected = NullPointerException.class)
@@ -98,16 +103,6 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() {
-        try {
-            Stores.persistentWindowStore("store", 1, 1, 1, false);
-            fail("Should have thrown illegal argument exception as number of segments is less than 2");
-        } catch (final IllegalArgumentException e) {
-         // ok
-        }
-    }
-
-    @Test
     public void shouldCreateInMemoryKeyValueStore() {
         assertThat(Stores.inMemoryKeyValueStore("memory").get(), instanceOf(InMemoryKeyValueStore.class));
     }
@@ -124,7 +119,7 @@ public class StoresTest {
 
     @Test
     public void shouldCreateRocksDbWindowStore() {
-        assertThat(Stores.persistentWindowStore("store", 1, 3, 1, false).get(), instanceOf(RocksDBWindowStore.class));
+        assertThat(Stores.persistentWindowStore("store", 1L, 1L, false).get(), instanceOf(RocksDBWindowStore.class));
     }
 
     @Test
@@ -134,7 +129,7 @@ public class StoresTest {
 
     @Test
     public void shouldBuildWindowStore() {
-        final WindowStore<String, String> store = Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 3, 2, 3, true),
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 3L, 3L, true),
                                                                       Serdes.String(),
                                                                       Serdes.String()).build();
         assertThat(store, not(nullValue()));

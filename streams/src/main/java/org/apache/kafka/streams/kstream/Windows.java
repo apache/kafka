@@ -36,18 +36,10 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    private static final int DEFAULT_NUM_SEGMENTS = 3;
+    private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
+    @Deprecated public int segments = 3;
 
-    static final long DEFAULT_MAINTAIN_DURATION_MS = 24 * 60 * 60 * 1000L; // one day
-
-    private long maintainDurationMs;
-
-    public int segments;
-
-    protected Windows() {
-        segments = DEFAULT_NUM_SEGMENTS;
-        maintainDurationMs = DEFAULT_MAINTAIN_DURATION_MS;
-    }
+    protected Windows() {}
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
@@ -77,13 +69,28 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
+     * Return the segment interval in milliseconds.
+     *
+     * @return the segment interval
+     */
+    @SuppressWarnings("deprecation") // The deprecation is on the public visibility of segments. We intend to make the field private later.
+    public long segmentInterval() {
+        // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
+        final long minimumSegmentInterval = 60_000L;
+        // Scaled to the (possibly overridden) retention period
+        return Math.max(maintainMs() / (segments - 1), minimumSegmentInterval);
+    }
+
+    /**
      * Set the number of segments to be used for rolling the window store.
      * This function is not exposed to users but can be called by developers that extend this class.
      *
      * @param segments the number of segments to be used
      * @return itself
      * @throws IllegalArgumentException if specified segments is small than 2
+     * @deprecated since 2.1 Override segmentInterval() instead.
      */
+    @Deprecated
     protected Windows<W> segments(final int segments) throws IllegalArgumentException {
         if (segments < 2) {
             throw new IllegalArgumentException("Number of segments must be at least 2.");

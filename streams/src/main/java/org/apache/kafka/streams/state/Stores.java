@@ -79,7 +79,7 @@ public class Stores {
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * @param name  name of the store (cannot be {@code null})
-     * @return  an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
      * to build a persistent store
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
@@ -90,7 +90,7 @@ public class Stores {
     /**
      * Create an in-memory {@link KeyValueBytesStoreSupplier}.
      * @param name  name of the store (cannot be {@code null})
-     * @return  an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
      * build an in-memory store
      */
     public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
@@ -151,25 +151,72 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, long, long, boolean, long)} instead
      */
+    @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final int numSegments,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
+        if (numSegments < 2) {
+            throw new IllegalArgumentException("numSegments cannot must smaller than 2");
+        }
+
+        final long legacySegmentInterval = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
+
+        return persistentWindowStore(
+            name,
+            retentionPeriod,
+            windowSize,
+            retainDuplicates,
+            legacySegmentInterval
+        );
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final long retentionPeriod,
+                                                                 final long windowSize,
+                                                                 final boolean retainDuplicates) {
+        // we're arbitrarily defaulting to segments no smaller than one minute.
+        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     * @param segmentInterval       size of segments in ms (must be at least one minute)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final long retentionPeriod,
+                                                                 final long windowSize,
+                                                                 final boolean retainDuplicates,
+                                                                 final long segmentInterval) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        if (numSegments < 2) {
-            throw new IllegalArgumentException("numSegments cannot must smaller than 2");
-        }
         if (windowSize < 0) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
-        final long segmentIntervalMs = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
+        if (segmentInterval < 60_000) {
+            throw new IllegalArgumentException("segmentInterval must be at least one minute");
+        }
 
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentIntervalMs, windowSize, retainDuplicates);
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
     }
 
     /**
