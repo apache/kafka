@@ -95,10 +95,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer")
     zkClient.createAclPaths()
 
+    // Start change listeners first and then populate the cache so that there is no timing window
+    // between loading cache and processing change notifications.
+    startZkChangeListeners()
     loadCache()
-
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
-    aclChangeListener.init()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -221,6 +221,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         }
       }
     }
+  }
+
+  private[auth] def startZkChangeListeners(): Unit = {
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    aclChangeListener.init()
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
