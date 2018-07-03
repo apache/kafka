@@ -162,7 +162,7 @@ public class ClientState {
             return capacity > other.capacity;
     }
 
-    boolean hasMoreAvailableActiveTaskStandbyThan(ClientState other) {
+    boolean hasMoreAvailableActiveTaskCapacityThan(ClientState other) {
         if (this.capacity <= 0) {
             throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
         }
@@ -170,7 +170,7 @@ public class ClientState {
         if (other.capacity <= 0) {
             throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
         }
-        
+
         final double thisLoad = (double) (numberOfActiveStateStores + 1) * numberOfActivePartitions / capacity;
         final double otherLoad = (double) (other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions
                 / other.capacity;
@@ -183,7 +183,7 @@ public class ClientState {
             return capacity > other.capacity;
     }
 
-    boolean hasMoreAvailableStandbyTaskCapacity(ClientState other) {
+    boolean hasMoreAvailableStandbyTaskCapacityThan(ClientState other) {
         if (this.capacity <= 0) {
             throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
         }
