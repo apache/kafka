@@ -18,8 +18,10 @@
  */
 package kafka.tools
 
+import java.net.{Socket, URL}
 import java.util.Date
 import java.text.SimpleDateFormat
+import java.util.regex.Pattern
 import javax.management._
 import javax.management.remote._
 
@@ -28,7 +30,7 @@ import joptsimple.OptionParser
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils , Exit, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 
 /**
@@ -84,6 +86,17 @@ object JmxTool extends Logging {
       .defaultsTo("original")
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
+    val connectTimeoutOpt = parser.accepts("connect-timeout", "The time in milliseconds which we will wait " +
+      "while trying to connect.")
+      .withRequiredArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(10000)
+    val probeOpt = parser.accepts("probe", "An optional host:port to probe before attempting to connect to JMX.")
+        .withRequiredArg()
+        .describedAs("probe")
+        .ofType(classOf[String])
+        .defaultsTo("")
     val helpOpt = parser.accepts("help", "Print usage information.")
 
 
@@ -112,10 +125,11 @@ object JmxTool extends Logging {
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
     var connected = false
-    val connectTimeoutMs = 10000
+    val connectTimeoutMs = options.valueOf(connectTimeoutOpt).intValue
     val connectTestStarted = System.currentTimeMillis
     do {
       try {
+        maybeProbe(options.valueOf(probeOpt))
         System.err.println(s"Trying to connect to JMX url: $url.")
         jmxc = JMXConnectorFactory.connect(url, null)
         mbsc = jmxc.getMBeanServerConnection
@@ -231,6 +245,28 @@ object JmxTool extends Logging {
       }
     }
     attributes
+  }
+
+  val hostPortPattern = Pattern.compile("(.*):([0-9]*)")
+
+  def maybeProbe(probe: String) = {
+    // Verify that we can connect to the JMX port.  This has to be done outside of the
+    // JMXConnectorFactory in order to properly handle the error where the connection
+    // can't be made.  See KAFKA-4620 for details.
+    val matcher = hostPortPattern.matcher(probe)
+    if (!matcher.matches()) {
+      if (!probe.isEmpty) {
+        throw new RuntimeException(s"Failed to parse probe string ${probe}")
+      }
+    } else {
+      val host = matcher.group(1)
+      val port = Integer.valueOf(matcher.group(2))
+      try {
+        new Socket(host, port).close()
+      } catch {
+        case t: Throwable => throw new RuntimeException(s"Unable to connect to ${probe}", t)
+      }
+    }
   }
 
   def parseFormat(reportFormatOpt : String): String = reportFormatOpt match {
