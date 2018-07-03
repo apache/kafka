@@ -69,6 +69,33 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private Logger log;
     private String logPrefix;
+    public enum Error {
+      NONE(0),
+      INCOMPLETE_SOURCE_TOPIC_METADATA(1);
+
+      private final int code;
+
+      Error(final int code) {
+        this.code = code;
+      }
+
+      public int getCode() {
+        return code;
+      }
+
+      public static Error fromCode(final int code) {
+        switch (code) {
+        case 0:
+          return NONE;
+        case 1:
+          return INCOMPLETE_SOURCE_TOPIC_METADATA;
+        default:
+          throw new IllegalArgumentException("Unknown error code: " + code);
+        }
+      }
+    }
+    // flag indicating whether streams app should shutdown
+    private Error error = Error.NONE;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -408,14 +435,36 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
         final Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
+        Map<String, Assignment> assignment;
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
+          for (String topic : topicsInfo.sourceTopics) {
+            if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
+                !metadata.internalTopics().contains(topic)) {
+              log.error(topic + " is unknown yet during rebalance," +
+                " please make sure they have been pre-created before starting the Streams application.");
+              assignment = new HashMap<>();
+              for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+                for (final String consumerId : clientMetadata.consumers) {
+                  assignment.put(consumerId, new Assignment(
+                      Collections.emptyList(),
+                      new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+                          Collections.emptyList(),
+                          Collections.emptyMap(),
+                          Collections.emptyMap(),
+                          Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code).encode()
+                  ));
+                }
+              }
+              return assignment;
+
+            }
+          }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
                 repartitionTopicMetadata.put(topic.name(), new InternalTopicMetadata(topic));
             }
         }
 
         boolean numPartitionsNeeded;
-        Map<String, Assignment> assignment;
         do {
             numPartitionsNeeded = false;
 
@@ -439,22 +488,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                         numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numPartitions;
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
-                                        if (numPartitionsCandidate == null) {
-                                          assignment = new HashMap<>();
-                                          for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
-                                            for (final String consumerId : clientMetadata.consumers) {
-                                              assignment.put(consumerId, new Assignment(
-                                                  Collections.emptyList(),
-                                                  new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
-                                                      Collections.emptyList(),
-                                                      Collections.emptyMap(),
-                                                      Collections.emptyMap(),
-                                                      AssignmentInfo.UNKNOWN_PARTITION).encode()
-                                              ));
-                                            }
-                                          }
-                                          return assignment;
-                                        }
                                     }
 
                                     if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
@@ -757,6 +790,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         Collections.sort(partitions, PARTITION_COMPARATOR);
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
+        if (info.errCode() != Error.NONE.code) {
+            error = Error.fromCode(info.errCode());
+            // set flag to shutdown streams app
+            return;
+        }
         final int receivedAssignmentMetadataVersion = info.version();
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
@@ -932,10 +970,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
                     final Integer partitions = metadata.partitionCountForTopic(topic);
 
-                    if (partitions == null) {
-                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopic not found: %s", logPrefix, topic));
-                    }
-
                     if (numPartitions == UNKNOWN) {
                         numPartitions = partitions;
                     } else if (numPartitions != partitions) {
@@ -943,24 +977,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         Arrays.sort(topics);
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
-                } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
-                    numPartitions = NOT_AVAILABLE;
-                    break;
                 }
             }
 
-            // if all topics for this co-partition group is repartition topics,
-            // then set the number of partitions to be the maximum of the number of partitions.
-            if (numPartitions == UNKNOWN) {
-                for (final Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
-                    if (copartitionGroup.contains(entry.getKey())) {
-                        final int partitions = entry.getValue().numPartitions;
-                        if (partitions > numPartitions) {
-                            numPartitions = partitions;
-                        }
-                    }
-                }
-            }
             // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
             for (final Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
                 if (copartitionGroup.contains(entry.getKey())) {

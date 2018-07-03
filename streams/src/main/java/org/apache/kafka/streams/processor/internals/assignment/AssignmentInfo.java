@@ -43,7 +43,6 @@ public class AssignmentInfo {
 
     public static final int LATEST_SUPPORTED_VERSION = 4;
     static final int UNKNOWN = -1;
-    public static final int UNKNOWN_PARTITION = 1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
@@ -84,6 +83,7 @@ public class AssignmentInfo {
                 + "; was: " + version);
         }
     }
+
     public AssignmentInfo(final int version,
         final List<TaskId> activeTasks,
         final Map<TaskId, Set<TopicPartition>> standbyTasks,
@@ -112,6 +112,10 @@ public class AssignmentInfo {
 
     public int version() {
         return usedVersion;
+    }
+
+    public int errCode() {
+        return errCode;
     }
 
     public int latestSupportedVersion() {
@@ -220,10 +224,12 @@ public class AssignmentInfo {
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
+
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
       encodeVersionThree(out);
       out.writeInt(errCode);
     }
+
     /**
      * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
      */
