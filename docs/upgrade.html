@@ -64,6 +64,14 @@
     before you switch to 0.11.0.</li>
 </ol>
 
+<h5><a id="upgrade_1100_streams" href="#upgrade_1100_streams">Upgrading a 0.10.2 Kafka Streams Application</a></h5>
+  <ul>
+    <li> Upgrading your Streams application from 0.10.2 to 0.11.0 does not require a broker upgrade.
+         A Kafka Streams 0.11.0 application can connect to 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+    <li> If you specify customized <code>key.serde</code>, <code>value.serde</code> and <code>timestamp.extractor</code> in configs, it is recommended to use their replaced configure parameter as these configs are deprecated. </li>
+    <li> See <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_0110">Streams API changes in 0.11.0</a> for more details. </li>
+  </ul>
+
 <h5><a id="upgrade_1103_notable" href="#upgrade_1103_notable">Notable changes in 0.11.0.3</a></h5>
 <ul>
     <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
@@ -327,6 +335,7 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> Upgrading your Streams application from 0.10.0 to 0.10.1 does require a <a href="#upgrade_10_1">broker upgrade</a> because a Kafka Streams 0.10.1 application can only connect to 0.10.1 brokers. </li>
     <li> There are couple of API changes, that are not backward compatible (cf. <a href="/{{version}}/documentation/streams#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
          Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+<!-- TODO: add this when 0.10.2.1 is release
     <li> Upgrading from 0.10.0.x to 0.10.1.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
          (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
          As an alternative, an offline upgrade is also possible.
@@ -337,6 +346,7 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
+-->
     <li> Upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1 requires an offline upgrade (rolling bounce upgrade is not supported)
         <ul>
             <li> stop all old (0.10.0.x) application instances </li>
