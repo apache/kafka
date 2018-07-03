@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -138,8 +139,10 @@ public class InternalTopologyBuilder {
         }
 
         long retentionPeriod() {
-            if (isWindowStore()) {
+            if (builder instanceof WindowStoreBuilder) {
                 return ((WindowStoreBuilder) builder).retentionPeriod();
+            } else if (builder instanceof SessionStoreBuilder) {
+                return ((SessionStoreBuilder) builder).retentionPeriod();
             } else {
                 throw new IllegalStateException("retentionPeriod is not supported when not a window store");
             }
@@ -159,7 +162,7 @@ public class InternalTopologyBuilder {
         }
 
         private boolean isWindowStore() {
-            return builder instanceof WindowStoreBuilder;
+            return builder instanceof WindowStoreBuilder || builder instanceof SessionStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
@@ -226,7 +229,7 @@ public class InternalTopologyBuilder {
                                   final Deserializer<?> keyDeserializer,
                                   final Deserializer<?> valDeserializer) {
             super(name, NO_PREDECESSORS);
-            this.topics = topics != null ? Arrays.asList(topics) : new ArrayList<String>();
+            this.topics = topics != null ? Arrays.asList(topics) : new ArrayList<>();
             this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
@@ -316,7 +319,7 @@ public class InternalTopologyBuilder {
                 final String topic = ((StaticTopicNameExtractor) topicExtractor).topicName;
                 if (internalTopicNames.contains(topic)) {
                     // prefix the internal topic name with the application id
-                    return new SinkNode<>(name, new StaticTopicNameExtractor<K, V>(decorateTopic(topic)), keySerializer, valSerializer, partitioner);
+                    return new SinkNode<>(name, new StaticTopicNameExtractor<>(decorateTopic(topic)), keySerializer, valSerializer, partitioner);
                 } else {
                     return new SinkNode<>(name, topicExtractor, keySerializer, valSerializer, partitioner);
                 }
@@ -415,7 +418,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("Sink " + name + " must have at least one parent");
         }
 
-        addSink(name, new StaticTopicNameExtractor<K, V>(topic), keySerializer, valSerializer, partitioner, predecessorNames);
+        addSink(name, new StaticTopicNameExtractor<>(topic), keySerializer, valSerializer, partitioner, predecessorNames);
         nodeToSinkTopic.put(name, topic);
     }
 
