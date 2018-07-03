@@ -19,11 +19,12 @@ package org.apache.kafka.streams.integration.utils;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
-import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.rules.ExternalResource;
@@ -50,7 +51,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private static final int TOPIC_DELETION_TIMEOUT = 30000;
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
-    private ZkUtils zkUtils = null;
+    private KafkaZkClient kafkaZkClient = null;
 
     private final Properties brokerConfig;
     public final MockTime time;
@@ -88,12 +89,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
-        zkUtils = ZkUtils.apply(
-            zKConnectString(),
-            30000,
-            30000,
-            JaasUtils.isZkSecurityEnabled());
-
+        kafkaZkClient = createZkClient();
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
         brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
@@ -113,6 +109,10 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
+    private KafkaZkClient createZkClient() {
+        return KafkaZkClient.apply(zKConnectString(), JaasUtils.isZkSecurityEnabled(), 30000,
+                                   30000, Integer.MAX_VALUE, Time.SYSTEM, "testMetricGroup", "testMetricType");
+    }
     private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
         if (!props.containsKey(propertyKey)) {
             brokerConfig.put(propertyKey, propertyValue);
@@ -126,7 +126,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
-        zkUtils.close();
+        kafkaZkClient.close();
         zookeeper.shutdown();
     }
 
@@ -298,7 +298,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>(
-                    JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
+                    JavaConverters.seqAsJavaListConverter(kafkaZkClient.getAllTopicsInCluster()).asJava());
             return !allTopics.removeAll(deletedTopics);
         }
     }
@@ -313,7 +313,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>(
-                    JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
+                    JavaConverters.seqAsJavaListConverter(kafkaZkClient.getAllTopicsInCluster()).asJava());
             return allTopics.equals(remainingTopics);
         }
     }
