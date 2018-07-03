@@ -113,7 +113,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
-    private final Queue<DelayedChannelClose> delayedClosingChannels;
+    private final Queue<DelayedAuthenticationFailureClose> delayedClosingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
     private final Map<String, ChannelState> disconnected;
     private final List<String> connected;
@@ -687,8 +687,8 @@ public class Selector implements Selectable, AutoCloseable {
         if (delayedClosingChannels == null || delayedClosingChannels.isEmpty())
             return;
 
-        DelayedChannelClose delayedClose;
-        long now = time.milliseconds();
+        DelayedAuthenticationFailureClose delayedClose;
+        long now = System.currentTimeMillis();
         while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.tryClose(now))
             delayedClosingChannels.remove();
     }
@@ -1151,9 +1151,9 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
-     * Encapsulate a channel that must be closed after a specific delay has elapsed.
+     * Encapsulate a channel that must be closed after a specific delay has elapsed due to authentication failure.
      */
-    private abstract class DelayedChannelClose {
+    private class DelayedAuthenticationFailureClose {
         private final KafkaChannel channel;
         private final long endTime;
         private boolean closed;
@@ -1162,14 +1162,10 @@ public class Selector implements Selectable, AutoCloseable {
          * @param channel The channel whose close is being delayed
          * @param delayMs The amount of time by which the operation should be delayed
          */
-        public DelayedChannelClose(KafkaChannel channel, int delayMs) {
+        public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
             this.channel = channel;
             this.endTime = System.currentTimeMillis() + delayMs;
             this.closed = false;
-        }
-
-        public KafkaChannel channel() {
-            return channel;
         }
 
         /**
@@ -1189,24 +1185,8 @@ public class Selector implements Selectable, AutoCloseable {
         public final void closeNow() {
             if (closed)
                 throw new IllegalStateException("Attempt to close a channel that has already been closed");
-            close();
+            handleCloseOnAuthenticationFailure(channel);
             closed = true;
-        }
-
-        protected abstract void close();
-    }
-
-    /**
-     * Encapsulate a channel whose close is being delayed because of failed authentication.
-     */
-    private class DelayedAuthenticationFailureClose extends DelayedChannelClose {
-        public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
-            super(channel, delayMs);
-        }
-
-        @Override
-        protected void close() {
-            handleCloseOnAuthenticationFailure(channel());
         }
     }
 
