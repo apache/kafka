@@ -12,6 +12,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Suppression;
 import org.apache.kafka.streams.kstream.Suppression.IntermediateSuppression;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.junit.Test;
@@ -127,5 +128,16 @@ public class KTableSuppressProcessorTest {
         total.toStream().to("total");
 
         return builder.build();
+    }
+
+    public void finalResults() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input")
+            .groupByKey()
+            .windowedBy(
+                TimeWindows.of(60_000).closeAfter(10 * 60).until(30L * 24 * 60 * 60 * 1000)
+            )
+            .count()
+            .suppress(Suppression.finalResultsOnly());
     }
 }
