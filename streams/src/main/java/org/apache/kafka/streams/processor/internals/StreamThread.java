@@ -1069,7 +1069,7 @@ public class StreamThread extends Thread {
                             }
 
                             remaining = task.update(partition, remaining);
-                            if (remaining != null) {
+                            if (!remaining.isEmpty()) {
                                 remainingStandbyRecords.put(partition, remaining);
                             } else {
                                 restoreConsumer.resume(singleton(partition));
@@ -1106,7 +1106,7 @@ public class StreamThread extends Thread {
                         }
 
                         final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                        if (remaining != null) {
+                        if (!remaining.isEmpty()) {
                             restoreConsumer.pause(singleton(partition));
                             standbyRecords.put(partition, remaining);
                         }
