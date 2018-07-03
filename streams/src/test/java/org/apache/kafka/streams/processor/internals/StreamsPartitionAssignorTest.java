@@ -1277,16 +1277,17 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         assertThat(assignment.size(), equalTo(2));
-        assertThat(
-            AssignmentInfo.decode(assignment.get("consumer1").userData()),
-            equalTo(new AssignmentInfo(
-                new ArrayList<>(activeTasks),
-                standbyTaskMap,
-                Collections.<HostInfo, Set<TopicPartition>>emptyMap()
-            )));
+        AssignmentInfo c1Info = AssignmentInfo.decode(assignment.get("consumer1").userData());
+        assertThat(c1Info.standbyTasks(), equalTo(standbyTaskMap));
+        assertThat(c1Info.partitionsByHost().isEmpty(), equalTo(true));
+        assertThat(c1Info.activeTasks().containsAll(activeTasks), equalTo(true));
+        assertThat(activeTasks.containsAll(c1Info.activeTasks()), equalTo(true));
         assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
 
-        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
+        AssignmentInfo futureInfo = AssignmentInfo.decode(assignment.get("future-consumer").userData());
+        assertThat(futureInfo.activeTasks().isEmpty(), equalTo(true));
+        assertThat(futureInfo.standbyTasks().isEmpty(), equalTo(true));
+        assertThat(futureInfo.partitionsByHost().isEmpty(), equalTo(true));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));
     }
 

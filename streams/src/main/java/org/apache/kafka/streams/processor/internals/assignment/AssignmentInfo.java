@@ -41,11 +41,13 @@ public class AssignmentInfo {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 3;
+    public static final int LATEST_SUPPORTED_VERSION = 4;
     static final int UNKNOWN = -1;
+    public static final int UNKNOWN_PARTITION = 1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
+    private int errCode;
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
@@ -55,6 +57,7 @@ public class AssignmentInfo {
                            final int latestSupportedVersion) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
+        this.errCode = 0;
     }
 
     public AssignmentInfo(final List<TaskId> activeTasks,
@@ -74,25 +77,37 @@ public class AssignmentInfo {
                           final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, 0);
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
         }
     }
-
+    public AssignmentInfo(final int version,
+        final List<TaskId> activeTasks,
+        final Map<TaskId, Set<TopicPartition>> standbyTasks,
+        final Map<HostInfo, Set<TopicPartition>> hostState,
+        final int errCode) {
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
+        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
+          throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
+              + "; was: " + version);
+      }
+    }
     // for testing only; don't apply version checks
     AssignmentInfo(final int version,
                    final int latestSupportedVersion,
                    final List<TaskId> activeTasks,
                    final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                   final Map<HostInfo, Set<TopicPartition>> hostState) {
+                   final Map<HostInfo, Set<TopicPartition>> hostState,
+                   final int errCode) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.partitionsByHost = hostState;
+        this.errCode = errCode;
     }
 
     public int version() {
@@ -133,6 +148,9 @@ public class AssignmentInfo {
                 case 3:
                     encodeVersionThree(out);
                     break;
+                case 4:
+                  encodeVersionFour(out);
+                  break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
                         + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -202,7 +220,10 @@ public class AssignmentInfo {
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
-
+    private void encodeVersionFour(final DataOutputStream out) throws IOException {
+      encodeVersionThree(out);
+      out.writeInt(errCode);
+    }
     /**
      * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
      */
@@ -228,6 +249,11 @@ public class AssignmentInfo {
                     assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
+                case 4:
+                  final int latestSupportedVer = in.readInt();
+                  assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVer);
+                  decodeVersionFourData(assignmentInfo, in);
+                  break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
                         "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -299,7 +325,11 @@ public class AssignmentInfo {
         decodeStandbyTasks(assignmentInfo, in);
         decodeGlobalAssignmentData(assignmentInfo, in);
     }
-
+    private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
+        final DataInputStream in) throws IOException {
+      decodeVersionThreeData(assignmentInfo, in);
+      assignmentInfo.errCode = in.readInt();
+    }
     @Override
     public int hashCode() {
         return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHost.hashCode();

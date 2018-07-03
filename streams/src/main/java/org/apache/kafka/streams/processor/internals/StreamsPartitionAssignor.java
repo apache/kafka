@@ -415,6 +415,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         boolean numPartitionsNeeded;
+        Map<String, Assignment> assignment;
         do {
             numPartitionsNeeded = false;
 
@@ -439,7 +440,20 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
                                         if (numPartitionsCandidate == null) {
-                                            repartitionTopicMetadata.get(topicName).numPartitions = NOT_AVAILABLE;
+                                          assignment = new HashMap<>();
+                                          for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+                                            for (final String consumerId : clientMetadata.consumers) {
+                                              assignment.put(consumerId, new Assignment(
+                                                  Collections.emptyList(),
+                                                  new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+                                                      Collections.emptyList(),
+                                                      Collections.emptyMap(),
+                                                      Collections.emptyMap(),
+                                                      AssignmentInfo.UNKNOWN_PARTITION).encode()
+                                              ));
+                                            }
+                                          }
+                                          return assignment;
                                         }
                                     }
 
@@ -582,7 +596,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minReceivedMetadataVersion == 2 || minReceivedMetadataVersion == 3) {
+        if (minReceivedMetadataVersion >= 2) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -600,7 +614,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
         taskManager.setPartitionsByHostState(partitionsByHostState);
 
-        final Map<String, Assignment> assignment;
         if (versionProbing) {
             assignment = versionProbingAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, futureConsumers, minReceivedMetadataVersion);
         } else {
