@@ -688,7 +688,7 @@ public class Selector implements Selectable, AutoCloseable {
             return;
 
         DelayedAuthenticationFailureClose delayedClose;
-        long now = System.currentTimeMillis();
+        long now = time.milliseconds();
         while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.tryClose(now))
             delayedClosingChannels.remove();
     }
@@ -1164,7 +1164,7 @@ public class Selector implements Selectable, AutoCloseable {
          */
         public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
             this.channel = channel;
-            this.endTime = System.currentTimeMillis() + delayMs;
+            this.endTime = time.milliseconds() + delayMs;
             this.closed = false;
         }
 

@@ -53,7 +53,7 @@ import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -81,6 +81,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(value = Parameterized.class)
 public class SaslAuthenticatorFailureTest {
     private static final int BUFFER_SIZE = 4 * 1024;
+    private static MockTime time = new MockTime();
 
     private NioEchoServer server;
     private Selector selector;
@@ -102,7 +103,7 @@ public class SaslAuthenticatorFailureTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         values.add(new Object[]{0});
-        values.add(new Object[]{500});
+        values.add(new Object[]{200});
         return values;
     }
 
@@ -115,12 +116,12 @@ public class SaslAuthenticatorFailureTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         SaslAuthenticatorTest.TestLogin.loginCount.set(0);
-        startTimeMs = Time.SYSTEM.milliseconds();
+        startTimeMs = time.milliseconds();
     }
 
     @After
     public void teardown() throws Exception {
-        long now = Time.SYSTEM.milliseconds();
+        long now = time.milliseconds();
         if (server != null)
             this.server.close();
         if (selector != null)
@@ -240,7 +241,7 @@ public class SaslAuthenticatorFailureTest {
         byte[] bytes = new byte[1024];
         random.nextBytes(bytes);
         selector.send(new NetworkSend(node1, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -251,7 +252,7 @@ public class SaslAuthenticatorFailureTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         random.nextBytes(bytes);
         selector.send(new NetworkSend(node2, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -279,7 +280,7 @@ public class SaslAuthenticatorFailureTest {
         ApiVersionsRequest request = createApiVersionsRequestV0();
         RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -306,7 +307,7 @@ public class SaslAuthenticatorFailureTest {
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
         selector.send(new NetworkSend(node1, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -320,7 +321,7 @@ public class SaslAuthenticatorFailureTest {
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
         selector.send(new NetworkSend(node2, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -345,7 +346,7 @@ public class SaslAuthenticatorFailureTest {
         RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA, metadataRequest1.version(),
                 "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -359,7 +360,7 @@ public class SaslAuthenticatorFailureTest {
         RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA,
                 metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
+        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state(), time);
         selector.close();
 
         // Test good connection still works
@@ -498,7 +499,7 @@ public class SaslAuthenticatorFailureTest {
         // Without SASL_AUTHENTICATE headers, disconnect state is ChannelState.AUTHENTICATE which is
         // a hint that channel was closed during authentication, unlike ChannelState.AUTHENTICATE_FAILED
         // which is an actual authentication failure reported by the broker.
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state(), time);
     }
 
     private void createServer(SecurityProtocol securityProtocol, String saslMechanism,
@@ -562,10 +563,10 @@ public class SaslAuthenticatorFailureTest {
         serverChannelBuilder.configure(saslServerConfigs);
         if (failedAuthenticationDelayMs == -1)
             server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
-                    "localhost", serverChannelBuilder, credentialCache);
+                    "localhost", serverChannelBuilder, credentialCache, time);
         else
             server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
-                    "localhost", serverChannelBuilder, credentialCache, failedAuthenticationDelayMs);
+                    "localhost", serverChannelBuilder, credentialCache, failedAuthenticationDelayMs, time);
         server.start();
         return server;
     }
@@ -604,7 +605,7 @@ public class SaslAuthenticatorFailureTest {
             }
         };
         clientChannelBuilder.configure(saslClientConfigs);
-        this.selector = NetworkTestUtils.createSelector(clientChannelBuilder);
+        this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
@@ -619,12 +620,6 @@ public class SaslAuthenticatorFailureTest {
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
     }
 
-    private void configureDigestMd5ServerCallback(SecurityProtocol securityProtocol) {
-        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("DIGEST-MD5");
-        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                TestDigestLoginModule.DigestServerCallbackHandler.class);
-    }
-
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
         if (selector != null) {
             selector.close();
@@ -634,7 +629,7 @@ public class SaslAuthenticatorFailureTest {
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
                 new TestSecurityConfig(clientConfigs), null, saslMechanism, true);
-        this.selector = NetworkTestUtils.createSelector(channelBuilder);
+        this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
@@ -644,10 +639,10 @@ public class SaslAuthenticatorFailureTest {
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         if (failedAuthenticationDelayMs != -1)
             return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                    new TestSecurityConfig(saslServerConfigs), credentialCache, failedAuthenticationDelayMs);
+                    new TestSecurityConfig(saslServerConfigs), credentialCache, failedAuthenticationDelayMs, time);
         else
             return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                    new TestSecurityConfig(saslServerConfigs), credentialCache);
+                    new TestSecurityConfig(saslServerConfigs), credentialCache, time);
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
@@ -677,7 +672,7 @@ public class SaslAuthenticatorFailureTest {
             throws Exception {
         createClientConnection(securityProtocol, node);
         ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node,
-                ChannelState.State.AUTHENTICATION_FAILED);
+                ChannelState.State.AUTHENTICATION_FAILED, time);
         selector.close();
         selector = null;
         return finalState;
@@ -694,13 +689,6 @@ public class SaslAuthenticatorFailureTest {
     private SaslHandshakeResponse sendHandshakeRequestReceiveResponse(String node, short version) throws Exception {
         SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest.Builder("PLAIN").build(version);
         SaslHandshakeResponse response = (SaslHandshakeResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE, handshakeRequest);
-        assertEquals(Errors.NONE, response.error());
-        return response;
-    }
-
-    private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
-        ApiVersionsRequest handshakeRequest = createApiVersionsRequestV0();
-        ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
         assertEquals(Errors.NONE, response.error());
         return response;
     }

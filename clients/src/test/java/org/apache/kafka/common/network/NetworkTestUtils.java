@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
@@ -36,20 +37,20 @@ import org.apache.kafka.test.TestUtils;
  */
 public class NetworkTestUtils {
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-                                                 AbstractConfig serverConfig, CredentialCache credentialCache) throws Exception {
-        return createEchoServer(listenerName, securityProtocol, serverConfig, credentialCache, 100);
+                                                 AbstractConfig serverConfig, CredentialCache credentialCache, Time time) throws Exception {
+        return createEchoServer(listenerName, securityProtocol, serverConfig, credentialCache, 100, time);
     }
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-            AbstractConfig serverConfig, CredentialCache credentialCache, int failedAuthenticationDelayMs) throws Exception {
+            AbstractConfig serverConfig, CredentialCache credentialCache, int failedAuthenticationDelayMs, Time time) throws Exception {
         NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost",
-                null, credentialCache, failedAuthenticationDelayMs);
+                null, credentialCache, failedAuthenticationDelayMs, time);
         server.start();
         return server;
     }
 
-    public static Selector createSelector(ChannelBuilder channelBuilder) {
-        return new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+    public static Selector createSelector(ChannelBuilder channelBuilder, Time time) {
+        return new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {
@@ -84,19 +85,25 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState, MockTime mockTime)
             throws IOException {
         boolean closed = false;
-        for (int i = 0; i < 30; i++) {
-            selector.poll(1000L);
+        for (int i = 0; i < 300; i++) {
+            selector.poll(100L);
             if (selector.channel(node) == null && selector.closingChannel(node) == null) {
                 closed = true;
                 break;
             }
+            if (mockTime != null)
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 100);
         }
         assertTrue("Channel was not closed by timeout", closed);
         ChannelState finalState = selector.disconnected().get(node);
         assertEquals(channelState, finalState.state());
         return finalState;
+    }
+
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
+        return waitForChannelClose(selector, node, channelState, null);
     }
 }

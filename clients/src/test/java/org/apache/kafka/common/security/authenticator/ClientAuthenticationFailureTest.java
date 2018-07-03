@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -55,6 +55,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class ClientAuthenticationFailureTest {
+    private static MockTime time = new MockTime(50);
 
     private NioEchoServer server;
     private Map<String, Object> saslServerConfigs;
@@ -91,12 +92,12 @@ public class ClientAuthenticationFailureTest {
         testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
         testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
-        startTimeMs = Time.SYSTEM.milliseconds();
+        startTimeMs = time.milliseconds();
     }
 
     @After
     public void teardown() throws Exception {
-        long now = Time.SYSTEM.milliseconds();
+        long now = time.milliseconds();
         if (server != null)
             server.close();
         if (failedAuthenticationDelayMs != -1)
@@ -172,8 +173,8 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         if (failedAuthenticationDelayMs == -1)
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache());
+            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
         else
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache(), failedAuthenticationDelayMs);
+            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache(), failedAuthenticationDelayMs, time);
     }
 }
