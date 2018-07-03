@@ -162,6 +162,48 @@ public class ClientState {
             return capacity > other.capacity;
     }
 
+    boolean hasMoreAvailableActiveTaskStandbyThan(ClientState other) {
+        if (this.capacity <= 0) {
+            throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
+        }
+
+        if (other.capacity <= 0) {
+            throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
+        }
+        
+        final double thisLoad = (double) (numberOfActiveStateStores + 1) * numberOfActivePartitions / capacity;
+        final double otherLoad = (double) (other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions
+                / other.capacity;
+
+        if (thisLoad < otherLoad)
+            return true;
+        else if (thisLoad > otherLoad)
+            return false;
+        else
+            return capacity > other.capacity;
+    }
+
+    boolean hasMoreAvailableStandbyTaskCapacity(ClientState other) {
+        if (this.capacity <= 0) {
+            throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
+        }
+
+        if (other.capacity <= 0) {
+            throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
+        }
+
+        final double thisLoad = (double) numberOfStandbyStateStores / capacity;
+        final double otherLoad = (double) other.numberOfStandbyStateStores / capacity;
+
+        if (thisLoad < otherLoad) {
+            return true;
+        } else if (thisLoad > otherLoad) {
+            return false;
+        } else {
+            return this.capacity > other.capacity;
+        }
+    }
+
     Set<TaskId> previousStandbyTasks() {
         final Set<TaskId> standby = new HashSet<>(prevAssignedTasks);
         standby.removeAll(prevActiveTasks);
