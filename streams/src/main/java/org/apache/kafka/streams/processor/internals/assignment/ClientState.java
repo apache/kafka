@@ -214,6 +214,18 @@ public class ClientState {
         return capacity;
     }
 
+    int getNumberOfActiveStateStores() {
+        return numberOfActiveStateStores;
+    }
+
+    int getNumberOfActivePartitions() {
+        return numberOfActivePartitions;
+    }
+
+    int getNumberOfStandbyStateStores() {
+        return numberOfStandbyStateStores;
+    }
+
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }

@@ -658,7 +658,15 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignTasksToClientsWithImprovedBalancing() {
         setFixedCounts();
-        // Unknown what to expect at the moment, will leave blank
+
+        final ClientState c1 = createClient(p1, 3);
+        final ClientState c2 = createClient(p2, 3);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05);
+        taskAssignor.assign(0);
+
+        assertTrue(Math.abs(c1.getNumberOfActivePartitions() - c2.getNumberOfActivePartitions()) <= 4);
+        assertTrue(Math.abs(c1.getNumberOfActiveStateStores() - c2.getNumberOfActiveStateStores()) <= 4);
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
