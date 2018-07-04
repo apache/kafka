@@ -274,7 +274,7 @@ public class StoreChangelogReader implements ChangelogReader {
         // otherwise if we did not fully restore to that point we need to set nextPosition
         // to the position of the restoreConsumer and we'll cause a TaskMigratedException exception
         if (nextPosition == -1 || (restorer.offsetLimit() == Long.MAX_VALUE && numberRecords != numberRestored)) {
-            nextPosition = restoreConsumer.position(restorer.partition());
+            nextPosition = restoreConsumer.position(restorer.partition()); // KafkaConsumer API is changed
         }
 
         if (!restoreRecords.isEmpty()) {

@@ -430,7 +430,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 if (eosEnabled) {
                     producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 } else {
-                    consumer.commitSync(consumedOffsetsAndMetadata);
+                    consumer.commitSync(consumedOffsetsAndMetadata); // KafkaConsumer API is changed
                 }
                 commitOffsetNeeded = false;
             }

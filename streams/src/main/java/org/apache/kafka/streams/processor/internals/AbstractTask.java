@@ -174,7 +174,7 @@ public abstract class AbstractTask implements Task {
     protected void updateOffsetLimits() {
         for (final TopicPartition partition : partitions) {
             try {
-                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API? & KafkaConsumer API is changed
                 final long offset = metadata != null ? metadata.offset() : 0L;
                 stateMgr.putOffsetLimit(partition, offset);
 
