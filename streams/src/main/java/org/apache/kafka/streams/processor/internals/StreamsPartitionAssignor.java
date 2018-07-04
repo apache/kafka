@@ -346,6 +346,25 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
+    Map<String, Assignment> errorAssignment(Map<UUID, ClientMetadata> clientsMetadata,
+        String topic, int errorCode) {
+      log.error(topic + " is unknown yet during rebalance," +
+          " please make sure they have been pre-created before starting the Streams application.");
+        Map<String, Assignment> assignment = new HashMap<>();
+        for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+          for (final String consumerId : clientMetadata.consumers) {
+            assignment.put(consumerId, new Assignment(
+                Collections.emptyList(),
+                new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+                    Collections.emptyList(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    errorCode).encode()
+            ));
+          }
+        }
+        return assignment;
+    }
     /*
      * This assigns tasks to consumer clients in the following steps.
      *
@@ -435,28 +454,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
         final Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
-        Map<String, Assignment> assignment;
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
           for (String topic : topicsInfo.sourceTopics) {
             if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
-                !metadata.internalTopics().contains(topic)) {
-              log.error(topic + " is unknown yet during rebalance," +
-                " please make sure they have been pre-created before starting the Streams application.");
-              assignment = new HashMap<>();
-              for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
-                for (final String consumerId : clientMetadata.consumers) {
-                  assignment.put(consumerId, new Assignment(
-                      Collections.emptyList(),
-                      new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
-                          Collections.emptyList(),
-                          Collections.emptyMap(),
-                          Collections.emptyMap(),
-                          Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code).encode()
-                  ));
-                }
-              }
-              return assignment;
-
+                !metadata.topics().contains(topic)) {
+                return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
             }
           }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
@@ -490,7 +492,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
                                     }
 
-                                    if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
+                                    if (numPartitionsCandidate > numPartitions) {
                                         numPartitions = numPartitionsCandidate;
                                     }
                                 }
@@ -647,6 +649,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
         taskManager.setPartitionsByHostState(partitionsByHostState);
 
+        final Map<String, Assignment> assignment;
         if (versionProbing) {
             assignment = versionProbingAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, futureConsumers, minReceivedMetadataVersion);
         } else {
