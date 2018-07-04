@@ -219,7 +219,7 @@ This message will be processed by the Wordcount application and the following ou
 </p>
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
@@ -252,7 +252,7 @@ hello kafka streams
 In your other terminal in which the console consumer is running, you will observe that the WordCount application wrote new output data:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
@@ -287,7 +287,7 @@ join kafka summit
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
