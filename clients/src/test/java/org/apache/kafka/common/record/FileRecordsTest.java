@@ -29,6 +29,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -59,6 +60,28 @@ public class FileRecordsTest {
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
         this.time = new MockTime();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testAppendProtectsFromOverflow() throws Exception {
+        File file = tempFile();
+        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+        randomAccessFile.setLength(Integer.MAX_VALUE);
+        FileRecords records = new FileRecords(file, randomAccessFile.getChannel(), 0, Integer.MAX_VALUE, false);
+        append(records, values);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testOpenOversizeFile() throws Exception {
+        File file = tempFile();
+        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+        randomAccessFile.setLength(Integer.MAX_VALUE + 1L);
+        new FileRecords(file, randomAccessFile.getChannel(), 0, Integer.MAX_VALUE, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testOutOfRangeSlice() throws Exception {
+        this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes();
     }
 
     /**
