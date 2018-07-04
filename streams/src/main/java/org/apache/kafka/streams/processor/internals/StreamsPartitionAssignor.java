@@ -63,7 +63,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
-    private final static int VERSION_FOUR = 4;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
     private int minReceivedMetadataVersion = UNKNOWN;
     protected Set<Integer> supportedVersions = new HashSet<>();
@@ -583,7 +582,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minReceivedMetadataVersion >= 2) {
+        if (minReceivedMetadataVersion == 2 || minReceivedMetadataVersion == 3) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -802,18 +801,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
-            case VERSION_FOUR:
-                if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
-                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
-                        "Upgrading subscription metadata version to {} for next rebalance.",
-                        usedSubscriptionMetadataVersion,
-                        leaderSupportedVersion,
-                        leaderSupportedVersion);
-                    usedSubscriptionMetadataVersion = leaderSupportedVersion;
-                }
-                processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-                partitionsByHost = info.partitionsByHost();
-                break;
             default:
                 throw new IllegalStateException("This code should never be reached. Please file a bug report at https://issues.apache.org/jira/projects/KAFKA/");
         }
@@ -867,19 +854,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
-    private void processVersionFourAssignment(final AssignmentInfo info,
-                                              final List<TopicPartition> partitions,
-                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
-        processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-    }
-
     // for testing
     protected void processLatestVersionAssignment(final AssignmentInfo info,
                                                   final List<TopicPartition> partitions,
                                                   final Map<TaskId, Set<TopicPartition>> activeTasks,
                                                   final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
-        processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+        processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
     /**

@@ -41,7 +41,7 @@ public class AssignmentInfo {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 4;
+    public static final int LATEST_SUPPORTED_VERSION = 3;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -133,9 +133,6 @@ public class AssignmentInfo {
                 case 3:
                     encodeVersionThree(out);
                     break;
-                case 4:
-                    encodeVersionFour(out);
-                    break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
                         + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -152,21 +149,21 @@ public class AssignmentInfo {
 
     private void encodeVersionOne(final DataOutputStream out) throws IOException {
         out.writeInt(1); // version
-        encodeActiveAndStandbyTaskAssignment(out, 1);
+        encodeActiveAndStandbyTaskAssignment(out);
     }
 
-    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, int usedVersion) throws IOException {
+    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
-            id.writeTo(out, usedVersion);
+            id.writeTo(out);
         }
 
         // encode standby tasks
         out.writeInt(standbyTasks.size());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
-            id.writeTo(out, usedVersion);
+            id.writeTo(out);
 
             final Set<TopicPartition> partitions = entry.getValue();
             writeTopicPartitions(out, partitions);
@@ -175,7 +172,7 @@ public class AssignmentInfo {
 
     private void encodeVersionTwo(final DataOutputStream out) throws IOException {
         out.writeInt(2); // version
-        encodeActiveAndStandbyTaskAssignment(out, 2);
+        encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
@@ -202,14 +199,7 @@ public class AssignmentInfo {
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
         out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out, 3);
-        encodePartitionsByHost(out);
-    }
-
-    private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        out.writeInt(4);
-        out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out, 4);
+        encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
@@ -224,7 +214,6 @@ public class AssignmentInfo {
             final AssignmentInfo assignmentInfo;
 
             final int usedVersion = in.readInt();
-            final int latestSupportedVersion;
             switch (usedVersion) {
                 case 1:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);
@@ -235,14 +224,9 @@ public class AssignmentInfo {
                     decodeVersionTwoData(assignmentInfo, in);
                     break;
                 case 3:
-                    latestSupportedVersion = in.readInt();
+                    final int latestSupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
                     decodeVersionThreeData(assignmentInfo, in);
-                    break;
-                case 4:
-                    latestSupportedVersion = in.readInt();
-                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
-                    decodeVersionFourData(assignmentInfo, in);
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -259,36 +243,34 @@ public class AssignmentInfo {
 
     private static void decodeVersionOneData(final AssignmentInfo assignmentInfo,
                                              final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in, 1);
-        decodeStandbyTasks(assignmentInfo, in, 1);
+        decodeActiveTasks(assignmentInfo, in);
+        decodeStandbyTasks(assignmentInfo, in);
         assignmentInfo.partitionsByHost = new HashMap<>();
     }
 
     private static void decodeActiveTasks(final AssignmentInfo assignmentInfo,
-                                          final DataInputStream in,
-                                          int usedVersion) throws IOException {
+                                          final DataInputStream in) throws IOException {
         final int count = in.readInt();
         assignmentInfo.activeTasks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            assignmentInfo.activeTasks.add(TaskId.readFrom(in, usedVersion));
+            assignmentInfo.activeTasks.add(TaskId.readFrom(in));
         }
     }
 
     private static void decodeStandbyTasks(final AssignmentInfo assignmentInfo,
-                                           final DataInputStream in,
-                                           int usedVersion) throws IOException {
+                                           final DataInputStream in) throws IOException {
         final int count = in.readInt();
         assignmentInfo.standbyTasks = new HashMap<>(count);
         for (int i = 0; i < count; i++) {
-            final TaskId id = TaskId.readFrom(in, usedVersion);
+            final TaskId id = TaskId.readFrom(in);
             assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
         }
     }
 
     private static void decodeVersionTwoData(final AssignmentInfo assignmentInfo,
                                              final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in, 2);
-        decodeStandbyTasks(assignmentInfo, in, 2);
+        decodeActiveTasks(assignmentInfo, in);
+        decodeStandbyTasks(assignmentInfo, in);
         decodeGlobalAssignmentData(assignmentInfo, in);
     }
 
@@ -313,15 +295,8 @@ public class AssignmentInfo {
 
     private static void decodeVersionThreeData(final AssignmentInfo assignmentInfo,
                                                final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in, 3);
-        decodeStandbyTasks(assignmentInfo, in, 3);
-        decodeGlobalAssignmentData(assignmentInfo, in);
-    }
-
-    private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
-                                              final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in, 4);
-        decodeStandbyTasks(assignmentInfo, in, 4);
+        decodeActiveTasks(assignmentInfo, in);
+        decodeStandbyTasks(assignmentInfo, in);
         decodeGlobalAssignmentData(assignmentInfo, in);
     }
 

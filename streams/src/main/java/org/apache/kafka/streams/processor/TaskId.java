@@ -32,16 +32,10 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    /** The number of State Stores in the task. */
-    private int numberOfStateStores;
-    /** The number of Partitions in the task.*/
-    private int numberOfInputPartitions;
-    
+
     public TaskId(int topicGroupId, int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        this.numberOfStateStores = 0;
-        this.numberOfInputPartitions = 0;
     }
 
     public String toString() {
@@ -68,43 +62,25 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot write to output stream
      */
-    public void writeTo(DataOutputStream out, int usedVersion) throws IOException {
+    public void writeTo(DataOutputStream out) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
-        if (usedVersion == 4) {
-            out.writeInt(numberOfStateStores);
-            out.writeInt(numberOfInputPartitions);
-        }
     }
 
     /**
      * @throws IOException if cannot read from input stream
      */
-    public static TaskId readFrom(DataInputStream in, int usedVersion) throws IOException {
-        final TaskId taskId = new TaskId(in.readInt(), in.readInt());
-        if (usedVersion == 4) {
-            taskId.setNumberOfStateStores(in.readInt());
-            taskId.setNumberOfInputPartitions(in.readInt());
-        }
-        return taskId;
+    public static TaskId readFrom(DataInputStream in) throws IOException {
+        return new TaskId(in.readInt(), in.readInt());
     }
 
-    public void writeTo(ByteBuffer buf, final int version) {
+    public void writeTo(ByteBuffer buf) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        if (version == 4) {
-            buf.putInt(numberOfStateStores);
-            buf.putInt(numberOfInputPartitions);
-        }
     }
 
-    public static TaskId readFrom(ByteBuffer buf, final int version) {
-        final TaskId result = new TaskId(buf.getInt(), buf.getInt());
-        if (version == 4) {
-            result.setNumberOfStateStores(buf.getInt());
-            result.setNumberOfInputPartitions(buf.getInt());
-        }
-        return result;
+    public static TaskId readFrom(ByteBuffer buf) {
+        return new TaskId(buf.getInt(), buf.getInt());
     }
 
     @Override
@@ -114,9 +90,7 @@ public class TaskId implements Comparable<TaskId> {
 
         if (o instanceof TaskId) {
             TaskId other = (TaskId) o;
-            return other.topicGroupId == this.topicGroupId && other.partition == this.partition && 
-                   other.numberOfInputPartitions == this.numberOfInputPartitions &&
-                   other.numberOfStateStores == this.numberOfStateStores;
+            return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
         } else {
             return false;
         }
@@ -136,21 +110,5 @@ public class TaskId implements Comparable<TaskId> {
                     (this.partition < other.partition ? -1 :
                         (this.partition > other.partition ? 1 :
                             0)));
-    }
-
-    public int numberOfStateStores() {
-        return numberOfStateStores;
-    }
-
-    public void setNumberOfStateStores(final int numberOfStateStores) {
-        this.numberOfStateStores = numberOfStateStores;
-    }
-
-    public int numberOfInputPartitions() {
-        return numberOfInputPartitions;
-    }
-
-    public void setNumberOfInputPartitions(final int numberOfInputPartitions) {
-        this.numberOfInputPartitions = numberOfInputPartitions;
     }
 }

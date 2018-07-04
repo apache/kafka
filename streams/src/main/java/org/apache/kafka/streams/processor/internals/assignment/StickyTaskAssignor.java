@@ -214,7 +214,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 return client;
             }
 
-            if (active && (leastLoaded == null || client.hasMoreAvailableActiveTaskCapacityThan(leastLoaded))) {
+            if (leastLoaded == null || client.hasMoreAvailableCapacityThan(leastLoaded)) {
                 if (!checkTaskPairs) {
                     leastLoaded = client;
                 } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), active)) {
@@ -222,13 +222,6 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 }
             }
 
-            if ((!active) && (leastLoaded == null || client.hasMoreAvailableStandbyTaskCapacityThan(leastLoaded))) {
-                if (!checkTaskPairs) {
-                    leastLoaded = client;
-                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), active)) {
-                    leastLoaded = client;
-                }
-            }
         }
         return leastLoaded;
 
