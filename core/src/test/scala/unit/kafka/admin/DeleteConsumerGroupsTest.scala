@@ -206,7 +206,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
     assertTrue(s"The consumer group deletion did not work as expected",
-      output.contains(s"Group '$group' could not be deleted due to: ${Errors.COORDINATOR_NOT_AVAILABLE}"))
+      output.contains(s"Group '$group' could not be deleted due to"))
   }
 
   @Test
@@ -218,8 +218,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val result = service.deleteGroups()
     assertTrue(s"The consumer group deletion did not work as expected",
-      result.size == 1 &&
-        result.keySet.contains(group) && result.get(group).contains(Errors.COORDINATOR_NOT_AVAILABLE))
+      result.size == 1 && result.keySet.contains(group))
   }
 
   @Test(expected = classOf[OptionException])
