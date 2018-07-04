@@ -140,20 +140,16 @@ public class ClientState {
         return assignedTasks.size() >= capacity;
     }
 
-    boolean hasMoreAvailableCapacityThan(final ClientState other) {
+    void checkCapacity(final ClientState other) {
         if (this.capacity <= 0) {
             throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
         }
-
         if (other.capacity <= 0) {
             throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
         }
+    }
 
-        final double otherLoad = (double) (other.assignedTaskCount() + other.numberOfActivePartitions 
-                + other.numberOfActiveStateStores + other.numberOfStandbyStateStores) / other.capacity;
-        final double thisLoad = (double) (assignedTaskCount() + numberOfActivePartitions 
-                + numberOfActiveStateStores + numberOfStandbyStateStores) / capacity;
-
+    boolean leastLoaded(final double thisLoad, final double otherLoad, final ClientState other) {
         if (thisLoad < otherLoad)
             return true;
         else if (thisLoad > otherLoad)
@@ -162,46 +158,33 @@ public class ClientState {
             return capacity > other.capacity;
     }
 
-    boolean hasMoreAvailableActiveTaskCapacityThan(ClientState other) {
-        if (this.capacity <= 0) {
-            throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
-        }
+    boolean hasMoreAvailableCapacityThan(final ClientState other) {
+        checkCapacity(other);
 
-        if (other.capacity <= 0) {
-            throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
-        }
+        final double otherLoad = (double) other.assignedTaskCount() / other.capacity();
+        final double thisLoad = (double) assignedTaskCount() / capacity();
 
-        final double thisLoad = (double) (numberOfActiveStateStores + 1) * numberOfActivePartitions / capacity;
-        final double otherLoad = (double) (other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions
-                / other.capacity;
+        return leastLoaded(thisLoad, otherLoad, other);
+    }
 
-        if (thisLoad < otherLoad)
-            return true;
-        else if (thisLoad > otherLoad)
-            return false;
-        else
-            return capacity > other.capacity;
+    boolean hasMoreAvailableActiveTaskCapacityThan(final ClientState other) {
+        checkCapacity(other);
+
+        final double otherLoad = (double) ((other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions
+                + other.assignedTaskCount()) / other.capacity;
+        final double thisLoad = (double) ((numberOfActiveStateStores + 1) * numberOfActivePartitions
+                + assignedTaskCount()) / capacity;
+
+        return leastLoaded(thisLoad, otherLoad, other);
     }
 
     boolean hasMoreAvailableStandbyTaskCapacityThan(ClientState other) {
-        if (this.capacity <= 0) {
-            throw new IllegalStateException("Capacity of this ClientState must be greater than 0.");
-        }
-
-        if (other.capacity <= 0) {
-            throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
-        }
+        checkCapacity(other);
 
         final double thisLoad = (double) numberOfStandbyStateStores / capacity;
         final double otherLoad = (double) other.numberOfStandbyStateStores / capacity;
 
-        if (thisLoad < otherLoad) {
-            return true;
-        } else if (thisLoad > otherLoad) {
-            return false;
-        } else {
-            return this.capacity > other.capacity;
-        }
+        return leastLoaded(thisLoad, otherLoad, other);
     }
 
     Set<TaskId> previousStandbyTasks() {
