@@ -59,7 +59,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
 
     private final static int UNKNOWN = -1;
-    public final static int NOT_AVAILABLE = -2;
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
@@ -934,9 +933,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             final InternalTopicConfig topic = metadata.config;
             final int numPartitions = metadata.numPartitions;
 
-            if (numPartitions == NOT_AVAILABLE) {
-                continue;
-            }
             if (numPartitions < 0) {
                 throw new StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
@@ -976,11 +972,14 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
                     final Integer partitions = metadata.partitionCountForTopic(topic);
 
+                    final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                    Arrays.sort(topics);
                     if (numPartitions == UNKNOWN) {
+                        if (partitions == null) {
+                            throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
+                        }
                         numPartitions = partitions;
                     } else if (numPartitions != partitions) {
-                        final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
-                        Arrays.sort(topics);
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
                 }
