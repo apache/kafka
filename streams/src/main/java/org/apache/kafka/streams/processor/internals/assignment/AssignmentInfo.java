@@ -42,6 +42,7 @@ public class AssignmentInfo {
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
 
     public static final int LATEST_SUPPORTED_VERSION = 4;
+    public static final int VERSION_WITH_ERRORCODE = 4;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -91,9 +92,9 @@ public class AssignmentInfo {
         final int errCode) {
         this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
-          throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
-              + "; was: " + version);
-      }
+            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
+                + "; was: " + version);
+        }
     }
     // for testing only; don't apply version checks
     AssignmentInfo(final int version,
@@ -153,8 +154,8 @@ public class AssignmentInfo {
                     encodeVersionThree(3, out);
                     break;
                 case 4:
-                  encodeVersionFour(out);
-                  break;
+                    encodeVersionFour(out);
+                    break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
                         + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -226,8 +227,8 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
-      encodeVersionThree(4, out);
-      out.writeInt(errCode);
+        encodeVersionThree(4, out);
+        out.writeInt(errCode);
     }
 
     /**
@@ -256,10 +257,10 @@ public class AssignmentInfo {
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 case 4:
-                  final int latestSupportedVer = in.readInt();
-                  assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVer);
-                  decodeVersionFourData(assignmentInfo, in);
-                  break;
+                    final int latestSupportedVer = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVer);
+                    decodeVersionFourData(assignmentInfo, in);
+                    break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
                         "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -333,8 +334,8 @@ public class AssignmentInfo {
     }
     private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
         final DataInputStream in) throws IOException {
-      decodeVersionThreeData(assignmentInfo, in);
-      assignmentInfo.errCode = in.readInt();
+        decodeVersionThreeData(assignmentInfo, in);
+        assignmentInfo.errCode = in.readInt();
     }
     @Override
     public int hashCode() {

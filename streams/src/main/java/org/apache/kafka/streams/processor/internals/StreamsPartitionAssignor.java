@@ -70,29 +70,29 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private Logger log;
     private String logPrefix;
     public enum Error {
-      NONE(0),
-      INCOMPLETE_SOURCE_TOPIC_METADATA(1);
+        NONE(0),
+        INCOMPLETE_SOURCE_TOPIC_METADATA(1);
 
-      private final int code;
+        private final int code;
 
-      Error(final int code) {
-        this.code = code;
-      }
-
-      public int getCode() {
-        return code;
-      }
-
-      public static Error fromCode(final int code) {
-        switch (code) {
-        case 0:
-          return NONE;
-        case 1:
-          return INCOMPLETE_SOURCE_TOPIC_METADATA;
-        default:
-          throw new IllegalArgumentException("Unknown error code: " + code);
+        Error(final int code) {
+            this.code = code;
         }
-      }
+
+        public int getCode() {
+            return code;
+        }
+
+        public static Error fromCode(final int code) {
+            switch (code) {
+                case 0:
+                    return NONE;
+                case 1:
+                    return INCOMPLETE_SOURCE_TOPIC_METADATA;
+                default:
+                    throw new IllegalArgumentException("Unknown error code: " + code);
+            }
+        }
     }
     // flag indicating whether streams app should shutdown
     private Error error = Error.NONE;
@@ -348,20 +348,20 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     Map<String, Assignment> errorAssignment(Map<UUID, ClientMetadata> clientsMetadata,
         String topic, int errorCode) {
-      log.error(topic + " is unknown yet during rebalance," +
-          " please make sure they have been pre-created before starting the Streams application.");
+        log.error(topic + " is unknown yet during rebalance," +
+            " please make sure they have been pre-created before starting the Streams application.");
         Map<String, Assignment> assignment = new HashMap<>();
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
-          for (final String consumerId : clientMetadata.consumers) {
-            assignment.put(consumerId, new Assignment(
-                Collections.emptyList(),
-                new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+            for (final String consumerId : clientMetadata.consumers) {
+                assignment.put(consumerId, new Assignment(
                     Collections.emptyList(),
-                    Collections.emptyMap(),
-                    Collections.emptyMap(),
-                    errorCode).encode()
-            ));
-          }
+                    new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+                        Collections.emptyList(),
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        errorCode).encode()
+                ));
+            }
         }
         return assignment;
     }
@@ -455,12 +455,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
-          for (String topic : topicsInfo.sourceTopics) {
-            if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
-                !metadata.topics().contains(topic)) {
-                return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
+            for (String topic : topicsInfo.sourceTopics) {
+                if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
+                    !metadata.topics().contains(topic)) {
+                    return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
+                }
             }
-          }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
                 repartitionTopicMetadata.put(topic.name(), new InternalTopicMetadata(topic));
             }
@@ -798,7 +798,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             // set flag to shutdown streams app
             return;
         }
-        final int receivedAssignmentMetadataVersion = info.version();
+        int receivedAssignmentMetadataVersion = info.version();
+        if (receivedAssignmentMetadataVersion == AssignmentInfo.VERSION_WITH_ERRORCODE) {
+            receivedAssignmentMetadataVersion = AssignmentInfo.VERSION_WITH_ERRORCODE - 1;
+        }
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {
@@ -983,6 +986,18 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
             }
 
+            // if all topics for this co-partition group is repartition topics,
+            // then set the number of partitions to be the maximum of the number of partitions.
+            if (numPartitions == UNKNOWN) {
+                for (final Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
+                    if (copartitionGroup.contains(entry.getKey())) {
+                        final int partitions = entry.getValue().numPartitions;
+                        if (partitions > numPartitions) {
+                            numPartitions = partitions;
+                        }
+                    }
+                }
+            }
             // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
             for (final Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
                 if (copartitionGroup.contains(entry.getKey())) {

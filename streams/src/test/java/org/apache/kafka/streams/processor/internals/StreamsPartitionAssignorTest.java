@@ -996,7 +996,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
         expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
         expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        assertThat(mockInternalTopicManager.readyTopics.isEmpty(), equalTo(true));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
@@ -1006,7 +1006,7 @@ public class StreamsPartitionAssignorTest {
             new TopicPartition(applicationId + "-count-repartition", 1),
             new TopicPartition(applicationId + "-count-repartition", 2)
         );
-        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+        assertThat(assignment.get(client).partitions().isEmpty(), equalTo(true));
     }
 
     @Test
