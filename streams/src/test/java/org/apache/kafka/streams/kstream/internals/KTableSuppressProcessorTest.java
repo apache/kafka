@@ -32,8 +32,10 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 
+@SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorTest {
 
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
@@ -41,8 +43,11 @@ public class KTableSuppressProcessorTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
+    private static final int COMMIT_INTERVAL = 30_000;
+    private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
+
     @Test
-    public void shouldSuppressIntermediateEvents() {
+    public void shouldSuppressIntermediateEventsWithEmitAfter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, Long> valueCounts = builder
@@ -57,7 +62,7 @@ public class KTableSuppressProcessorTest {
             .count();
 
         valueCounts
-            .suppress(Suppression.withSuppressedIntermediateEvents(Suppression.IntermediateSuppression.withEmitAfter(Duration.ofMillis(2))))
+            .suppress(Suppression.withSuppressedIntermediateEvents(Suppression.IntermediateSuppression.withEmitAfter(Duration.ofMillis(scaledTime(2L)))))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -68,24 +73,25 @@ public class KTableSuppressProcessorTest {
         final Topology topology = builder.build();
         final Properties config = Utils.mkProperties(Utils.mkMap(
             Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase()),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus"),
+            Utils.mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL))
         ));
 
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
 
-            driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
-            driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
-            driver.pipeInput(recordFactory.create("input", "k2", "v1", 2L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(0L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v2", scaledTime(1L)));
+            driver.pipeInput(recordFactory.create("input", "k2", "v1", scaledTime(2L)));
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Arrays.asList(
-                    new KVT<>("v1", 1L, 0L),
-                    new KVT<>("v1", 0L, 1L),
-                    new KVT<>("v2", 1L, 1L),
-                    new KVT<>("v1", 1L, 2L)
+                    new KVT<>("v1", 1L, scaledTime(0L)),
+                    new KVT<>("v1", 0L, scaledTime(1L)),
+                    new KVT<>("v2", 1L, scaledTime(1L)),
+                    new KVT<>("v1", 1L, scaledTime(2L))
                 )
             );
             verify(
@@ -94,12 +100,12 @@ public class KTableSuppressProcessorTest {
             );
 
 
-            driver.pipeInput(recordFactory.create("input", "x", "x", 3L));
+            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(3L)));
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Collections.singletonList(
-                    new KVT<>("x", 1L, 3L)
+                    new KVT<>("x", 1L, scaledTime(3L))
                 )
             );
             verify(
@@ -107,20 +113,118 @@ public class KTableSuppressProcessorTest {
                 Collections.emptyList()
             );
 
-            driver.pipeInput(recordFactory.create("input", "x", "x", 4L));
+            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(4L)));
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Arrays.asList(
-                    new KVT<>("x", 0L, 4L),
-                    new KVT<>("x", 1L, 4L)
+                    new KVT<>("x", 0L, scaledTime(4L)),
+                    new KVT<>("x", 1L, scaledTime(4L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Arrays.asList(
-                    new KVT<>("v2", 1L, 1L),
-                    new KVT<>("v1", 1L, 2L)
+                    new KVT<>("v2", 1L, scaledTime(1L)),
+                    new KVT<>("v1", 1L, scaledTime(2L))
+                )
+            );
+
+        }
+    }
+
+    private long scaledTime(final long unscaledTime) {
+        return SCALE_FACTOR * unscaledTime;
+    }
+
+    @Test
+    public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, Long> valueCounts = builder
+            .table(
+                "input",
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .count();
+
+        valueCounts
+            .suppress(Suppression.withSuppressedIntermediateEvents(Suppression.IntermediateSuppression.withEmitAfter(Duration.ZERO)))
+            .toStream()
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final Topology topology = builder.build();
+        final Properties config = Utils.mkProperties(Utils.mkMap(
+            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase()),
+            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus"),
+            Utils.mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL))
+        ));
+
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(0L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v2", scaledTime(1L)));
+            driver.pipeInput(recordFactory.create("input", "k2", "v1", scaledTime(2L)));
+
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("v1", 1L, scaledTime(0L)),
+                    new KVT<>("v1", 0L, scaledTime(1L)),
+                    new KVT<>("v2", 1L, scaledTime(1L)),
+                    new KVT<>("v1", 1L, scaledTime(2L))
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("v1", 1L, scaledTime(0L)),
+                    new KVT<>("v1", 0L, scaledTime(1L)),
+                    new KVT<>("v2", 1L, scaledTime(1L)),
+                    new KVT<>("v1", 1L, scaledTime(2L))
+                )
+            );
+
+
+            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(3L)));
+
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Collections.singletonList(
+                    new KVT<>("x", 1L, scaledTime(3L))
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Collections.singletonList(
+                    new KVT<>("x", 1L, scaledTime(3L))
+                )
+            );
+
+            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(4L)));
+
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("x", 0L, scaledTime(4L)),
+                    new KVT<>("x", 1L, scaledTime(4L))
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("x", 0L, scaledTime(4L)),
+                    new KVT<>("x", 1L, scaledTime(4L))
                 )
             );
 
