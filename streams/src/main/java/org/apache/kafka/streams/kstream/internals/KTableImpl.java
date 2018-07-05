@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
-import org.apache.kafka.streams.kstream.Suppression;
+import org.apache.kafka.streams.kstream.Suppress;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -363,9 +363,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> suppress(final Suppression<K, V> suppression) {
+    public KTable<K, V> suppress(final Suppress<K, V> suppress) {
         final String name = builder.newProcessorName(SUPPRESS_NAME);
-        final ProcessorSupplier<K, V> suppressionSupplier = () -> new KTableSuppressProcessor<>(suppression);
+        final ProcessorSupplier<K, V> suppressionSupplier = () -> new KTableSuppressProcessor<>(suppress);
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(
             suppressionSupplier,

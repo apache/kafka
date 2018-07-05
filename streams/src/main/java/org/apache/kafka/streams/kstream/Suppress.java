@@ -5,9 +5,9 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.time.Duration;
 
 @SuppressWarnings({"WeakerAccess", "unused"})
-public class Suppression<K, V> {
+public class Suppress<K, V> {
     private Duration latenessBound = Duration.ofMillis(Long.MAX_VALUE);
-    private IntermediateSuppression<K, V> intermediateSuppression = new IntermediateSuppression<>();
+    private IntermediateSuppression<K, V> intermediateSuppression = null;
 
     public enum BufferFullStrategy {
         EMIT,
@@ -101,11 +101,11 @@ public class Suppression<K, V> {
         }
     }
 
-    public Suppression() {}
+    public Suppress() {}
 
-    public static <K extends Windowed, V> Suppression<K, V> finalResultsOnly(final Duration maxAllowedLateness, final BufferFullStrategy bufferFullStrategy) {
-        return Suppression
-            .<K, V>withSuppressedLateEvents(maxAllowedLateness)
+    public static <K extends Windowed, V> Suppress<K, V> finalResultsOnly(final Duration maxAllowedLateness, final BufferFullStrategy bufferFullStrategy) {
+        return Suppress
+            .<K, V>lateEvents(maxAllowedLateness)
             .<K, V>suppressIntermediateEvents(
                 IntermediateSuppression
                     .<K, V>withEmitAfter(maxAllowedLateness)
@@ -113,23 +113,23 @@ public class Suppression<K, V> {
             );
     }
 
-    public static <K, V> Suppression<K, V> withSuppressedLateEvents(final Duration maxAllowedLateness) {
-        return new Suppression<K, V>().suppressLateEvents(maxAllowedLateness);
+    public static <K, V> Suppress<K, V> lateEvents(final Duration maxAllowedLateness) {
+        return new Suppress<K, V>().suppressLateEvents(maxAllowedLateness);
     }
 
-    public Suppression<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
-        final Suppression<K, V> result = new Suppression<>();
+    public Suppress<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
+        final Suppress<K, V> result = new Suppress<>();
         result.latenessBound = maxAllowedLateness;
         result.intermediateSuppression = this.intermediateSuppression;
         return result;
     }
 
-    public static <K, V> Suppression<K, V> withSuppressedIntermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
-        return new Suppression<K, V>().<K, V>suppressIntermediateEvents(intermediateSuppression);
+    public static <K, V> Suppress<K, V> intermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
+        return new Suppress<K, V>().<K, V>suppressIntermediateEvents(intermediateSuppression);
     }
 
-    public Suppression<K, V> suppressIntermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
-        final Suppression<K, V> result = new Suppression<>();
+    public Suppress<K, V> suppressIntermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
+        final Suppress<K, V> result = new Suppress<>();
         result.latenessBound = this.latenessBound;
         result.intermediateSuppression = intermediateSuppression;
         return result;

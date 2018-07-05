@@ -2,7 +2,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Suppression;
+import org.apache.kafka.streams.kstream.Suppress;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -18,7 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
-    private final Suppression<K, V> suppression;
+    private final Suppress<K, V> suppress;
     private final LinkedHashMap<K, ContextualRecord<V>> priorityQueue;
     private InternalProcessorContext internalProcessorContext;
     private long memBufferSize;
@@ -46,13 +46,13 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    KTableSuppressProcessor(final Suppression<K, V> suppression) {
-        this.suppression = suppression;
+    KTableSuppressProcessor(final Suppress<K, V> suppress) {
+        this.suppress = suppress;
         priorityQueue = new LinkedHashMap<>();
         valueSerializer =
-            suppression.getIntermediateSuppression().getValueSerializer() == null
+            (suppress.getIntermediateSuppression() == null || suppress.getIntermediateSuppression().getValueSerializer() == null)
                 ? null
-                : new ChangedSerializer<V>(suppression.getIntermediateSuppression().getValueSerializer());
+                : new ChangedSerializer<V>(suppress.getIntermediateSuppression().getValueSerializer());
     }
 
     @Override
@@ -62,7 +62,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
 
         if (intermediateSuppression()) {
-            final Duration timeToWaitForMoreEvents = suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents();
+            final Duration timeToWaitForMoreEvents = suppress.getIntermediateSuppression().getTimeToWaitForMoreEvents();
             if (timeToWaitForMoreEvents != null && timeToWaitForMoreEvents.toMillis() > 0) {
                 final long evictionTimeout = timeToWaitForMoreEvents.toMillis();
 
@@ -86,13 +86,22 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
+    private void forwardIfTimely(final K key, final V value) {
+        final long timestamp = internalProcessorContext.timestamp();
+        final long streamTime = internalProcessorContext.streamTime();
+        final long latenessBound = suppress.getLatenessBound().toMillis();
+        if (timestamp >= (streamTime - latenessBound)){
+            internalProcessorContext.forward(key, value);
+        }
+    }
+
     private void setNodeAndForward(final Map.Entry<K, ContextualRecord<V>> next) {
         final ProcessorNode prevNode = internalProcessorContext.currentNode();
         final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
         internalProcessorContext.setRecordContext(next.getValue().recordContext);
         internalProcessorContext.setCurrentNode(myNode);
         try {
-            internalProcessorContext.forward(next.getKey(), next.getValue().value);
+            forwardIfTimely(next.getKey(), next.getValue().value);
         } finally {
             internalProcessorContext.setCurrentNode(prevNode);
             internalProcessorContext.setRecordContext(prevRecordContext);
@@ -102,7 +111,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     @Override
     public void process(final K key, final V value) {
         if (intermediateSuppression() && (nonTimeBoundSuppression() || nonInstantaneousTimeBoundSuppression())) {
-            // intermediate suppression is enabled
+            // intermediate suppress is enabled
             final ContextualRecord<V> previous = priorityQueue.remove(key);
             if (previous != null) { memBufferSize = memBufferSize - previous.size; }
 
@@ -115,15 +124,15 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             // adding that key may have put us over the edge...
             enforceSizeBound();
         } else {
-            internalProcessorContext.forward(key, value);
+            forwardIfTimely(key, value);
         }
     }
 
     private void enforceSizeBound() {
-        if (priorityQueue.size() > suppression.getIntermediateSuppression().getNumberOfKeysToRemember()
-            || memBufferSize > suppression.getIntermediateSuppression().getBytesToUseForSuppressionStorage()) {
+        if (priorityQueue.size() > suppress.getIntermediateSuppression().getNumberOfKeysToRemember()
+            || memBufferSize > suppress.getIntermediateSuppression().getBytesToUseForSuppressionStorage()) {
 
-            switch (suppression.getIntermediateSuppression().getBufferFullStrategy()) {
+            switch (suppress.getIntermediateSuppression().getBufferFullStrategy()) {
                 case EMIT:
                     // we only added one, so we only need to remove one.
                     final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = priorityQueue.entrySet().iterator();
@@ -141,7 +150,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
     private long computeRecordSize(final K key, final V value, final ProcessorRecordContext recordContext1) {
         long size = 0L;
-        final Serializer<K> keySerializer = suppression.getIntermediateSuppression().getKeySerializer();
+        final Serializer<K> keySerializer = suppress.getIntermediateSuppression().getKeySerializer();
         if (keySerializer != null) {
             size += keySerializer.serialize(null, key).length;
         }
@@ -166,15 +175,15 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     }
 
     private boolean nonInstantaneousTimeBoundSuppression() {
-        return suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents().toMillis() > 0L;
+        return suppress.getIntermediateSuppression().getTimeToWaitForMoreEvents().toMillis() > 0L;
     }
 
     private boolean nonTimeBoundSuppression() {
-        return suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents() == null;
+        return suppress.getIntermediateSuppression().getTimeToWaitForMoreEvents() == null;
     }
 
     private boolean intermediateSuppression() {
-        return suppression.getIntermediateSuppression() != null;
+        return suppress.getIntermediateSuppression() != null;
     }
 
 
@@ -186,7 +195,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     @Override
     public String toString() {
         return "KTableSuppressProcessor{" +
-            "suppression=" + suppression +
+            "suppress=" + suppress +
             '}';
     }
 }
