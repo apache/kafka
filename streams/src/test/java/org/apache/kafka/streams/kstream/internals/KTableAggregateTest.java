@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -32,12 +32,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
-import org.apache.kafka.streams.kstream.Suppression;
-import org.apache.kafka.streams.kstream.Suppression.IntermediateSuppression;
-import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
@@ -51,14 +47,9 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.EMIT;
-import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.SHUT_DOWN;
-import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.SPILL_TO_DISK;
-import static org.apache.kafka.streams.kstream.Suppression.suppressLateEvents;
 import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
@@ -87,92 +78,14 @@ public class KTableAggregateTest {
 
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-            stringSerialzied
+        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                       stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.TOSTRING_ADDER,
-            MockAggregator.TOSTRING_REMOVER,
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
-        table.toStream().process(supplier);
-
-        final KTable<String, String> suppress = table.suppress(new Suppression<>());
-
-        // bound the lateness of events in your stream
-        table
-            .suppress(suppressLateEvents(Duration.ofMinutes(10)))
-            .toStream();
-KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-            stringSerialzied
-        ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.TOSTRING_ADDER,
-            MockAggregator.TOSTRING_REMOVER,
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
-
-        // rate-limit updates
-        table.suppress(
-            new Suppression<String, String>()
-                .suppressIntermediateEvents(
-                    new IntermediateSuppression()
-                        .emitAfter(Duration.ofSeconds(30))
-                        .bufferKeys(1000)
-                        .bufferFullStrategy(EMIT)
-                )
-        ).toStream();
-
-        table.suppress(Suppression.<String, String>finalResultsOnly(Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN));
-
-//        KTable<String,String> r = finalResultsOnly(table, Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN);
-
-        final KTable<Windowed<Integer>, Long> windowCounts = builder.<Integer, String>stream("events")
-            .groupByKey()
-            .windowedBy(TimeWindows.of(3600_000))
-            .count();
-
-        windowCounts.suppress(Suppression.finalResultsOnly(Duration.ofMinutes(10), Suppression.BufferFullStrategy.SHUT_DOWN));
-
-
-        // window final events option 1 : expect not to run out of memory
-        final KTable<Windowed<Integer>, Long> suppressedKTable = windowCounts
-            .suppress(
-                Suppression
-                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
-                    .suppressIntermediateEvents(
-                        new IntermediateSuppression().emitAfter(Duration.ofMinutes(10))
-                    )
-            );
-
-        suppressedKTable
-            .toStream()
-            .filter((key, value) -> value < 3)
-            .foreach((key, value) -> sendAlert("User " + key.key() + " had fewer than 3 events in window " + key.window()));
-
-        // window final events option 2 : expect not to run out of memory (gracefully)
-        windowCounts
-            .suppress(
-                Suppression
-                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
-                    .suppressIntermediateEvents(
-                        new IntermediateSuppression()
-                            .emitAfter(Duration.ofMinutes(10))
-                            .bufferBytes(5_000_000)
-                            .bufferFullStrategy(SHUT_DOWN)
-                    )
-            );
-
-        // window final events option 3 : use the disk if we run out of memory
-        windowCounts
-            .suppress(
-                Suppression
-                    .<Windowed<Integer>, Long>suppressLateEvents(Duration.ofMinutes(10))
-                    .suppressIntermediateEvents(
-                        new IntermediateSuppression()
-                            .emitAfter(Duration.ofMinutes(10))
-                            .bufferBytes(5_000_000)
-                            .bufferFullStrategy(SPILL_TO_DISK)
-                    )
-            );
+        table2.toStream().process(supplier);
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
 
@@ -194,18 +107,14 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
         driver.flushState();
 
         assertEquals(Utils.mkList(
-            "A:0+1",
-            "B:0+2",
-            "A:0+1-1+3",
-            "B:0+2-2+4",
-            "C:0+5",
-            "D:0+6",
-            "B:0+2-2+4-4+7",
-            "C:0+5-5+8"), supplier.theCapturedProcessor().processed);
-    }
-
-    private void sendAlert(final String s) {
-
+                "A:0+1",
+                "B:0+2",
+                "A:0+1-1+3",
+                "B:0+2-2+4",
+                "C:0+5",
+                "D:0+6",
+                "B:0+2-2+4-4+7",
+                "C:0+5-5+8"), supplier.theCapturedProcessor().processed);
     }
 
 
@@ -216,7 +125,7 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
         KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-            stringSerialzied
+                                                       stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
@@ -242,21 +151,21 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-                                                           @Override
-                                                           public KeyValue<String, String> apply(String key, String value) {
-                                                               switch (key) {
-                                                                   case "null":
-                                                                       return KeyValue.pair(null, value);
-                                                                   case "NULL":
-                                                                       return null;
-                                                                   default:
-                                                                       return KeyValue.pair(value, value);
-                                                               }
-                                                           }
-                                                       },
-            stringSerialzied
+            @Override
+                public KeyValue<String, String> apply(String key, String value) {
+                switch (key) {
+                    case "null":
+                        return KeyValue.pair(null, value);
+                    case "NULL":
+                        return null;
+                    default:
+                        return KeyValue.pair(value, value);
+                }
+                }
+            },
+                stringSerialzied
         )
-            .aggregate(MockInitializer.STRING_INIT,
+                .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
@@ -283,15 +192,15 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
         driver.flushState();
 
         assertEquals(Utils.mkList(
-            "1:0+1",
-            "1:0+1-1",
-            "1:0+1-1+1",
-            "2:0+2",
-            //noop
-            "2:0+2-2", "4:0+4",
-            //noop
-            "4:0+4-4", "7:0+7"
-        ), supplier.theCapturedProcessor().processed);
+                "1:0+1",
+                "1:0+1-1",
+                "1:0+1-1+1",
+                "2:0+2",
+                  //noop
+                "2:0+2-2", "4:0+4",
+                  //noop
+                "4:0+4-4", "7:0+7"
+                ), supplier.theCapturedProcessor().processed);
     }
 
     private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Object> supplier) {
@@ -325,10 +234,10 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
         final String input = "count-test-input";
 
         builder.table(input, consumed)
-            .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
-            .toStream()
-            .process(supplier);
+                .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
+                .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
+                .toStream()
+                .process(supplier);
 
         testCountHelper(builder, input, supplier);
     }
@@ -375,7 +284,7 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
             "blue:1",
             "yellow:1",
             "green:2"
-        ), proc.processed);
+            ), proc.processed);
     }
 
     @Test
@@ -385,34 +294,34 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
 
         builder.table(input, consumed)
-            .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
 
-                @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                    return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
-                }
-            }, stringSerialzied)
-            .aggregate(new Initializer<String>() {
+                    @Override
+                    public KeyValue<String, String> apply(String key, String value) {
+                        return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
+                    }
+                }, stringSerialzied)
+                .aggregate(new Initializer<String>() {
 
-                @Override
-                public String apply() {
-                    return "";
-                }
-            }, new Aggregator<String, String, String>() {
+                    @Override
+                    public String apply() {
+                        return "";
+                    }
+                }, new Aggregator<String, String, String>() {
 
-                @Override
-                public String apply(String aggKey, String value, String aggregate) {
-                    return aggregate + value;
-                }
-            }, new Aggregator<String, String, String>() {
+                    @Override
+                    public String apply(String aggKey, String value, String aggregate) {
+                        return aggregate + value;
+                    }
+                }, new Aggregator<String, String, String>() {
 
-                @Override
-                public String apply(String key, String value, String aggregate) {
-                    return aggregate.replaceAll(value, "");
-                }
-            }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))
-            .toStream()
-            .process(supplier);
+                    @Override
+                    public String apply(String key, String value, String aggregate) {
+                        return aggregate.replaceAll(value, "");
+                    }
+                }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))
+                .toStream()
+                .process(supplier);
 
         driver.setUp(builder, stateDir);
 
@@ -428,11 +337,11 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
         driver.flushState();
 
         assertEquals(Utils.mkList(
-            "1:1",
-            "1:12",
-            "1:2",
-            "1:2"
-        ), proc.processed);
+                 "1:1",
+                 "1:12",
+                 "1:2",
+                 "1:2"
+                 ), proc.processed);
     }
 
     @Test
@@ -453,17 +362,17 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
                 return new KeyValue<>(value, key);
             }
         }, Serialized.with(Serdes.String(), Serdes.Long()))
-            .reduce(new Reducer<Long>() {
-                @Override
-                public Long apply(final Long value1, final Long value2) {
-                    return value1 + value2;
-                }
-            }, new Reducer<Long>() {
-                @Override
-                public Long apply(final Long value1, final Long value2) {
-                    return value1 - value2;
-                }
-            }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("reducer-store"));
+                .reduce(new Reducer<Long>() {
+                    @Override
+                    public Long apply(final Long value1, final Long value2) {
+                        return value1 + value2;
+                    }
+                }, new Reducer<Long>() {
+                    @Override
+                    public Long apply(final Long value1, final Long value2) {
+                        return value1 - value2;
+                    }
+                }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("reducer-store"));
 
         reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
@@ -478,12 +387,12 @@ KTable<String, String> table1 = builder.table(topic1, consumed);
                 return value1 + ":" + value2;
             }
         })
-            .mapValues(new ValueMapper<String, String>() {
-                @Override
-                public String apply(final String value) {
-                    return value;
-                }
-            });
+                .mapValues(new ValueMapper<String, String>() {
+                    @Override
+                    public String apply(final String value) {
+                        return value;
+                    }
+                });
 
         driver.setUp(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));

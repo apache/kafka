@@ -1,180 +1,182 @@
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KGroupedTable;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.Suppression;
-import org.apache.kafka.streams.kstream.Suppression.IntermediateSuppression;
-import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.test.OutputVerifier;
 import org.junit.Test;
 
 import java.time.Duration;
-import java.util.Map;
-
-import static org.apache.kafka.streams.kstream.Suppression.BufferFullStrategy.EMIT;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
 
 public class KTableSuppressProcessorTest {
-    private static class Purchase {
-        final long id;
-        final long customerId;
-        final int value;
 
-        private Purchase(final long id, final long customerId, final int value) {
-            this.id = id;
-            this.customerId = customerId;
-            this.value = value;
-        }
-    }
+    private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
+    private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
+    private static final Serde<String> STRING_SERDE = Serdes.String();
+    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
-    private static class PurchaseSerde implements Serde<Purchase> {
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
-
-        @Override
-        public Serializer<Purchase> serializer() {
-            return null;
-        }
-
-        @Override
-        public Deserializer<Purchase> deserializer() {
-            return null;
-        }
-    }
-
-    public Topology buildTopology() {
+    @Test
+    public void shouldSuppressIntermediateEvents() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final String purchases = "purchases";
 
-        final KStream<String, String> siteEvents = builder.stream("/site-events");
-        final KStream<Integer, Integer> keyedByPartition = siteEvents.transform(() -> new Transformer<String, String, KeyValue<Integer, Integer>>() {
-            private ProcessorContext context;
+        final KTable<String, Long> valueCounts = builder
+            .table(
+                "input",
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .count();
 
-            @Override
-            public void init(final ProcessorContext context) {
-                this.context = context;
-            }
+        valueCounts
+            .suppress(Suppression.withSuppressedIntermediateEvents(Suppression.IntermediateSuppression.withEmitAfter(Duration.ofMillis(2))))
+            .toStream()
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
-            @Override
-            public KeyValue<Integer, Integer> transform(final String key, final String value) {
-                return new KeyValue<>(context.partition(), 1);
-            }
+        valueCounts
+            .toStream()
+            .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
 
-            @Override
-            public void close() {
+        final Topology topology = builder.build();
+        final Properties config = Utils.mkProperties(Utils.mkMap(
+            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase()),
+            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+        ));
 
-            }
-        });
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
-        final KTable<Integer, Long> countsByPartition = keyedByPartition.groupByKey().count();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
 
-        final KGroupedTable<String, Long> singlePartition = countsByPartition.groupBy((key, value) -> new KeyValue<>("ALL", value));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
+            driver.pipeInput(recordFactory.create("input", "k2", "v1", 2L));
 
-        final KTable<String, Long> totalCount = singlePartition.reduce((l, r) -> l + r, (l, r) -> l - r);
-
-        totalCount.toStream().foreach((k, v) -> {
-            // k is always "ALL"
-            // v is always the most recent total value
-            System.out.println("The total event count is: " + v);
-        });
-
-
-        final KTable<Long, Purchase> input = builder.table(
-            purchases,
-            Consumed.with(Serdes.Long(), new PurchaseSerde())
-        );
-
-        // Fairly sloppy, but the idea is to "split" each customer id into one id per partition.
-        // This way, we can first total their purchases inside each partition before aggregating them
-        // across partitions
-        final KTable<Long, Purchase> purchasesWithPartitionedCustomers = input.transformValues(
-            () -> new ValueTransformerWithKey<Long, Purchase, Purchase>() {
-                private ProcessorContext context;
-
-                @Override
-                public void init(final ProcessorContext context) {
-                    this.context = context;
-                }
-
-                @Override
-                public Purchase transform(final Long readOnlyKey, final Purchase purchase) {
-                    final int partition = context.partition();
-                    return new Purchase(
-                        purchase.id,
-                        purchase.customerId * 1000 + partition,
-                        purchase.value
-                    );
-                }
-
-                @Override
-                public void close() {
-
-                }
-            });
-
-        final KGroupedTable<Long, Integer> purchaseValueByPartitionedCustomer =
-            purchasesWithPartitionedCustomers.groupBy(
-                (id, purchase) -> new KeyValue<>(purchase.customerId, purchase.value)
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("v1", 1L, 0L),
+                    new KVT<>("v1", 0L, 1L),
+                    new KVT<>("v2", 1L, 1L),
+                    new KVT<>("v1", 1L, 2L)
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Collections.emptyList()
             );
 
-        final Suppression<Long, Integer> oncePerKeyPerSecond = Suppression.suppressIntermediateEvents(
-            IntermediateSuppression
-                .emitAfter(Duration.ofSeconds(1))
-                .bufferKeys(5000)
-                .bufferFullStrategy(EMIT)
-        );
-        final KTable<Long, Integer> totalValueByPartitionedCustomer =
-            purchaseValueByPartitionedCustomer
-                .reduce((l, r) -> l + r, (l, r) -> l - r)
-                .suppress(oncePerKeyPerSecond);
 
-        // This is where we reverse the partitioning of each customer
-        final KTable<Long, Integer> aggregatedTotalValueByPartitionedCustomer =
-            totalValueByPartitionedCustomer
-                .groupBy((key, value) -> new KeyValue<>(key / 1000, value))
-                .reduce((l, r) -> l + r, (l, r) -> l - r)
-                .suppress(oncePerKeyPerSecond);
+            driver.pipeInput(recordFactory.create("input", "x", "x", 3L));
 
-        final KTable<String, Integer> total = aggregatedTotalValueByPartitionedCustomer
-            .groupBy((key, value) -> new KeyValue<>("ALL", value))
-            .reduce((l, r) -> l + r, (l, r) -> l - r)
-            .suppress(Suppression.suppressIntermediateEvents(
-                IntermediateSuppression.emitAfter(Duration.ofSeconds(1))
-            ));
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Collections.singletonList(
+                    new KVT<>("x", 1L, 3L)
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Collections.emptyList()
+            );
 
-        total.toStream().to("total");
+            driver.pipeInput(recordFactory.create("input", "x", "x", 4L));
 
-        return builder.build();
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("x", 0L, 4L),
+                    new KVT<>("x", 1L, 4L)
+                )
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                Arrays.asList(
+                    new KVT<>("v2", 1L, 1L),
+                    new KVT<>("v1", 1L, 2L)
+                )
+            );
+
+        }
     }
 
-    public void finalResults() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input")
-            .groupByKey()
-            .windowedBy(
-                TimeWindows.of(60_000).closeAfter(10 * 60).until(30L * 24 * 60 * 60 * 1000)
-            )
-            .count()
-            .suppress(Suppression.finalResultsOnly());
+    private <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KVT<K, V>> expectedResults) {
+        if (results.size() != expectedResults.size()) {
+            throw new AssertionError(printRecords(results) + " != " + expectedResults);
+        }
+        final Iterator<KVT<K, V>> expectedIterator = expectedResults.iterator();
+        for (final ProducerRecord<K, V> result : results) {
+            final KVT<K, V> expected = expectedIterator.next();
+            OutputVerifier.compareKeyValueTimestamp(result, expected.key, expected.value, expected.timestamp);
+        }
+    }
+
+    private static class KVT<K, V> {
+        private final K key;
+        private final V value;
+        private final long timestamp;
+
+        private KVT(final K key, final V value, final long timestamp) {
+            this.key = key;
+            this.value = value;
+            this.timestamp = timestamp;
+        }
+
+        @Override
+        public String toString() {
+            return "KVT{" +
+                "key=" + key +
+                ", value=" + value +
+                ", timestamp=" + timestamp +
+                '}';
+        }
+    }
+
+    private <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver, final String topic, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
+        final List<ProducerRecord<K, V>> result = new LinkedList<>();
+        for (ProducerRecord<K, V> next = driver.readOutput(topic, keyDeserializer, valueDeserializer);
+             next != null;
+             next = driver.readOutput(topic, keyDeserializer, valueDeserializer)
+            ) {
+            result.add(next);
+        }
+        return new ArrayList<>(result);
+    }
+
+    private <K, V> String printRecords(final List<ProducerRecord<K, V>> result) {
+        final StringBuilder resultStr = new StringBuilder();
+        resultStr.append("[\n");
+        for (final ProducerRecord<?, ?> record : result) {
+            resultStr.append("  ").append(record.toString()).append("\n");
+        }
+        resultStr.append("]");
+        return resultStr.toString();
     }
 }
