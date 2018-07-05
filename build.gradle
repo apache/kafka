@@ -564,6 +564,7 @@ project(':core') {
     testCompile libs.easymock
     testCompile(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
+      exclude module: 'mina-core'
     }
     testCompile libs.apachedsCoreApi
     testCompile libs.apachedsInterceptorKerberos
