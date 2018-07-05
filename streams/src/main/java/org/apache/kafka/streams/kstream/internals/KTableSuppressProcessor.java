@@ -7,8 +7,10 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,14 +21,16 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private final Suppression<K, V> suppression;
     private final LinkedHashMap<K, ContextualRecord<V>> priorityQueue;
     private InternalProcessorContext internalProcessorContext;
-    private int memBufferSize;
+    private long memBufferSize;
+    private ProcessorNode myNode;
+    private final Serializer<Change<V>> valueSerializer;
 
     private static class ContextualRecord<V> {
         private final V value;
         private final ProcessorRecordContext recordContext;
-        private final int size;
+        private final long size;
 
-        private ContextualRecord(final V value, final ProcessorRecordContext recordContext, final Integer size) {
+        private ContextualRecord(final V value, final ProcessorRecordContext recordContext, final long size) {
             this.value = value;
             this.recordContext = recordContext;
             this.size = size;
@@ -45,35 +49,53 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     KTableSuppressProcessor(final Suppression<K, V> suppression) {
         this.suppression = suppression;
         priorityQueue = new LinkedHashMap<>();
+        valueSerializer =
+            suppression.getIntermediateSuppression().getValueSerializer() == null
+                ? null
+                : new ChangedSerializer<V>(suppression.getIntermediateSuppression().getValueSerializer());
     }
 
     @Override
     public void init(final ProcessorContext context) {
         internalProcessorContext = (InternalProcessorContext) context;
+        myNode = internalProcessorContext.currentNode();
 
 
-        if (intermediateSuppression() && suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents().toMillis() > 0) {
-            final long evictionTimeout = suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents().toMillis();
+        if (intermediateSuppression()) {
+            final Duration timeToWaitForMoreEvents = suppression.getIntermediateSuppression().getTimeToWaitForMoreEvents();
+            if (timeToWaitForMoreEvents != null && timeToWaitForMoreEvents.toMillis() > 0) {
+                final long evictionTimeout = timeToWaitForMoreEvents.toMillis();
 
-            internalProcessorContext.schedule(
-                evictionTimeout,
-                PunctuationType.STREAM_TIME,
-                streamTime -> {
-                    final Set<Map.Entry<K, ContextualRecord<V>>> entries = priorityQueue.entrySet();
-                    final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = entries.iterator();
-                    while (iterator.hasNext()) {
-                        final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
-                        final ProcessorRecordContext recordContext = next.getValue().recordContext;
-                        if (recordContext.timestamp() <= streamTime - evictionTimeout) {
-                            internalProcessorContext.setRecordContext(recordContext);
-                            // internalProcessorContext.setCurrentNode(); TODO: need to do this?
-                            internalProcessorContext.forward(next.getKey(), next.getValue().value);
-                            iterator.remove();
-                        } else {
-                            break;
+                internalProcessorContext.schedule(
+                    evictionTimeout,
+                    PunctuationType.STREAM_TIME,
+                    streamTime -> {
+                        final Set<Map.Entry<K, ContextualRecord<V>>> entries = priorityQueue.entrySet();
+                        final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = entries.iterator();
+                        while (iterator.hasNext()) {
+                            final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
+                            if (next.getValue().recordContext.timestamp() <= streamTime - evictionTimeout) {
+                                setNodeAndForward(next);
+                                iterator.remove();
+                            } else {
+                                break;
+                            }
                         }
-                    }
-                });
+                    });
+            }
+        }
+    }
+
+    private void setNodeAndForward(final Map.Entry<K, ContextualRecord<V>> next) {
+        final ProcessorNode prevNode = internalProcessorContext.currentNode();
+        final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
+        internalProcessorContext.setRecordContext(next.getValue().recordContext);
+        internalProcessorContext.setCurrentNode(myNode);
+        try {
+            internalProcessorContext.forward(next.getKey(), next.getValue().value);
+        } finally {
+            internalProcessorContext.setCurrentNode(prevNode);
+            internalProcessorContext.setRecordContext(prevRecordContext);
         }
     }
 
@@ -85,7 +107,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             if (previous != null) { memBufferSize = memBufferSize - previous.size; }
 
             final ProcessorRecordContext recordContext = internalProcessorContext.recordContext();
-            final int size = computeRecordSize(key, value, recordContext);
+            final long size = computeRecordSize(key, value, recordContext);
             memBufferSize = memBufferSize + size;
 
             priorityQueue.put(key, new ContextualRecord<>(value, recordContext, size));
@@ -106,9 +128,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
                     // we only added one, so we only need to remove one.
                     final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = priorityQueue.entrySet().iterator();
                     final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
-                    internalProcessorContext.setRecordContext(next.getValue().recordContext);
-                    // internalProcessorContext.setCurrentNode(); TODO: need to do this?
-                    internalProcessorContext.forward(next.getKey(), next.getValue().value);
+                    setNodeAndForward(next);
                     iterator.remove();
                     return;
                 case SHUT_DOWN:
@@ -119,15 +139,14 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    private int computeRecordSize(final K key, final V value, final ProcessorRecordContext recordContext1) {
-        int size = 0;
+    private long computeRecordSize(final K key, final V value, final ProcessorRecordContext recordContext1) {
+        long size = 0L;
         final Serializer<K> keySerializer = suppression.getIntermediateSuppression().getKeySerializer();
         if (keySerializer != null) {
             size += keySerializer.serialize(null, key).length;
         }
-        final Serializer<V> valueSerializer = suppression.getIntermediateSuppression().getValueSerializer();
         if (valueSerializer != null) {
-            size += valueSerializer.serialize(null, value).length;
+            size += valueSerializer.serialize(null, valueAsChange(value)).length;
         }
         size += 8; // timestamp
         size += 8; // offset
@@ -138,6 +157,12 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             size += header.value().length;
         }
         return size;
+    }
+
+    // TODO This reveals that the value type is a lie... This should be fixable.
+    @SuppressWarnings("unchecked")
+    private Change<V> valueAsChange(final V value) {
+        return (Change<V>) value;
     }
 
     private boolean nonInstantaneousTimeBoundSuppression() {

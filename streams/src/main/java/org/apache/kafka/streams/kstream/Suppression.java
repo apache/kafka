@@ -44,12 +44,12 @@ public class Suppression<K, V> {
             return result;
         }
 
-        public static IntermediateSuppression withBufferKeys(final long numberOfKeysToRemember) {
-            return new IntermediateSuppression().bufferKeys(numberOfKeysToRemember);
+        public static <K, V> IntermediateSuppression<K, V> withBufferKeys(final long numberOfKeysToRemember) {
+            return new IntermediateSuppression<K, V>().bufferKeys(numberOfKeysToRemember);
         }
 
-        public IntermediateSuppression bufferKeys(final long numberOfKeysToRemember) {
-            final IntermediateSuppression result = new IntermediateSuppression<>(this);
+        public IntermediateSuppression<K, V> bufferKeys(final long numberOfKeysToRemember) {
+            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
             result.numberOfKeysToRemember = numberOfKeysToRemember;
             return result;
         }
