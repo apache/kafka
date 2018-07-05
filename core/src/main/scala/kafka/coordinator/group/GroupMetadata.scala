@@ -183,7 +183,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var leaderId: Option[String] = None
   private var protocol: Option[String] = None
 
-  val members = new mutable.HashMap[String, MemberMetadata]
+  private val members = new mutable.HashMap[String, MemberMetadata]
   private var awaitingJoinCallbackMembers = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -224,11 +224,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def remove(memberId: String) {
-    val member = get(memberId)
-    member.supportedProtocols.foreach(p => supportedProtocols(p._1) -= 1)
-    if (member.awaitingJoinCallback != null)
-      awaitingJoinCallbackMembers -= 1;
-    members.remove(memberId)
+    val member = members.remove(memberId)
+    if (member.nonEmpty) {
+      member.get.supportedProtocols.foreach(p => supportedProtocols(p._1) -= 1)
+      if (member.get.awaitingJoinCallback != null)
+        awaitingJoinCallbackMembers -= 1
+    }
     if (isLeader(memberId)) {
       leaderId = if (members.isEmpty) {
         None
@@ -281,6 +282,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   private def candidateProtocols = {
+    // get the set of protocols that are commonly supported by all members
     val n = members.size
     supportedProtocols.filter(_._2 == n).map(_._1).toSet
   }
