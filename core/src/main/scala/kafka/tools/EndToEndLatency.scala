@@ -18,11 +18,13 @@
 package kafka.tools
 
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -89,9 +91,9 @@ object EndToEndLatency {
     }
 
     //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
-    //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
+    //a position() request is issued. Hence we need to position after we seek to ensure we see our first write.
     consumer.seekToEnd(Collections.emptyList())
-    consumer.poll(0)
+    consumer.assignment().asScala.foreach(consumer.position)
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -103,7 +105,7 @@ object EndToEndLatency {
 
       //Send message (of random bytes) synchronously then immediately poll for it
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
-      val recordIter = consumer.poll(timeout).iterator
+      val recordIter = consumer.poll(Duration.ofMillis(timeout)).iterator
 
       val elapsed = System.nanoTime - begin
 
