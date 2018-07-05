@@ -25,14 +25,16 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
 
 public class PartitionGroupTest {
@@ -48,25 +50,22 @@ public class PartitionGroupTest {
         new MockSourceNode<>(topics, intDeserializer, intDeserializer),
         timestampExtractor,
         new LogAndContinueExceptionHandler(),
-        null,
-        logContext);
+        new InternalMockProcessorContext(),
+        logContext
+    );
     private final RecordQueue queue2 = new RecordQueue(
         partition2,
         new MockSourceNode<>(topics, intDeserializer, intDeserializer),
         timestampExtractor,
         new LogAndContinueExceptionHandler(),
-        null,
-        logContext);
+        new InternalMockProcessorContext(),
+        logContext
+    );
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
-    private final PartitionGroup group = new PartitionGroup(new HashMap<TopicPartition, RecordQueue>() {
-        {
-            put(partition1, queue1);
-            put(partition2, queue2);
-        }
-    });
+    private final PartitionGroup group = new PartitionGroup(mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)));
 
     @Test
     public void testTimeTracking() {
@@ -87,6 +86,9 @@ public class PartitionGroupTest {
             new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
 
         group.addRawRecords(partition2, list2);
+        // 1:[1, 3, 5]
+        // 2:[2, 4, 6]
+        // st: 1
 
         assertEquals(6, group.numBuffered());
         assertEquals(3, group.numBuffered(partition1));
@@ -98,6 +100,9 @@ public class PartitionGroupTest {
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);
+        // 1:[3, 5]
+        // 2:[2, 4, 6]
+        // st: 2
         assertEquals(partition1, info.partition());
         assertEquals(1L, record.timestamp);
         assertEquals(5, group.numBuffered());
@@ -107,6 +112,9 @@ public class PartitionGroupTest {
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);
+        // 1:[3, 5]
+        // 2:[4, 6]
+        // st: 3
         assertEquals(partition2, info.partition());
         assertEquals(2L, record.timestamp);
         assertEquals(4, group.numBuffered());
@@ -114,13 +122,15 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(3L, group.timestamp());
 
-        // add three 3 records with timestamp 2, 4, 6 to partition-1 again
+        // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
 
         group.addRawRecords(partition1, list3);
-
+        // 1:[3, 5, 2, 4]
+        // 2:[4, 6]
+        // st: 3 (non-decreasing, so adding 2 doesn't change it)
         assertEquals(6, group.numBuffered());
         assertEquals(4, group.numBuffered(partition1));
         assertEquals(2, group.numBuffered(partition2));
@@ -128,6 +138,9 @@ public class PartitionGroupTest {
 
         // get one record, time should not be advanced
         record = group.nextRecord(info);
+        // 1:[5, 2, 4]
+        // 2:[4, 6]
+        // st: 3 (2's presence prevents it from advancing to 4)
         assertEquals(partition1, info.partition());
         assertEquals(3L, record.timestamp);
         assertEquals(5, group.numBuffered());
@@ -135,8 +148,11 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(3L, group.timestamp());
 
-        // get one more record, now time should be advanced
+        // get one record, time should not be advanced
         record = group.nextRecord(info);
+        // 1:[2, 4]
+        // 2:[4, 6]
+        // st: 3 (2's presence prevents it from advancing to 4)
         assertEquals(partition1, info.partition());
         assertEquals(5L, record.timestamp);
         assertEquals(4, group.numBuffered());
@@ -144,8 +160,11 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(3L, group.timestamp());
 
-        // get one more record, time should not be advanced
+        // get one more record, now time should be advanced
         record = group.nextRecord(info);
+        // 1:[4]
+        // 2:[4, 6]
+        // st: 4
         assertEquals(partition1, info.partition());
         assertEquals(2L, record.timestamp);
         assertEquals(3, group.numBuffered());
@@ -153,8 +172,11 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(4L, group.timestamp());
 
-        // get one more record, now time should be advanced
+        // get one more record, time should not be advanced
         record = group.nextRecord(info);
+        // 1:[4]
+        // 2:[6]
+        // st: 4
         assertEquals(partition2, info.partition());
         assertEquals(4L, record.timestamp);
         assertEquals(2, group.numBuffered());
@@ -164,6 +186,9 @@ public class PartitionGroupTest {
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
+        // 1:[]
+        // 2:[6]
+        // st: 4 (doesn't advance because 1 is empty, so it's still reporting the last-known time of 4)
         assertEquals(partition1, info.partition());
         assertEquals(4L, record.timestamp);
         assertEquals(1, group.numBuffered());
@@ -173,6 +198,9 @@ public class PartitionGroupTest {
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
+        // 1:[]
+        // 2:[]
+        // st: 4 (1 and 2 are empty, so they are still reporting the last-known times of 4 and 6.)
         assertEquals(partition2, info.partition());
         assertEquals(6L, record.timestamp);
         assertEquals(0, group.numBuffered());

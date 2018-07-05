@@ -363,76 +363,17 @@ object AdminUtils extends Logging with AdminUtilities {
 
   @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
-      if (topicExists(zkUtils, topic)) {
-        try {
-          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
-        } catch {
-          case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-            "topic %s is already marked for deletion".format(topic))
-          case e2: Throwable => throw new AdminOperationException(e2)
-        }
-      } else {
-        throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
+    if (topicExists(zkUtils, topic)) {
+      try {
+        zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+      } catch {
+        case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+          "topic %s is already marked for deletion".format(topic))
+        case e2: Throwable => throw new AdminOperationException(e2)
       }
+    } else {
+      throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
     }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
-    zkUtils.getConsumersInGroup(group).nonEmpty
-  }
-
-  /**
-   * Delete the whole directory of the given consumer group if the group is inactive.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param group Consumer group
-   * @return whether or not we deleted the consumer group information
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteConsumerGroupInZK(zkUtils: ZkUtils, group: String) = {
-    if (!isConsumerGroupActive(zkUtils, group)) {
-      val dir = new ZKGroupDirs(group)
-      zkUtils.deletePathRecursive(dir.consumerGroupDir)
-      true
-    }
-    else false
-  }
-
-  /**
-   * Delete the given consumer group's information for the given topic in Zookeeper if the group is inactive.
-   * If the consumer group consumes no other topics, delete the whole consumer group directory.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param group Consumer group
-   * @param topic Topic of the consumer group information we wish to delete
-   * @return whether or not we deleted the consumer group information for the given topic
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, group: String, topic: String) = {
-    val topics = zkUtils.getTopicsByConsumerGroup(group)
-    if (topics == Seq(topic)) {
-      deleteConsumerGroupInZK(zkUtils, group)
-    }
-    else if (!isConsumerGroupActive(zkUtils, group)) {
-      val dir = new ZKGroupTopicDirs(group, topic)
-      zkUtils.deletePathRecursive(dir.consumerOwnerDir)
-      zkUtils.deletePathRecursive(dir.consumerOffsetDir)
-      true
-    }
-    else false
-  }
-
-  /**
-   * Delete every inactive consumer group's information about the given topic in Zookeeper.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param topic Topic of the consumer group information we wish to delete
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String): Set[String] = {
-    val groups = zkUtils.getAllConsumerGroupsForTopic(topic)
-    groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
-    groups
   }
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =

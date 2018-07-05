@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
 
 /**
@@ -51,6 +50,8 @@ public interface ValueTransformer<V, VR> {
     /**
      * Initialize this transformer.
      * This is called once per instance when the topology gets initialized.
+     * When the framework is done with the transformer, {@link #close()} will be called on it; the
+     * framework may later re-use the transformer by calling {@link #init()} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
@@ -85,28 +86,8 @@ public interface ValueTransformer<V, VR> {
     VR transform(final V value);
 
     /**
-     * Perform any periodic operations if this processor {@link ProcessorContext#schedule(long) schedule itself} with
-     * the context during {@link #init(ProcessorContext) initialization}.
-     * <p>
-     * It is not possible to return any new output records within {@code punctuate}.
-     * Using {@link ProcessorContext#forward(Object, Object)} or {@link ProcessorContext#forward(Object, Object, To)}
-     * will result in an {@link StreamsException exception}.
-     * Furthermore, {@code punctuate} must return {@code null}.
-     * <p>
-     * Note, that {@code punctuate} is called base on <it>stream time</it> (i.e., time progress with regard to
-     * timestamps return by the used {@link TimestampExtractor})
-     * and not based on wall-clock time.
-     *
-     * @deprecated Please use {@link Punctuator} functional interface instead.
-     *
-     * @param timestamp the stream time when {@code punctuate} is being called
-     * @return must return {@code null}&mdash;otherwise, an {@link StreamsException exception} will be thrown
-     */
-    @Deprecated
-    VR punctuate(final long timestamp);
-
-    /**
-     * Close this processor and clean up any resources.
+     * Close this transformer and clean up any resources. The framework may
+     * later re-use this transformer by calling {@link #init()} on it again.
      * <p>
      * It is not possible to return any new output records within {@code close()}.
      * Using {@link ProcessorContext#forward(Object, Object)} or {@link ProcessorContext#forward(Object, Object, To)}

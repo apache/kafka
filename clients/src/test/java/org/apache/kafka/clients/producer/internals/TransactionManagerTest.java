@@ -133,6 +133,26 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testSenderShutdownWithPendingAddPartitions() throws Exception {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        FutureRecordMetadata sendFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+
+        sender.initiateClose();
+        sender.run();
+
+        assertTrue(sendFuture.isDone());
+    }
+
+    @Test
     public void testEndTxnNotSentIfIncompleteBatches() {
         long pid = 13131L;
         short epoch = 1;

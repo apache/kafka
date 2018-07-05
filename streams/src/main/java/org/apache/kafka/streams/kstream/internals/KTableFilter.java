@@ -131,6 +131,11 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         public V get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
+
+        @Override
+        public void close() {
+            parentGetter.close();
+        }
     }
 
 }

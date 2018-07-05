@@ -26,7 +26,6 @@ import org.junit.rules.Timeout;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -41,7 +40,7 @@ public class BasicPlatformTest {
     public void testCreateBasicPlatform() throws Exception {
         File configFile = TestUtils.tempFile();
         try {
-            try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(configFile),
+            try (OutputStreamWriter writer = new OutputStreamWriter(Files.newOutputStream(configFile.toPath()),
                     StandardCharsets.UTF_8)) {
                 writer.write("{\n");
                 writer.write("  \"platform\": \"org.apache.kafka.trogdor.basic.BasicPlatform\",\n");

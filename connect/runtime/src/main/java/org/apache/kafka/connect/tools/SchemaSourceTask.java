@@ -81,6 +81,7 @@ public class SchemaSourceTask extends SourceTask {
         .field("seqno", Schema.INT64_SCHEMA)
         .build();
 
+    @Override
     public String version() {
         return new SchemaSourceConnector().version();
     }

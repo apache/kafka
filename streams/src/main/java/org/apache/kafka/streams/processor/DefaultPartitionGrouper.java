@@ -82,7 +82,11 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
             if (partitions.isEmpty()) {
-                log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
+
+                log.warn("Skipping creating tasks for the topic group {} since topic {}'s metadata is not available yet;"
+                         + " no tasks for this topic group will be assigned to any client.\n"
+                         + " Make sure all supplied topics in the topology are created before starting"
+                         + " as this could lead to unexpected results", topics, topic);
                 return StreamsPartitionAssignor.NOT_AVAILABLE;
             } else {
                 int numPartitions = partitions.size();

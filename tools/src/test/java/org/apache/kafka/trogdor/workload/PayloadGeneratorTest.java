@@ -139,4 +139,12 @@ public class PayloadGeneratorTest {
         iter.seek(0);
         assertEquals(0, iter.position());
     }
+
+    @Test
+    public void testNullPayloadGenerator() {
+        NullPayloadGenerator generator = new NullPayloadGenerator();
+        assertEquals(null, generator.generate(0));
+        assertEquals(null, generator.generate(1));
+        assertEquals(null, generator.generate(100));
+    }
 }

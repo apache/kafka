@@ -50,12 +50,12 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     val plainSaslConsumer = consumers.head
 
     val gssapiSaslProperties = kafkaClientSaslProperties("GSSAPI", dynamicJaasConfig = true)
-    val gssapiSaslProducer = TestUtils.createNewProducer(brokerList,
+    val gssapiSaslProducer = TestUtils.createProducer(brokerList,
                                                          securityProtocol = this.securityProtocol,
                                                          trustStoreFile = this.trustStoreFile,
                                                          saslProperties = Some(gssapiSaslProperties))
     producers += gssapiSaslProducer
-    val gssapiSaslConsumer = TestUtils.createNewConsumer(brokerList,
+    val gssapiSaslConsumer = TestUtils.createConsumer(brokerList,
                                                          securityProtocol = this.securityProtocol,
                                                          trustStoreFile = this.trustStoreFile,
                                                          saslProperties = Some(gssapiSaslProperties))

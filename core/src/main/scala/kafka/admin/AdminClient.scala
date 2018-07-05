@@ -18,12 +18,11 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, Future, TimeUnit}
 
-import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
 import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
@@ -35,8 +34,6 @@ import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
@@ -45,9 +42,10 @@ import scala.util.{Failure, Success, Try}
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
-  * and configurations.  This client is deprecated, and will be replaced by KafkaAdminClient.
-  * @see KafkaAdminClient
+  * and configurations. This client is deprecated, and will be replaced by org.apache.kafka.clients.admin.AdminClient.
   */
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
                   val retryBackoffMs: Long,
@@ -218,73 +216,6 @@ class AdminClient(val time: Time,
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 
-  /*
-   * Remove all the messages whose offset is smaller than the given offset of the corresponding partition
-   *
-   * DeleteRecordsResult contains either lowWatermark of the partition or exception. We list the possible exception
-   * and their interpretations below:
-   *
-   * - DisconnectException if leader node of the partition is not available. Need retry by user.
-   * - PolicyViolationException if the topic is configured as non-deletable.
-   * - TopicAuthorizationException if the topic doesn't exist and the user doesn't have the authority to create the topic
-   * - TimeoutException if response is not available within the timeout specified by either Future's timeout or AdminClient's request timeout
-   * - UnknownTopicOrPartitionException if the partition doesn't exist or if the user doesn't have the authority to describe the topic
-   * - NotLeaderForPartitionException if broker is not leader of the partition. Need retry by user.
-   * - OffsetOutOfRangeException if the offset is larger than high watermark of this partition
-   *
-   */
-
-  def deleteRecordsBefore(offsets: Map[TopicPartition, Long]): Future[Map[TopicPartition, DeleteRecordsResult]] = {
-    val metadataRequest = new MetadataRequest.Builder(offsets.keys.map(_.topic).toSet.toList.asJava, true)
-    val response = sendAnyNode(ApiKeys.METADATA, metadataRequest).asInstanceOf[MetadataResponse]
-    val errors = response.errors
-    if (!errors.isEmpty)
-      error(s"Metadata request contained errors: $errors")
-
-    val (partitionsWithoutError, partitionsWithError) = offsets.partition{ partitionAndOffset =>
-      !response.errors().containsKey(partitionAndOffset._1.topic())}
-
-    val (partitionsWithLeader, partitionsWithoutLeader) = partitionsWithoutError.partition{ partitionAndOffset =>
-      response.cluster().leaderFor(partitionAndOffset._1) != null}
-
-    val partitionsWithErrorResults = partitionsWithError.keys.map( partition =>
-      partition -> DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, response.errors().get(partition.topic()).exception())).toMap
-
-    val partitionsWithoutLeaderResults = partitionsWithoutLeader.mapValues( _ =>
-      DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.LEADER_NOT_AVAILABLE.exception()))
-
-    val partitionsGroupByLeader = partitionsWithLeader.groupBy(partitionAndOffset =>
-      response.cluster().leaderFor(partitionAndOffset._1))
-
-    // prepare requests and generate Future objects
-    val futures = partitionsGroupByLeader.map{ case (node, partitionAndOffsets) =>
-      val convertedMap: java.util.Map[TopicPartition, java.lang.Long] = partitionAndOffsets.mapValues(_.asInstanceOf[java.lang.Long]).asJava
-      val future = client.send(node, new DeleteRecordsRequest.Builder(requestTimeoutMs, convertedMap))
-      pendingFutures.add(future)
-      future.compose(new RequestFutureAdapter[ClientResponse, Map[TopicPartition, DeleteRecordsResult]]() {
-          override def onSuccess(response: ClientResponse, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
-            val deleteRecordsResponse = response.responseBody().asInstanceOf[DeleteRecordsResponse]
-            val result = deleteRecordsResponse.responses().asScala.mapValues(v => DeleteRecordsResult(v.lowWatermark, v.error.exception())).toMap
-            future.complete(result)
-            pendingFutures.remove(future)
-          }
-
-          override def onFailure(e: RuntimeException, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
-            val result = partitionAndOffsets.mapValues(_ => DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, e))
-            future.complete(result)
-            pendingFutures.remove(future)
-          }
-
-        })
-    }
-
-    // default output if not receiving DeleteRecordsResponse before timeout
-    val defaultResults = offsets.mapValues(_ =>
-      DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.REQUEST_TIMED_OUT.exception())) ++ partitionsWithErrorResults ++ partitionsWithoutLeaderResults
-
-    new CompositeFuture(time, defaultResults, futures.toList)
-  }
-
   /**
    * Case class used to represent a consumer of a consumer group
    */
@@ -340,33 +271,6 @@ class AdminClient(val time: Time,
     }.toList
 
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
-  }
-
-  def createToken(renewers: List[KafkaPrincipal], maxTimePeriodMs: Long = -1): (Errors, DelegationToken) = {
-    val responseBody = sendAnyNode(ApiKeys.CREATE_DELEGATION_TOKEN, new CreateDelegationTokenRequest.Builder(renewers.asJava, maxTimePeriodMs))
-    val response = responseBody.asInstanceOf[CreateDelegationTokenResponse]
-    val tokenInfo = new TokenInformation(response.tokenId, response.owner, renewers.asJava,
-      response.issueTimestamp, response.maxTimestamp, response.expiryTimestamp)
-    (response.error, new DelegationToken(tokenInfo, response.hmacBytes))
-  }
-
-  def renewToken(hmac: ByteBuffer, renewTimePeriod: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new RenewDelegationTokenRequest.Builder(hmac, renewTimePeriod))
-    val response = responseBody.asInstanceOf[RenewDelegationTokenResponse]
-    (response.error, response.expiryTimestamp)
-  }
-
-  def expireToken(hmac: ByteBuffer, expiryTimeStamp: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.EXPIRE_DELEGATION_TOKEN, new ExpireDelegationTokenRequest.Builder(hmac, expiryTimeStamp))
-    val response = responseBody.asInstanceOf[ExpireDelegationTokenResponse]
-    (response.error, response.expiryTimestamp)
-  }
-
-  def describeToken(owners: List[KafkaPrincipal]): (Errors, List[DelegationToken]) = {
-    val ownersList = if (owners == null) null else owners.asJava
-    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new DescribeDelegationTokenRequest.Builder(ownersList))
-    val response = responseBody.asInstanceOf[DescribeDelegationTokenResponse]
-    (response.error, response.tokens().asScala.toList)
   }
 
   def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
@@ -461,6 +365,8 @@ class CompositeFuture[T](time: Time,
   }
 }
 
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 object AdminClient {
   val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
   val DefaultRequestTimeoutMs = 5000
@@ -501,8 +407,6 @@ object AdminClient {
       .withClientSaslSupport()
     config
   }
-
-  case class DeleteRecordsResult(lowWatermark: Long, error: Exception)
 
   class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
 
@@ -559,7 +463,7 @@ object AdminClient {
       metadata,
       time,
       retryBackoffMs,
-      requestTimeoutMs.toLong,
+      requestTimeoutMs,
       Integer.MAX_VALUE)
 
     new AdminClient(

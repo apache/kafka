@@ -27,7 +27,7 @@ import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
@@ -81,8 +81,7 @@ class GroupCoordinator(val brokerId: Int,
    */
   def startup(enableMetadataExpiration: Boolean = true) {
     info("Starting up.")
-    if (enableMetadataExpiration)
-      groupManager.enableMetadataExpiration()
+    groupManager.startup(enableMetadataExpiration)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -109,7 +108,7 @@ class GroupCoordinator(val brokerId: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback): Unit = {
-    validateGroup(groupId).foreach { error =>
+    validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(joinError(memberId, error))
       return
     }
@@ -126,7 +125,7 @@ class GroupCoordinator(val brokerId: Int,
           if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           } else {
-            val group = groupManager.addGroup(new GroupMetadata(groupId, initialState = Empty))
+            val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
             doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
           }
 
@@ -237,7 +236,7 @@ class GroupCoordinator(val brokerId: Int,
                       memberId: String,
                       groupAssignment: Map[String, Array[Byte]],
                       responseCallback: SyncCallback): Unit = {
-    validateGroup(groupId) match {
+    validateGroupStatus(groupId, ApiKeys.SYNC_GROUP) match {
       case Some(error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS =>
         // The coordinator is loading, which means we've lost the state of the active rebalance and the
         // group will need to start over at JoinGroup. By returning rebalance in progress, the consumer
@@ -313,7 +312,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Errors => Unit): Unit = {
-    validateGroup(groupId).foreach { error =>
+    validateGroupStatus(groupId, ApiKeys.LEAVE_GROUP).foreach { error =>
       responseCallback(error)
       return
     }
@@ -346,7 +345,7 @@ class GroupCoordinator(val brokerId: Int,
     var groupsEligibleForDeletion: Seq[GroupMetadata] = Seq()
 
     groupIds.foreach { groupId =>
-      validateGroup(groupId) match {
+      validateGroupStatus(groupId, ApiKeys.DELETE_GROUPS) match {
         case Some(error) =>
           groupErrors += groupId -> error
 
@@ -386,7 +385,7 @@ class GroupCoordinator(val brokerId: Int,
                       memberId: String,
                       generationId: Int,
                       responseCallback: Errors => Unit) {
-    validateGroup(groupId).foreach { error =>
+    validateGroupStatus(groupId, ApiKeys.HEARTBEAT).foreach { error =>
       if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS)
         // the group is still loading, so respond just blindly
         responseCallback(Errors.NONE)
@@ -448,11 +447,11 @@ class GroupCoordinator(val brokerId: Int,
                              producerEpoch: Short,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
-    validateGroup(groupId) match {
+    validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
       case None =>
         val group = groupManager.getGroup(groupId).getOrElse {
-          groupManager.addGroup(new GroupMetadata(groupId, initialState = Empty))
+          groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
         doCommitOffsets(group, NoMemberId, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
     }
@@ -463,14 +462,14 @@ class GroupCoordinator(val brokerId: Int,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
-    validateGroup(groupId) match {
+    validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
             if (generationId < 0) {
               // the group is not relying on Kafka for group management, so allow the commit
-              val group = groupManager.addGroup(new GroupMetadata(groupId, initialState = Empty))
+              val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
               doCommitOffsets(group, memberId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
                 offsetMetadata, responseCallback)
             } else {
@@ -485,12 +484,12 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleTxnCompletion(producerId: Long,
-                          offsetsPartitions: Iterable[TopicPartition],
-                          transactionResult: TransactionResult) {
+  def scheduleHandleTxnCompletion(producerId: Long,
+                                  offsetsPartitions: Iterable[TopicPartition],
+                                  transactionResult: TransactionResult) {
     require(offsetsPartitions.forall(_.topic == Topic.GROUP_METADATA_TOPIC_NAME))
     val isCommit = transactionResult == TransactionResult.COMMIT
-    groupManager.handleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
+    groupManager.scheduleHandleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
   }
 
   private def doCommitOffsets(group: GroupMetadata,
@@ -524,7 +523,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleFetchOffsets(groupId: String, partitions: Option[Seq[TopicPartition]] = None):
   (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
 
-    validateGroup(groupId) match {
+    validateGroupStatus(groupId, ApiKeys.OFFSET_FETCH) match {
       case Some(error) => error -> Map.empty
       case None =>
         // return offsets blindly regardless the current group state since the group may be using
@@ -543,7 +542,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDescribeGroup(groupId: String): (Errors, GroupSummary) = {
-    validateGroup(groupId) match {
+    validateGroupStatus(groupId, ApiKeys.DESCRIBE_GROUPS) match {
       case Some(error) => (error, GroupCoordinator.EmptyGroup)
       case None =>
         groupManager.getGroup(groupId) match {
@@ -563,8 +562,23 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
 
-  private def validateGroup(groupId: String): Option[Errors] = {
-    if (!validGroupId(groupId))
+  private def isValidGroupId(groupId: String, api: ApiKeys): Boolean = {
+    api match {
+      case ApiKeys.OFFSET_COMMIT | ApiKeys.OFFSET_FETCH | ApiKeys.DESCRIBE_GROUPS | ApiKeys.DELETE_GROUPS =>
+        // For backwards compatibility, we support the offset commit APIs for the empty groupId, and also
+        // in DescribeGroups and DeleteGroups so that users can view and delete state of all groups.
+        groupId != null
+      case _ =>
+        // The remaining APIs are groups using Kafka for group coordination and must have a non-empty groupId
+        groupId != null && !groupId.isEmpty
+    }
+  }
+
+  /**
+   * Check that the groupId is valid, assigned to this coordinator and that the group has been loaded.
+   */
+  private def validateGroupStatus(groupId: String, api: ApiKeys): Option[Errors] = {
+    if (!isValidGroupId(groupId, api))
       Some(Errors.INVALID_GROUP_ID)
     else if (!isActive.get)
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
@@ -646,10 +660,6 @@ class GroupCoordinator(val brokerId: Int,
         completeAndScheduleNextHeartbeatExpiration(group, member)
       }
     }
-  }
-
-  private def validGroupId(groupId: String): Boolean = {
-    groupId != null && !groupId.isEmpty
   }
 
   private def joinError(memberId: String, error: Errors): JoinGroupResult = {

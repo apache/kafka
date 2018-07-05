@@ -27,10 +27,9 @@ import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
-import org.apache.kafka.trogdor.rest.CreateWorkerResponse;
+import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
-import org.apache.kafka.trogdor.rest.StopWorkerResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,13 +94,16 @@ public final class Agent {
         return new AgentStatusResponse(serverStartMs, workerManager.workerStates());
     }
 
-    public CreateWorkerResponse createWorker(CreateWorkerRequest req) throws Exception {
-        workerManager.createWorker(req.id(), req.spec());
-        return new CreateWorkerResponse(req.spec());
+    public void createWorker(CreateWorkerRequest req) throws Throwable {
+        workerManager.createWorker(req.workerId(), req.taskId(), req.spec());
     }
 
-    public StopWorkerResponse stopWorker(StopWorkerRequest req) throws Exception {
-        return new StopWorkerResponse(workerManager.stopWorker(req.id()));
+    public void stopWorker(StopWorkerRequest req) throws Throwable {
+        workerManager.stopWorker(req.workerId(), false);
+    }
+
+    public void destroyWorker(DestroyWorkerRequest req) throws Throwable {
+        workerManager.stopWorker(req.workerId(), true);
     }
 
     public static void main(String[] args) throws Exception {

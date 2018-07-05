@@ -20,23 +20,28 @@ package org.apache.kafka.trogdor.task;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 public class SampleTaskSpec extends TaskSpec {
-    private final long exitMs;
+    private final Map<String, Long> nodeToExitMs;
     private final String error;
 
     @JsonCreator
     public SampleTaskSpec(@JsonProperty("startMs") long startMs,
                         @JsonProperty("durationMs") long durationMs,
-                        @JsonProperty("exitMs") long exitMs,
+                        @JsonProperty("nodeToExitMs") Map<String, Long> nodeToExitMs,
                         @JsonProperty("error") String error) {
         super(startMs, durationMs);
-        this.exitMs = exitMs;
+        this.nodeToExitMs = nodeToExitMs == null ? new HashMap<String, Long>() :
+            Collections.unmodifiableMap(nodeToExitMs);
         this.error = error == null ? "" : error;
     }
 
     @JsonProperty
-    public long exitMs() {
-        return exitMs;
+    public Map<String, Long> nodeToExitMs() {
+        return nodeToExitMs;
     }
 
     @JsonProperty

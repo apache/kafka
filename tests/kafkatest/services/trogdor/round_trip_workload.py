@@ -20,14 +20,14 @@ from kafkatest.services.trogdor.task_spec import TaskSpec
 
 class RoundTripWorkloadSpec(TaskSpec):
     def __init__(self, start_ms, duration_ms, client_node, bootstrap_servers,
-                 target_messages_per_sec, partition_assignments, max_messages):
+                 target_messages_per_sec, max_messages, active_topics):
         super(RoundTripWorkloadSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.workload.RoundTripWorkloadSpec"
         self.message["clientNode"] = client_node
         self.message["bootstrapServers"] = bootstrap_servers
         self.message["targetMessagesPerSec"] = target_messages_per_sec
-        self.message["partitionAssignments"] = partition_assignments
         self.message["maxMessages"] = max_messages
+        self.message["activeTopics"] = active_topics
 
 
 class RoundTripWorkloadService(Service):

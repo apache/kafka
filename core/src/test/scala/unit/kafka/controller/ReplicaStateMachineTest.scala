@@ -119,7 +119,7 @@ class ReplicaStateMachineTest extends JUnitSuite {
     EasyMock.replay(mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
     EasyMock.verify(mockControllerBrokerRequestBatch)
-    assertEquals(NewReplica, replicaState(replica))
+    assertEquals(OfflineReplica, replicaState(replica))
   }
 
   @Test

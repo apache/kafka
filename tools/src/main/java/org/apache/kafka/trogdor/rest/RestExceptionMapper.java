@@ -18,6 +18,7 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,8 @@ public class RestExceptionMapper implements ExceptionMapper<Throwable> {
         }
         if (e instanceof NotFoundException) {
             return buildResponse(Response.Status.NOT_FOUND, e);
+        } else if (e instanceof InvalidRequestException) {
+            return buildResponse(Response.Status.BAD_REQUEST, e);
         } else if (e instanceof InvalidTypeIdException) {
             return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
         } else if (e instanceof JsonMappingException) {
@@ -46,6 +49,8 @@ public class RestExceptionMapper implements ExceptionMapper<Throwable> {
             return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
         } else if (e instanceof SerializationException) {
             return buildResponse(Response.Status.BAD_REQUEST, e);
+        } else if (e instanceof RequestConflictException) {
+            return buildResponse(Response.Status.CONFLICT, e);
         } else {
             return buildResponse(Response.Status.INTERNAL_SERVER_ERROR, e);
         }
@@ -57,7 +62,9 @@ public class RestExceptionMapper implements ExceptionMapper<Throwable> {
         } else if (code == Response.Status.NOT_IMPLEMENTED.getStatusCode()) {
             throw new ClassNotFoundException(msg);
         } else if (code == Response.Status.BAD_REQUEST.getStatusCode()) {
-            throw new SerializationException(msg);
+            throw new InvalidRequestException(msg);
+        } else if (code == Response.Status.CONFLICT.getStatusCode()) {
+            throw new RequestConflictException(msg);
         } else {
             throw new RuntimeException(msg);
         }

@@ -57,10 +57,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void schedule(final long interval) {
-    }
-
-    @Override
     public <K, V> void forward(final K key, final V value) {
         forwardedValues.put(key, value);
     }
@@ -90,8 +86,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
+    }
+
+    @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }

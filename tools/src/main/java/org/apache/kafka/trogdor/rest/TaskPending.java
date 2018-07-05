@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -27,6 +28,6 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 public class TaskPending extends TaskState {
     @JsonCreator
     public TaskPending(@JsonProperty("spec") TaskSpec spec) {
-        super(spec);
+        super(spec, NullNode.instance);
     }
 }

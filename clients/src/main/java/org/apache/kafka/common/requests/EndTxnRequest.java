@@ -38,8 +38,13 @@ public class EndTxnRequest extends AbstractRequest {
             PRODUCER_EPOCH,
             new Field(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction (0 = ABORT, 1 = COMMIT)"));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema END_TXN_REQUEST_V1 = END_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{END_TXN_REQUEST_V0};
+        return new Schema[]{END_TXN_REQUEST_V0, END_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {

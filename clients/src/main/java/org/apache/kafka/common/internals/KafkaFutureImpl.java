@@ -141,11 +141,15 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
-        KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
+        KafkaFutureImpl<R> future = new KafkaFutureImpl<>();
         addWaiter(new Applicant<>(function, future));
         return future;
     }
 
+    public <R> void copyWith(KafkaFuture<R> future, BaseFunction<R, T> function) {
+        KafkaFutureImpl<R> futureImpl = (KafkaFutureImpl<R>) future;
+        futureImpl.addWaiter(new Applicant<>(function, this));
+    }
 
     /**
      * @See KafkaFutureImpl#thenApply(BaseFunction)

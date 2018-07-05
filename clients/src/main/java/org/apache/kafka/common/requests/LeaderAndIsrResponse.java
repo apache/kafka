@@ -119,4 +119,13 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
         return struct;
     }
+
+    @Override
+    public String toString() {
+        return "LeaderAndIsrResponse(" +
+                "responses=" + responses +
+                ", error=" + error +
+                ")";
+    }
+
 }

@@ -43,14 +43,16 @@ class ProduceBenchTest(Test):
         self.zk.stop()
 
     def test_produce_bench(self):
+        active_topics={"produce_bench_topic[0-1]":{"numPartitions":1, "replicationFactor":3}}
+        inactive_topics={"produce_bench_topic[2-9]":{"numPartitions":1, "replicationFactor":3}}
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,
                                         target_messages_per_sec=1000,
                                         max_messages=100000,
                                         producer_conf={},
-                                        total_topics=10,
-                                        active_topics=2)
+                                        inactive_topics=inactive_topics,
+                                        active_topics=active_topics)
         workload1 = self.trogdor.create_task("workload1", spec)
         workload1.wait_for_done(timeout_sec=360)
         tasks = self.trogdor.tasks()

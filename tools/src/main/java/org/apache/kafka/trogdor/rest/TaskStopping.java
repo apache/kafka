@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -32,8 +33,9 @@ public class TaskStopping extends TaskState {
 
     @JsonCreator
     public TaskStopping(@JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs) {
-        super(spec);
+            @JsonProperty("startedMs") long startedMs,
+            @JsonProperty("status") JsonNode status) {
+        super(spec, status);
         this.startedMs = startedMs;
     }
 

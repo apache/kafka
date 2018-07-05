@@ -27,13 +27,13 @@ import java.util.TreeMap;
  */
 public class AgentStatusResponse extends Message {
     private final long serverStartMs;
-    private final TreeMap<String, WorkerState> workers;
+    private final TreeMap<Long, WorkerState> workers;
 
     @JsonCreator
     public AgentStatusResponse(@JsonProperty("serverStartMs") long serverStartMs,
-            @JsonProperty("workers") TreeMap<String, WorkerState> workers) {
+            @JsonProperty("workers") TreeMap<Long, WorkerState> workers) {
         this.serverStartMs = serverStartMs;
-        this.workers = workers == null ? new TreeMap<String, WorkerState>() : workers;
+        this.workers = workers == null ? new TreeMap<Long, WorkerState>() : workers;
     }
 
     @JsonProperty
@@ -42,7 +42,7 @@ public class AgentStatusResponse extends Message {
     }
 
     @JsonProperty
-    public TreeMap<String, WorkerState> workers() {
+    public TreeMap<Long, WorkerState> workers() {
         return workers;
     }
 }

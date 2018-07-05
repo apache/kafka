@@ -52,7 +52,7 @@ public class FetchRequest extends AbstractRequest {
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
     private static final String ISOLATION_LEVEL_KEY_NAME = "isolation_level";
     private static final String TOPICS_KEY_NAME = "topics";
-    private static final String FORGOTTEN_TOPICS_DATA = "forgetten_topics_data";
+    private static final String FORGOTTEN_TOPICS_DATA = "forgotten_topics_data";
 
     // request and partition level name
     private static final String MAX_BYTES_KEY_NAME = "max_bytes";
@@ -175,9 +175,14 @@ public class FetchRequest extends AbstractRequest {
         new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V5), "Topics to fetch in the order provided."),
         new Field(FORGOTTEN_TOPICS_DATA, new ArrayOf(FORGOTTEN_TOPIC_DATA), "Topics to remove from the fetch session."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema FETCH_REQUEST_V8 = FETCH_REQUEST_V7;
+
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
-            FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7};
+            FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7, FETCH_REQUEST_V8};
     };
 
     // default values for older versions where a request level limit did not exist

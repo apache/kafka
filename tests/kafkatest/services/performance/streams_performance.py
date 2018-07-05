@@ -15,25 +15,28 @@
 
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.streams import StreamsTestBaseService
+from kafkatest.services.kafka import KafkaConfig
+from kafkatest.services import streams_property
 
 #
 # Class used to start the simple Kafka Streams benchmark
 #
+
 class StreamsSimpleBenchmarkService(StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
 
-    def __init__(self, test_context, kafka, numrecs, load_phase, test_name, num_threads):
+    def __init__(self, test_context, kafka, test_name, num_threads, num_recs_or_wait_ms, key_skew, value_size):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
                                                             kafka,
                                                             "org.apache.kafka.streams.perf.SimpleBenchmark",
-                                                            numrecs,
-                                                            load_phase,
                                                             test_name,
-                                                            num_threads)
+                                                            num_recs_or_wait_ms,
+                                                            key_skew,
+                                                            value_size)
 
-        self.load_phase = load_phase
-
-        if self.load_phase == "false":
+        self.jmx_option = ""
+        if test_name.startswith('stream') or test_name.startswith('table'):
+            self.jmx_option = "stream-jmx"
             JmxMixin.__init__(self,
                               num_nodes=1,
                               jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %(i+1) for i in range(num_threads)],
@@ -45,13 +48,27 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                               'poll-rate'],
                               root=StreamsTestBaseService.PERSISTENT_ROOT)
 
-    def start_cmd(self, node):
-        cmd = super(StreamsSimpleBenchmarkService, self).start_cmd(node)
+        if test_name.startswith('consume'):
+            self.jmx_option = "consumer-jmx"
+            JmxMixin.__init__(self,
+                              num_nodes=1,
+                              jmx_object_names=['kafka.consumer:type=consumer-fetch-manager-metrics,client-id=simple-benchmark-consumer'],
+                              jmx_attributes=['records-consumed-rate'],
+                              root=StreamsTestBaseService.PERSISTENT_ROOT)
 
-        if self.load_phase == "false":
+        self.num_threads = num_threads
+
+    def prop_file(self):
+        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                             streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                             streams_property.NUM_THREADS: self.num_threads})
+        return cfg.render()
+
+
+    def start_cmd(self, node):
+        if self.jmx_option != "":
             args = self.args.copy()
             args['jmx_port'] = self.jmx_port
-            args['kafka'] = self.kafka.bootstrap_servers()
             args['config_file'] = self.CONFIG_FILE
             args['stdout'] = self.STDOUT_FILE
             args['stderr'] = self.STDERR_FILE
@@ -61,23 +78,24 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
 
             cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
                   "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-                  " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-                  " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+                  " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
+                  " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
-        self.logger.info("Executing streams simple benchmark cmd: " + cmd)
+        else:
+            cmd = super(StreamsSimpleBenchmarkService, self).start_cmd(node)
 
         return cmd
 
     def start_node(self, node):
         super(StreamsSimpleBenchmarkService, self).start_node(node)
 
-        if self.load_phase == "false":
+        if self.jmx_option != "":
             self.start_jmx_tool(1, node)
 
-
     def clean_node(self, node):
-        if self.load_phase == "false":
+        if self.jmx_option != "":
             JmxMixin.clean_node(self, node)
+
         super(StreamsSimpleBenchmarkService, self).clean_node(node)
 
     def collect_data(self, node, tag = None):

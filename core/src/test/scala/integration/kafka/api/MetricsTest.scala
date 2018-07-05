@@ -119,7 +119,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     saslProps.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256")
     // Use acks=0 to verify error metric when connection is closed without a response
     saslProps.put(ProducerConfig.ACKS_CONFIG, "0")
-    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol,
+    val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile, saslProperties = Some(saslProps), props = Some(producerProps))
 
     try {
@@ -217,11 +217,15 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
-    // Latency is rounded to milliseconds, so check the count instead.
-    val initialCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
+    val histogram = yammerHistogram("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
+    // Latency is rounded to milliseconds, so check the count instead
+    val initialCount = histogram.count
     servers.head.zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    val newCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
+    val newCount = histogram.count
     assertTrue("ZooKeeper latency not recorded",  newCount > initialCount)
+
+    val min = histogram.min
+    assertTrue(s"Min latency should not be negative: $min", min >= 0)
 
     assertEquals(s"Unexpected ZK state", "CONNECTED", yammerMetricValue("SessionState"))
   }
@@ -286,12 +290,12 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 
-  private def yammerHistogramCount(name: String): Long = {
+  private def yammerHistogram(name: String): Histogram = {
     val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
     val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
       .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
     metric match {
-      case m: Histogram => m.count
+      case m: Histogram => m
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")
     }
   }

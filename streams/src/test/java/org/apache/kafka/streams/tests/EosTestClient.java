@@ -37,7 +37,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class EosTestClient extends SmokeTestUtil {
 
     static final String APP_ID = "EosTest";
-    private final String kafka;
     private final Properties properties;
     private final boolean withRepartitioning;
     private final AtomicBoolean notRunningCallbackReceived = new AtomicBoolean(false);
@@ -45,9 +44,8 @@ public class EosTestClient extends SmokeTestUtil {
     private KafkaStreams streams;
     private boolean uncaughtException;
 
-    EosTestClient(final String kafka, final Properties properties, final boolean withRepartitioning) {
+    EosTestClient(final Properties properties, final boolean withRepartitioning) {
         super();
-        this.kafka = kafka;
         this.properties = properties;
         this.withRepartitioning = withRepartitioning;
     }
@@ -79,7 +77,7 @@ public class EosTestClient extends SmokeTestUtil {
             if (streams == null) {
                 uncaughtException = false;
 
-                streams = createKafkaStreams(properties, kafka);
+                streams = createKafkaStreams(properties);
                 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                     @Override
                     public void uncaughtException(final Thread t, final Throwable e) {
@@ -112,10 +110,8 @@ public class EosTestClient extends SmokeTestUtil {
         }
     }
 
-    private KafkaStreams createKafkaStreams(final Properties props,
-                                            final String kafka) {
+    private KafkaStreams createKafkaStreams(final Properties props) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);

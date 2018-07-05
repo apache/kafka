@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{Seq, Set, mutable}
@@ -28,7 +29,7 @@ import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
@@ -64,19 +65,29 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  private def getPartitionMetadata(topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
+  // If errorUnavailableListeners=true, return LISTENER_NOT_FOUND if listener is missing on the broker.
+  // Otherwise, return LEADER_NOT_AVAILABLE for broker unavailable and missing listener (Metadata response v5 and below).
+  private def getPartitionMetadata(topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean,
+                                   errorUnavailableListeners: Boolean): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
       partitions.map { case (partitionId, partitionState) =>
         val topicPartition = TopicAndPartition(topic, partitionId)
-        val maybeLeader = getAliveEndpoint(partitionState.basePartitionState.leader, listenerName)
+        val leaderBrokerId = partitionState.basePartitionState.leader
+        val maybeLeader = getAliveEndpoint(leaderBrokerId, listenerName)
         val replicas = partitionState.basePartitionState.replicas.asScala.map(_.toInt)
         val replicaInfo = getEndpoints(replicas, listenerName, errorUnavailableEndpoints)
         val offlineReplicaInfo = getEndpoints(partitionState.offlineReplicas.asScala.map(_.toInt), listenerName, errorUnavailableEndpoints)
 
         maybeLeader match {
           case None =>
-            debug(s"Error while fetching metadata for $topicPartition: leader not available")
-            new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, partitionId, Node.noNode(),
+            val error = if (!aliveBrokers.contains(brokerId)) { // we are already holding the read lock
+              debug(s"Error while fetching metadata for $topicPartition: leader not available")
+              Errors.LEADER_NOT_AVAILABLE
+            } else {
+              debug(s"Error while fetching metadata for $topicPartition: listener $listenerName not found on leader $leaderBrokerId")
+              if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
+            }
+            new MetadataResponse.PartitionMetadata(error, partitionId, Node.noNode(),
               replicaInfo.asJava, java.util.Collections.emptyList(), offlineReplicaInfo.asJava)
 
           case Some(leader) =>
@@ -111,10 +122,11 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
+  def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false,
+                       errorUnavailableListeners: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
     inReadLock(partitionMetadataLock) {
       topics.toSeq.flatMap { topic =>
-        getPartitionMetadata(topic, listenerName, errorUnavailableEndpoints).map { partitionMetadata =>
+        getPartitionMetadata(topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
           new MetadataResponse.TopicMetadata(Errors.NONE, topic, Topic.isInternal(topic), partitionMetadata.toBuffer.asJava)
         }
       }
@@ -124,6 +136,14 @@ class MetadataCache(brokerId: Int) extends Logging {
   def getAllTopics(): Set[String] = {
     inReadLock(partitionMetadataLock) {
       cache.keySet.toSet
+    }
+  }
+
+  def getAllPartitions(): Map[TopicPartition, UpdateMetadataRequest.PartitionState] = {
+    inReadLock(partitionMetadataLock) {
+      cache.flatMap { case (topic, partitionStates) =>
+        partitionStates.map { case (partition, state ) => (new TopicPartition(topic, partition), state) }
+      }.toMap
     }
   }
 
@@ -179,6 +199,27 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   def getControllerId: Option[Int] = controllerId
+
+  def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
+    inReadLock(partitionMetadataLock) {
+      val nodes = aliveNodes.map { case (id, nodes) => (id, nodes.get(listenerName).orNull) }
+      def node(id: Integer): Node = nodes.get(id).orNull
+      val partitions = getAllPartitions()
+        .filter { case (_, state) => state.basePartitionState.leader != LeaderAndIsr.LeaderDuringDelete }
+        .map { case (tp, state) =>
+          new PartitionInfo(tp.topic, tp.partition, node(state.basePartitionState.leader),
+            state.basePartitionState.replicas.asScala.map(node).toArray,
+            state.basePartitionState.isr.asScala.map(node).toArray,
+            state.offlineReplicas.asScala.map(node).toArray)
+        }
+      val unauthorizedTopics = Collections.emptySet[String]
+      val internalTopics = getAllTopics().filter(Topic.isInternal).asJava
+      new Cluster(clusterId, nodes.values.filter(_ != null).toList.asJava,
+        partitions.toList.asJava,
+        unauthorizedTopics, internalTopics,
+        getControllerId.map(id => node(id)).orNull)
+    }
+  }
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
   def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {

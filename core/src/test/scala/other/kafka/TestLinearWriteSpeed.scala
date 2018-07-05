@@ -20,6 +20,7 @@ package kafka
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.StandardOpenOption
 import java.util.{Properties, Random}
 
 import joptsimple._
@@ -102,7 +103,7 @@ object TestLinearWriteSpeed {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
     val rand = new Random
     rand.nextBytes(buffer.array)
-    val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
+    val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
@@ -188,20 +189,22 @@ object TestLinearWriteSpeed {
     }
     def close() {
       raf.close()
+      Utils.delete(file)
     }
   }
 
   class ChannelWritable(val file: File, val content: ByteBuffer) extends Writable {
     file.deleteOnExit()
-    val raf = new RandomAccessFile(file, "rw")
-    val channel = raf.getChannel
+    val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
+      StandardOpenOption.WRITE)
     def write(): Int = {
       channel.write(content)
       content.rewind()
       content.limit()
     }
     def close() {
-      raf.close()
+      channel.close()
+      Utils.delete(file)
     }
   }
 

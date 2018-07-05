@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -25,6 +24,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
@@ -33,6 +33,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
+    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -41,7 +42,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                          final StreamsConfig config,
                          final RecordCollector collector,
                          final ProcessorStateManager stateMgr,
-                         final StreamsMetrics metrics,
+                         final StreamsMetricsImpl metrics,
                          final ThreadCache cache) {
         super(id, config, metrics, stateMgr, cache);
         this.task = task;
@@ -54,7 +55,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public RecordCollector recordCollector() {
-        return this.collector;
+        return collector;
     }
 
     /**
@@ -116,7 +117,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             if (sendTo != null) {
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
-                    throw new StreamsException("Unknown processor name: " + sendTo);
+                    throw new StreamsException("Unknown downstream node: " + sendTo + " either does not exist or is not" +
+                            " connected to this processor.");
                 }
                 forward(child, key, value);
             } else {
@@ -152,15 +154,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return task.schedule(interval, type, callback);
     }
 
+    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
+        this.streamTimeSupplier = streamTimeSupplier;
+    }
+
     @Override
-    @Deprecated
-    public void schedule(final long interval) {
-        schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                currentNode().processor().punctuate(timestamp);
-            }
-        });
+    public long streamTime() {
+        return streamTimeSupplier.get();
     }
 
 }
