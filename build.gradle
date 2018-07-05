@@ -564,9 +564,8 @@ project(':core') {
     testCompile libs.easymock
     testCompile(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
-      // `apacheds` used by MiniKdc depends on ``mina-core-2.0.16`, but `apacheda` includes
-      // `mina-core-2.0.18` that contains a public API change. It is safer to use the
-      //  dependency from `apacheds` for MiniKdc.
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
       exclude module: 'mina-core'
     }
     testCompile libs.apachedsCoreApi
