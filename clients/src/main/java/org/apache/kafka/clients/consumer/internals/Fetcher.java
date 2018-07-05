@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1013,8 +1014,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers);
         } catch (RuntimeException e) {
-            throw new SerializationException("Error deserializing key/value for partition " + partition +
-                    " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
+            throw new RecordDeserializationException(partition, record.offset(),
+                    "Error deserializing key/value for partition " + partition + " at offset " + record.offset()
+                            + ". If needed, please seek past the record to continue consumption.");
         }
     }
 
@@ -1191,10 +1193,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // we allow user to move forward in this case.
                     cachedRecordException = null;
                 }
-            } catch (SerializationException se) {
-                cachedRecordException = se;
+            } catch (RecordDeserializationException de) {
+                cachedRecordException = de;
                 if (records.isEmpty())
-                    throw se;
+                    throw de;
             } catch (KafkaException e) {
                 cachedRecordException = e;
                 if (records.isEmpty())

@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -318,8 +319,15 @@ public class FetcherTest {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised");
             } catch (SerializationException e) {
+                // catch SerializationException to ensure backwards compatibility
+                if(!(e instanceof RecordDeserializationException))
+                    fail("fetchedRecords should have raised " + RecordDeserializationException.class.getName());
+
                 // the position should not advance since no data has been returned
                 assertEquals(1, subscriptions.position(tp0).longValue());
+                RecordDeserializationException error = (RecordDeserializationException) e;
+                assertEquals(error.partition(), tp0);
+                assertEquals(error.offset(), subscriptions.position(tp0).longValue());
             }
         }
     }
