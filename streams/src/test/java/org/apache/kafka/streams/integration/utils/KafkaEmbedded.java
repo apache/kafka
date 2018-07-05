@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
-import kafka.zk.AdminZkClient;
-import kafka.zk.KafkaZkClient;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -33,7 +36,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
@@ -46,8 +52,6 @@ public class KafkaEmbedded {
     private static final Logger log = LoggerFactory.getLogger(KafkaEmbedded.class);
 
     private static final String DEFAULT_ZK_CONNECT = "127.0.0.1:2181";
-    private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
-    private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
 
     private final Properties effectiveConfig;
     private final File logDir;
@@ -170,25 +174,47 @@ public class KafkaEmbedded {
                             final int replication,
                             final Properties topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
-            topic, partitions, replication, topicConfig);
-        try (KafkaZkClient kafkaZkClient = createZkClient()) {
-            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
+                 topic, partitions, replication, topicConfig);
+        NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
+        newTopic.configs((Map) topicConfig);
+
+        int tries = 0;
+        int maxTries = 5;
+        try (AdminClient adminClient = createAdminClient()) {
+            while (true) {
+                try {
+                    adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+                    break;
+                } catch (InterruptedException | ExecutionException e) {
+                    if (tries++ > maxTries)
+                        throw new RuntimeException(e);
+
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e1) { }
+                }
+            }
         }
     }
 
-    private KafkaZkClient createZkClient() {
-        return KafkaZkClient.apply(zookeeperConnect(), false, DEFAULT_ZK_SESSION_TIMEOUT_MS,
-                DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM, "testMetricGroup", "testMetricType");
+    private AdminClient createAdminClient() {
+        Properties adminClientConfig = new Properties();
+        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
+        Object listeners = effectiveConfig.get(KafkaConfig$.MODULE$.ListenersProp());
+        if (listeners != null && listeners.toString().contains("SSL")) {
+            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+            adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
+        return AdminClient.create(adminClientConfig);
     }
 
     public void deleteTopic(final String topic) {
-        log.debug("Deleting topic { name: {} }", topic);
-
-        try (KafkaZkClient kafkaZkClient = createZkClient()) {
-            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            adminZkClient.deleteTopic(topic);
-            kafkaZkClient.close();
+        try (AdminClient adminClient = createAdminClient()) {
+            adminClient.deleteTopics(Collections.singletonList(topic)).all().get();
+        } catch (InterruptedException | ExecutionException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
+                throw new RuntimeException(e);
         }
     }
 
