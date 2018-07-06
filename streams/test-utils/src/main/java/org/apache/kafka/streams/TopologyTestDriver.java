@@ -213,6 +213,19 @@ public class TopologyTestDriver implements Closeable {
 
     /**
      * Create a new test diver instance.
+     * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
+     *
+     * @param topology the topology to be tested
+     * @param config   the configuration for the topology
+     */
+    @SuppressWarnings("WeakerAccess")
+    public TopologyTestDriver(final Topology topology,
+                              final StreamsConfig streamsConfig) {
+        this(topology, streamsConfig, System.currentTimeMillis());
+    }
+
+    /**
+     * Create a new test diver instance.
      *
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
@@ -222,7 +235,21 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
-        this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
+        this(topology.internalTopologyBuilder, new StreamsConfig(config), initialWallClockTimeMs);
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param topology               the topology to be tested
+     * @param config                 the configuration for the topology
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    @SuppressWarnings("WeakerAccess")
+    public TopologyTestDriver(final Topology topology,
+                              final StreamsConfig streamsConfig,
+                              final long initialWallClockTimeMs) {
+        this(topology.internalTopologyBuilder, streamsConfig, initialWallClockTimeMs);
     }
 
     /**
@@ -233,9 +260,8 @@ public class TopologyTestDriver implements Closeable {
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
     private TopologyTestDriver(final InternalTopologyBuilder builder,
-                               final Properties config,
+                               final StreamsConfig streamsConfig,
                                final long initialWallClockTimeMs) {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
