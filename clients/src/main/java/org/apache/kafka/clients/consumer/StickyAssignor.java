@@ -331,7 +331,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // note that a conflict could exists only if user data is for different generations
 
         Map<TopicPartition, ConsumerGenerationPair> partitionConsumer = new HashMap<>();
-        int maxGeneration = 0;
+        int maxGeneration = this.generation;
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
@@ -346,9 +346,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 else {
                     ConsumerGenerationPair existingRecord = partitionConsumer.get(partition);
                     if (consumerUserData.generation == existingRecord.generation) {
-                        // same partition is assigned to two consumers during the same rebalance
-                        throw new IllegalStateException("Error: Partition '" + partition + "' is assigned to multiple consumers " +
-                                "following sticky assignment generation " + consumerUserData.generation + ".");
+                        // same partition is assigned to two consumers during the same rebalance.
+                        // log an error and skip this record
+                        log.error("Error: Partition '" + partition + "' is assigned to multiple consumers " +
+                                  "following sticky assignment generation " + consumerUserData.generation + ".");
                     } else if (consumerUserData.generation > existingRecord.generation) {
                         // same partition is assigned to two consumers in different rebalances.
                         // the assignment being processed has higher generation that the one already processed, and takes priority
@@ -516,10 +517,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             TreeSet<String> sortedConsumers = new TreeSet<>(new SubscriptionComparator(assignments));
             sortedConsumers.addAll(assignments.keySet());
 
-            List<TopicPartition> prevPartitions = new ArrayList(prevAssignment.keySet());
+            List<TopicPartition> prevAssignedPartitions = new ArrayList(prevAssignment.keySet());
             while (!sortedConsumers.isEmpty()) {
                 String consumer = sortedConsumers.pollLast();
                 List<TopicPartition> remainingPartitions = assignments.get(consumer);
+                List<TopicPartition> prevPartitions = new ArrayList<>(prevAssignedPartitions);
                 prevPartitions.retainAll(remainingPartitions);
                 if (!prevPartitions.isEmpty()) {
                     TopicPartition partition = prevPartitions.remove(0);
