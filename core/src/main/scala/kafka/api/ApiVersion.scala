@@ -70,9 +70,9 @@ object ApiVersion {
     // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
     // and KafkaStorageException for fetch requests.
     KAFKA_1_1_IV0,
-    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279
+    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279 (Fix log divergence between leader and follower after fast leader fail over)
     KAFKA_2_0_IV0,
-    // Introduced ApiVersionsRequest V2 via KIP-219
+    // Several request versions were bumped due to KIP-219 (Improve quota communication)
     KAFKA_2_0_IV1
   )
 
