@@ -31,7 +31,8 @@ public final class DaemonStartAction extends Action {
                 CollectdStartAction.TYPE,
                 ZooKeeperStartAction.TYPE,
                 TrogdorDaemonType.COORDINATOR.startType(),
-                TrogdorDaemonType.AGENT.startType()
+                TrogdorDaemonType.AGENT.startType(),
+                JmxDumperStartAction.TYPE
             });
     }
 }

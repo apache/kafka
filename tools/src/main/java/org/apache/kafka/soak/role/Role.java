@@ -40,6 +40,7 @@ import java.util.Collection;
     @JsonSubTypes.Type(value = UbuntuNodeRole.class, name = "ubuntuNode"),
     @JsonSubTypes.Type(value = ZooKeeperRole.class, name = "zooKeeper"),
     @JsonSubTypes.Type(value = CollectdRole.class, name = "collectd"),
+    @JsonSubTypes.Type(value = JmxDumperRole.class, name = "jmx"),
     })
 public interface Role {
     /**

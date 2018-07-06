@@ -20,28 +20,26 @@ package org.apache.kafka.soak.action;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
-import org.apache.kafka.soak.role.BrokerRole;
+import org.apache.kafka.soak.role.JmxDumperRole;
 
 /**
- * Stop the broker.
+ * Stop the JMXDumper.
  */
-public final class BrokerStopAction extends Action {
-    public final static String TYPE = "brokerStop";
+public final class JmxDumperStopAction extends Action {
+    public final static String TYPE = "jmxStop";
 
-    public BrokerStopAction(String scope) {
+    public JmxDumperStopAction(String scope) {
         super(new ActionId(TYPE, scope),
-            new TargetId[] {
-                new TargetId(JmxDumperStopAction.TYPE, scope)
-            },
+            new TargetId[] {},
             new String[] {});
     }
 
     @Override
     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
         if (node.dns().isEmpty()) {
-            node.log().printf("*** Skipping brokerStop, because the node has no DNS address.%n");
+            node.log().printf("*** Skipping jmxStop, because the node has no DNS address.%n");
             return;
         }
-        SoakUtil.killJavaProcess(cluster, node, BrokerRole.KAFKA_CLASS_NAME, true);
+        SoakUtil.killJavaProcess(cluster, node, JmxDumperRole.CLASS_NAME, true);
     }
 }

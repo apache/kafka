@@ -48,4 +48,9 @@ public final class ActionPaths {
     public static final String COLLECTD_PROPERTIES = COLLECTD_ROOT + "/collectd.conf";
     public static final String COLLECTD = "collectd";
     public static final String COLLECTD_LOGS = LOGS_ROOT + "/collectd";
+
+    public static final String KAFKA_RUN_CLASS = KAFKA_SRC + "/bin/kafka-run-class.sh";
+    public static final String JMX_DUMPER_ROOT = "/mnt/jmx";
+    public static final String JMX_DUMPER_PROPERTIES = JMX_DUMPER_ROOT  + "/jmx.conf";
+    public static final String JMX_DUMPER_LOGS = LOGS_ROOT + "/jmx";
 };
