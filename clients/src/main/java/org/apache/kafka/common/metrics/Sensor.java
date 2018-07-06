@@ -299,9 +299,11 @@ public final class Sensor {
      * for sensor record and metric value read to allow concurrent reads and updates. For simplicity,
      * all sensors are synchronized on this object.
      * <p>
-     * Sensor object is not used as a lock since metrics reporter is invoked while holding Sensor
-     * and Metrics locks to report addition and removal of metrics and synchronized reporters may
-     * deadlock if Sensor lock is used for reading metrics values.
+     * Sensor object is not used as a lock for reading metric value since metrics reporter is
+     * invoked while holding Sensor and Metrics locks to report addition and removal of metrics
+     * and synchronized reporters may deadlock if Sensor lock is used for reading metrics values.
+     * Note that Sensor object itself is used as a lock to protect the access to stats and metrics
+     * while recording metric values, adding and deleting sensors.
      * </p><p>
      * Locking order (assume all MetricsReporter methods may be synchronized):
      * <ul>
