@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ConfigTransformerTest {
@@ -37,6 +38,7 @@ public class ConfigTransformerTest {
     public static final String TEST_PATH = "testPath";
     public static final String TEST_RESULT = "testResult";
     public static final String TEST_RESULT_WITH_TTL = "testResultWithTTL";
+    public static final String TEST_RESULT_NO_PATH = "testResultNoPath";
 
     private ConfigTransformer configTransformer;
 
@@ -84,6 +86,24 @@ public class ConfigTransformerTest {
         assertEquals("${test:testPath:testResult}", data.get(MY_KEY));
     }
 
+    @Test
+    public void testReplaceVariableNoPath() throws Exception {
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testKey}"));
+        Map<String, String> data = result.data();
+        Map<String, Long> ttls = result.ttls();
+        assertEquals(TEST_RESULT_NO_PATH, data.get(MY_KEY));
+        assertTrue(ttls.isEmpty());
+    }
+
+    @Test
+    public void testNullConfigValue() throws Exception {
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, null));
+        Map<String, String> data = result.data();
+        Map<String, Long> ttls = result.ttls();
+        assertNull(data.get(MY_KEY));
+        assertTrue(ttls.isEmpty());
+    }
+
     public static class TestConfigProvider implements ConfigProvider {
 
         public void configure(Map<String, ?> configs) {
@@ -96,7 +116,7 @@ public class ConfigTransformerTest {
         public ConfigData get(String path, Set<String> keys) {
             Map<String, String> data = new HashMap<>();
             Long ttl = null;
-            if (path.equals(TEST_PATH)) {
+            if (TEST_PATH.equals(path)) {
                 if (keys.contains(TEST_KEY)) {
                     data.put(TEST_KEY, TEST_RESULT);
                 }
@@ -106,6 +126,10 @@ public class ConfigTransformerTest {
                 }
                 if (keys.contains(TEST_INDIRECTION)) {
                     data.put(TEST_INDIRECTION, "${test:testPath:testResult}");
+                }
+            } else {
+                if (keys.contains(TEST_KEY)) {
+                    data.put(TEST_KEY, TEST_RESULT_NO_PATH);
                 }
             }
             return new ConfigData(data, ttl);

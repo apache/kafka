@@ -159,6 +159,16 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
+    @Test(expected = TopologyException.class)
+    public void testAddProcessorWithEmptyParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddProcessorWithNullParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier(), null);
+    }
+
     @Test
     public void testAddSinkWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
@@ -177,6 +187,17 @@ public class InternalTopologyBuilderTest {
     @Test(expected = TopologyException.class)
     public void testAddSinkWithSelfParent() {
         builder.addSink("sink", "topic-2", null, null, null, "sink");
+    }
+
+
+    @Test(expected = TopologyException.class)
+    public void testAddSinkWithEmptyParents() {
+        builder.addSink("sink", "topic", null, null, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddSinkWithNullParents() {
+        builder.addSink("sink", "topic", null, null, null, null);
     }
 
     @Test
@@ -275,7 +296,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStoreWithSink() {
-        builder.addSink("sink-1", "topic-1", null, null, null);
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
         try {
             builder.addStateStore(storeBuilder, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
@@ -510,16 +532,36 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 30000, 3, 10000, false), Serdes.String(), Serdes.String()), "processor");
+        builder.addStateStore(
+            Stores.windowStoreBuilder(
+                Stores.persistentWindowStore("store1", 30_000L, 10_000L, false),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "processor"
+        );
+        builder.addStateStore(
+                Stores.sessionStoreBuilder(
+                        Stores.persistentSessionStore("store2", 30000), Serdes.String(), Serdes.String()
+                ),
+                "processor"
+        );
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
-        assertEquals(2, properties.size());
-        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
-        assertEquals("appId-store-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof WindowedChangelogTopicConfig);
+        final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
+        final Map<String, String> properties1 = topicConfig1.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(2, properties1.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store1-changelog", topicConfig1.name());
+        assertTrue(topicConfig1 instanceof WindowedChangelogTopicConfig);
+        final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
+        final Map<String, String> properties2 = topicConfig2.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(2, properties2.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store2-changelog", topicConfig2.name());
+        assertTrue(topicConfig2 instanceof WindowedChangelogTopicConfig);
     }
 
     @Test

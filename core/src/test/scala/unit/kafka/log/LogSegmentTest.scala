@@ -517,4 +517,34 @@ class LogSegmentTest {
     assertEquals(1, log.records.batches.asScala.size)
   }
 
+  @Test
+  def testAppendFromFile(): Unit = {
+    def records(offset: Long, size: Int): MemoryRecords =
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+        new SimpleRecord(new Array[Byte](size)))
+
+    // create a log file in a separate directory to avoid conflicting with created segments
+    val tempDir = TestUtils.tempDir()
+    val fileRecords = FileRecords.open(Log.logFile(tempDir, 0))
+
+    // Simulate a scenario where we have a single log with an offset range exceeding Int.MaxValue
+    fileRecords.append(records(0, 1024))
+    fileRecords.append(records(500, 1024 * 1024 + 1))
+    val sizeBeforeOverflow = fileRecords.sizeInBytes()
+    fileRecords.append(records(Int.MaxValue + 5L, 1024))
+    val sizeAfterOverflow = fileRecords.sizeInBytes()
+
+    val segment = createSegment(0)
+    val bytesAppended = segment.appendFromFile(fileRecords, 0)
+    assertEquals(sizeBeforeOverflow, bytesAppended)
+    assertEquals(sizeBeforeOverflow, segment.size)
+
+    val overflowSegment = createSegment(Int.MaxValue)
+    val overflowBytesAppended = overflowSegment.appendFromFile(fileRecords, sizeBeforeOverflow)
+    assertEquals(sizeAfterOverflow - sizeBeforeOverflow, overflowBytesAppended)
+    assertEquals(overflowBytesAppended, overflowSegment.size)
+
+    Utils.delete(tempDir)
+  }
+
 }

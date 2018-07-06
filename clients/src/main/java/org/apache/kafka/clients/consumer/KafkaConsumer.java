@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -669,12 +669,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+          
             this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
-            int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
-            if (this.requestTimeoutMs < sessionTimeoutMs)
-                throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " (" + requestTimeoutMs +
-                                                  ") cannot be lower than  " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG +
-                                                  " (" + sessionTimeoutMs + ")");
             this.time = Time.SYSTEM;
 
             Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
@@ -753,12 +749,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.assignors = config.getConfiguredInstances(
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
+
+            int maxPollIntervalMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+            int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
             this.coordinator = new ConsumerCoordinator(logContext,
                     this.client,
                     groupId,
-                    config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    heartbeatIntervalMs,
+                    maxPollIntervalMs,
+                    sessionTimeoutMs,
+                    new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
                     assignors,
                     this.metadata,
                     this.subscriptions,
@@ -1609,7 +1608,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partition The partition to get the position for
      * @param timeout The maximum amount of time to await determination of the current position
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
-     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
@@ -2084,7 +2083,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
-        close(Duration.ofMillis(TimeUnit.MILLISECONDS.toMillis(timeout)));
+        close(Duration.ofMillis(timeUnit.toMillis(timeout)));
     }
 
     /**

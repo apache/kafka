@@ -147,22 +147,25 @@ public class PluginUtilsTest {
                 "org.apache.kafka.connect.converters.ByteArrayConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.connect.storage.DoubleConverter")
+                "org.apache.kafka.connect.converters.DoubleConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.connect.storage.FloatConverter")
+                "org.apache.kafka.connect.converters.FloatConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.connect.storage.IntegerConverter")
+                "org.apache.kafka.connect.converters.IntegerConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.connect.storage.LongConverter")
+                "org.apache.kafka.connect.converters.LongConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.connect.storage.ShortConverter")
+                "org.apache.kafka.connect.converters.ShortConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.StringConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.SimpleHeaderConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
             "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"

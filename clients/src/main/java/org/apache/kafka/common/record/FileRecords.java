@@ -25,13 +25,13 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -109,14 +109,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
      *
      * @param buffer The buffer to write the batches to
      * @param position Position in the buffer to read from
-     * @return The same buffer
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
-    public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
+    public void readInto(ByteBuffer buffer, int position) throws IOException {
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
-        return buffer;
     }
 
     /**
@@ -428,19 +426,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
         if (mutable) {
-            if (fileAlreadyExists) {
-                return new RandomAccessFile(file, "rw").getChannel();
+            if (fileAlreadyExists || !preallocate) {
+                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
+                        StandardOpenOption.WRITE);
             } else {
-                if (preallocate) {
-                    RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                    randomAccessFile.setLength(initFileSize);
-                    return randomAccessFile.getChannel();
-                } else {
-                    return new RandomAccessFile(file, "rw").getChannel();
-                }
+                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+                randomAccessFile.setLength(initFileSize);
+                return randomAccessFile.getChannel();
             }
         } else {
-            return new FileInputStream(file).getChannel();
+            return FileChannel.open(file.toPath());
         }
     }
 

@@ -17,8 +17,10 @@
 
 package kafka.zk
 
-import kafka.security.auth.{Resource, Topic}
-import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
+import java.nio.charset.StandardCharsets.UTF_8
+
+import kafka.security.auth.{Group, Resource, Topic}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -58,5 +60,15 @@ class LiteralAclStoreTest {
     val actual = store.changeStore.decode(changeNode.bytes)
 
     assertEquals(literalResource, actual)
+  }
+
+  @Test
+  def shouldDecodeResourceUsingTwoPartLogic(): Unit = {
+    val resource = Resource(Group, "PREFIXED:this, including the PREFIXED part, is a valid two part group name", LITERAL)
+    val encoded = (resource.resourceType +  Resource.Separator + resource.name).getBytes(UTF_8)
+
+    val actual = store.changeStore.decode(encoded)
+
+    assertEquals(resource, actual)
   }
 }

@@ -248,11 +248,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error while range compacting during restoring  store " + this.name, e);
                 }
-
-                // we need to re-open with the old num.levels again, this is a workaround
-                // until https://github.com/facebook/rocksdb/pull/2740 is merged in rocksdb
-                close();
-                openDB(internalProcessorContext);
             }
         }
 

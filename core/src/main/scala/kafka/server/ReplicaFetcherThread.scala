@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 
 import AbstractFetcherThread.ResultWithPartitions
-import kafka.api.{FetchRequest => _, _}
+import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._

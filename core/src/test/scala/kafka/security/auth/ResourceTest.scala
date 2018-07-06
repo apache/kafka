@@ -18,7 +18,7 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
-import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Test
 import org.junit.Assert._
 

@@ -86,6 +86,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
+    }
+
+    @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
         // no-op

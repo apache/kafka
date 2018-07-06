@@ -20,9 +20,9 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 
-import kafka.common.InvalidOffsetException
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
 
 /**

@@ -109,4 +109,8 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         }
         return map;
     }
+
+    public static String kafkaAdminClientNetworkThreadPrefix() {
+        return KafkaAdminClient.NETWORK_THREAD_PREFIX;
+    }
 }

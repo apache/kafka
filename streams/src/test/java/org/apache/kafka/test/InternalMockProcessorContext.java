@@ -61,6 +61,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private long streamTime = -1L;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -118,12 +119,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock"),
             new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            () -> collector,
             cache
         );
     }
@@ -178,6 +174,15 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // state mgr will be overridden by the state dir and store maps
     @Override
     public void initialized() {}
+
+    public void setStreamTime(final long currentTime) {
+        streamTime = currentTime;
+    }
+
+    @Override
+    public long streamTime() {
+        return streamTime;
+    }
 
     @Override
     public File stateDir() {
@@ -336,5 +341,4 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
         return new WrappedBatchingStateRestoreCallback(restoreCallback);
     }
-
 }
