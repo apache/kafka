@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -142,11 +143,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public void ensureValid() {
         if (sizeInBytes() < RECORD_BATCH_OVERHEAD)
-            throw new InvalidRecordException("Record batch is corrupt (the size " + sizeInBytes() +
+            throw new CorruptRecordException("Record batch is corrupt (the size " + sizeInBytes() +
                     " is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
 
         if (!isValid())
-            throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
+            throw new CorruptRecordException("Record is corrupt (stored crc = " + checksum()
                     + ", computed crc = " + computeChecksum() + ")");
     }
 

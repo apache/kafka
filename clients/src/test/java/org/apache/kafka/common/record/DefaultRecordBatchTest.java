@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -173,7 +174,7 @@ public class DefaultRecordBatchTest {
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidRecordSize() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -233,7 +234,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidCrc() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,

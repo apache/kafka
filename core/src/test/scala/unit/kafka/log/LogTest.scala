@@ -1507,19 +1507,19 @@ class LogTest {
       log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
     try {
       log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
     try {
       log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
 
     // the following should succeed without any InvalidMessageException

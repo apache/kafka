@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1080,9 +1081,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (checkCrcs && currentBatch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                 try {
                     batch.ensureValid();
-                } catch (InvalidRecordException e) {
                     throw new KafkaException("Record batch for partition " + partition + " at offset " +
                             batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                } catch (CorruptRecordException e) {
                 }
             }
         }
@@ -1091,7 +1092,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (checkCrcs) {
                 try {
                     record.ensureValid();
-                } catch (InvalidRecordException e) {
+                } catch (CorruptRecordException e) {
                     throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
                             + " is invalid, cause: " + e.getMessage());
                 }
