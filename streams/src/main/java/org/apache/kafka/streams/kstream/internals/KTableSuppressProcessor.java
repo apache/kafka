@@ -26,11 +26,13 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private final Serializer<Change<V>> valueSerializer;
 
     private static class ContextualRecord<V> {
+        private final long time;
         private final V value;
         private final ProcessorRecordContext recordContext;
         private final long size;
 
-        private ContextualRecord(final V value, final ProcessorRecordContext recordContext, final long size) {
+        private ContextualRecord(final long time, final V value, final ProcessorRecordContext recordContext, final long size) {
+            this.time = time;
             this.value = value;
             this.recordContext = recordContext;
             this.size = size;
@@ -38,11 +40,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
         @Override
         public String toString() {
-            return "ContextualRecord{" +
-                "value=" + value +
-                ", timestamp=" + recordContext.timestamp() +
-                ", size=" + Objects.toString(size) +
-                '}';
+            return "ContextualRecord{value=" + value + ", time=" + time + ", size=" + Objects.toString(size) + '}';
         }
     }
 
@@ -67,7 +65,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
                 final long evictionTimeout = timeToWaitForMoreEvents.toMillis();
 
                 internalProcessorContext.schedule(
-                    evictionTimeout,
+                    1L,
                     PunctuationType.STREAM_TIME,
                     streamTime -> {
                         final Set<Map.Entry<K, ContextualRecord<V>>> entries = priorityQueue.entrySet();
@@ -86,12 +84,11 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    private void forwardIfTimely(final K key, final V value) {
-        final long timestamp = internalProcessorContext.timestamp();
+    private void forwardIfTimely(final long time, final K key, final V value) {
         final long streamTime = internalProcessorContext.streamTime();
         final long latenessBound = suppress.getLatenessBound().toMillis();
-        System.out.println(key + ", " + value + ", " + timestamp + ", " + streamTime + ", " + latenessBound);
-        if (timestamp >= (streamTime - latenessBound)) {
+        System.out.println("k=" + key + ", v=" + value + ", t=" + time + ", st=" + streamTime + ", l=" + latenessBound);
+        if (time >= (streamTime - latenessBound)) {
             internalProcessorContext.forward(key, value);
         }
     }
@@ -102,7 +99,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         internalProcessorContext.setRecordContext(next.getValue().recordContext);
         internalProcessorContext.setCurrentNode(myNode);
         try {
-            forwardIfTimely(next.getKey(), next.getValue().value);
+            forwardIfTimely(next.getValue().time, next.getKey(), next.getValue().value);
         } finally {
             internalProcessorContext.setCurrentNode(prevNode);
             internalProcessorContext.setRecordContext(prevRecordContext);
@@ -111,6 +108,8 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
+        final long time = suppress.getTimeDefinition().time(internalProcessorContext, key, value);
+
         if (intermediateSuppression() && (nonTimeBoundSuppression() || nonInstantaneousTimeBoundSuppression())) {
             // intermediate suppress is enabled
             final ContextualRecord<V> previous = priorityQueue.remove(key);
@@ -120,12 +119,12 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             final long size = computeRecordSize(key, value, recordContext);
             memBufferSize = memBufferSize + size;
 
-            priorityQueue.put(key, new ContextualRecord<>(value, recordContext, size));
+            priorityQueue.put(key, new ContextualRecord<>(time, value, recordContext, size));
 
             // adding that key may have put us over the edge...
             enforceSizeBound();
         } else {
-            forwardIfTimely(key, value);
+            forwardIfTimely(time, key, value);
         }
     }
 

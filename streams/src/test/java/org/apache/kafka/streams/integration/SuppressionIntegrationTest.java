@@ -54,7 +54,6 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
-import static org.apache.kafka.streams.kstream.Suppress.lateEvents;
 
 @Category({IntegrationTest.class})
 public class SuppressionIntegrationTest {
@@ -391,10 +390,11 @@ public class SuppressionIntegrationTest {
             .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
-        valueCounts
-            .suppress(lateEvents(Duration.ofMillis(scaledTime(1L))))
-            .toStream()
-            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+        //TODO final results
+//        valueCounts
+//            .suppress(lateEvents(Duration.ofMillis(scaledTime(1L))))
+//            .toStream()
+//            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()

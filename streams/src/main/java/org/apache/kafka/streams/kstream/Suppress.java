@@ -1,6 +1,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 
@@ -8,6 +9,7 @@ import java.time.Duration;
 public class Suppress<K, V> {
     private Duration latenessBound = Duration.ofMillis(Long.MAX_VALUE);
     private IntermediateSuppression<K, V> intermediateSuppression = null;
+    private TimeDefinition<K, V> timeDefinition = ((context, k, v) -> context.timestamp());
 
     public enum BufferFullStrategy {
         EMIT,
@@ -103,24 +105,47 @@ public class Suppress<K, V> {
 
     public Suppress() {}
 
-    public static <K extends Windowed, V> Suppress<K, V> finalResultsOnly(final Duration maxAllowedLateness, final BufferFullStrategy bufferFullStrategy) {
+    private Suppress(final Suppress<K, V> other) {
+        this.timeDefinition = other.timeDefinition;
+        this.latenessBound = other.latenessBound;
+        this.intermediateSuppression = other.intermediateSuppression;
+    }
+
+    public static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final Duration maxAllowedLateness,
+                                                                              final BufferFullStrategy bufferFullStrategy) {
+        if (bufferFullStrategy == BufferFullStrategy.EMIT) {
+            throw new IllegalArgumentException(
+                "The EMIT strategy may produce intermediate results. " +
+                    "Select either SHUT_DOWN or SPILL_TO_DISK"
+            );
+        }
         return Suppress
-            .<K, V>lateEvents(maxAllowedLateness)
-            .<K, V>suppressIntermediateEvents(
+            .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
+            .suppressLateEvents(maxAllowedLateness)
+            .suppressIntermediateEvents(
                 IntermediateSuppression
                     .<K, V>withEmitAfter(maxAllowedLateness)
                     .bufferFullStrategy(bufferFullStrategy)
             );
     }
 
-    public static <K, V> Suppress<K, V> lateEvents(final Duration maxAllowedLateness) {
+    public interface TimeDefinition<K, V> {
+        long time(ProcessorContext context, K k, V v);
+    }
+
+    private static <K, V> Suppress<K, V> usingTimeDefinition(final TimeDefinition<K, V> timeDefinition) {
+        final Suppress<K, V> suppress = new Suppress<>();
+        suppress.timeDefinition = timeDefinition;
+        return suppress;
+    }
+
+    private static <K, V> Suppress<K, V> lateEvents(final Duration maxAllowedLateness) {
         return new Suppress<K, V>().suppressLateEvents(maxAllowedLateness);
     }
 
-    public Suppress<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
-        final Suppress<K, V> result = new Suppress<>();
+    private Suppress<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
+        final Suppress<K, V> result = new Suppress<>(this);
         result.latenessBound = maxAllowedLateness;
-        result.intermediateSuppression = this.intermediateSuppression;
         return result;
     }
 
@@ -128,9 +153,8 @@ public class Suppress<K, V> {
         return new Suppress<K, V>().<K, V>suppressIntermediateEvents(intermediateSuppression);
     }
 
-    public Suppress<K, V> suppressIntermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
-        final Suppress<K, V> result = new Suppress<>();
-        result.latenessBound = this.latenessBound;
+    private Suppress<K, V> suppressIntermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
+        final Suppress<K, V> result = new Suppress<>(this);
         result.intermediateSuppression = intermediateSuppression;
         return result;
     }
@@ -141,5 +165,9 @@ public class Suppress<K, V> {
 
     public IntermediateSuppression<K, V> getIntermediateSuppression() {
         return intermediateSuppression;
+    }
+
+    public TimeDefinition<K, V> getTimeDefinition() {
+        return timeDefinition;
     }
 }

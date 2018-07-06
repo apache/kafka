@@ -22,7 +22,10 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.junit.Test;
@@ -38,9 +41,10 @@ import java.util.Objects;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
+import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.emitFinalResultsOnly;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
-import static org.apache.kafka.streams.kstream.Suppress.lateEvents;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorTest {
@@ -51,7 +55,7 @@ public class KTableSuppressProcessorTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     private static final int COMMIT_INTERVAL = 30_000;
-    private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
+    private static final int SCALE_FACTOR = 1;
 
     @Test
     public void shouldSuppressIntermediateEventsWithEmitAfter() {
@@ -402,27 +406,24 @@ public class KTableSuppressProcessorTest {
 
 
     @Test
-    public void shouldSuppressLateEvents() {
+    public void shouldSupportFinalResultsForTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                "input",
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count();
+        final KTable<Windowed<String>, Long> valueCounts = builder
+            .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(scaledTime(2L)).until(scaledTime(3L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
         valueCounts
-            .suppress(lateEvents(Duration.ofMillis(scaledTime(1L))))
+            .suppress(emitFinalResultsOnly(Duration.ofMillis(scaledTime(1L)), SHUT_DOWN))
             .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Topology topology = builder.build();
@@ -438,55 +439,63 @@ public class KTableSuppressProcessorTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
 
             driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(0L)));
-            driver.pipeInput(recordFactory.create("input", "k2", "v1", scaledTime(2L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(1L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(2L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(1L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(0L)));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", scaledTime(3L)));
+
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Arrays.asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L))
+                    new KVT<>("[k1@0/2]", 1L, scaledTime(0L)),
+                    new KVT<>("[k1@0/2]", 2L, scaledTime(1L)),
+                    new KVT<>("[k1@2/4]", 1L, scaledTime(2L)),
+                    new KVT<>("[k1@0/2]", 3L, scaledTime(1L)),
+                    new KVT<>("[k1@0/2]", 4L, scaledTime(0L)),
+                    new KVT<>("[k1@2/4]", 2L, scaledTime(3L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 Arrays.asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L))
+                    new KVT<>("[k1@0/2]", 4L, scaledTime(1L))
                 )
             );
 
-            // An event 1ms late should be admitted
-            driver.pipeInput(recordFactory.create("input", "k1", "v2", scaledTime(1L)));
-
-            verify(
-                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("v1", 1L, scaledTime(1L)),
-                    new KVT<>("v2", 1L, scaledTime(1L))
-                )
-            );
-            verify(
-                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("v1", 1L, scaledTime(1L)),
-                    new KVT<>("v2", 1L, scaledTime(1L))
-                )
-            );
-
-            // An event 2ms late should be rejected
-            driver.pipeInput(recordFactory.create("input", "k2", "v2", scaledTime(0L)));
-
-            verify(
-                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("v1", 0L, scaledTime(0L)),
-                    new KVT<>("v2", 2L, scaledTime(0L))
-                )
-            );
-            verify(
-                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.emptyList()
-            );
+//            // An event 1ms late should be admitted
+//            driver.pipeInput(recordFactory.create("input", "k1", "v2", scaledTime(1L)));
+//
+//            verify(
+//                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+//                Arrays.asList(
+//                    new KVT<>("v1", 1L, scaledTime(1L)),
+//                    new KVT<>("v2", 1L, scaledTime(1L))
+//                )
+//            );
+//            verify(
+//                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+//                Arrays.asList(
+//                    new KVT<>("v1", 1L, scaledTime(1L)),
+//                    new KVT<>("v2", 1L, scaledTime(1L))
+//                )
+//            );
+//
+//            // An event 2ms late should be rejected
+//            driver.pipeInput(recordFactory.create("input", "k2", "v2", scaledTime(0L)));
+//
+//            verify(
+//                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+//                Arrays.asList(
+//                    new KVT<>("v1", 0L, scaledTime(0L)),
+//                    new KVT<>("v2", 2L, scaledTime(0L))
+//                )
+//            );
+//            verify(
+//                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+//                Collections.emptyList()
+//            );
 
         }
     }
