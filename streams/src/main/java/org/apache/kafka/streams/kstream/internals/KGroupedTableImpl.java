@@ -27,6 +27,10 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRepartitionNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -73,17 +77,19 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                       final String name,
                       final String sourceName,
                       final Serde<K> keySerde,
-                      final Serde<V> valSerde) {
-        super(builder, name, Collections.singleton(sourceName));
+                      final Serde<V> valSerde,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, Collections.singleton(sourceName), streamsGraphNode);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
     }
 
-    private void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                final String topic,
-                                final String funcName,
-                                final String sourceName,
-                                final String sinkName) {
+    private <T> void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+                                    final String topic,
+                                    final String funcName,
+                                    final String sourceName,
+                                    final String sinkName) {
+
         final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
         final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
@@ -109,16 +115,67 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
+        final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+
 
         buildAggregate(aggregateSupplier,
-                       materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
+                       topic,
                        funcName,
-                       sourceName, sinkName);
+                       sourceName,
+                       sinkName
+        );
+
         builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
-                                                              .materialize(), funcName);
+                                                          .materialize(), funcName);
+
+
+        StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
+                                                                 sourceName,
+                                                                 topic);
+        addGraphNode(repartitionNode);
+
+        StatefulProcessorNode statefulProcessorNode = createStatefulProcessorNode(materialized,
+                                                                                  funcName,
+                                                                                  aggregateSupplier);
+
+        repartitionNode.addChildNode(statefulProcessorNode);
+
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable());
+        return new KTableImpl<>(builder,
+                                funcName,
+                                aggregateSupplier,
+                                Collections.singleton(sourceName),
+                                materialized.storeName(),
+                                materialized.isQueryable(),
+                                statefulProcessorNode);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> StatefulProcessorNode createStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
+                                                                  final String functionName,
+                                                                  final ProcessorSupplier aggregateSupplier) {
+
+        ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
+
+        return StatefulProcessorNode.statefulProcessorNodeBuilder()
+            .withNodeName(functionName)
+            .withProcessorParameters(aggregateFunctionProcessorParams)
+            .withStoreBuilder(new KeyValueStoreMaterializer(materialized).materialize()).build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private GroupedTableOperationRepartitionNode createRepartitionNode(final String sinkName,
+                                                                       final String sourceName,
+                                                                       final String topic) {
+
+        return GroupedTableOperationRepartitionNode.groupedTableOperationNodeBuilder()
+            .withRepartitionTopic(topic)
+            .withSinkName(sinkName)
+            .withSourceName(sourceName)
+            .withKeySerde(keySerde)
+            .withValueSerde(valSerde)
+            .withNodeName(sourceName).build();
     }
 
     @Override

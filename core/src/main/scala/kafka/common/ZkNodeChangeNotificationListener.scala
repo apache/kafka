@@ -16,6 +16,7 @@
  */
 package kafka.common
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -102,7 +103,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     val (data, _) = zkClient.getDataAndStat(changeZnode)
     data match {
       case Some(d) => Try(notificationHandler.processNotification(d)) match {
-        case Failure(e) => error(s"error processing change notification from $changeZnode", e)
+        case Failure(e) => error(s"error processing change notification ${new String(d, UTF_8)} from $changeZnode", e)
         case _ =>
       }
       case None => warn(s"read null data from $changeZnode")

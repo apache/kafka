@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
@@ -33,6 +32,7 @@ import java.util.Iterator;
 public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownConversionRecords> {
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecordsSend.class);
     private static final int MAX_READ_SIZE = 128 * 1024;
+    static final int MIN_OVERFLOW_MESSAGE_LENGTH = Records.LOG_OVERHEAD;
 
     private RecordConversionStats recordConversionStats;
     private RecordsSend convertedRecordsWriter;
@@ -49,39 +49,31 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     public long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
         if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
-
             // Check if we have more chunks left to down-convert
             if (convertedRecordsIterator.hasNext()) {
                 // Get next chunk of down-converted messages
                 ConvertedRecords<MemoryRecords> recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
-
-                int sizeOfFirstConvertedBatch = convertedRecords.batchIterator().next().sizeInBytes();
-                if (previouslyWritten == 0 && sizeOfFirstConvertedBatch > size())
-                    throw new EOFException("Unable to send first batch completely." +
-                            " maximum_size: " + size() +
-                            " converted_records_size: " + sizeOfFirstConvertedBatch);
-
                 recordConversionStats.add(recordsAndStats.recordConversionStats());
-                log.debug("Got lazy converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
+                log.debug("Down-converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
             } else {
-                if (previouslyWritten == 0)
-                    throw new EOFException("Unable to get the first batch of down-converted records");
-
-                // We do not have any records left to down-convert. Construct a "fake" message for the length remaining.
+                // We do not have any records left to down-convert. Construct an overflow message for the length remaining.
                 // This message will be ignored by the consumer because its length will be past the length of maximum
                 // possible response size.
                 // DefaultRecordBatch =>
                 //      BaseOffset => Int64
                 //      Length => Int32
                 //      ...
-                log.debug("Constructing fake message batch for partition {} for remaining length={}", topicPartition(), remaining);
-                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(Math.max(Records.LOG_OVERHEAD, Math.min(remaining + 1, MAX_READ_SIZE)));
-                fakeMessageBatch.putLong(-1L);
-                fakeMessageBatch.putInt(remaining + 1);
-                convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
-            }
+                ByteBuffer overflowMessageBatch = ByteBuffer.allocate(
+                        Math.max(MIN_OVERFLOW_MESSAGE_LENGTH, Math.min(remaining + 1, MAX_READ_SIZE)));
+                overflowMessageBatch.putLong(-1L);
 
+                // Fill in the length of the overflow batch. A valid batch must be at least as long as the minimum batch
+                // overhead.
+                overflowMessageBatch.putInt(Math.max(remaining + 1, DefaultRecordBatch.RECORD_BATCH_OVERHEAD));
+                convertedRecords = MemoryRecords.readableRecords(overflowMessageBatch);
+                log.debug("Constructed overflow message batch for partition {} with length={}", topicPartition(), remaining);
+            }
             convertedRecordsWriter = new DefaultRecordsSend(destination(), convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
         }
         return convertedRecordsWriter.writeTo(channel);

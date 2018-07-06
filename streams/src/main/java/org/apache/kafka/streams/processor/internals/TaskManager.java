@@ -278,6 +278,10 @@ public class TaskManager {
         }
     }
 
+    AdminClient getAdminClient() {
+        return adminClient;
+    }
+
     Set<TaskId> suspendedActiveTaskIds() {
         return active.previousTaskIds();
     }

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
@@ -32,7 +33,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamWindowAggregate.class);
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final Windows<W> windows;
@@ -66,11 +67,14 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         private WindowStore<K, T> windowStore;
         private TupleForwarder<Windowed<K>, T> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private InternalProcessorContext internalProcessorContext;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            this.internalProcessorContext = (InternalProcessorContext) context;
+
             metrics = (StreamsMetricsImpl) context.metrics();
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
@@ -82,7 +86,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             // if the key is null, we do not need proceed aggregating the record
             // the record with the table
             if (key == null) {
-                LOG.warn(
+                log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
@@ -92,21 +96,32 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // first get the matching windows
             final long timestamp = context().timestamp();
+            final long expiryTime = internalProcessorContext.streamTime() - windows.maintainMs();
+
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                T oldAgg = windowStore.fetch(key, entry.getKey());
+                final Long windowStart = entry.getKey();
+                if (windowStart > expiryTime) {
+                    T oldAgg = windowStore.fetch(key, windowStart);
 
-                if (oldAgg == null) {
-                    oldAgg = initializer.apply();
+                    if (oldAgg == null) {
+                        oldAgg = initializer.apply();
+                    }
+
+                    final T newAgg = aggregator.apply(key, value, oldAgg);
+
+                    // update the store with the new value
+                    windowStore.put(key, newAgg, windowStart);
+                    tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
+                } else {
+                    log.warn(
+                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{}] expiration=[{}]",
+                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, expiryTime
+                    );
+                    metrics.skippedRecordsSensor().record();
                 }
-
-                final T newAgg = aggregator.apply(key, value, oldAgg);
-
-                // update the store with the new value
-                windowStore.put(key, newAgg, entry.getKey());
-                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
         }
     }

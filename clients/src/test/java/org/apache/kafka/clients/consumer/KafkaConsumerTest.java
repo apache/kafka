@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -44,10 +45,10 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -71,6 +72,7 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1747,7 +1749,7 @@ public class KafkaConsumerTest {
         String groupId = "mock-group";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
-        long requestTimeoutMs = 30000;
+        int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 30000;
         boolean excludeInternalTopics = true;
         int minBytes = 1;
@@ -1762,7 +1764,7 @@ public class KafkaConsumerTest {
         Deserializer<String> valueDeserializer = new StringDeserializer();
 
         List<PartitionAssignor> assignors = singletonList(assignor);
-        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.<ConsumerInterceptor<String, String>>emptyList());
+        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
 
         Metrics metrics = new Metrics();
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
@@ -1771,13 +1773,15 @@ public class KafkaConsumerTest {
         LogContext loggerFactory = new LogContext();
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
+
+        Heartbeat heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 loggerFactory,
                 consumerClient,
                 groupId,
                 rebalanceTimeoutMs,
                 sessionTimeoutMs,
-                heartbeatIntervalMs,
+                heartbeat,
                 assignors,
                 metadata,
                 subscriptions,
@@ -1811,7 +1815,7 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED);
 
-        return new KafkaConsumer<>(
+        return new KafkaConsumer<String, String>(
                 loggerFactory,
                 clientId,
                 consumerCoordinator,
@@ -1838,5 +1842,16 @@ public class KafkaConsumerTest {
             this.offset = offset;
             this.count = count;
         }
+    }
+
+    @Test
+    public void testCloseWithTimeUnit() {
+        KafkaConsumer consumer = EasyMock.partialMockBuilder(KafkaConsumer.class)
+                .addMockedMethod("close", Duration.class).createMock();
+        consumer.close(Duration.ofSeconds(1));
+        EasyMock.expectLastCall();
+        EasyMock.replay(consumer);
+        consumer.close(1, TimeUnit.SECONDS);
+        EasyMock.verify(consumer);
     }
 }

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
@@ -768,4 +770,11 @@ public abstract class AdminClient implements AutoCloseable {
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
     }
+
+    /**
+     * Get the metrics kept by the adminClient
+     *
+     * @return
+     */
+    public abstract Map<MetricName, ? extends Metric> metrics();
 }

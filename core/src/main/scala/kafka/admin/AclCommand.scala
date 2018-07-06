@@ -25,13 +25,13 @@ import kafka.utils._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.resource.{ResourcePatternFilter, ResourceNameType, ResourceType => JResourceType, Resource => JResource}
+import org.apache.kafka.common.resource.{PatternType, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 
 import scala.collection.JavaConverters._
 
 object AclCommand extends Logging {
 
-  val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, ResourceNameType.LITERAL)
+  val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
 
@@ -87,13 +87,14 @@ object AclCommand extends Logging {
   }
 
   private def addAcl(opts: AclCommandOptions) {
-    if (opts.options.valueOf(opts.resourceNameType) == ResourceNameType.ANY)
-      CommandLineUtils.printUsageAndDie(opts.parser, "A '--resource-name-type' value of 'Any' is not valid when adding acls.")
+    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    if (patternType == PatternType.MATCH || patternType == PatternType.ANY)
+      CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
     withAuthorizer(opts) { authorizer =>
       val resourceToAcl = getResourceFilterToAcls(opts).map {
         case (filter, acls) =>
-          Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), filter.nameType()) -> acls
+          Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), filter.patternType()) -> acls
       }
 
       if (resourceToAcl.values.exists(_.isEmpty))
@@ -262,24 +263,24 @@ object AclCommand extends Logging {
   }
 
   private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
-    val resourceNameType: ResourceNameType = opts.options.valueOf(opts.resourceNameType)
+    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, resourceNameType))
+      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, patternType))
 
-    if (resourceNameType == ResourceNameType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
+    if (patternType == PatternType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
       resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, resourceNameType))
+      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourcePatternFilter(JResourceType.GROUP, group.trim, patternType))
 
     if (opts.options.has(opts.transactionalIdOpt))
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
-        resourceFilters += new ResourcePatternFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, resourceNameType))
+        resourceFilters += new ResourcePatternFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, patternType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, resourceNameType))
+      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
@@ -345,11 +346,16 @@ object AclCommand extends Logging {
       .describedAs("delegation-token")
       .ofType(classOf[String])
 
-    val resourceNameType = parser.accepts("resource-name-type", "The type of the resource name, or any.")
+    val resourcePatternType = parser.accepts("resource-pattern-type", "The type of the resource pattern or pattern filter. " +
+      "When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'. " +
+      "When listing or removing acls, a specific pattern type can be used to list or remove acls from specific resource patterns, " +
+      "or use the filter values of 'any' or 'match', where 'any' will match any pattern type, but will match the resource name exactly, " +
+      "where as 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s). " +
+      "WARNING: 'match', when used in combination with the '--remove' switch, should be used with care.")
       .withRequiredArg()
       .ofType(classOf[String])
-      .withValuesConvertedBy(new ResourceNameTypeConverter())
-      .defaultsTo(ResourceNameType.LITERAL)
+      .withValuesConvertedBy(new PatternTypeConverter())
+      .defaultsTo(PatternType.LITERAL)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove ACLs.")
@@ -429,17 +435,17 @@ object AclCommand extends Logging {
 
 }
 
-class ResourceNameTypeConverter extends EnumConverter[ResourceNameType](classOf[ResourceNameType]) {
+class PatternTypeConverter extends EnumConverter[PatternType](classOf[PatternType]) {
 
-  override def convert(value: String): ResourceNameType = {
-    val nameType = super.convert(value)
-    if (nameType.isUnknown)
-      throw new ValueConversionException("Unknown resourceNameType: " + value)
+  override def convert(value: String): PatternType = {
+    val patternType = super.convert(value)
+    if (patternType.isUnknown)
+      throw new ValueConversionException("Unknown resource-pattern-type: " + value)
 
-    nameType
+    patternType
   }
 
-  override def valuePattern: String = ResourceNameType.values
-    .filter(_ != ResourceNameType.UNKNOWN)
+  override def valuePattern: String = PatternType.values
+    .filter(_ != PatternType.UNKNOWN)
     .mkString("|")
 }

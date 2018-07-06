@@ -69,6 +69,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
             return Collections.emptyMap();
         }
     };
+    private long streamTime = TimestampTracker.NOT_KNOWN;
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
@@ -214,6 +215,15 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     @Override
     public ProcessorNode currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
+    }
+
+    void updateStreamTime(final long streamTime) {
+        this.streamTime = Math.max(this.streamTime, streamTime);
+    }
+
+    @Override
+    public long streamTime() {
+        return streamTime;
     }
 
 }

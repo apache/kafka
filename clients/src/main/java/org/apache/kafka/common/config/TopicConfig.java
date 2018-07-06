@@ -165,4 +165,11 @@ public class TopicConfig {
         "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
         "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
         "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
+        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
+        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
+        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
+        "does not apply to any message format conversion that might be required for replication to followers.";
 }

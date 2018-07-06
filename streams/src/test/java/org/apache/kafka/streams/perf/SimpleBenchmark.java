@@ -32,10 +32,10 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -469,13 +469,18 @@ public class SimpleBenchmark {
         setStreamProperties("simple-benchmark-streams-with-store");
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder
-                = Stores.windowStoreBuilder(Stores.persistentWindowStore("store",
+
+        final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore(
+                "store",
                 AGGREGATE_WINDOW_SIZE * 3,
-                3,
                 AGGREGATE_WINDOW_SIZE,
-                false),
-                INTEGER_SERDE, BYTE_SERDE);
+                false,
+                60_000L
+            ),
+            INTEGER_SERDE,
+            BYTE_SERDE
+        );
         builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);

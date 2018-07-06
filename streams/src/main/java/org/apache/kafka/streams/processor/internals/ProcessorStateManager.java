@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -67,7 +66,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
                                  final LogContext logContext) throws IOException {
-        super(stateDirectory.directoryForTask(taskId));
+        super(stateDirectory.directoryForTask(taskId), eosEnabled);
 
         this.log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
@@ -81,12 +80,11 @@ public class ProcessorStateManager extends AbstractStateManager {
         offsetLimits = new HashMap<>();
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
+        restoreCallbacks = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
-
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -169,39 +167,16 @@ public class ProcessorStateManager extends AbstractStateManager {
             final int partition = getPartition(topicName);
             final TopicPartition storePartition = new TopicPartition(topicName, partition);
 
-            if (checkpointableOffsets.containsKey(storePartition)) {
-                partitionsAndOffsets.put(storePartition, checkpointableOffsets.get(storePartition));
-            } else {
-                partitionsAndOffsets.put(storePartition, -1L);
-            }
+            partitionsAndOffsets.put(storePartition, checkpointableOffsets.getOrDefault(storePartition, -1L));
         }
         return partitionsAndOffsets;
     }
 
-    List<ConsumerRecord<byte[], byte[]>> updateStandbyStates(final TopicPartition storePartition,
-                                                             final List<ConsumerRecord<byte[], byte[]>> records) {
-        final long limit = offsetLimit(storePartition);
-        List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
-        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-
+    void updateStandbyStates(final TopicPartition storePartition,
+                             final List<KeyValue<byte[], byte[]>> restoreRecords,
+                             final long lastOffset) {
         // restore states from changelog records
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreCallbacks.get(storePartition.topic()));
-
-        long lastOffset = -1L;
-        int count = 0;
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            if (record.offset() < limit) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
-                lastOffset = record.offset();
-            } else {
-                if (remainingRecords == null) {
-                    remainingRecords = new ArrayList<>(records.size() - count);
-                }
-
-                remainingRecords.add(record);
-            }
-            count++;
-        }
 
         if (!restoreRecords.isEmpty()) {
             try {
@@ -213,8 +188,6 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         // record the restored offset for its change log partition
         standbyRestoredOffsets.put(storePartition, lastOffset + 1);
-
-        return remainingRecords;
     }
 
     void putOffsetLimit(final TopicPartition partition, final long limit) {
@@ -222,7 +195,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         offsetLimits.put(partition, limit);
     }
 
-    private long offsetLimit(final TopicPartition partition) {
+    long offsetLimit(final TopicPartition partition) {
         final Long limit = offsetLimits.get(partition);
         return limit != null ? limit : Long.MAX_VALUE;
     }
@@ -340,7 +313,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         return globalStores.get(name);
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback callback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback callback) {
         if (callback instanceof BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) callback;
         }

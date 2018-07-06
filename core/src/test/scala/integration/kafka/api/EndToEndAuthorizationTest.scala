@@ -31,7 +31,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
-import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -152,7 +152,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--add",
                                           s"--topic=$topicPrefix",
                                           s"--group=$groupPrefix",
-                                          s"--resource-name-type=prefixed",
+                                          s"--resource-pattern-type=prefixed",
                                           s"--consumer",
                                           s"--producer",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
@@ -189,8 +189,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     createTopic(topic, 1, 3)
   }
 
-  override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createNewProducer(brokerList,
+  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+    TestUtils.createProducer(brokerList,
                                 maxBlockMs = 3000L,
                                 securityProtocol = this.securityProtocol,
                                 trustStoreFile = this.trustStoreFile,

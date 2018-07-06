@@ -927,7 +927,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs to the {@link KafkaConsumer main consumer}.
      * Properties using the prefix {@link #MAIN_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #MAIN_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #MAIN_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #MAIN_CONSUMER_PREFIX}, main consumer will share the general consumer configs
@@ -995,7 +995,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs for the {@link KafkaConsumer restore-consumer}.
      * Properties using the prefix {@link #RESTORE_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #RESTORE_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #RESTORE_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #RESTORE_CONSUMER_PREFIX}, restore consumer will share the general consumer configs
@@ -1027,7 +1027,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs for the {@link KafkaConsumer global consumer}.
      * Properties using the prefix {@link #GLOBAL_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #GLOBAL_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #GLOBAL_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #GLOBAL_CONSUMER_PREFIX}, global consumer will share the general consumer configs

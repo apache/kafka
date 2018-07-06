@@ -23,9 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.util.Arrays;
 import java.util.Locale;
@@ -46,7 +44,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class WordCountDemo {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -64,18 +62,8 @@ public class WordCountDemo {
         KStream<String, String> source = builder.stream("streams-plaintext-input");
 
         KTable<String, Long> counts = source
-            .flatMapValues(new ValueMapper<String, Iterable<String>>() {
-                @Override
-                public Iterable<String> apply(String value) {
-                    return Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" "));
-                }
-            })
-            .groupBy(new KeyValueMapper<String, String, String>() {
-                @Override
-                public String apply(String key, String value) {
-                    return value;
-                }
-            })
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" ")))
+            .groupBy((key, value) -> value)
             .count();
 
         // need to override value serde to Long type
