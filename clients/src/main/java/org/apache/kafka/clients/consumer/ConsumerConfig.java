@@ -95,6 +95,9 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
     private static final String ENABLE_AUTO_COMMIT_DOC = "If true the consumer's offset will be periodically committed in the background.";
 
+    /**
+     * <code>enable.parallel.rebalance</code>
+     */
     public static final String ENABLE_PARALLEL_REBALANCE_CONFIG = "enable.parallel.rebalance";
     private static final String ENABLE_PARALLEL_REBALANCE_DOC = "If true the lag caused by rebalancing will be mitigated with the usage of two processes where one processes the lagging offsets while the other processes current offsets.";
 
