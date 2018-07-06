@@ -201,7 +201,11 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                 // will only close the database and open it again with bulk loading enabled.
                 if (!bulkLoadSegments.contains(segment)) {
                     segment.toggleDbForBulkLoading(true);
-                    bulkLoadSegments.add(segment);
+                    // If the store does not exist yet, the getOrCreateSegmentIfLive will call openDB that
+                    // makes the open flag for the newly created store.
+                    // if the store does exist already, then toggleDbForBulkLoading will make sure that
+                    // the store is already open here.
+                    bulkLoadSegments = new HashSet<>(segments.allSegments());
                 }
                 final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                 if (record.value == null) {
