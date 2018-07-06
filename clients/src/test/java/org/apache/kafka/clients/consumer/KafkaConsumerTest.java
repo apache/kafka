@@ -34,7 +34,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InoperativeRecordException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -125,12 +128,158 @@ public class KafkaConsumerTest {
     private final int sessionTimeoutMs = 10000;
     private final int heartbeatIntervalMs = 1000;
 
+    /*
+        A container class that holds a KafkaConsumer and other associated classes for easier testing
+     */
+    class ConsumerContainer {
+        MockClient client;
+        public Node node;
+        KafkaConsumer<String, String> consumer;
+
+        ConsumerContainer(KafkaConsumer<String, String> consumer, MockClient client, Node node) {
+            this.consumer = consumer;
+            this.client = client;
+            this.node = node;
+        }
+    }
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
+
+    @Test
+    public void testPollReturnsRecords() {
+        ConsumerContainer consumerContainer = setUpConsumerAndCreateRecordsToPoll(tp0, 5);
+        KafkaConsumer<String, String> consumer = consumerContainer.consumer;
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(records.count(), 5);
+        assertEquals(records.partitions(), new HashSet<>(Collections.singletonList(tp0)));
+        assertEquals(records.records(tp0).size(), 5);
+
+        consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void testPollReturnsRecordsUpUntilError() {
+        int invalidRecordNumber = 4;
+        ByteArrayDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
+
+        ConsumerContainer consumerContainer = setUpConsumerAndCreateRecordsToPoll(tp0, 5, deserializer);
+        KafkaConsumer<String, String> consumer = consumerContainer.consumer;
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(invalidRecordNumber - 1, records.count());
+        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
+        assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
+        long lastValidOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
+        assertEquals(invalidRecordNumber - 2, lastValidOffset);
+
+        consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException() {
+        int invalidRecordNumber = 4;
+        int invalidRecordOffset = 3;
+        ByteArrayDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
+
+        KafkaConsumer<String, String> consumer = setUpConsumerAndCreateRecordsToPoll(tp0, 5, deserializer).consumer;
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        assertEquals(invalidRecordNumber - 1, records.count());
+        assertEquals(new HashSet<>(Collections.singletonList(tp0)), records.partitions());
+        assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
+        long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
+        assertEquals(invalidRecordNumber - 2, lastOffset);
+
+        try {
+            consumer.poll(Duration.ZERO);
+            fail("Second poll should raise " + RecordDeserializationException.class.getName());
+        } catch (RecordDeserializationException rde) {
+            assertEquals(invalidRecordOffset, rde.offset());
+            assertEquals(tp0, rde.partition());
+        }
+
+        consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+
+    @Test
+    public void testPollCorruptedRecordThrowsInoperativeRecordException() {
+        int numRecords = 10;  // total number of records created is 20
+        int corruptRecordOffset = 19;
+
+        ConsumerContainer container = setUpConsumerAndCreateRecordsToPoll(tp0, numRecords);
+        // create corrupt record
+        container.client.prepareResponseFrom(fetchResponse(tp0, 10, numRecords, false, true), container.node);
+        KafkaConsumer<String, String> consumer = container.consumer;
+        // 1-19 clean; 20 corrupt
+        consumer.poll(Duration.ZERO); // eat up first 19 clean records
+
+        try {
+            consumer.poll(Duration.ZERO);
+            fail("Poll should raise " + InoperativeRecordException.class.getName());
+        } catch (InoperativeRecordException ire) {
+            assertEquals(tp0, ire.partition());
+            assertEquals(corruptRecordOffset, ire.offset());
+        }
+
+        consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    /*
+        Create a mock deserializer which throws a SerializationException on the Nth record's value deserialization
+     */
+    private ByteArrayDeserializer mockErrorDeserializer(int recordNumber) {
+        int recordIndex = (recordNumber * 2)  - 1; // * 2 because we deserialize key and values
+        return new ByteArrayDeserializer() {
+            int i = 0;
+            byte[] invalidData;
+            @Override
+            public byte[] deserialize(String topic, byte[] data) {
+                if (i == recordIndex && invalidData == null) {
+                    invalidData = data;
+                }
+                if (Arrays.equals(data, invalidData)) {
+                    invalidData = data;
+                    throw new SerializationException();
+                }
+                i++;
+
+                return data;
+            }
+        };
+    }
+
+    private ConsumerContainer setUpConsumerAndCreateRecordsToPoll(TopicPartition tp, int recordCount) {
+        return setUpConsumerAndCreateRecordsToPoll(tp, recordCount, new StringDeserializer());
+    }
+
+    private ConsumerContainer setUpConsumerAndCreateRecordsToPoll(TopicPartition tp, int recordCount, Deserializer deserializer) {
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(tp.topic(), 1);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = createMetadata();
+        metadata.update(cluster, Collections.emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        PartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, deserializer, true);
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp), null);
+        consumer.updateAssignmentMetadataIfNeeded(0L);
+        client.prepareResponseFrom(fetchResponse(tp, 0, recordCount), node);
+
+        return new ConsumerContainer(consumer, client, node);
+    }
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -1697,22 +1846,22 @@ public class KafkaConsumerTest {
     }
 
 
+    /*
+        Builds records for the given partitions
+     */
     private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
+        return fetchResponse(fetches, false, false);
+    }
+
+    private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches, boolean startFromOffset, boolean corruptRecord) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
-            final MemoryRecords records;
-            if (fetchCount == 0) {
-                records = MemoryRecords.EMPTY;
-            } else {
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
-                        TimestampType.CREATE_TIME, fetchOffset);
-                for (int i = 0; i < fetchCount; i++)
-                    builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-                records = builder.build();
-            }
+
+            final MemoryRecords records = fetchCount == 0 ? MemoryRecords.EMPTY : buildRecords(fetchOffset, fetchCount, startFromOffset, corruptRecord);
+
             tpResponses.put(partition, new FetchResponse.PartitionData<>(
                     Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
                     0L, null, records));
@@ -1720,9 +1869,37 @@ public class KafkaConsumerTest {
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
 
+
+    private MemoryRecords buildRecords(long baseOffset, long recordCount, boolean startFromOffset, boolean corruptRecord) {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE,
+                TimestampType.CREATE_TIME, baseOffset);
+
+        int startOffset = startFromOffset ? (int) baseOffset : 0 ;
+        for (int i = startOffset; i < (startOffset + recordCount); i++)
+            builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
+
+        if (corruptRecord) {
+            builder.close();
+            // break the CRC
+            buffer.position(buffer.position() - 1);
+            buffer.put("beef".getBytes());
+            buffer.position(0);
+        }
+
+        return builder.build();
+    }
+
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
+        return fetchResponse(partition, fetchOffset, count, false, false);
+    }
+    /*
+        Creates a fetch response with `count` records in it, starting from fetchOffset.
+        If `corruptRecord` is true, the last record's checksum will be corrupt
+     */
+    private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count, boolean startFromOffset, boolean corruptRecord) {
         FetchInfo fetchInfo = new FetchInfo(fetchOffset, count);
-        return fetchResponse(Collections.singletonMap(partition, fetchInfo));
+        return fetchResponse(Collections.singletonMap(partition, fetchInfo), startFromOffset, corruptRecord);
     }
 
     private KafkaConsumer<String, String> newConsumer(Time time,
@@ -1730,13 +1907,7 @@ public class KafkaConsumerTest {
                                                       Metadata metadata,
                                                       PartitionAssignor assignor,
                                                       boolean autoCommitEnabled) {
-        return newConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, autoCommitEnabled);
-    }
-
-    private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
-                                                                  KafkaClient client,
-                                                                  Metadata metadata) {
-        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, false);
+        return newConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, new StringDeserializer(), autoCommitEnabled);
     }
 
     private KafkaConsumer<String, String> newConsumer(Time time,
@@ -1744,6 +1915,31 @@ public class KafkaConsumerTest {
                                                       Metadata metadata,
                                                       PartitionAssignor assignor,
                                                       OffsetResetStrategy resetStrategy,
+                                                      boolean autoCommitEnabled) {
+        return newConsumer(time, client, metadata, assignor, resetStrategy, new StringDeserializer(), autoCommitEnabled);
+    }
+
+    private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
+                                                                  KafkaClient client,
+                                                                  Metadata metadata) {
+        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, new StringDeserializer(), false);
+    }
+
+    private KafkaConsumer<String, String> newConsumer(Time time,
+                                                      KafkaClient client,
+                                                      Metadata metadata,
+                                                      PartitionAssignor assignor,
+                                                      Deserializer deserializer,
+                                                      boolean autoCommitEnabled) {
+        return newConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, deserializer, autoCommitEnabled);
+    }
+
+    private KafkaConsumer<String, String> newConsumer(Time time,
+                                                      KafkaClient client,
+                                                      Metadata metadata,
+                                                      PartitionAssignor assignor,
+                                                      OffsetResetStrategy resetStrategy,
+                                                      Deserializer deserializer,
                                                       boolean autoCommitEnabled) {
         String clientId = "mock-consumer";
         String groupId = "mock-group";
@@ -1759,9 +1955,6 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
-        
-        Deserializer<String> keyDeserializer = new StringDeserializer();
-        Deserializer<String> valueDeserializer = new StringDeserializer();
 
         List<PartitionAssignor> assignors = singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
@@ -1804,8 +1997,8 @@ public class KafkaConsumerTest {
                 fetchSize,
                 maxPollRecords,
                 checkCrcs,
-                keyDeserializer,
-                valueDeserializer,
+                deserializer,
+                deserializer,
                 metadata,
                 subscriptions,
                 metrics,
@@ -1819,8 +2012,8 @@ public class KafkaConsumerTest {
                 loggerFactory,
                 clientId,
                 consumerCoordinator,
-                keyDeserializer,
-                valueDeserializer,
+                deserializer,
+                deserializer,
                 fetcher,
                 interceptors,
                 time,

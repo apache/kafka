@@ -19,16 +19,17 @@ package org.apache.kafka.common.errors;
 import org.apache.kafka.common.TopicPartition;
 
 /**
- *  Any exception during deserialization in the consumer
+ *  Thrown when encountering a corrupt/invalid record in the consumer
+ *  Contains the offset of the record or the last offset of the batch record
  */
-public class RecordDeserializationException extends SerializationException {
+public class InoperativeRecordException extends ApiException {
 
     private static final long serialVersionUID = 1L;
     private TopicPartition partition;
     private long offset;
 
-    public RecordDeserializationException(TopicPartition partition, long offset, String message) {
-        super(message);
+    public InoperativeRecordException(TopicPartition partition, long offset, String message, Throwable cause) {
+        super(message, cause);
         this.partition = partition;
         this.offset = offset;
     }
@@ -39,11 +40,5 @@ public class RecordDeserializationException extends SerializationException {
 
     public long offset() {
         return offset;
-    }
-
-    /* avoid the expensive and useless stack trace for serialization exceptions */
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
     }
 }
