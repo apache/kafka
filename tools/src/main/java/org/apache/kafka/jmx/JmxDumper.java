@@ -15,13 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.tools;
+package org.apache.kafka.jmx;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -37,7 +33,6 @@ import javax.management.InstanceNotFoundException;
 import javax.management.MBeanAttributeInfo;
 import javax.management.MBeanInfo;
 import javax.management.MBeanServerConnection;
-import javax.management.ObjectName;
 import javax.management.remote.JMXConnector;
 import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
@@ -83,119 +78,6 @@ public final class JmxDumper {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    /**
-     * The top-level JmxDumper config object.
-     * Maps host:port pairs to DumperConfig objects.
-     */
-    public static final class TopLevelConfig {
-        private final Map<String, DumperConfig> map;
-
-        @JsonCreator
-        public TopLevelConfig() {
-            this.map = new HashMap<>();
-        }
-
-        private TopLevelConfig(Map<String, DumperConfig> map) {
-            this.map = map;
-        }
-
-        @JsonAnyGetter
-        public Map<String, DumperConfig> get() {
-            return map;
-        }
-
-        @JsonAnySetter
-        public void set(String name, DumperConfig value) {
-            map.put(name, value);
-        }
-    }
-
-    public static final class DumperConfig {
-        private final int periodMs;
-        private final List<FileConfig> files;
-
-        @JsonCreator
-        public DumperConfig(@JsonProperty("periodMs") int periodMs,
-                            @JsonProperty("files") List<FileConfig> files) {
-            this.periodMs = (periodMs <= 0) ? DEFAULT_PERIOD_MS : periodMs;
-            this.files = (files == null) ? Collections.emptyList() : new ArrayList<>(files);
-        }
-
-        @JsonProperty
-        public int periodMs() {
-            return periodMs;
-        }
-
-        @JsonProperty
-        public List<FileConfig> files() {
-            return files;
-        }
-
-        Collection<ObjectConfig> allObjects() {
-            HashMap<String, ObjectConfig> objects = new HashMap<>();
-            for (FileConfig file : files) {
-                for (ObjectConfig object : file.objects) {
-                    objects.put(object.name, object);
-                }
-            }
-            return objects.values();
-        }
-    }
-
-    public static final class FileConfig {
-        private final String path;
-        private final List<ObjectConfig> objects;
-
-        @JsonCreator
-        public FileConfig(@JsonProperty("path") String path,
-                             @JsonProperty("objects") List<ObjectConfig> objects) {
-            this.path = (path == null) ? "" : path;
-            this.objects = (objects == null) ? Collections.emptyList() : new ArrayList<>(objects);
-        }
-
-        @JsonProperty
-        public String path() {
-            return path;
-        }
-
-        @JsonProperty
-        public List<ObjectConfig> objects() {
-            return objects;
-        }
-    }
-
-    public static final class ObjectConfig {
-        private final String name;
-        private final String shortName;
-        private final List<String> attributes;
-        private final ObjectName objectName;
-
-        @JsonCreator
-        public ObjectConfig(@JsonProperty("name") String name,
-                               @JsonProperty("shortName") String shortName,
-                               @JsonProperty("attributes") List<String> attributes) throws Exception {
-            this.name = (name == null) ? "" : name;
-            this.shortName = (shortName == null) ? "" : shortName;
-            this.attributes = (attributes == null) ? Collections.emptyList() : new ArrayList<>(attributes);
-            this.objectName = new ObjectName(this.name);
-        }
-
-        @JsonProperty
-        public String name() {
-            return name;
-        }
-
-        @JsonProperty
-        public String shortName() {
-            return shortName;
-        }
-
-        @JsonProperty
-        public List<String> attributes() {
-            return attributes;
-        }
-    }
-
     public static final class DumperUrl {
         final String host;
         final int port;
@@ -236,12 +118,12 @@ public final class JmxDumper {
     }
 
     private final class CsvFile implements AutoCloseable {
-        private final FileConfig file;
+        private final JmxFileConfig file;
         private final OutputStreamWriter writer;
 
-        public CsvFile(FileConfig file) throws Exception {
+        public CsvFile(JmxFileConfig file) throws Exception {
             this.file = file;
-            OutputStream outputStream = Files.newOutputStream(Paths.get(file.path), WRITE, CREATE_NEW);
+            OutputStream outputStream = Files.newOutputStream(Paths.get(file.path()), WRITE, CREATE_NEW);
             try {
                 this.writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
             } catch (Throwable t) {
@@ -254,15 +136,15 @@ public final class JmxDumper {
             HashMap<String, String> shortNames = new HashMap<>();
             CsvRow headerRow = new CsvRow();
             headerRow.add("time");
-            for (ObjectConfig object : file.objects) {
-                String prev = shortNames.get(object.shortName);
+            for (JmxObjectConfig object : file.objects()) {
+                String prev = shortNames.get(object.shortName());
                 if (prev != null) {
                     throw new RuntimeException("shortName collision: both " + prev + " and " +
-                        object.name + " have the shortName " + object.shortName);
+                        object.name() + " have the shortName " + object.shortName());
                 }
-                shortNames.put(object.shortName, object.name);
-                for (String attribute : object.attributes) {
-                    headerRow.add(object.shortName + ":" + attribute);
+                shortNames.put(object.shortName(), object.name());
+                for (String attribute : object.attributes()) {
+                    headerRow.add(object.shortName() + ":" + attribute);
                 }
             }
             writer.write(headerRow.asString());
@@ -278,14 +160,14 @@ public final class JmxDumper {
         public void storeJmx(long time) throws Exception {
             CsvRow row = new CsvRow();
             row.add(time);
-            for (ObjectConfig object : file.objects) {
+            for (JmxObjectConfig object : file.objects()) {
                 HashMap<String, Object> values = new HashMap<>();
                 List<Attribute> attributeList = null;
                 try {
-                    attributeList = connection.getAttributes(object.objectName,
-                        object.attributes.toArray(new String[0])).asList();
+                    attributeList = connection.getAttributes(object.objectName(),
+                        object.attributes().toArray(new String[0])).asList();
                 } catch (Throwable e) {
-                    throw new RuntimeException("Failed to get attributes for object " + object.name, e);
+                    throw new RuntimeException("Failed to get attributes for object " + object.name(), e);
                 }
                 for (Attribute attribute : attributeList) {
                     try {
@@ -294,11 +176,11 @@ public final class JmxDumper {
                         throw new RuntimeException("Failed to get a value for attribute " + attribute, e);
                     }
                 }
-                for (String attribute : objectNameToAttributes.get(object.name)) {
+                for (String attribute : objectNameToAttributes.get(object.name())) {
                     Object value = values.get(attribute);
                     if (value == null) {
                         throw new RuntimeException("getAttributes failed to fetch a value for " +
-                            object.shortName + ":" + attribute);
+                            object.shortName() + ":" + attribute);
                     }
                     row.addObject(value);
                 }
@@ -389,29 +271,29 @@ public final class JmxDumper {
         }
 
         private final boolean load() throws Exception {
-            Collection<ObjectConfig> objects = dumperConfig.allObjects();
-            for (ObjectConfig object : objects) {
+            Collection<JmxObjectConfig> objects = dumperConfig.allObjects();
+            for (JmxObjectConfig object : objects) {
                 MBeanInfo info = null;
                 try {
-                    info = connection.getMBeanInfo(object.objectName);
+                    info = connection.getMBeanInfo(object.objectName());
                 } catch (InstanceNotFoundException e) {
-                    System.out.printf("** Unable to locate %s%n", object.name);
+                    System.out.printf("** Unable to locate %s%n", object.name());
                     return false;
                 }
                 ArrayList<String> attributeList = new ArrayList<>();
                 for (MBeanAttributeInfo attributeInfo : info.getAttributes()) {
                     attributeList.add(attributeInfo.getName());
                 }
-                if (object.attributes.isEmpty()) {
-                    objectNameToAttributes.put(object.name, attributeList);
+                if (object.attributes().isEmpty()) {
+                    objectNameToAttributes.put(object.name(), attributeList);
                 } else {
-                    for (String attribute : object.attributes) {
+                    for (String attribute : object.attributes()) {
                         if (!attributeList.contains(attribute)) {
                             throw new RuntimeException("Unable to find attribute " + attribute + " for " +
-                                object.name + ".  Found: " + Utils.mkList(attributeList));
+                                object.name() + ".  Found: " + Utils.mkList(attributeList));
                         }
                     }
-                    objectNameToAttributes.put(object.name, object.attributes);
+                    objectNameToAttributes.put(object.name(), object.attributes());
                 }
             }
             System.out.printf("** Located %d object names.%n", objects.size());
@@ -423,7 +305,7 @@ public final class JmxDumper {
         @Override
         public void run() {
             try {
-                for (FileConfig file : dumperConfig.files) {
+                for (JmxFileConfig file : dumperConfig.files()) {
                     CsvFile csvFile = new CsvFile(file);
                     csvFiles.add(csvFile);
                     csvFile.writeHeader();
@@ -443,7 +325,8 @@ public final class JmxDumper {
                 for (CsvFile csvFile : csvFiles) {
                     csvFile.storeJmx(time);
                 }
-                executorService.schedule(this, dumperConfig.periodMs, TimeUnit.MILLISECONDS);
+                executorService.schedule(this, dumperConfig.periodMs(),
+                    TimeUnit.MILLISECONDS);
             } catch (Throwable t) {
                 completer.completeExceptionally(t);
             }
@@ -501,7 +384,7 @@ public final class JmxDumper {
     }
 
     private final DumperUrl url;
-    private final DumperConfig dumperConfig;
+    private final JmxDumperConfig dumperConfig;
     private final Completer completer;
     private final ScheduledExecutorService executorService;
     private JMXConnector connector = null;
@@ -509,7 +392,7 @@ public final class JmxDumper {
     private final List<CsvFile> csvFiles = new ArrayList<>();
     private final HashMap<String, List<String>> objectNameToAttributes = new HashMap<>();
 
-    JmxDumper(String endpoint, DumperConfig dumperConfig, Completer completer) throws Exception {
+    JmxDumper(String endpoint, JmxDumperConfig dumperConfig, Completer completer) throws Exception {
         this.url = new DumperUrl(endpoint);
         this.dumperConfig = dumperConfig;
         this.completer = completer;
@@ -543,10 +426,12 @@ public final class JmxDumper {
 
         Namespace res = parser.parseArgsOrFail(args);
         String configPath = res.getString("config_path");
-        TopLevelConfig topLevelConfig = JSON_SERDE.readValue(new File(configPath), TopLevelConfig.class);
-        final Completer completer = new Completer(topLevelConfig.map.size());
+
+        JmxDumpersConfig dumpersConfig = JSON_SERDE.
+            readValue(new File(configPath), JmxDumpersConfig.class);
+        final Completer completer = new Completer(dumpersConfig.map().size());
         Map<String, JmxDumper> dumpersMap = new HashMap<>();
-        for (Map.Entry<String, DumperConfig> entry : topLevelConfig.map.entrySet()) {
+        for (Map.Entry<String, JmxDumperConfig> entry : dumpersConfig.map().entrySet()) {
             dumpersMap.put(entry.getKey(),
                 new JmxDumper(entry.getKey(), entry.getValue(), completer));
         }

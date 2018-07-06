@@ -15,41 +15,47 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.soak.role;
+package org.apache.kafka.jmx;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.jmx.JmxDumpersConfig;
-import org.apache.kafka.soak.action.Action;
-import org.apache.kafka.soak.action.JmxDumperStartAction;
-import org.apache.kafka.soak.action.JmxDumperStatusAction;
-import org.apache.kafka.soak.action.JmxDumperStopAction;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 
-public class JmxDumperRole implements Role {
-    public static final String CLASS_NAME = "org.apache.kafka.jmx.JmxDumper";
+public final class JmxDumperConfig {
+    private final static int DEFAULT_PERIOD_MS = 1000;
 
-    private final JmxDumpersConfig config;
+    private final int periodMs;
+    private final List<JmxFileConfig> files;
 
     @JsonCreator
-    public JmxDumperRole(@JsonProperty("conf") JmxDumpersConfig config) {
-        this.config = (config == null) ? new JmxDumpersConfig(Collections.emptyMap()) : config;
+    public JmxDumperConfig(@JsonProperty("periodMs") int periodMs,
+                           @JsonProperty("files") List<JmxFileConfig> files) {
+        this.periodMs = (periodMs <= 0) ? DEFAULT_PERIOD_MS : periodMs;
+        this.files = (files == null) ? Collections.emptyList() : new ArrayList<>(files);
     }
 
     @JsonProperty
-    public JmxDumpersConfig config() {
-        return config;
+    public int periodMs() {
+        return periodMs;
     }
 
-    @Override
-    public Collection<Action> createActions(String nodeName) {
-        ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new JmxDumperStartAction(nodeName, config));
-        actions.add(new JmxDumperStatusAction(nodeName));
-        actions.add(new JmxDumperStopAction(nodeName));
-        return actions;
+    @JsonProperty
+    public List<JmxFileConfig> files() {
+        return files;
     }
-};
+
+    Collection<JmxObjectConfig> allObjects() {
+        HashMap<String, JmxObjectConfig> objects = new HashMap<>();
+        for (JmxFileConfig file : files) {
+            for (JmxObjectConfig object : file.objects()) {
+                objects.put(object.name(), object);
+            }
+        }
+        return objects.values();
+    }
+}

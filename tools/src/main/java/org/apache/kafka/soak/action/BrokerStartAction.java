@@ -96,6 +96,7 @@ public final class BrokerStartAction extends Action {
 
     public String[] createRunDaemonCommandLine() {
         return new String[]{"-n", "--", "nohup", "env",
+            "JMX_PORT=9192",
             "KAFKA_JVM_PERFORMANCE_OPTS='" + jvmOptions + "'",
             "KAFKA_LOG4J_OPTS='-Dlog4j.configuration=file:" + ActionPaths.KAFKA_BROKER_LOG4J + "' ",
             ActionPaths.KAFKA_START_SCRIPT, ActionPaths.KAFKA_BROKER_PROPERTIES,

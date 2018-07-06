@@ -17,12 +17,12 @@
 
 package org.apache.kafka.soak.action;
 
+import org.apache.kafka.jmx.JmxDumpersConfig;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
 import org.apache.kafka.soak.role.JmxDumperRole;
 import org.apache.kafka.soak.tool.SoakTool;
-import org.apache.kafka.tools.JmxDumper;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,13 +38,13 @@ import static org.apache.kafka.soak.action.ActionPaths.KAFKA_RUN_CLASS;
 public final class JmxDumperStartAction extends Action {
     public final static String TYPE = "jmxStart";
 
-    private final JmxDumper.TopLevelConfig conf;
+    private final JmxDumpersConfig config;
 
-    public JmxDumperStartAction(String scope, JmxDumper.TopLevelConfig conf) {
+    public JmxDumperStartAction(String scope, JmxDumpersConfig config) {
         super(new ActionId(TYPE, scope),
-            new TargetId[]{ new TargetId(BrokerStopAction.TYPE, scope) },
+            new TargetId[]{new TargetId(BrokerStopAction.TYPE, scope)},
             new String[] {});
-        this.conf = conf;
+        this.config = config;
     }
 
     @Override
@@ -72,7 +72,7 @@ public final class JmxDumperStartAction extends Action {
     private File writeJmxDumperConfig(SoakCluster cluster, SoakNode node) throws IOException {
         File file = new File(cluster.env().outputDirectory(),
                 String.format("jmx-dumper-%d.conf", node.nodeIndex()));
-        SoakTool.JSON_SERDE.writeValue(file, conf);
+        SoakTool.JSON_SERDE.writeValue(file, config);
         return file;
     }
 

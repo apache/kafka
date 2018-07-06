@@ -189,6 +189,16 @@
     <allow pkg="org.apache.log4j" />
   </subpackage>
 
+  <subpackage name="jmx">
+    <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="javax.servlet" />
+    <allow pkg="javax.ws.rs" />
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.jmx" />
+    <allow pkg="org.apache.log4j" />
+  </subpackage>
+
   <subpackage name="trogdor">
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="javax.servlet" />
@@ -212,6 +222,7 @@
     <allow pkg="javax.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.jmx"/>
     <allow pkg="org.apache.kafka.soak" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
