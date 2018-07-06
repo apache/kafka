@@ -37,7 +37,8 @@ object QuotaFactory extends Logging {
 
   object UnboundedQuota extends ReplicaQuota {
     override def isThrottled(topicPartition: TopicPartition): Boolean = false
-    override def isQuotaExceeded(): Boolean = false
+    override def isQuotaExceeded: Boolean = false
+    def record(value: Long): Unit = ()
   }
 
   case class QuotaManagers(fetch: ClientQuotaManager,
