@@ -19,12 +19,13 @@ package kafka.server
 import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.log.LogManager
 import kafka.cluster.Partition
+import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset
 import org.apache.kafka.common.requests.EpochEndOffset._
@@ -44,6 +45,25 @@ class ReplicaFetcherThreadTest {
   private val t2p1 = new TopicPartition("topic2", 1)
 
   private val brokerEndPoint = new BrokerEndPoint(0, "localhost", 1000)
+
+  @Test
+  def shouldSendLatestRequestVersionsByDefault(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+    val thread = new ReplicaFetcherThread(
+      name = "bob",
+      fetcherId = 0,
+      sourceBroker = brokerEndPoint,
+      brokerConfig = config,
+      replicaMgr = null,
+      metrics =  new Metrics(),
+      time = new SystemTime(),
+      quota = UnboundedQuota,
+      leaderEndpointBlockingSend = None)
+    assertEquals(ApiKeys.FETCH.latestVersion, thread.fetchRequestVersion)
+    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, thread.offsetForLeaderEpochRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, thread.listOffsetRequestVersion)
+  }
 
   @Test
   def shouldNotIssueLeaderEpochRequestIfInterbrokerVersionBelow11(): Unit = {
@@ -108,7 +128,6 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
     val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
@@ -131,14 +150,15 @@ class ReplicaFetcherThreadTest {
     //Expectations
     expect(partition.truncateTo(anyLong(), anyBoolean())).once
 
-    replay(leaderEpochs, replicaManager, logManager, quota, replica)
+    replay(leaderEpochs, replicaManager, logManager, replica)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1), t1p1 -> new EpochEndOffset(leaderEpoch, 1)).asJava
 
     //Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
-    val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
+    val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, replicaManager,
+      new Metrics, new SystemTime, UnboundedQuota, Some(mockNetwork))
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
     //Loop 1
