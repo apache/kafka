@@ -568,6 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
+    private final boolean useParallelRebalance;
     private volatile boolean closed = false;
     private List<PartitionAssignor> assignors;
 
@@ -668,6 +669,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+            this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
             int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
             if (this.requestTimeoutMs < sessionTimeoutMs)
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " (" + requestTimeoutMs +
@@ -833,6 +835,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.useParallelRebalance = false;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
     }

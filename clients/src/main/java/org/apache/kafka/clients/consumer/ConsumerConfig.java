@@ -95,6 +95,9 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
     private static final String ENABLE_AUTO_COMMIT_DOC = "If true the consumer's offset will be periodically committed in the background.";
 
+    public static final String ENABLE_PARALLEL_REBALANCE_CONFIG = "enable.parallel.rebalance";
+    private static final String ENABLE_PARALLEL_REBALANCE_DOC = "If true the lag caused by rebalancing will be mitigated with the usage of two processes where one processes the lagging offsets while the other processes current offsets.";
+
     /**
      * <code>auto.commit.interval.ms</code>
      */
@@ -293,6 +296,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.MEDIUM,
                                         ENABLE_AUTO_COMMIT_DOC)
+                                .define(ENABLE_PARALLEL_REBALANCE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.MEDIUM,
+                                        ENABLE_PARALLEL_REBALANCE_DOC)
                                 .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
                                         Type.INT,
                                         5000,
