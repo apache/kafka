@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
-public final class ConsumerCoordinator extends AbstractCoordinator {
+public class ConsumerCoordinator extends AbstractCoordinator {
     private final Logger log;
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
