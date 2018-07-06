@@ -90,7 +90,8 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         final long timestamp = internalProcessorContext.timestamp();
         final long streamTime = internalProcessorContext.streamTime();
         final long latenessBound = suppress.getLatenessBound().toMillis();
-        if (timestamp >= (streamTime - latenessBound)){
+        System.out.println(key + ", " + value + ", " + timestamp + ", " + streamTime + ", " + latenessBound);
+        if (timestamp >= (streamTime - latenessBound)) {
             internalProcessorContext.forward(key, value);
         }
     }
