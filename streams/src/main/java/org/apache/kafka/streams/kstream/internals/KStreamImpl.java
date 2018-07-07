@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -376,6 +378,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             builder.addGraphNode(branchNode, branchChildNode);
             branchChildren[i] = new KStreamImpl<>(childNames[i], keySerde, valSerde, sourceNodes, repartitionRequired, branchChildNode, builder);
+        }
+
+        return branchChildren;
+    }
+
+    @Override
+    public Map<String, KStream<K, V>> branch(final Map<String, Predicate<? super K, ? super V>> predicatesMap) {
+        Map.Entry<String, Predicate<? super K, ? super V>>[] predicatesEntries = (Map.Entry<String, Predicate<? super K, ? super V>>[])predicatesMap.entrySet().toArray();
+
+        // extract predicates array
+        Predicate<? super K, ? super V>[] predicates = (Predicate<? super K, ? super V>[]) predicatesMap.values().toArray();
+
+        // hand over to original array style processing
+        KStream<K, V>[] branchesArray = branch(predicates);
+
+        // map array results into predicate map
+        Map<String, KStream<K, V>> branchChildren = new HashMap<String, KStream<K, V>>(predicates.length);
+        String[] branchNames = (String[]) predicatesMap.keySet().toArray();
+
+        for (int i = 0; i < branchesArray.length; i++) {
+            String predicateMapChildName = branchNames[i];
+            KStream<K, V> branchChild = branchesArray[i];
+            branchChildren.put(predicateMapChildName, branchChild);
         }
 
         return branchChildren;
