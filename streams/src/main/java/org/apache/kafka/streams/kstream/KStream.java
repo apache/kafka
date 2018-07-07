@@ -759,7 +759,7 @@ public interface KStream<K, V> {
     @SuppressWarnings("unchecked")
     KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
 
-    Map<String, KStream<K, V>> branch(final Map<String, Predicate<? super K, ? super V>> predicates);
+    Map<String, KStream<K, V>> branchMap(final Map<String, Predicate<? super K, ? super V>> predicates);
 
     /**
      * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on

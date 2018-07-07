@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -461,7 +463,7 @@ public class KStreamImplTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldHaveAtLeastOnPredicateWhenBranching() {
+    public void shouldHaveAtLeastOnePredicateWhenBranching() {
         testStream.branch();
     }
 
@@ -469,6 +471,32 @@ public class KStreamImplTest {
     public void shouldCantHaveNullPredicate() {
         testStream.branch((Predicate) null);
     }
+
+
+    public void shouldTranslatePredicateMap() {
+        Map<String, Predicate<? super String, ? super String>> predicatesMap = new HashMap<>();
+        Predicate predicateZero = new Predicate() {
+            @Override
+            public boolean test(Object key, Object value) {
+                return false;
+            }
+        };
+        predicatesMap.put("zero", predicateZero);
+        Predicate predicateOne = new Predicate() {
+            @Override
+            public boolean test(Object key, Object value) {
+                return false;
+            }
+        };
+        predicatesMap.put("one", predicateOne);
+
+        Map<String, KStream<String, String>> stringKStreamMap = testStream.branchMap(predicatesMap);
+
+        assertEquals(stringKStreamMap.get("zero"), predicateZero);
+        assertEquals(stringKStreamMap.get("one"), predicateOne);
+    }
+
+
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicOnThrough() {
