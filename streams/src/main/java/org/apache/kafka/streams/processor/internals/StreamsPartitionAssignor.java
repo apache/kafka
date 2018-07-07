@@ -798,9 +798,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             return;
         }
         int receivedAssignmentMetadataVersion = info.version();
-        if (receivedAssignmentMetadataVersion == AssignmentInfo.VERSION_WITH_ERRORCODE) {
-            receivedAssignmentMetadataVersion = AssignmentInfo.VERSION_WITH_ERRORCODE - 1;
-        }
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {

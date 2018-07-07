@@ -32,7 +32,7 @@ public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 3;
+    public static final int LATEST_SUPPORTED_VERSION = 4;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
