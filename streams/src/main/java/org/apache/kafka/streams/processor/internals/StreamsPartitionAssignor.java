@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -62,6 +63,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
+    private final static int VERSION_FOUR = 4;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
     private int minReceivedMetadataVersion = UNKNOWN;
     protected Set<Integer> supportedVersions = new HashSet<>();
@@ -93,8 +95,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
         }
     }
-    // flag indicating whether streams app should shutdown
-    private Error error = Error.NONE;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -212,6 +212,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
     private AtomicBoolean versionProbingFlag;
+    // flag indicating whether streams app should shutdown
+    private AtomicInteger shutdownErrorCode;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
@@ -290,6 +292,21 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         versionProbingFlag = (AtomicBoolean) o2;
+
+        final Object ai = configs.get(StreamsConfig.InternalConfig.SHUTDOWN_ERROR_CODE);
+        if (ai == null) {
+            final KafkaException fatalException = new KafkaException("ShutdownErrorCode is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(ai instanceof AtomicInteger)) {
+            final KafkaException fatalException = new KafkaException(String.format("%s is not an instance of %s",
+                ai.getClass().getName(), AtomicInteger.class.getName()));
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+        shutdownErrorCode = (AtomicInteger) ai;
 
         numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
@@ -793,8 +810,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != Error.NONE.code) {
-            error = Error.fromCode(info.errCode());
-            // set flag to shutdown streams app
+          // set flag to shutdown streams app
+            shutdownErrorCode.set(info.errCode());
             return;
         }
         int receivedAssignmentMetadataVersion = info.version();
@@ -843,6 +860,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 partitionsByHost = info.partitionsByHost();
                 break;
             case VERSION_THREE:
+            case VERSION_FOUR:
                 if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
                     log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
                         "Upgrading subscription metadata version to {} for next rebalance.",

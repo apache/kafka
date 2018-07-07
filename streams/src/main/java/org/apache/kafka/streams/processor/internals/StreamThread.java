@@ -261,6 +261,12 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
+            if (streamThread.shutdownErrorCode.get() != 0) {
+                log.debug("Received error code " + streamThread.shutdownErrorCode.get() +
+                    " - shutdown");
+                streamThread.shutdown();
+                return;
+            }
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
@@ -564,6 +570,7 @@ public class StreamThread extends Thread {
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
     private final AtomicBoolean versionProbingFlag;
+    private final AtomicInteger shutdownErrorCode;
 
     private long lastCommitMs;
     private long timerStartedMs;
@@ -659,6 +666,8 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         final AtomicBoolean versionProbingFlag = new AtomicBoolean();
         consumerConfigs.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, versionProbingFlag);
+        final AtomicInteger shutdownErrorCode = new AtomicInteger();
+        consumerConfigs.put(StreamsConfig.InternalConfig.SHUTDOWN_ERROR_CODE, shutdownErrorCode);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -679,7 +688,8 @@ public class StreamThread extends Thread {
             builder,
             threadClientId,
             logContext,
-            versionProbingFlag);
+            versionProbingFlag,
+            shutdownErrorCode);
     }
 
     public StreamThread(final Time time,
@@ -693,7 +703,8 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
                         final LogContext logContext,
-                        final AtomicBoolean versionProbingFlag) {
+                        final AtomicBoolean versionProbingFlag,
+                        final AtomicInteger shutdownErrorCode) {
         super(threadClientId);
 
         this.stateLock = new Object();
@@ -711,6 +722,7 @@ public class StreamThread extends Thread {
         this.consumer = consumer;
         this.originalReset = originalReset;
         this.versionProbingFlag = versionProbingFlag;
+        this.shutdownErrorCode = shutdownErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);

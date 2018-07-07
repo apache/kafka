@@ -83,6 +83,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -305,7 +306,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
@@ -339,7 +341,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
@@ -374,7 +377,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval + 1);
@@ -523,7 +527,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.setStateListener(
             new StreamThread.StateListener() {
@@ -560,7 +565,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.shutdown();
         EasyMock.verify(taskManager);
@@ -588,7 +594,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean()
+            new AtomicBoolean(),
+            new AtomicInteger()
         );
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
@@ -1288,7 +1295,9 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicBoolean());
+                new AtomicBoolean(),
+                new AtomicInteger()
+                );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
@@ -1331,7 +1340,9 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicBoolean());
+                new AtomicBoolean(),
+                new AtomicInteger()
+                );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
