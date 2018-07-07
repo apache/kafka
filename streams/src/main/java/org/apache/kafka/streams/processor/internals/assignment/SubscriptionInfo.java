@@ -122,6 +122,7 @@ public class SubscriptionInfo {
                 buf = encodeVersionTwo();
                 break;
             case 3:
+            case 4:
                 buf = encodeVersionThree();
                 break;
             default:
@@ -247,6 +248,7 @@ public class SubscriptionInfo {
                 decodeVersionTwoData(subscriptionInfo, data);
                 break;
             case 3:
+            case 4:
                 latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 decodeVersionThreeData(subscriptionInfo, data);
