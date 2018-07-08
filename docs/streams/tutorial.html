@@ -532,7 +532,7 @@
               .groupBy((key, value) -> value)
               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
               .toStream()
-              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
     </pre>
 
     <p>
