@@ -45,6 +45,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   @volatile
   private var _length: Long = _
 
+  protected def hotEntries: Int
   protected def entrySize: Int
 
   protected val lock = new ReentrantLock
@@ -311,26 +312,35 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     if(_entries == 0)
       return (-1, -1)
 
+    def binarySearch(begin: Int, end: Int) : (Int, Int) = {
+      // binary search for the entry
+      var lo = begin
+      var hi = end
+      while(lo < hi) {
+        val mid = ceil(hi/2.0 + lo/2.0).toInt
+        val found = parseEntry(idx, mid)
+        val compareResult = compareIndexEntry(found, target, searchEntity)
+        if(compareResult > 0)
+          hi = mid - 1
+        else if(compareResult < 0)
+          lo = mid
+        else
+          return (mid, mid)
+      }
+      (lo, if (lo == _entries - 1) -1 else lo + 1)
+    }
+
+    val firstHotEntry = Math.max(0, _entries - 1 - hotEntries)
+    // check if the target offset is in the warmed up section of the index
+    if(compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
+      return binarySearch(firstHotEntry, _entries - 1)
+    }
+
     // check if the target offset is smaller than the least offset
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
       return (-1, 0)
 
-    // binary search for the entry
-    var lo = 0
-    var hi = _entries - 1
-    while(lo < hi) {
-      val mid = ceil(hi/2.0 + lo/2.0).toInt
-      val found = parseEntry(idx, mid)
-      val compareResult = compareIndexEntry(found, target, searchEntity)
-      if(compareResult > 0)
-        hi = mid - 1
-      else if(compareResult < 0)
-        lo = mid
-      else
-        return (mid, mid)
-    }
-
-    (lo, if (lo == _entries - 1) -1 else lo + 1)
+    return binarySearch(0, firstHotEntry)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {
