@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Suppress;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -114,6 +115,7 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             .toStream()
+            .filterNot((k,v) -> k.equals("tick"))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
 
@@ -125,7 +127,7 @@ public class SuppressionIntegrationTest {
                     new KVT<>("k1", "v1", scaledTime(0L)),
                     new KVT<>("k1", "v2", scaledTime(1L)),
                     new KVT<>("k2", "v1", scaledTime(2L)),
-                    new KVT<>("x", "x", scaledTime(4L))
+                    new KVT<>("tick", "tick", scaledTime(5L))
                 )
             );
 
@@ -135,8 +137,7 @@ public class SuppressionIntegrationTest {
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
-                    new KVT<>("v1", 1L, scaledTime(2L)),
-                    new KVT<>("x", 1L, scaledTime(4L))
+                    new KVT<>("v1", 1L, scaledTime(2L))
                 )
             );
             verifyOutput(
@@ -368,6 +369,7 @@ public class SuppressionIntegrationTest {
     }
 
     @Test
+    @Ignore
     public void shouldSuppressLateEvents() throws InterruptedException {
         final String testId = "-shouldSuppressLateEvents";
         final String appId = getClass().getSimpleName().toLowerCase() + testId;
@@ -577,20 +579,14 @@ public class SuppressionIntegrationTest {
 
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
         consumer.assign(singletonList(topicPartition));
+        consumer.seekToBeginning(singletonList(topicPartition));
 
         final List<ConsumerRecord<K, V>> results = new LinkedList<>();
-        final long endOffset = consumer.endOffsets(singletonList(topicPartition)).get(topicPartition) - 1;
-        System.out.println(endOffset);
-        consumer.seekToBeginning(singletonList(topicPartition));
-//        outer:
         while (results.size() < numRecords) {
             final ConsumerRecords<K, V> consumerRecords = consumer.poll(Duration.ofMillis(100));
             for (final ConsumerRecord<K, V> consumerRecord : consumerRecords) {
                 System.out.println(consumerRecord);
                 results.add(consumerRecord);
-//                if (endOffset <= consumerRecord.offset() + 1) {
-//                    break outer;
-//                }
             }
         }
 

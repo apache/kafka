@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private final Suppress<K, V> suppress;
@@ -72,7 +73,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
                         final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = entries.iterator();
                         while (iterator.hasNext()) {
                             final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
-                            if (next.getValue().recordContext.timestamp() <= streamTime - evictionTimeout) {
+                            if (next.getValue().recordContext.timestamp() < streamTime - evictionTimeout) {
                                 setNodeAndForward(next);
                                 iterator.remove();
                             } else {

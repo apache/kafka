@@ -40,6 +40,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
@@ -79,6 +82,7 @@ public class KTableSuppressProcessorTest {
 
         valueCounts
             .toStream()
+            .filterNot((k,v) -> k.equals("tick"))
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Topology topology = builder.build();
@@ -98,7 +102,7 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
@@ -107,36 +111,40 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.emptyList()
+                emptyList()
             );
 
-
-            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(3L)));
+            driver.pipeInput(recordFactory.create("input", "tick", "tick", scaledTime(3L)));
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
-                    new KVT<>("x", 1L, scaledTime(3L))
-                )
+                emptyList()
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.emptyList()
+                emptyList()
             );
 
-            driver.pipeInput(recordFactory.create("input", "x", "x", scaledTime(4L)));
+            driver.pipeInput(recordFactory.create("input", "tick", "tick", scaledTime(4L)));
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("x", 0L, scaledTime(4L)),
-                    new KVT<>("x", 1L, scaledTime(4L))
-                )
+                emptyList()
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("v2", 1L, scaledTime(1L)),
+                singletonList(new KVT<>("v2", 1L, scaledTime(1L)))
+            );
+
+            driver.pipeInput(recordFactory.create("input", "tick", "tick", scaledTime(5L)));
+
+            verify(
+                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                emptyList()
+            );
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                singletonList(
                     new KVT<>("v1", 1L, scaledTime(2L))
                 )
             );
@@ -189,7 +197,7 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
@@ -198,7 +206,7 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
@@ -211,13 +219,13 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     new KVT<>("x", 1L, scaledTime(3L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     new KVT<>("x", 1L, scaledTime(3L))
                 )
             );
@@ -226,14 +234,14 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("x", 0L, scaledTime(4L)),
                     new KVT<>("x", 1L, scaledTime(4L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("x", 0L, scaledTime(4L)),
                     new KVT<>("x", 1L, scaledTime(4L))
                 )
@@ -284,7 +292,7 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
@@ -293,7 +301,7 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     // consecutive updates to v1 get suppressed into only the latter.
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L))
@@ -306,13 +314,13 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     new KVT<>("x", 1L, scaledTime(3L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     // now we see that last update to v1, but we won't see the update to x until it gets evicted
                     new KVT<>("v1", 1L, scaledTime(2L))
                 )
@@ -368,7 +376,7 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("v1", 1L, scaledTime(0L)),
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L)),
@@ -377,7 +385,7 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     // consecutive updates to v1 get suppressed into only the latter.
                     new KVT<>("v1", 0L, scaledTime(1L)),
                     new KVT<>("v2", 1L, scaledTime(1L))
@@ -390,13 +398,13 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     new KVT<>("x", 1L, scaledTime(3L))
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Collections.singletonList(
+                singletonList(
                     // now we see that last update to v1, but we won't see the update to x until it gets evicted
                     new KVT<>("v1", 1L, scaledTime(2L))
                 )
@@ -448,7 +456,7 @@ public class KTableSuppressProcessorTest {
 
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
+                asList(
                     new KVT<>("[k1@0/2]", 1L, scaledTime(0L)),
                     new KVT<>("[k1@0/2]", 2L, scaledTime(1L)),
                     new KVT<>("[k1@2/4]", 1L, scaledTime(2L)),
@@ -459,8 +467,8 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                Arrays.asList(
-                    new KVT<>("[k1@0/2]", 4L, scaledTime(1L))
+                asList(
+                    new KVT<>("[k1@0/2]", 4L, scaledTime(0L))
                 )
             );
 
