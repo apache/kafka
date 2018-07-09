@@ -40,9 +40,8 @@ import org.scalatest.junit.JUnitSuite
  * <p>
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
- */ 
-class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
-  with StreamToTableJoinTestData {
+ */
+class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite with StreamToTableJoinTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
@@ -67,7 +66,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
   @Test def testShouldCountClicksPerRegion(): Unit = {
 
-    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced, 
+    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced,
     // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
     // get these instances automatically
     import Serdes._
@@ -84,7 +83,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     val clicksPerRegion: KTable[String, Long] =
       userClicksStream
 
-        // Join the stream against the table.
+      // Join the stream against the table.
         .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
 
         // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
@@ -100,8 +99,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
     streams.start()
 
-
-    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] = 
+    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
 
     streams.close()
@@ -126,29 +124,32 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
     val builder: StreamsBuilderJ = new StreamsBuilderJ()
 
-    val userClicksStream: KStreamJ[String, JLong] = 
+    val userClicksStream: KStreamJ[String, JLong] =
       builder.stream[String, JLong](userClicksTopicJ, Consumed.`with`(Serdes.String, Serdes.JavaLong))
 
-    val userRegionsTable: KTableJ[String, String] = 
+    val userRegionsTable: KTableJ[String, String] =
       builder.table[String, String](userRegionsTopicJ, Consumed.`with`(Serdes.String, Serdes.String))
 
     // Join the stream against the table.
     val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
-      .leftJoin(userRegionsTable, 
+      .leftJoin(
+        userRegionsTable,
         new ValueJoiner[JLong, String, (String, JLong)] {
-          def apply(clicks: JLong, region: String): (String, JLong) = 
+          def apply(clicks: JLong, region: String): (String, JLong) =
             (if (region == null) "UNKNOWN" else region, clicks)
-        }, 
-        Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String))
+        },
+        Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String)
+      )
 
     // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-    val clicksByRegion : KStreamJ[String, JLong] = userClicksJoinRegion
-      .map { 
+    val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
+      .map {
         new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
-          def apply(k: String, regionWithClicks: (String, JLong)) = new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
+          def apply(k: String, regionWithClicks: (String, JLong)) =
+            new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
         }
       }
-        
+
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
       .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
@@ -157,7 +158,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
           def apply(v1: JLong, v2: JLong) = v1 + v2
         }
       }
-        
+
     // Write the (continuously updating) results to the output topic.
     clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
 
@@ -165,7 +166,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
     streams.start()
 
-    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] = 
+    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopicJ, userRegionsTopicJ, outputTopicJ)
 
     streams.close()
@@ -214,17 +215,27 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     p
   }
 
-  private def produceNConsume(userClicksTopic: String, userRegionsTopic: String, outputTopic: String): java.util.List[KeyValue[String, Long]] = {
+  private def produceNConsume(userClicksTopic: String,
+                              userRegionsTopic: String,
+                              outputTopic: String): java.util.List[KeyValue[String, Long]] = {
 
     import collection.JavaConverters._
-    
+
     // Publish user-region information.
     val userRegionsProducerConfig: Properties = getUserRegionsProducerConfig()
-    IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions.asJava, userRegionsProducerConfig, mockTime, false)
+    IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic,
+                                                       userRegions.asJava,
+                                                       userRegionsProducerConfig,
+                                                       mockTime,
+                                                       false)
 
     // Publish user-click information.
     val userClicksProducerConfig: Properties = getUserClicksProducerConfig()
-    IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks.asJava, userClicksProducerConfig, mockTime, false)
+    IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic,
+                                                       userClicks.asJava,
+                                                       userClicksProducerConfig,
+                                                       mockTime,
+                                                       false)
 
     // consume and verify result
     val consumerConfig = getConsumerConfig()
@@ -232,4 +243,3 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedClicksPerRegion.size)
   }
 }
-

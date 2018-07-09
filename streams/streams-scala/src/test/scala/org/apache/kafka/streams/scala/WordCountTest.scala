@@ -50,7 +50,7 @@ import ImplicitConversions._
  * <p>
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
- */ 
+ */
 class WordCountTest extends JUnitSuite with WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
@@ -61,11 +61,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 
-
   val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
   @Rule def testFolder: TemporaryFolder = tFolder
-    
-
   @Before
   def startKafkaCluster(): Unit = {
     cluster.createTopic(inputTopic)
@@ -86,7 +83,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
 
     // generate word counts
     val wordCounts: KTable[String, Long] =
-      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
         .groupBy((_, v) => v)
         .count()
 
@@ -117,7 +115,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
 
     // generate word counts
     val wordCounts: KTable[String, Long] =
-      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
         .groupBy((k, v) => v)
         .count()(Materialized.as("word-count"))
 
@@ -139,7 +138,12 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   @Test def testShouldCountWordsJava(): Unit = {
 
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
-    import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
+    import org.apache.kafka.streams.kstream.{
+      KTable => KTableJ,
+      KStream => KStreamJ,
+      KGroupedStream => KGroupedStreamJ,
+      _
+    }
     import collection.JavaConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -250,4 +254,3 @@ trait WordCountTestData {
     new KeyValue("слова", 1L)
   )
 }
-
