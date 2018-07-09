@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.Suppress;
+import org.apache.kafka.streams.kstream.Suppress.BufferConfig;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -56,9 +57,11 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.kstream.Suppress.BufferConfig.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.BufferConfig.withBufferFullStrategy;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
-import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferConfig;
 import static org.apache.kafka.streams.kstream.Suppress.emitFinalResultsOnly;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
 
@@ -254,7 +257,9 @@ public class SuppressionIntegrationTest {
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
         valueCounts
-            .suppress(intermediateEvents(Suppress.IntermediateSuppression.<String, Long>withBufferKeys(1).bufferFullStrategy(EMIT)))
+            .suppress(intermediateEvents(
+                withBufferConfig(BufferConfig.<String, Long>withBufferKeys((long) 1).bufferFullStrategy(EMIT))
+            ))
             .toStream()
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -326,8 +331,10 @@ public class SuppressionIntegrationTest {
         valueCounts
             .suppress(intermediateEvents(
                 // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-                withBufferBytes(200, STRING_SERIALIZER, new LongSerializer())
-                    .bufferFullStrategy(EMIT)
+                withBufferConfig(
+                    withBufferBytes((long) 200, STRING_SERIALIZER, new LongSerializer())
+                        .bufferFullStrategy(EMIT)
+                )
             ))
             .toStream()
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
@@ -400,7 +407,7 @@ public class SuppressionIntegrationTest {
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 
         valueCounts
-            .suppress(emitFinalResultsOnly(Duration.ofMillis(scaledTime(1L)), SHUT_DOWN))
+            .suppress(emitFinalResultsOnly(Duration.ofMillis(scaledTime(1L)), withBufferFullStrategy(SHUT_DOWN)))
             .toStream()
             .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));

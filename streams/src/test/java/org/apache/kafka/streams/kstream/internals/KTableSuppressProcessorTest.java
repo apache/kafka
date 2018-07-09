@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Suppress.BufferConfig;
 import org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -32,8 +33,6 @@ import org.junit.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -43,9 +42,11 @@ import java.util.Properties;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.kstream.Suppress.BufferConfig.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.BufferConfig.withBufferFullStrategy;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
-import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferConfig;
 import static org.apache.kafka.streams.kstream.Suppress.emitFinalResultsOnly;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
 
@@ -56,6 +57,7 @@ public class KTableSuppressProcessorTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+    private static final LongSerializer LONG_SERIALIZER = new LongSerializer();
 
     private static final int COMMIT_INTERVAL = 30_000;
     private static final int SCALE_FACTOR = 1;
@@ -82,7 +84,7 @@ public class KTableSuppressProcessorTest {
 
         valueCounts
             .toStream()
-            .filterNot((k,v) -> k.equals("tick"))
+            .filterNot((k, v) -> k.equals("tick"))
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Topology topology = builder.build();
@@ -266,7 +268,9 @@ public class KTableSuppressProcessorTest {
             .count();
 
         valueCounts
-            .suppress(intermediateEvents(IntermediateSuppression.<String, Long>withBufferKeys(1).bufferFullStrategy(EMIT)))
+            .suppress(intermediateEvents(
+                withBufferConfig(BufferConfig.<String, Long>withBufferKeys((long) 1).bufferFullStrategy(EMIT))
+            ))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -346,8 +350,10 @@ public class KTableSuppressProcessorTest {
         valueCounts
             .suppress(intermediateEvents(
                 // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-                withBufferBytes(200, STRING_SERIALIZER, new LongSerializer())
-                    .bufferFullStrategy(EMIT)
+                withBufferConfig(
+                    withBufferBytes(200L, STRING_SERIALIZER, LONG_SERIALIZER)
+                        .bufferFullStrategy(EMIT)
+                )
             ))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
@@ -422,7 +428,12 @@ public class KTableSuppressProcessorTest {
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
         valueCounts
-            .suppress(emitFinalResultsOnly(Duration.ofMillis(scaledTime(1L)), SHUT_DOWN))
+            .suppress(
+                emitFinalResultsOnly(
+                    Duration.ofMillis(scaledTime(1L)),
+                    withBufferFullStrategy(SHUT_DOWN)
+                )
+            )
             .toStream()
             .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
@@ -465,7 +476,7 @@ public class KTableSuppressProcessorTest {
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                asList(
+                singletonList(
                     new KVT<>("[k1@0/2]", 4L, scaledTime(0L))
                 )
             );

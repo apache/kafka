@@ -16,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private final Suppress<K, V> suppress;
@@ -48,10 +47,25 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     KTableSuppressProcessor(final Suppress<K, V> suppress) {
         this.suppress = suppress;
         priorityQueue = new LinkedHashMap<>();
-        valueSerializer =
-            (suppress.getIntermediateSuppression() == null || suppress.getIntermediateSuppression().getValueSerializer() == null)
-                ? null
-                : new ChangedSerializer<V>(suppress.getIntermediateSuppression().getValueSerializer());
+        valueSerializer = getValueSerializer(suppress);
+    }
+
+    private Serializer<Change<V>> getValueSerializer(final Suppress<K, V> suppress) {
+        return (suppress.getIntermediateSuppression() == null
+            || suppress.getIntermediateSuppression().getBufferConfig() == null
+            || suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer() == null
+        )
+            ? null
+            : new ChangedSerializer<>(suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer());
+    }
+
+    private Serializer<K> getKeySerializer(final Suppress<K, V> suppress) {
+        return (suppress.getIntermediateSuppression() == null
+            || suppress.getIntermediateSuppression().getBufferConfig() == null
+            || suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer() == null
+        )
+            ? null
+            : suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer();
     }
 
     @Override
@@ -130,10 +144,10 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     }
 
     private void enforceSizeBound() {
-        if (priorityQueue.size() > suppress.getIntermediateSuppression().getNumberOfKeysToRemember()
-            || memBufferSize > suppress.getIntermediateSuppression().getBytesToUseForSuppressionStorage()) {
+        if (priorityQueue.size() > suppress.getIntermediateSuppression().getBufferConfig().getNumberOfKeysToRemember()
+            || memBufferSize > suppress.getIntermediateSuppression().getBufferConfig().getBytesToUseForSuppressionStorage()) {
 
-            switch (suppress.getIntermediateSuppression().getBufferFullStrategy()) {
+            switch (suppress.getIntermediateSuppression().getBufferConfig().getBufferFullStrategy()) {
                 case EMIT:
                     // we only added one, so we only need to remove one.
                     final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = priorityQueue.entrySet().iterator();
@@ -151,7 +165,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
     private long computeRecordSize(final K key, final V value, final ProcessorRecordContext recordContext1) {
         long size = 0L;
-        final Serializer<K> keySerializer = suppress.getIntermediateSuppression().getKeySerializer();
+        final Serializer<K> keySerializer = getKeySerializer(suppress);
         if (keySerializer != null) {
             size += keySerializer.serialize(null, key).length;
         }

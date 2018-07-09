@@ -17,69 +17,56 @@ public class Suppress<K, V> {
         SHUT_DOWN
     }
 
-    public static class IntermediateSuppression<K, V> {
-        private Duration timeToWaitForMoreEvents = null;
+    public static class BufferConfig<K, V> {
         private long numberOfKeysToRemember = Long.MAX_VALUE;
         private long bytesToUseForSuppressionStorage = Long.MAX_VALUE;
         private BufferFullStrategy bufferFullStrategy = BufferFullStrategy.EMIT;
+
         private Serializer<K> keySerializer;
         private Serializer<V> valueSerializer;
 
-        private IntermediateSuppression() {}
+        private BufferConfig() {}
 
-        private IntermediateSuppression(final IntermediateSuppression<K, V> from) {
-            timeToWaitForMoreEvents = from.timeToWaitForMoreEvents;
-            numberOfKeysToRemember = from.numberOfKeysToRemember;
-            bytesToUseForSuppressionStorage = from.bytesToUseForSuppressionStorage;
-            bufferFullStrategy = from.bufferFullStrategy;
-            keySerializer = from.keySerializer;
-            valueSerializer = from.valueSerializer;
+        private BufferConfig(final BufferConfig<K, V> from) {
+            this.numberOfKeysToRemember = from.numberOfKeysToRemember;
+            this.bytesToUseForSuppressionStorage = from.bytesToUseForSuppressionStorage;
+            this.bufferFullStrategy = from.bufferFullStrategy;
+            this.keySerializer = from.keySerializer;
+            this.valueSerializer = from.valueSerializer;
         }
 
-        public static <K, V> IntermediateSuppression<K, V> withEmitAfter(final Duration timeToWaitForMoreEvents) {
-            return new IntermediateSuppression<K, V>().emitAfter(timeToWaitForMoreEvents);
+        public static <K, V> BufferConfig<K, V> withBufferKeys(final long numberOfKeysToRemember) {
+            return new BufferConfig<K, V>().bufferKeys(numberOfKeysToRemember);
         }
 
-        public IntermediateSuppression<K, V> emitAfter(final Duration timeToWaitForMoreEvents) {
-            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
-            result.timeToWaitForMoreEvents = timeToWaitForMoreEvents;
-            return result;
-        }
-
-        public static <K, V> IntermediateSuppression<K, V> withBufferKeys(final long numberOfKeysToRemember) {
-            return new IntermediateSuppression<K, V>().bufferKeys(numberOfKeysToRemember);
-        }
-
-        public IntermediateSuppression<K, V> bufferKeys(final long numberOfKeysToRemember) {
-            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
+        public BufferConfig<K, V> bufferKeys(final long numberOfKeysToRemember) {
+            final BufferConfig<K, V> result = new BufferConfig<>(this);
             result.numberOfKeysToRemember = numberOfKeysToRemember;
             return result;
         }
 
-        public static <K, V> IntermediateSuppression<K, V> withBufferBytes(final long bytesToUseForSuppressionStorage, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-            return new IntermediateSuppression<K, V>().bufferBytes(bytesToUseForSuppressionStorage, keySerializer, valueSerializer);
+
+        public static <K, V> BufferConfig<K, V> withBufferBytes(final long bytesToUseForSuppressionStorage, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+            return new BufferConfig<K, V>().bufferBytes(bytesToUseForSuppressionStorage, keySerializer, valueSerializer);
         }
 
-        public IntermediateSuppression<K, V> bufferBytes(final long bytesToUseForSuppressionStorage, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
+        public BufferConfig<K, V> bufferBytes(final long bytesToUseForSuppressionStorage, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
             this.keySerializer = keySerializer;
             this.valueSerializer = valueSerializer;
-            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
+            final BufferConfig<K, V> result = new BufferConfig<>(this);
             result.bytesToUseForSuppressionStorage = bytesToUseForSuppressionStorage;
             return result;
         }
 
-        public static IntermediateSuppression withBufferFullStrategy(final BufferFullStrategy bufferFullStrategy) {
-            return new IntermediateSuppression().bufferFullStrategy(bufferFullStrategy);
+
+        public static <K, V> BufferConfig<K, V> withBufferFullStrategy(final BufferFullStrategy bufferFullStrategy) {
+            return new BufferConfig<K, V>().bufferFullStrategy(bufferFullStrategy);
         }
 
-        public IntermediateSuppression<K, V> bufferFullStrategy(final BufferFullStrategy bufferFullStrategy) {
-            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
+        public BufferConfig<K, V> bufferFullStrategy(final BufferFullStrategy bufferFullStrategy) {
+            final BufferConfig<K, V> result = new BufferConfig<>(this);
             result.bufferFullStrategy = bufferFullStrategy;
             return result;
-        }
-
-        public Duration getTimeToWaitForMoreEvents() {
-            return timeToWaitForMoreEvents;
         }
 
         public long getNumberOfKeysToRemember() {
@@ -103,6 +90,46 @@ public class Suppress<K, V> {
         }
     }
 
+    public static class IntermediateSuppression<K, V> {
+        private BufferConfig<K, V> bufferConfig = new BufferConfig<>();
+        private Duration timeToWaitForMoreEvents = null;
+
+        private IntermediateSuppression() {}
+
+        private IntermediateSuppression(final IntermediateSuppression<K, V> from) {
+            timeToWaitForMoreEvents = from.timeToWaitForMoreEvents;
+            this.bufferConfig = from.bufferConfig;
+        }
+
+        public static <K, V> IntermediateSuppression<K, V> withEmitAfter(final Duration timeToWaitForMoreEvents) {
+            return new IntermediateSuppression<K, V>().emitAfter(timeToWaitForMoreEvents);
+        }
+
+        public IntermediateSuppression<K, V> emitAfter(final Duration timeToWaitForMoreEvents) {
+            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
+            result.timeToWaitForMoreEvents = timeToWaitForMoreEvents;
+            return result;
+        }
+
+        public static <K, V> IntermediateSuppression<K, V> withBufferConfig(final BufferConfig<K, V> bufferConfig) {
+            return new IntermediateSuppression<K, V>().bufferConfig(bufferConfig);
+        }
+
+        public IntermediateSuppression<K, V> bufferConfig(final BufferConfig<K, V> bufferConfig) {
+            final IntermediateSuppression<K, V> result = new IntermediateSuppression<>(this);
+            result.bufferConfig = bufferConfig;
+            return result;
+        }
+
+        public Duration getTimeToWaitForMoreEvents() {
+            return timeToWaitForMoreEvents;
+        }
+
+        public BufferConfig<K, V> getBufferConfig() {
+            return bufferConfig;
+        }
+    }
+
     public Suppress() {}
 
     private Suppress(final Suppress<K, V> other) {
@@ -112,20 +139,21 @@ public class Suppress<K, V> {
     }
 
     public static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final Duration maxAllowedLateness,
-                                                                              final BufferFullStrategy bufferFullStrategy) {
-        if (bufferFullStrategy == BufferFullStrategy.EMIT) {
+                                                                              final BufferConfig<K, V> bufferConfig) {
+        if (bufferConfig.getBufferFullStrategy() == BufferFullStrategy.EMIT) {
             throw new IllegalArgumentException(
                 "The EMIT strategy may produce intermediate results. " +
                     "Select either SHUT_DOWN or SPILL_TO_DISK"
             );
         }
+
         return Suppress
             .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
             .suppressLateEvents(maxAllowedLateness)
             .suppressIntermediateEvents(
                 IntermediateSuppression
                     .<K, V>withEmitAfter(maxAllowedLateness)
-                    .bufferFullStrategy(bufferFullStrategy)
+                    .bufferConfig(bufferConfig)
             );
     }
 
