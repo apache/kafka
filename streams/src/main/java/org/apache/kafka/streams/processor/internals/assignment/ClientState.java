@@ -171,9 +171,9 @@ public class ClientState {
         checkCapacity(other);
 
         final double otherLoad = (double) ((other.numberOfActiveStateStores + 1) * other.numberOfActivePartitions
-                + other.assignedTaskCount()) / other.capacity;
+                + other.activeTasks().size()) / other.capacity;
         final double thisLoad = (double) ((numberOfActiveStateStores + 1) * numberOfActivePartitions
-                + assignedTaskCount()) / capacity;
+                + activeTasks.size()) / capacity;
 
         return leastLoaded(thisLoad, otherLoad, other);
     }
@@ -181,8 +181,8 @@ public class ClientState {
     boolean hasMoreAvailableStandbyTaskCapacityThan(ClientState other) {
         checkCapacity(other);
 
-        final double thisLoad = (double) numberOfStandbyStateStores / capacity;
-        final double otherLoad = (double) other.numberOfStandbyStateStores / capacity;
+        final double thisLoad = (double) (numberOfStandbyStateStores + standbyTasks.size()) / capacity;
+        final double otherLoad = (double) (other.numberOfStandbyStateStores + other.standbyTasks().size()) / capacity;
 
         return leastLoaded(thisLoad, otherLoad, other);
     }
