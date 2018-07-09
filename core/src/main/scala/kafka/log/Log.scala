@@ -2148,13 +2148,14 @@ object Log {
     }
 
     val dirName = dir.getName
-    if (dirName == null || dirName.isEmpty || (!dirName.equals(DeleteDirParent) && !dirName.contains('-')))
+    val dirParentName = if (dir.getParent == null) null else dir.getParentFile.getName
+    if (dirName == null || dirName.isEmpty || dirParentName == null || (!dirParentName.equals(DeleteDirParent) && !dirName.contains('-')))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
         dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
-    if (dir.getParent.equals(DeleteDirParent)) {
+    if (dirParentName.equals(DeleteDirParent)) {
       // the inspected file is inside the 'delete' folder
       val files = dir.listFiles(new FileFilter {
         override def accept(file: File): Boolean =
@@ -2164,7 +2165,7 @@ object Log {
           }
       })
 
-      if (files.isEmpty)
+      if (files == null || files.isEmpty)
         throw exception(dir)
 
       val splits = files(0).getName.split("-")
