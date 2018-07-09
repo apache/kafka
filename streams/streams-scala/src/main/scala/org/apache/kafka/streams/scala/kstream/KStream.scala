@@ -46,7 +46,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param predicate a filter that is applied to each record
    * @return a [[KStream]] that contains only those records that satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KStream#filter`
-   */ 
+   */
   def filter(predicate: (K, V) => Boolean): KStream[K, V] =
     inner.filter(predicate.asPredicate)
 
@@ -57,7 +57,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param predicate a filter that is applied to each record
    * @return a [[KStream]] that contains only those records that do <em>not</em> satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KStream#filterNot`
-   */ 
+   */
   def filterNot(predicate: (K, V) => Boolean): KStream[K, V] =
     inner.filterNot(predicate.asPredicate)
 
@@ -70,7 +70,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper a function `(K, V) => KR` that computes a new key for each record
    * @return a [[KStream]] that contains records with new key (possibly of different type) and unmodified value
    * @see `org.apache.kafka.streams.kstream.KStream#selectKey`
-   */ 
+   */
   def selectKey[KR](mapper: (K, V) => KR): KStream[KR, V] =
     inner.selectKey[KR](mapper.asKeyValueMapper)
 
@@ -83,7 +83,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper a function `(K, V) => (KR, VR)` that computes a new output record
    * @return a [[KStream]] that contains records with new key and value (possibly both of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#map`
-   */ 
+   */
   def map[KR, VR](mapper: (K, V) => (KR, VR)): KStream[KR, VR] = {
     val kvMapper = mapper.tupled andThen tuple2ToKeyValue
     inner.map[KR, VR](((k: K, v: V) => kvMapper(k, v)).asKeyValueMapper)
@@ -97,7 +97,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper, a function `V => VR` that computes a new output value
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#mapValues`
-   */ 
+   */
   def mapValues[VR](mapper: V => VR): KStream[K, VR] =
     inner.mapValues[VR](mapper.asValueMapper)
 
@@ -109,7 +109,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper, a function `(K, V) => VR` that computes a new output value
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#mapValues`
-   */ 
+   */
   def mapValues[VR](mapper: (K, V) => VR): KStream[K, VR] =
     inner.mapValues[VR](mapper.asValueMapperWithKey)
 
@@ -122,10 +122,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper function `(K, V) => Iterable[(KR, VR)]` that computes the new output records
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#flatMap`
-   */ 
+   */
   def flatMap[KR, VR](mapper: (K, V) => Iterable[(KR, VR)]): KStream[KR, VR] = {
     val kvMapper = mapper.tupled andThen (iter => iter.map(tuple2ToKeyValue).asJava)
-    inner.flatMap[KR, VR](((k: K, v: V) => kvMapper(k , v)).asKeyValueMapper)
+    inner.flatMap[KR, VR](((k: K, v: V) => kvMapper(k, v)).asKeyValueMapper)
   }
 
   /**
@@ -139,7 +139,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper a function `V => Iterable[VR]` that computes the new output values
    * @return a [[KStream]] that contains more or less records with unmodified keys and new values of different type
    * @see `org.apache.kafka.streams.kstream.KStream#flatMapValues`
-   */ 
+   */
   def flatMapValues[VR](mapper: V => Iterable[VR]): KStream[K, VR] =
     inner.flatMapValues[VR](mapper.asValueMapper)
 
@@ -154,7 +154,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param mapper a function `(K, V) => Iterable[VR]` that computes the new output values
    * @return a [[KStream]] that contains more or less records with unmodified keys and new values of different type
    * @see `org.apache.kafka.streams.kstream.KStream#flatMapValues`
-   */ 
+   */
   def flatMapValues[VR](mapper: (K, V) => Iterable[VR]): KStream[K, VR] =
     inner.flatMapValues[VR](mapper.asValueMapperWithKey)
 
@@ -187,7 +187,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.branch(predicates.map(_.asPredicate): _*).map(kstream => wrapKStream(kstream))
 
   /**
-   * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for 
+   * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for
    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`
    * <p>
    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
@@ -219,7 +219,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.through(topic, produced)
 
   /**
-   * Materialize this stream to a topic using the `Produced` instance for 
+   * Materialize this stream to a topic using the `Produced` instance for
    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`
    * <p>
    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
@@ -250,34 +250,34 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.to(topic, produced)
 
   /**
-    * Dynamically materialize this stream to topics using the `Produced` instance for
-    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`.
-    * The topic names for each record to send to is dynamically determined based on the given mapper.
-    * <p>
-    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
-    * key and value serdes that will be converted to a `Produced` instance implicitly.
-    * <p>
-    * {{{
-    * Example:
-    *
-    * // brings implicit serdes in scope
-    * import Serdes._
-    *
-    * //..
-    * val clicksPerRegion: KTable[String, Long] = //..
-    *
-    * // Implicit serdes in scope will generate an implicit Produced instance, which
-    * // will be passed automatically to the call of through below
-    * clicksPerRegion.to(topicChooser)
-    *
-    * // Similarly you can create an implicit Produced and it will be passed implicitly
-    * // to the through call
-    * }}}
-    *
-    * @param extractor the extractor to determine the name of the Kafka topic to write to for reach record
-    * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
-    * @see `org.apache.kafka.streams.kstream.KStream#to`
-    */
+   * Dynamically materialize this stream to topics using the `Produced` instance for
+   * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`.
+   * The topic names for each record to send to is dynamically determined based on the given mapper.
+   * <p>
+   * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+   * key and value serdes that will be converted to a `Produced` instance implicitly.
+   * <p>
+   * {{{
+   * Example:
+   *
+   * // brings implicit serdes in scope
+   * import Serdes._
+   *
+   * //..
+   * val clicksPerRegion: KTable[String, Long] = //..
+   *
+   * // Implicit serdes in scope will generate an implicit Produced instance, which
+   * // will be passed automatically to the call of through below
+   * clicksPerRegion.to(topicChooser)
+   *
+   * // Similarly you can create an implicit Produced and it will be passed implicitly
+   * // to the through call
+   * }}}
+   *
+   * @param extractor the extractor to determine the name of the Kafka topic to write to for reach record
+   * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
+   * @see `org.apache.kafka.streams.kstream.KStream#to`
+   */
   def to(extractor: TopicNameExtractor[K, V])(implicit produced: Produced[K, V]): Unit =
     inner.to(extractor, produced)
 
@@ -303,14 +303,14 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and registered 
-   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
+   * In order to assign a state, the state must be created and registered
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
    *
    * @param valueTransformerSupplier a instance of `ValueTransformerSupplier` that generates a `ValueTransformer`
    * @param stateStoreNames          the names of the state stores used by the processor
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */ 
+   */
   def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
                           stateStoreNames: String*): KStream[K, VR] =
     inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
@@ -319,29 +319,28 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and registered 
-   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
+   * In order to assign a state, the state must be created and registered
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
    *
    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
    * @param stateStoreNames          the names of the state stores used by the processor
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */ 
+   */
   def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          stateStoreNames: String*): KStream[K, VR] = {
+                          stateStoreNames: String*): KStream[K, VR] =
     inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
-  }
 
   /**
    * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
    * `processorSupplier`).
-   * In order to assign a state, the state must be created and registered 
-   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
+   * In order to assign a state, the state must be created and registered
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
    *
    * @param processorSupplier a function that generates a [[org.apache.kafka.stream.Processor]]
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
-   */ 
+   */
   def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
     val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
       override def get(): Processor[K, V] = processorSupplier()
@@ -350,7 +349,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   }
 
   /**
-   * Group the records by their current key into a [[KGroupedStream]] 
+   * Group the records by their current key into a [[KGroupedStream]]
    * <p>
    * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
    * serdes that will be converted to a `Serialized` instance implicitly.
@@ -375,10 +374,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * // to the groupByKey call
    * }}}
    *
-   * @param (implicit) serialized the instance of Serialized that gives the serdes 
+   * @param (implicit) serialized the instance of Serialized that gives the serdes
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`
-   */ 
+   */
   def groupByKey(implicit serialized: Serialized[K, V]): KGroupedStream[K, V] =
     inner.groupByKey(serialized)
 
@@ -412,18 +411,18 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param selector a function that computes a new key for grouping
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupBy`
-   */ 
+   */
   def groupBy[KR](selector: (K, V) => KR)(implicit serialized: Serialized[KR, V]): KGroupedStream[KR, V] =
     inner.groupBy(selector.asKeyValueMapper, serialized)
 
   /**
-   * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with 
+   * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with
    * serializers and deserializers supplied by the implicit `Joined` instance.
    *
    * @param otherStream the [[KStream]] to be joined with this stream
    * @param joiner      a function that computes the join result for a pair of matching records
    * @param windows     the specification of the `JoinWindows`
-   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize 
+   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize
    *                    inputs and outputs of the joined streams. Instead of `Joined`, the user can also supply
    *                    key serde, value serde and other value serde in implicit scope and they will be
    *                    converted to the instance of `Joined` through implicit conversion
@@ -438,17 +437,17 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.join[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
 
   /**
-   * Join records of this stream with another [[KTable]]'s records using inner equi join with 
+   * Join records of this stream with another [[KTable]]'s records using inner equi join with
    * serializers and deserializers supplied by the implicit `Joined` instance.
    *
    * @param table    the [[KTable]] to be joined with this stream
    * @param joiner   a function that computes the join result for a pair of matching records
-   * @param joined   an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize 
+   * @param joined   an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize
    *                 inputs and outputs of the joined streams. Instead of `Joined`, the user can also supply
    *                 key serde, value serde and other value serde in implicit scope and they will be
    *                 converted to the instance of `Joined` through implicit conversion
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
-   * one for each matched record-pair with the same key 
+   * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KStream#join`
    */
   def join[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
@@ -464,7 +463,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *                       one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#join`
-   */ 
+   */
   def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
     joiner: (V, GV) => RV
@@ -476,20 +475,20 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     )
 
   /**
-   * Join records of this stream with another [[KStream]]'s records using windowed left equi join with 
+   * Join records of this stream with another [[KStream]]'s records using windowed left equi join with
    * serializers and deserializers supplied by the implicit `Joined` instance.
    *
    * @param otherStream the [[KStream]] to be joined with this stream
    * @param joiner      a function that computes the join result for a pair of matching records
    * @param windows     the specification of the `JoinWindows`
-   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize 
+   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize
    *                    inputs and outputs of the joined streams. Instead of `Joined`, the user can also supply
    *                    key serde, value serde and other value serde in implicit scope and they will be
    *                    converted to the instance of `Joined` through implicit conversion
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *                    one for each matched record-pair with the same key and within the joining window intervals
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
-   */ 
+   */
   def leftJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
     windows: JoinWindows
@@ -497,19 +496,19 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.leftJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
 
   /**
-   * Join records of this stream with another [[KTable]]'s records using left equi join with 
+   * Join records of this stream with another [[KTable]]'s records using left equi join with
    * serializers and deserializers supplied by the implicit `Joined` instance.
    *
    * @param table    the [[KTable]] to be joined with this stream
    * @param joiner   a function that computes the join result for a pair of matching records
-   * @param joined   an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize 
+   * @param joined   an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize
    *                 inputs and outputs of the joined streams. Instead of `Joined`, the user can also supply
    *                 key serde, value serde and other value serde in implicit scope and they will be
    *                 converted to the instance of `Joined` through implicit conversion
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
-   *                 one for each matched record-pair with the same key 
+   *                 one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
-   */ 
+   */
   def leftJoin[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
     inner.leftJoin[VT, VR](table.inner, joiner.asValueJoiner, joined)
 
@@ -523,7 +522,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *                       one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
-   */ 
+   */
   def leftJoin[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
     joiner: (V, GV) => RV
@@ -531,20 +530,20 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.leftJoin[GK, GV, RV](globalKTable, keyValueMapper.asKeyValueMapper, joiner.asValueJoiner)
 
   /**
-   * Join records of this stream with another [[KStream]]'s records using windowed outer equi join with 
+   * Join records of this stream with another [[KStream]]'s records using windowed outer equi join with
    * serializers and deserializers supplied by the implicit `Joined` instance.
    *
    * @param otherStream the [[KStream]] to be joined with this stream
    * @param joiner      a function that computes the join result for a pair of matching records
    * @param windows     the specification of the `JoinWindows`
-   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize 
+   * @param joined      an implicit `Joined` instance that defines the serdes to be used to serialize/deserialize
    *                    inputs and outputs of the joined streams. Instead of `Joined`, the user can also supply
    *                    key serde, value serde and other value serde in implicit scope and they will be
    *                    converted to the instance of `Joined` through implicit conversion
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    * one for each matched record-pair with the same key and within the joining window intervals
    * @see `org.apache.kafka.streams.kstream.KStream#outerJoin`
-   */ 
+   */
   def outerJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
     windows: JoinWindows
@@ -554,8 +553,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Merge this stream and the given stream into one larger stream.
    * <p>
-   * There is no ordering guarantee between records from this `KStream` and records from the provided `KStream` 
-   * in the merged stream. Relative order is preserved within each input stream though (ie, records within 
+   * There is no ordering guarantee between records from this `KStream` and records from the provided `KStream`
+   * in the merged stream. Relative order is preserved within each input stream though (ie, records within
    * one input stream are processed in order).
    *
    * @param stream a stream which is to be merged into this stream
