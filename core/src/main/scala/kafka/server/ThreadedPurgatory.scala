@@ -201,17 +201,17 @@ final class ThreadedPurgatory(val time: Time,
     threads
   }
 
-  def tryCompleteElseRegister(delayable: Delayable, watchKeys: Seq[_ <: Any],
-                              timeout: Long, timeUnit: TimeUnit) = {
-    if (delayable.check()) {
-      delayable.complete(false)
-    } else {
-      register(delayable, watchKeys, timeout, timeUnit)
-    }
-  }
-
+  /**
+    * Register a new delayable with the purgatory.
+    *
+    * @param delayable      The delayable.
+    * @param watchKeys      The keys to watch.
+    * @param timeout        The timeout after which the delayable should be expired.
+    * @param timeUnit       The units for the timeout.
+    * @param scheduleCheck  If true, we will schedule an initial check.
+    */
   def register(delayable: Delayable, watchKeys: Seq[_ <: Any], timeout: Long,
-               timeUnit: TimeUnit = TimeUnit.NANOSECONDS) = {
+               timeUnit: TimeUnit = TimeUnit.NANOSECONDS, scheduleCheck: Boolean = true) = {
     // Get the time in nanoseconds without holding the object lock.
     val timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit)
     var expirationTimeNs = time.nanoseconds() + timeoutNs
@@ -221,9 +221,14 @@ final class ThreadedPurgatory(val time: Time,
         val prevNextWakeNs = if (next.isEmpty) Long.MaxValue
           else next.firstKey().expirationTimeNs
         val data = insertDelayableData(expirationTimeNs, delayable, watchKeys)
+        if (scheduleCheck) {
+          data.shouldCheck = true
+          shouldCheck.add(delayable)
+          serviceCond.signal()
+        }
         delayables.put(delayable, data)
         watchMap.put(data, delayable)
-        logger.info("WATERMELON {} registering delayable {} with watch keys {}",
+        logger.debug("{} registering delayable {} with watch keys {}",
           purgatoryName, delayable, watchKeys.mkString(", "))
         if (data.expirationTimeNs < prevNextWakeNs) {
           timeoutCond.signal() // Wake up the timeout thread if necessary.
@@ -244,7 +249,7 @@ final class ThreadedPurgatory(val time: Time,
   }
 
   private [server] def unregisterInternal(delayable: Delayable, data: DelayableData) = {
-    logger.info("WATERMELON {} unregistering delayable {}", purgatoryName, delayable)
+    logger.debug("{} unregistering delayable {}", purgatoryName, delayable)
     watchMap.remove(data, delayable)
     next.remove(data)
     delayables.remove(delayable)
@@ -274,9 +279,9 @@ final class ThreadedPurgatory(val time: Time,
     }
     if (checkRequested) {
       logger.whenTraceEnabled(watchKey match {
-        case None => logger.info("WATERMELON {} scheduling a check of delayable {}",
+        case None => logger.trace("{} scheduling a check of delayable {}",
           purgatoryName, delayable)
-        case Some(key) => logger.info("WATERMELON {} scheduling a check of delayable {} because of key {}",
+        case Some(key) => logger.trace("{} scheduling a check of delayable {} because of key {}",
           purgatoryName, delayable, key)
       })
       true

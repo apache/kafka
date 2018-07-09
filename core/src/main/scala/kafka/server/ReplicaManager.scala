@@ -494,8 +494,8 @@ class ReplicaManager(val config: KafkaConfig,
         // this is because while the delayed produce operation is being created, new
         // requests may arrive and hence make this operation completable.
         produceRequestTag.map(t => t.log(s"ReplicaManager invoking delayedProducePurgatory#tryCompleteElseWatch."))
-        delayedProducePurgatory.tryCompleteElseRegister(delayedProduce, producerRequestKeys,
-          timeout, TimeUnit.MILLISECONDS)
+        delayedProducePurgatory.register(delayedProduce, producerRequestKeys,
+          timeout, TimeUnit.MILLISECONDS, true)
       } else {
         // we can respond immediately
         val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
@@ -857,7 +857,7 @@ class ReplicaManager(val config: KafkaConfig,
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
       // may arrive and hence make this operation completable.
-      delayedFetchPurgatory.tryCompleteElseRegister(delayedFetch, watchKeys, timeout, TimeUnit.MILLISECONDS)
+      delayedFetchPurgatory.register(delayedFetch, watchKeys, timeout, TimeUnit.MILLISECONDS, true)
     }
   }
 
