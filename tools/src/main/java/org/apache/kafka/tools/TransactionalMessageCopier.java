@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -287,7 +288,7 @@ public class TransactionalMessageCopier {
                 try {
                     producer.beginTransaction();
                     while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
-                        ConsumerRecords<String, String> records = consumer.poll(200L);
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                             messagesInCurrentTransaction++;

@@ -314,7 +314,7 @@ public class StreamsResetter {
 
         try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             client.subscribe(topicsToSubscribe);
-            client.poll(1);
+            client.poll(java.time.Duration.ofMillis(1));
 
             final Set<TopicPartition> partitions = client.assignment();
             final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
