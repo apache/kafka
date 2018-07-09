@@ -31,7 +31,8 @@ public final class DaemonStatusAction extends Action {
                 CollectdStatusAction.TYPE,
                 ZooKeeperStatusAction.TYPE,
                 TrogdorDaemonType.COORDINATOR.statusType(),
-                TrogdorDaemonType.AGENT.statusType()
+                TrogdorDaemonType.AGENT.statusType(),
+                JmxDumperStatusAction.TYPE
             });
     }
 }

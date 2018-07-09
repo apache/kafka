@@ -42,7 +42,7 @@ public final class JmxDumperStartAction extends Action {
 
     public JmxDumperStartAction(String scope, JmxDumpersConfig config) {
         super(new ActionId(TYPE, scope),
-            new TargetId[]{new TargetId(BrokerStopAction.TYPE, scope)},
+            new TargetId[]{},
             new String[] {});
         this.config = config;
     }

@@ -26,7 +26,6 @@ public final class DaemonStopAction extends Action {
     public DaemonStopAction(String scope) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
-                new TargetId(SaveLogsAction.TYPE, scope),
                 new TargetId(TaskStopAction.TYPE, scope)
             },
             new String[] {
@@ -34,7 +33,8 @@ public final class DaemonStopAction extends Action {
                 CollectdStopAction.TYPE,
                 TrogdorDaemonType.AGENT.stopType(),
                 TrogdorDaemonType.COORDINATOR.stopType(),
-                ZooKeeperStopAction.TYPE
+                ZooKeeperStopAction.TYPE,
+                JmxDumperStopAction.TYPE
             });
     }
 }

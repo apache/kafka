@@ -40,6 +40,6 @@ public final class JmxDumperStopAction extends Action {
             node.log().printf("*** Skipping jmxStop, because the node has no DNS address.%n");
             return;
         }
-        SoakUtil.killJavaProcess(cluster, node, JmxDumperRole.CLASS_NAME, true);
+        SoakUtil.killJavaProcess(cluster, node, JmxDumperRole.CLASS_NAME, false);
     }
 }

@@ -30,8 +30,8 @@ public final class DownAction extends Action {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
             new String[] {
-                SaveLogsAction.TYPE,
                 StopAction.TYPE,
+                SaveLogsAction.TYPE,
                 DestroyAction.TYPE
             });
     }
