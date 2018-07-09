@@ -62,6 +62,8 @@ public class StickyTaskAssignorTest {
     private final Integer p2 = 2;
     private final Integer p3 = 3;
     private final Integer p4 = 4;
+    private final Integer p5 = 5;
+    private final Integer p6 = 6;
 
     @Before
     public void setUpFixedCounts() {
@@ -638,8 +640,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToClientsWithImprovedBalancing() {
-        final ClientState c1 = createClient(p1, 3);
-        final ClientState c2 = createClient(p2, 3);
+        final ClientState c1 = createClient(p1, 6);
+        final ClientState c2 = createClient(p2, 6);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05);
         taskAssignor.assign(1);
@@ -647,6 +649,33 @@ public class StickyTaskAssignorTest {
         assertTrue(Math.abs(c1.getNumberOfActivePartitions() - c2.getNumberOfActivePartitions()) <= 4);
         assertTrue(Math.abs(c1.getNumberOfActiveStateStores() - c2.getNumberOfActiveStateStores()) <= 4);
         assertTrue(Math.abs(c1.getNumberOfStandbyStateStores() - c2.getNumberOfStandbyStateStores()) <= 4);
+    }
+
+    @Test
+    public void shouldAssignMultipleReplicasToClientsWithImprovedBalancing() {
+        createClientWithPreviousActiveTasks(p1, 1, task00);
+        createClientWithPreviousActiveTasks(p2, 1, task01);
+        createClientWithPreviousActiveTasks(p3, 1, task02);
+        createClientWithPreviousActiveTasks(p4, 1, task03);
+        createClientWithPreviousActiveTasks(p5, 1, task04);
+        createClientWithPreviousActiveTasks(p6, 1, task05);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05);
+        taskAssignor.assign(2);
+
+        //do not expect too accurate behavior, there is still some limits to our approximation of the "capacity" of a task
+        assertTrue(clients.get(p1).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p1).getNumberOfStandbyStateStores() > 1);
+        assertTrue(clients.get(p2).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p2).getNumberOfStandbyStateStores() > 1);
+        assertTrue(clients.get(p3).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p3).getNumberOfStandbyStateStores() > 1);
+        assertTrue(clients.get(p4).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p4).getNumberOfStandbyStateStores() > 1);
+        assertTrue(clients.get(p5).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p5).getNumberOfStandbyStateStores() > 1);
+        assertTrue(clients.get(p6).getNumberOfStandbyStateStores() < 9
+                   && clients.get(p6).getNumberOfStandbyStateStores() > 1);
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
