@@ -97,8 +97,8 @@ public final class WorkerUtils {
         }
     }
 
-    private static final int ADMIN_REQUEST_TIMEOUT = 25000;
-    private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
+    private static final long ADMIN_REQUEST_TIMEOUT = 25000;
+    private static final long CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
 
             //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {

@@ -176,7 +176,7 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The default timeout to use for an operation.
      */
-    private final int defaultTimeoutMs;
+    private final long defaultTimeoutMs;
 
     /**
      * The name of this AdminClient instance.
@@ -297,7 +297,7 @@ public class KafkaAdminClient extends AdminClient {
      *
      * @return                  The deadline in milliseconds.
      */
-    private long calcDeadlineMs(long now, Integer optionTimeoutMs) {
+    private long calcDeadlineMs(long now, Long optionTimeoutMs) {
         if (optionTimeoutMs != null)
             return now + Math.max(0, optionTimeoutMs);
         return now + defaultTimeoutMs;

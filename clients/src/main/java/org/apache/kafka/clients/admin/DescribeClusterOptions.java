@@ -33,7 +33,7 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DescribeClusterOptions timeoutMs(Integer timeoutMs) {
+    public DescribeClusterOptions timeoutMs(Long timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }
