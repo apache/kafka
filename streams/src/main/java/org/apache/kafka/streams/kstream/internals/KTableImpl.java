@@ -31,8 +31,11 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
@@ -40,6 +43,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
@@ -365,7 +369,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public KTable<K, V> suppress(final Suppress<K, V> suppress) {
         final String name = builder.newProcessorName(SUPPRESS_NAME);
-        final ProcessorSupplier<K, V> suppressionSupplier = () -> new KTableSuppressProcessor<>(suppress);
+
+        final ProcessorSupplier<K, V> suppressionSupplier = () -> new KTableSuppressProcessor<>(
+            buildSuppress(suppress)
+        );
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(
             suppressionSupplier,
@@ -385,6 +392,40 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             false,
             node
         );
+    }
+
+
+    private long allowedLateness() {
+        String chain = "";
+        // Search backward until we find
+        StreamsGraphNode node1 = this.parentGraphNode;
+        while (node1 != null) {
+            if (node1 instanceof StatefulProcessorNode) {
+                final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node1).getProcessorParameters().processorSupplier();
+                if (processorSupplier instanceof KStreamWindowAggregate) {
+                    final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
+                    final Windows windows = kStreamWindowAggregate.getWindows();
+                    return windows.allowedLateness();
+                }
+            }
+            chain = chain.equals("") ? node1.nodeName() : node1.nodeName() + "->" + chain;
+            node1 = node1.parentNode();
+        }
+        throw new IllegalArgumentException(
+            "Allowed Lateness is only defined for windowed computations. Got [" + chain + "]."
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Suppress<K, V> buildSuppress(final Suppress<K, V> suppress) {
+        if (suppress.isFinalResultsSuppression()) {
+            return (Suppress<K, V>) Suppress.buildFinalResultsSuppression(
+                Duration.ofMillis(allowedLateness()),
+                (Suppress<Windowed, V>) suppress
+            );
+        } else {
+            return suppress;
+        }
     }
 
     @Override

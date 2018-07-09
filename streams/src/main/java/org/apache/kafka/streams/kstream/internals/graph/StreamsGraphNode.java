@@ -94,4 +94,14 @@ public abstract class StreamsGraphNode {
 
     public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
 
+    @Override
+    public String toString() {
+        return "StreamsGraphNode{" +
+            ", nodeName='" + nodeName + '\'' +
+            ", repartitionRequired=" + repartitionRequired +
+            ", keyChangingOperation=" + keyChangingOperation +
+            ", id=" + id +
+            ", internalStreamsBuilder=" + internalStreamsBuilder +
+            '}';
+    }
 }

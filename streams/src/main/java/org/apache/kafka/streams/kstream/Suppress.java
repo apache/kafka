@@ -10,6 +10,7 @@ public class Suppress<K, V> {
     private Duration latenessBound = Duration.ofMillis(Long.MAX_VALUE);
     private IntermediateSuppression<K, V> intermediateSuppression = null;
     private TimeDefinition<K, V> timeDefinition = ((context, k, v) -> context.timestamp());
+    private BufferConfig<K, V> finalResultsConfig;
 
     public enum BufferFullStrategy {
         EMIT,
@@ -138,8 +139,7 @@ public class Suppress<K, V> {
         this.intermediateSuppression = other.intermediateSuppression;
     }
 
-    public static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final Duration maxAllowedLateness,
-                                                                              final BufferConfig<K, V> bufferConfig) {
+    public static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final BufferConfig<K, V> bufferConfig) {
         if (bufferConfig.getBufferFullStrategy() == BufferFullStrategy.EMIT) {
             throw new IllegalArgumentException(
                 "The EMIT strategy may produce intermediate results. " +
@@ -147,14 +147,10 @@ public class Suppress<K, V> {
             );
         }
 
-        return Suppress
-            .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
-            .suppressLateEvents(maxAllowedLateness)
-            .suppressIntermediateEvents(
-                IntermediateSuppression
-                    .<K, V>withEmitAfter(maxAllowedLateness)
-                    .bufferConfig(bufferConfig)
-            );
+        final Suppress<K, V> suppress = new Suppress<>();
+        suppress.finalResultsConfig = bufferConfig;
+        suppress.timeDefinition = ((ProcessorContext context, K k, V v) -> k.window().end());
+        return suppress;
     }
 
     public interface TimeDefinition<K, V> {
@@ -197,5 +193,22 @@ public class Suppress<K, V> {
 
     public TimeDefinition<K, V> getTimeDefinition() {
         return timeDefinition;
+    }
+
+
+    public boolean isFinalResultsSuppression() {
+        return finalResultsConfig != null;
+    }
+
+    public static <K extends Windowed, V> Suppress<K, V> buildFinalResultsSuppression(final Duration allowedLateness,
+                                                                                      final Suppress<K, V> suppress) {
+        return Suppress
+            .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
+            .suppressLateEvents(allowedLateness)
+            .suppressIntermediateEvents(
+                IntermediateSuppression
+                    .<K, V>withEmitAfter(allowedLateness)
+                    .bufferConfig(suppress.finalResultsConfig)
+            );
     }
 }

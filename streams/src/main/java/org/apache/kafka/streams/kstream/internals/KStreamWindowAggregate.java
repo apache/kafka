@@ -52,6 +52,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         this.aggregator = aggregator;
     }
 
+    public Windows<W> getWindows() {
+        return windows;
+    }
+
     @Override
     public Processor<K, V> get() {
         return new KStreamWindowAggregateProcessor();
@@ -83,8 +87,6 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @Override
         public void process(final K key, final V value) {
-            // if the key is null, we do not need proceed aggregating the record
-            // the record with the table
             if (key == null) {
                 log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",

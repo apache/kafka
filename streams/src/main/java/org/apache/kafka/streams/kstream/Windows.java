@@ -38,8 +38,21 @@ public abstract class Windows<W extends Window> {
 
     private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
+    private long allowedLateness = 0;
 
     protected Windows() {}
+
+    public Windows<W> allowedLateness(final long allowedLateness) {
+        if (allowedLateness < 0) {
+            throw new IllegalArgumentException();
+        }
+        this.allowedLateness = allowedLateness;
+        return this;
+    }
+
+    public long allowedLateness() {
+        return allowedLateness;
+    }
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
@@ -73,7 +86,8 @@ public abstract class Windows<W extends Window> {
      *
      * @return the segment interval
      */
-    @SuppressWarnings("deprecation") // The deprecation is on the public visibility of segments. We intend to make the field private later.
+    @SuppressWarnings("deprecation")
+    // The deprecation is on the public visibility of segments. We intend to make the field private later.
     public long segmentInterval() {
         // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
         final long minimumSegmentInterval = 60_000L;

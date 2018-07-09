@@ -420,16 +420,15 @@ public class KTableSuppressProcessorTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(scaledTime(2L)).until(scaledTime(3L)))
+            .windowedBy(TimeWindows
+                .of(scaledTime(2L))
+                .until(scaledTime(3L))
+                .allowedLateness(scaledTime(1L))
+            )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
         valueCounts
-            .suppress(
-                emitFinalResultsOnly(
-                    Duration.ofMillis(scaledTime(1L)),
-                    withBufferFullStrategy(SHUT_DOWN)
-                )
-            )
+            .suppress(emitFinalResultsOnly(withBufferFullStrategy(SHUT_DOWN)))
             .toStream()
             .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
