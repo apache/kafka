@@ -328,7 +328,6 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-
     @Test
     public void shouldSuppressIntermediateEventsWithBytesLimit() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -411,7 +410,6 @@ public class KTableSuppressProcessorTest {
             );
         }
     }
-
 
     @Test
     public void shouldSupportFinalResultsForTimeWindows() {

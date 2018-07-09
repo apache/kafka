@@ -30,10 +30,13 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.Suppress;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -48,12 +51,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
+import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferBytes;
+import static org.apache.kafka.streams.kstream.Suppress.emitFinalResultsOnly;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
 
 @Category({IntegrationTest.class})
@@ -115,7 +121,7 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             .toStream()
-            .filterNot((k,v) -> k.equals("tick"))
+            .filterNot((k, v) -> k.equals("tick"))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
 
@@ -368,10 +374,13 @@ public class SuppressionIntegrationTest {
         }
     }
 
+    private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
+        return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
+    }
+
     @Test
-    @Ignore
-    public void shouldSuppressLateEvents() throws InterruptedException {
-        final String testId = "-shouldSuppressLateEvents";
+    public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
+        final String testId = "-shouldSupportFinalResultsForTimeWindows";
         final String appId = getClass().getSimpleName().toLowerCase() + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -381,25 +390,24 @@ public class SuppressionIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
-        //TODO final results
-//        valueCounts
-//            .suppress(lateEvents(Duration.ofMillis(scaledTime(1L))))
-//            .toStream()
-//            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+        final KTable<Windowed<String>, Long> valueCounts = builder
+            .stream(input,
+                Consumed.with(STRING_SERDE, STRING_SERDE)
+            )
+            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(scaledTime(2L)).until(scaledTime(3L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
+
+        valueCounts
+            .suppress(emitFinalResultsOnly(Duration.ofMillis(scaledTime(1L)), SHUT_DOWN))
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final KafkaStreams driver = getCleanStartedStreams(appId, builder);
@@ -414,56 +422,84 @@ public class SuppressionIntegrationTest {
             produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(0L))));
             verifyOutput(
                 outputRaw,
-                singletonList(new KVT<>("v1", 1L, scaledTime(0L)))
+                singletonList(new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)))
             );
             verifyOutput(
                 outputSuppressed,
-                singletonList(new KVT<>("v1", 1L, scaledTime(0L)))
+                emptyList()
             );
 
-            produceSynchronously(input, singletonList(new KVT<>("k2", "v1", scaledTime(2L))));
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(1L))));
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L))
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L))
                 )
             );
             verifyOutput(
                 outputSuppressed,
-                asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L))
-                )
+                emptyList()
             );
-
-            // The stream time has already hit the highest point it will, so we don't need to submit the events one-by-one anymore.
-            produceSynchronously(
-                input,
-                asList(
-                    new KVT<>("k1", "v2", scaledTime(1L)),
-                    new KVT<>("k2", "v2", scaledTime(0L))
-                )
-            );
-
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(2L))));
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L)),
-                    new KVT<>("v1", 1L, scaledTime(1L)),
-                    new KVT<>("v2", 1L, scaledTime(1L)),
-                    new KVT<>("v1", 0L, scaledTime(0L)),
-                    new KVT<>("v2", 2L, scaledTime(0L))
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L))
                 )
             );
             verifyOutput(
                 outputSuppressed,
+                emptyList()
+            );
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(1L))));
+            verifyOutput(
+                outputRaw,
                 asList(
-                    new KVT<>("v1", 1L, scaledTime(0L)),
-                    new KVT<>("v1", 2L, scaledTime(2L)),
-                    new KVT<>("v1", 1L, scaledTime(1L)),
-                    new KVT<>("v2", 1L, scaledTime(1L))
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 3L, scaledTime(1L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                emptyList()
+            );
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(0L))));
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 3L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                emptyList()
+            );
+
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(3L))));
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 3L, scaledTime(1L)),
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L)),
+                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 2L, scaledTime(3L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                singletonList(
+                    new KVT<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L))
                 )
             );
         } finally {
