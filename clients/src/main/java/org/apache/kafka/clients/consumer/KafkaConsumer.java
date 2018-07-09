@@ -569,6 +569,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
+    private Map<TopicPartition, Long> startOffsets = new HashMap<>();
+    private Map<TopicPartition, Long> endOffsets = new HashMap<>();
+    private boolean rebalanceInProgress;
     private volatile boolean closed = false;
     private List<PartitionAssignor> assignors;
 
@@ -1167,6 +1170,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
+
+            rebalanceInProgress = coordinator.isRebalancing(); // what do we do here?
 
             // poll for new data until the timeout expires
             long elapsedTime = 0L;

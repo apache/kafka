@@ -115,7 +115,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
-    private AtomicBoolean rebalanceInProgress = new AtomicBoolean(false);
+    protected AtomicBoolean rebalanceInProgress = new AtomicBoolean(false);
     private MemberState state = MemberState.UNJOINED;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private Node coordinator = null;
