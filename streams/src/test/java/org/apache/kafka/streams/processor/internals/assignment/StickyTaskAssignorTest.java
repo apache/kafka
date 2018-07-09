@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -61,6 +62,11 @@ public class StickyTaskAssignorTest {
     private final Integer p2 = 2;
     private final Integer p3 = 3;
     private final Integer p4 = 4;
+
+    @Before
+    public void setUpFixedCounts() {
+        setFixedCounts();
+    }
 
     @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
@@ -246,8 +252,6 @@ public class StickyTaskAssignorTest {
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
 
-
-
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
@@ -327,29 +331,6 @@ public class StickyTaskAssignorTest {
         for (final ClientState clientState : clients.values()) {
             assertThat(clientState.assignedTaskCount(), equalTo(1));
         }
-    }
-
-    @Test
-    public void shouldAssignMoreTasksToClientWithMoreCapacity() {
-        createClient(p2, 2);
-        createClient(p1, 1);
-
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00,
-                                                                            task01,
-                                                                            task02,
-                                                                            new TaskId(1, 0),
-                                                                            new TaskId(1, 1),
-                                                                            new TaskId(1, 2),
-                                                                            new TaskId(2, 0),
-                                                                            new TaskId(2, 1),
-                                                                            new TaskId(2, 2),
-                                                                            new TaskId(3, 0),
-                                                                            new TaskId(3, 1),
-                                                                            new TaskId(3, 2));
-
-        taskAssignor.assign(0);
-        assertThat(clients.get(p2).assignedTaskCount(), equalTo(8));
-        assertThat(clients.get(p1).assignedTaskCount(), equalTo(4));
     }
 
     @Test
@@ -656,9 +637,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToClientsWithImprovedBalancing() {
-        setFixedCounts();
-
+    public void shouldAssignActiveTasksToClientsWithImprovedBalancing() {
         final ClientState c1 = createClient(p1, 3);
         final ClientState c2 = createClient(p2, 3);
 
@@ -667,6 +646,17 @@ public class StickyTaskAssignorTest {
 
         assertTrue(Math.abs(c1.getNumberOfActivePartitions() - c2.getNumberOfActivePartitions()) <= 4);
         assertTrue(Math.abs(c1.getNumberOfActiveStateStores() - c2.getNumberOfActiveStateStores()) <= 4);
+    }
+
+    @Test
+    public void shouldAssignStandbyTasksToClientsWithImprovedBalancing() {
+        final ClientState c1 = createClient(p1, 3);
+        final ClientState c2 = createClient(p2, 3);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05);
+        taskAssignor.assign(1);
+
+        assertTrue(Math.abs(c1.getNumberOfStandbyStateStores() - c2.getNumberOfStandbyStateStores()) <= 4);
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
