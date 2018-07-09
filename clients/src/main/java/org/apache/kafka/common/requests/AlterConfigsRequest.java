@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -29,6 +30,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
@@ -73,7 +75,7 @@ public class AlterConfigsRequest extends AbstractRequest {
         private final Collection<ConfigEntry> entries;
 
         public Config(Collection<ConfigEntry> entries) {
-            this.entries = entries;
+            this.entries = Objects.requireNonNull(entries, "entries");
         }
 
         public Collection<ConfigEntry> entries() {
@@ -86,8 +88,8 @@ public class AlterConfigsRequest extends AbstractRequest {
         private final String value;
 
         public ConfigEntry(String name, String value) {
-            this.name = name;
-            this.value = value;
+            this.name = Objects.requireNonNull(name, "name");
+            this.value = Objects.requireNonNull(value, "value");
         }
 
         public String name() {
@@ -102,12 +104,12 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder {
 
-        private final Map<Resource, Config> configs;
+        private final Map<ConfigResource, Config> configs;
         private final boolean validateOnly;
 
-        public Builder(Map<Resource, Config> configs, boolean validateOnly) {
+        public Builder(Map<ConfigResource, Config> configs, boolean validateOnly) {
             super(ApiKeys.ALTER_CONFIGS);
-            this.configs = configs;
+            this.configs = Objects.requireNonNull(configs, "configs");
             this.validateOnly = validateOnly;
         }
 
@@ -117,12 +119,12 @@ public class AlterConfigsRequest extends AbstractRequest {
         }
     }
 
-    private final Map<Resource, Config> configs;
+    private final Map<ConfigResource, Config> configs;
     private final boolean validateOnly;
 
-    public AlterConfigsRequest(short version, Map<Resource, Config> configs, boolean validateOnly) {
+    public AlterConfigsRequest(short version, Map<ConfigResource, Config> configs, boolean validateOnly) {
         super(version);
-        this.configs = configs;
+        this.configs = Objects.requireNonNull(configs, "configs");
         this.validateOnly = validateOnly;
     }
 
@@ -134,9 +136,9 @@ public class AlterConfigsRequest extends AbstractRequest {
         for (Object resourcesObj : resourcesArray) {
             Struct resourcesStruct = (Struct) resourcesObj;
 
-            ResourceType resourceType = ResourceType.forId(resourcesStruct.getByte(RESOURCE_TYPE_KEY_NAME));
+            ConfigResource.Type resourceType = ConfigResource.Type.forId(resourcesStruct.getByte(RESOURCE_TYPE_KEY_NAME));
             String resourceName = resourcesStruct.getString(RESOURCE_NAME_KEY_NAME);
-            Resource resource = new Resource(resourceType, resourceName);
+            ConfigResource resource = new ConfigResource(resourceType, resourceName);
 
             Object[] configEntriesArray = resourcesStruct.getArray(CONFIG_ENTRIES_KEY_NAME);
             List<ConfigEntry> configEntries = new ArrayList<>(configEntriesArray.length);
@@ -151,7 +153,7 @@ public class AlterConfigsRequest extends AbstractRequest {
         }
     }
 
-    public Map<Resource, Config> configs() {
+    public Map<ConfigResource, Config> configs() {
         return configs;
     }
 
@@ -164,10 +166,10 @@ public class AlterConfigsRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.requestSchema(version()));
         struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
         List<Struct> resourceStructs = new ArrayList<>(configs.size());
-        for (Map.Entry<Resource, Config> entry : configs.entrySet()) {
+        for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
 
-            Resource resource = entry.getKey();
+            ConfigResource resource = entry.getKey();
             resourceStruct.set(RESOURCE_TYPE_KEY_NAME, resource.type().id());
             resourceStruct.set(RESOURCE_NAME_KEY_NAME, resource.name());
 
@@ -194,8 +196,8 @@ public class AlterConfigsRequest extends AbstractRequest {
             case 0:
             case 1:
                 ApiError error = ApiError.fromThrowable(e);
-                Map<Resource, ApiError> errors = new HashMap<>(configs.size());
-                for (Resource resource : configs.keySet())
+                Map<ConfigResource, ApiError> errors = new HashMap<>(configs.size());
+                for (ConfigResource resource : configs.keySet())
                     errors.put(resource, error);
                 return new AlterConfigsResponse(throttleTimeMs, errors);
             default:
@@ -207,5 +209,4 @@ public class AlterConfigsRequest extends AbstractRequest {
     public static AlterConfigsRequest parse(ByteBuffer buffer, short version) {
         return new AlterConfigsRequest(ApiKeys.ALTER_CONFIGS.parseRequest(version, buffer), version);
     }
-
 }

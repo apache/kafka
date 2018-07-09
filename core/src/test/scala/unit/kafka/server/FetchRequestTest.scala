@@ -26,7 +26,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch, Records}
+import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
@@ -69,7 +69,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def initProducer(): Unit = {
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
@@ -203,7 +203,7 @@ class FetchRequestTest extends BaseRequestTest {
     val batchSize = 4 * msgValueLen
     val propsOverride = new Properties
     propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, lingerMs = Long.MaxValue,
       keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
     val bytes = new Array[Byte](msgValueLen)
@@ -261,7 +261,7 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
       lingerMs = 300 * 1000)
 
@@ -426,7 +426,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
-    val topics = (0 until numPartitions).map(t => s"topic$t")
+    val topics = (0 until numTopics).map(t => s"topic$t")
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }

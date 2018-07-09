@@ -19,6 +19,20 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_2_1_0" href="#upgrade_2_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, or 2.0.0 to 2.1.0</a></h4>
+<p><b>Additional Upgrade Notes:</b></p>
+
+<ol>
+    <li>Offset expiration semantics has slightly changed in this version. According to the new semantics, offsets of partitions in a group will
+        not be removed while the group is subscribed to the corresponding topic and is still active (has active consumers). If group becomes
+        empty all its offsets will be removed after default offset retention period (or the one set by broker) has passed (unless the group becomes
+        active again). Offsets associated with standalone (simple) consumers, that do not use Kafka group management, will be removed after default
+        offset retention period (or the one set by broker) has passed since their last commit.</li>
+    <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
+        This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.</li>
+</ol>
+
+
 <h4><a id="upgrade_2_0_0" href="#upgrade_2_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, or 1.1.x to 2.0.0</a></h4>
 <p>Kafka 2.0.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
     you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_200_notable">notable changes in 2.0.0</a> before upgrading.
@@ -61,6 +75,11 @@
         Similarly for the message format version.</li>
     <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         Hot-swapping the jar-file only might not work.</li>
+    <li>ACLs should not be added to prefixed resources,
+        (added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>),
+        until all brokers in the cluster have been updated.
+        <p><b>NOTE:</b> any prefixed ACLs added to a cluster, even after the cluster is fully upgraded, will be ignored should the cluster be downgraded again.
+    </li>
 </ol>
 
 <h5><a id="upgrade_200_notable" href="#upgrade_200_notable">Notable changes in 2.0.0</a></h5>
@@ -75,10 +94,16 @@
         JMX monitoring tools that do not automatically aggregate. To get the total count for a specific request type, the tool needs to be
         updated to aggregate across different versions.
     </li>
+    <li><a href="https://cwiki.apache.org/confluence/x/uaBzB">KIP-225</a> changed the metric "records.lag" to use tags for topic and partition. The original version with the name format "{topic}-{partition}.records-lag" has been removed.</li>
+    <li>The Scala consumers, which have been deprecated since 0.11.0.0, have been removed. The Java consumer has been the recommended option
+        since 0.10.0.0. Note that the Scala consumers in 1.1.0 (and older) will continue to work even if the brokers are upgraded to 2.0.0.</li>
     <li>The Scala producers, which have been deprecated since 0.10.0.0, have been removed. The Java producer has been the recommended option
         since 0.9.0.0. Note that the behaviour of the default partitioner in the Java producer differs from the default partitioner
-        in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.</li>
-    <li>The ConsoleProducer no longer supports the Scala producer.</li>
+        in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.
+        Note that the Scala producers in 1.1.0 (and older) will continue to work even if the brokers are upgraded to 2.0.0.</li>
+    <li>MirrorMaker and ConsoleConsumer no longer support the Scala consumer, they always use the Java consumer.</li>
+    <li>The ConsoleProducer no longer supports the Scala producer, it always uses the Java producer.</li>
+    <li>A number of deprecated tools that rely on the Scala clients have been removed: ReplayLogProducer, SimpleConsumerPerformance, SimpleConsumerShell, ExportZkOffsets, ImportZkOffsets, UpdateOffsetsInZK, VerifyConsumerRebalance.</li>
     <li>The deprecated kafka.tools.ProducerPerformance has been removed, please use org.apache.kafka.tools.ProducerPerformance.</li>
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
@@ -92,18 +117,43 @@
         <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
         <code>internal.value.converter.schemas.enable=false</code>
     </li>
-    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds overloads to the consumer to support
-        timeout behavior for blocking APIs. In particular, a new <code>poll(Duration)</code> API has been added which
-        does not block for dynamic partition assignment. The old <code>poll(long)</code> API has been deprecated and
-        will be removed in a future version.</li>
+    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds a new consumer configuration <code>default.api.timeout.ms</code>
+        to specify the default timeout to use for <code>KafkaConsumer</code> APIs that could block. The KIP also adds overloads for such blocking
+        APIs to support specifying a specific timeout to use for each of them instead of using the default timeout set by <code>default.api.timeout.ms</code>.
+        In particular, a new <code>poll(Duration)</code> API has been added which does not block for dynamic partition assignment.
+        The old <code>poll(long)</code> API has been deprecated and will be removed in a future version. Overloads have also been added
+        for other <code>KafkaConsumer</code> methods like <code>partitionsFor</code>, <code>listTopics</code>, <code>offsetsForTimes</code>,
+        <code>beginningOffsets</code>, <code>endOffsets</code> and <code>close</code> that take in a <code>Duration</code>.</li>
+    <li>Also as part of KIP-266, the default value of <code>request.timeout.ms</code> has been changed to 30 seconds.
+        The previous value was a little higher than 5 minutes to account for maximum time that a rebalance would take.
+        Now we treat the JoinGroup request in the rebalance as a special case and use a value derived from
+        <code>max.poll.interval.ms</code> for the request timeout. All other request types use the timeout defined
+        by <code>request.timeout.ms</code></li>
     <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
-    <li>The tool kafka.tools.ReplayLogProducer has been removed.</li>
+    <li>The AclCommand tool <code>--producer</code> convenience option uses the <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a> finer grained ACL on the given topic. </li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-176%3A+Remove+deprecated+new-consumer+option+for+tools">KIP-176</a> removes
+        the <code>--new-consumer</code> option for all consumer based tools. This option is redundant since the new consumer is automatically
+        used if --bootstrap-server is defined.
+    </li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> adds the ability
+        to define ACLs on prefixed resources, e.g. any topic starting with 'foo'.</li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-283%3A+Efficient+Memory+Usage+for+Down-Conversion">KIP-283</a> improves message down-conversion
+        handling on Kafka broker, which has typically been a memory-intensive operation. The KIP adds a mechanism by which the operation becomes less memory intensive
+        by down-converting chunks of partition data at a time which helps put an upper bound on memory consumption. With this improvement, there is a change in
+        <code>FetchResponse</code> protocol behavior where the broker could send an oversized message batch towards the end of the response with an invalid offset.
+        Such oversized messages must be ignored by consumer clients, as is done by <code>KafkaConsumer</code>.
+    <p>KIP-283 also adds new topic and broker configurations <code>message.downconversion.enable</code> and <code>log.message.downconversion.enable</code> respectively
+       to control whether down-conversion is enabled. When disabled, broker does not perform any down-conversion and instead sends an <code>UNSUPPORTED_VERSION</code>
+       error to the client.</p></li>
+    <li>Dynamic broker configuration options can be stored in ZooKeeper using kafka-configs.sh before brokers are started.
+        This option can be used to avoid storing clear passwords in server.properties as all password configs may be stored encrypted in ZooKeeper.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
 <ul>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-279%3A+Fix+log+divergence+between+leader+and+follower+after+fast+leader+fail+over">KIP-279</a>: OffsetsForLeaderEpochResponse v1 introduces a partition-level <code>leader_epoch</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-219+-+Improve+quota+communication">KIP-219</a>: Bump up the protocol versions of non-cluster action requests and responses that are throttled on quota violation.</li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>: Bump up the protocol versions ACL create, describe and delete requests and responses.</li>
 </ul>
 
 

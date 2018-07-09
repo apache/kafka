@@ -278,6 +278,10 @@ public class TaskManager {
         }
     }
 
+    AdminClient getAdminClient() {
+        return adminClient;
+    }
+
     Set<TaskId> suspendedActiveTaskIds() {
         return active.previousTaskIds();
     }
@@ -309,7 +313,6 @@ public class TaskManager {
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
-     * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
         active.initializeNewTasks();

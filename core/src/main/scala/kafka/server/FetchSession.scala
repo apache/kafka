@@ -290,6 +290,12 @@ trait FetchContext extends Logging {
 
   def partitionsToLogString(partitions: util.Collection[TopicPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
+
+  /**
+    * Return an empty throttled response due to quota violation.
+    */
+  def getThrottledResponse(throttleTimeMs: Int): FetchResponse[Records] =
+    new FetchResponse(Errors.NONE, new FetchSession.RESP_MAP, throttleTimeMs, INVALID_SESSION_ID)
 }
 
 /**
@@ -471,6 +477,21 @@ class IncrementalFetchContext(private val time: Time,
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet())}")
         new FetchResponse(Errors.NONE, updates, 0, session.id)
+      }
+    }
+  }
+
+  override def getThrottledResponse(throttleTimeMs: Int): FetchResponse[Records] = {
+    session.synchronized {
+      // Check to make sure that the session epoch didn't change in between
+      // creating this fetch context and generating this response.
+      val expectedEpoch = JFetchMetadata.nextEpoch(reqMetadata.epoch())
+      if (session.epoch != expectedEpoch) {
+        info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
+          s"got ${session.epoch}.  Possible duplicate request.")
+        new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, new FetchSession.RESP_MAP, throttleTimeMs, session.id)
+      } else {
+        new FetchResponse(Errors.NONE, new FetchSession.RESP_MAP, throttleTimeMs, session.id)
       }
     }
   }

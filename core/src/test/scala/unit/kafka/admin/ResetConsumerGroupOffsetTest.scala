@@ -16,6 +16,7 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
+import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -91,7 +92,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsNewConsumerExistingTopic(): Unit = {
+  def testResetOffsetsExistingTopic(): Unit = {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "new.group", "--topic", topic,
       "--to-offset", "50")
     produceMessages(topic, 100)
@@ -333,6 +334,13 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets.mapValues(_.offset))
 
     adminZkClient.deleteTopic(topic)
+  }
+
+  @Test(expected = classOf[OptionException])
+  def testResetWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
+      "--to-offset", "2", "--export")
+    getConsumerGroupService(cgcArgs)
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {

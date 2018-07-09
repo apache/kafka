@@ -109,7 +109,7 @@ public class Sender implements Runnable {
     private final SenderMetrics sensors;
 
     /* the max time to wait for the server to respond to the request*/
-    private final int requestTimeout;
+    private final int requestTimeoutMs;
 
     /* The max time to wait before retrying a request which has failed */
     private final long retryBackoffMs;
@@ -130,7 +130,7 @@ public class Sender implements Runnable {
                   int retries,
                   SenderMetricsRegistry metricsRegistry,
                   Time time,
-                  int requestTimeout,
+                  int requestTimeoutMs,
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
@@ -145,7 +145,7 @@ public class Sender implements Runnable {
         this.retries = retries;
         this.time = time;
         this.sensors = new SenderMetrics(metricsRegistry);
-        this.requestTimeout = requestTimeout;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
@@ -280,7 +280,7 @@ public class Sender implements Runnable {
             }
         }
 
-        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
+        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeoutMs, now);
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
@@ -342,12 +342,12 @@ public class Sender implements Runnable {
                         break;
                     }
 
-                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeoutMs)) {
                         transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
                 } else {
-                    targetNode = awaitLeastLoadedNodeReady(requestTimeout);
+                    targetNode = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 }
 
                 if (targetNode != null) {
@@ -355,7 +355,7 @@ public class Sender implements Runnable {
                         time.sleep(nextRequestHandler.retryBackoffMs());
 
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
-                            requestBuilder, now, true, nextRequestHandler);
+                            requestBuilder, now, true, requestTimeoutMs, nextRequestHandler);
                     transactionManager.setInFlightTransactionalRequestCorrelationId(clientRequest.correlationId());
                     log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
 
@@ -364,7 +364,7 @@ public class Sender implements Runnable {
                 }
             } catch (IOException e) {
                 log.debug("Disconnect from {} while trying to send request {}. Going " +
-                        "to back off and retry", targetNode, requestBuilder);
+                        "to back off and retry.", targetNode, requestBuilder, e);
                 if (nextRequestHandler.needsCoordinator()) {
                     // We break here so that we pick up the FindCoordinator request immediately.
                     transactionManager.lookupCoordinator(nextRequestHandler);
@@ -409,7 +409,7 @@ public class Sender implements Runnable {
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
-        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
+        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, requestTimeoutMs, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
@@ -423,8 +423,9 @@ public class Sender implements Runnable {
 
     private void maybeWaitForProducerId() {
         while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
+            Node node = null;
             try {
-                Node node = awaitLeastLoadedNodeReady(requestTimeout);
+                node = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
                     InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
@@ -448,7 +449,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
-                log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
+                log.debug("Broker {} disconnected while awaiting InitProducerId response", node, e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
@@ -652,7 +653,7 @@ public class Sender implements Runnable {
      */
     private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
         for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
-            sendProduceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue());
+            sendProduceRequest(now, entry.getKey(), acks, requestTimeoutMs, entry.getValue());
     }
 
     /**
@@ -702,7 +703,8 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
-        ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
+        ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
+                requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

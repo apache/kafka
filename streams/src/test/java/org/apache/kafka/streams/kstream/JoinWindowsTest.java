@@ -113,16 +113,6 @@ public class JoinWindowsTest {
     }
 
     @Test
-    public void shouldUseWindowSizeForMaintainDurationWhenSizeLargerThanDefaultMaintainMs() {
-        final long size = Windows.DEFAULT_MAINTAIN_DURATION_MS;
-
-        final JoinWindows windowSpec = JoinWindows.of(size);
-        final long windowSize = windowSpec.size();
-
-        assertEquals(windowSize, windowSpec.maintainMs());
-    }
-
-    @Test
     public void retentionTimeMustNoBeSmallerThanWindowSize() {
         final JoinWindows windowSpec = JoinWindows.of(anySize);
         final long windowSize = windowSpec.size();

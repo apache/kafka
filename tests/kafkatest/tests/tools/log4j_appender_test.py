@@ -64,10 +64,9 @@ class Log4jAppenderTest(Test):
             self.logger.debug("Received message: %s" % msg)
             self.messages_received_count += 1
 
-    def start_consumer(self, security_protocol):
-        enable_new_consumer = security_protocol != SecurityConfig.PLAINTEXT
+    def start_consumer(self):
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
-                                        consumer_timeout_ms=1000, new_consumer=enable_new_consumer,
+                                        consumer_timeout_ms=1000,
                                         message_validator=self.custom_message_validator)
         self.consumer.start()
 
@@ -84,7 +83,7 @@ class Log4jAppenderTest(Test):
         self.start_appender(security_protocol)
         self.appender.wait()
 
-        self.start_consumer(security_protocol)
+        self.start_consumer()
         node = self.consumer.nodes[0]
 
         wait_until(lambda: self.consumer.alive(node),

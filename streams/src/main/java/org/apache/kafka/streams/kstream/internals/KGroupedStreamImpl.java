@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -51,14 +52,16 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                        final Set<String> sourceNodes,
                        final Serde<K> keySerde,
                        final Serde<V> valSerde,
-                       final boolean repartitionRequired) {
-        super(builder, name, sourceNodes);
+                       final boolean repartitionRequired,
+                       final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder,
                                                                     keySerde,
                                                                     valSerde,
                                                                     repartitionRequired,
                                                                     sourceNodes,
-                                                                    name);
+                                                                    name,
+                                                                    streamsGraphNode);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
@@ -161,7 +164,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                              name,
                                              keySerde,
                                              valSerde,
-                                             repartitionRequired);
+                                             repartitionRequired,
+                                             parentGraphNode);
     }
 
     @Override
@@ -172,7 +176,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 name,
                                                 keySerde,
                                                 valSerde,
-                                                aggregateBuilder);
+                                                aggregateBuilder,
+                                                parentGraphNode);
     }
 
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,

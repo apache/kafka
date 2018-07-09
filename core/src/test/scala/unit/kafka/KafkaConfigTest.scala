@@ -16,7 +16,8 @@
  */
 package kafka
 
-import java.io.{File, FileOutputStream}
+import java.io.File
+import java.nio.file.Files
 import java.util
 
 import kafka.server.KafkaConfig
@@ -104,14 +105,13 @@ class KafkaTest {
     val file = File.createTempFile("kafkatest", ".properties")
     file.deleteOnExit()
 
-    val writer = new FileOutputStream(file)
-    lines.foreach { l =>
-      writer.write(l.getBytes)
-      writer.write("\n".getBytes)
-    }
-
-    writer.close
-
-    file.getAbsolutePath
+    val writer = Files.newOutputStream(file.toPath)
+    try {
+      lines.foreach { l =>
+        writer.write(l.getBytes)
+        writer.write("\n".getBytes)
+      }
+      file.getAbsolutePath
+    } finally writer.close()
   }
 }

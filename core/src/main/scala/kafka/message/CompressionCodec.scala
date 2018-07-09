@@ -19,6 +19,8 @@ package kafka.message
 
 import java.util.Locale
 
+import kafka.common.UnknownCodecException
+
 object CompressionCodec {
   def getCompressionCodec(codec: Int): CompressionCodec = {
     codec match {
@@ -26,7 +28,7 @@ object CompressionCodec {
       case GZIPCompressionCodec.codec => GZIPCompressionCodec
       case SnappyCompressionCodec.codec => SnappyCompressionCodec
       case LZ4CompressionCodec.codec => LZ4CompressionCodec
-      case _ => throw new kafka.common.UnknownCodecException("%d is an unknown compression codec".format(codec))
+      case _ => throw new UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
   def getCompressionCodec(name: String): CompressionCodec = {

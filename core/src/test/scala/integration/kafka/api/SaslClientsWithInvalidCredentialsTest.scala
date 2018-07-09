@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import java.io.FileOutputStream
+import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -159,7 +159,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   @Test
   def testConsumerGroupServiceWithAuthenticationFailure() {
     val propsFile = TestUtils.tempFile()
-    val propsStream = new FileOutputStream(propsFile)
+    val propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("security.protocol=SASL_PLAINTEXT\n".getBytes())
     propsStream.write(s"sasl.mechanism=$kafkaClientSaslMechanism".getBytes())
     propsStream.close()
@@ -169,7 +169,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
                         "--group", "test.group",
                         "--command-config", propsFile.getAbsolutePath)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new KafkaConsumerGroupService(opts)
+    val consumerGroupService = new ConsumerGroupService(opts)
 
     val consumer = consumers.head
     consumer.subscribe(List(topic).asJava)
@@ -227,7 +227,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val txProducer = TestUtils.createNewProducer(brokerList,
+    val txProducer = TestUtils.createProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   saslProperties = this.clientSaslProperties,
                                   retries = 1000,

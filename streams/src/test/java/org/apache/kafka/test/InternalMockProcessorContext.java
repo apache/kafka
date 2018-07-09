@@ -61,6 +61,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private long streamTime = -1L;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -76,6 +77,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
         this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final StreamsConfig config) {
+        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -111,12 +119,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock"),
             new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            () -> collector,
             cache
         );
     }
@@ -171,6 +174,15 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // state mgr will be overridden by the state dir and store maps
     @Override
     public void initialized() {}
+
+    public void setStreamTime(final long currentTime) {
+        streamTime = currentTime;
+    }
+
+    @Override
+    public long streamTime() {
+        return streamTime;
+    }
 
     @Override
     public File stateDir() {
@@ -293,10 +305,14 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
-
+    public StateRestoreListener getRestoreListener(final String storeName) {
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
+        return getStateRestoreListener(restoreCallback);
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
@@ -325,5 +341,4 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
         return new WrappedBatchingStateRestoreCallback(restoreCallback);
     }
-
 }

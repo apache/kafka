@@ -44,23 +44,9 @@ public class LineSplit {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        builder.<String, String>stream("streams-plaintext-input")
-               .flatMapValues(new ValueMapper<String, Iterable<String>>() {
-                    @Override
-                    public Iterable<String> apply(String value) {
-                        return Arrays.asList(value.split("\\W+"));
-                    }
-                })
-               .to("streams-linesplit-output");
-
-        /* ------- use the code below for Java 8 and uncomment the above ----
-
         builder.stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.split("\\W+")))
                .to("streams-linesplit-output");
-
-           ----------------------------------------------------------------- */
-
 
         final Topology topology = builder.build();
         final KafkaStreams streams = new KafkaStreams(topology, props);

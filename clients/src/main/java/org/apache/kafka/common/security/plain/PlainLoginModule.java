@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.plain;
 
-import org.apache.kafka.common.security.plain.internal.PlainSaslServerProvider;
+import org.apache.kafka.common.security.plain.internals.PlainSaslServerProvider;
 
 import java.util.Map;
 

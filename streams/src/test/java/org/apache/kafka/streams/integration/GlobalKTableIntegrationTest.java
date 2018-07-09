@@ -18,19 +18,17 @@ package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -40,6 +38,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -52,23 +51,19 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertThat;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final Properties BROKER_CONFIG;
-    static {
-        BROKER_CONFIG = new Properties();
-        BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
-        BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
-    }
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
-            new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+            new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
@@ -231,35 +226,23 @@ public class GlobalKTableIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreTransactionalMessages() throws Exception {
-        produceInitialGlobalTableValues(true);
+    public void shouldRestoreGlobalInMemoryKTableOnRestart() throws Exception {
+        builder = new StreamsBuilder();
+        globalTable = builder.globalTable(
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore(globalStore)));
+
+        produceInitialGlobalTableValues();
+
         startStreams();
+        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
+        kafkaStreams.close();
 
-        final Map<Long, String> expected = new HashMap<>();
-        expected.put(1L, "A");
-        expected.put(2L, "B");
-        expected.put(3L, "C");
-        expected.put(4L, "D");
-
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                ReadOnlyKeyValueStore<Long, String> store = null;
-                try {
-                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
-                } catch (InvalidStateStoreException ex) {
-                    return false;
-                }
-                Map<Long, String> result = new HashMap<>();
-                Iterator<KeyValue<Long, String>> it = store.all();
-                while (it.hasNext()) {
-                    KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
-                }
-                return result.equals(expected);
-            }
-        }, 30000L, "waiting for initial values");
-        System.out.println("no failed test");
+        startStreams();
+        store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
     }
 
     private void createTopics() throws InterruptedException {
@@ -268,7 +251,7 @@ public class GlobalKTableIntegrationTest {
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
-
+    
     private void startStreams() {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
@@ -292,29 +275,20 @@ public class GlobalKTableIntegrationTest {
     }
 
     private void produceInitialGlobalTableValues() throws Exception {
-        produceInitialGlobalTableValues(false);
-    }
-
-    private void produceInitialGlobalTableValues(final boolean enableTransactions) throws Exception {
-        Properties properties = new Properties();
-        if (enableTransactions) {
-            properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
-            properties.put(ProducerConfig.RETRIES_CONFIG, 1);
-        }
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalTableTopic,
                 Arrays.asList(
                         new KeyValue<>(1L, "A"),
                         new KeyValue<>(2L, "B"),
                         new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D")),
+                        new KeyValue<>(4L, "D")
+                        ),
                 TestUtils.producerConfig(
                         CLUSTER.bootstrapServers(),
                         LongSerializer.class,
-                        StringSerializer.class,
-                        properties),
-                mockTime,
-                enableTransactions);
+                        StringSerializer.class
+                        ),
+                mockTime);
     }
 
     private void produceGlobalTableValues() throws Exception {

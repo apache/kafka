@@ -73,7 +73,7 @@ public class CreateTopicsResponse extends AbstractResponse {
      *
      * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
-     * CLUSTER_AUTHORIZATION_FAILED(31)
+     * TOPIC_AUTHORIZATION_FAILED(29)
      * TOPIC_ALREADY_EXISTS(36)
      * INVALID_PARTITIONS(37)
      * INVALID_REPLICATION_FACTOR(38)
@@ -81,6 +81,7 @@ public class CreateTopicsResponse extends AbstractResponse {
      * INVALID_CONFIG(40)
      * NOT_CONTROLLER(41)
      * INVALID_REQUEST(42)
+     * POLICY_VIOLATION(44)
      */
 
     private final Map<String, ApiError> errors;
