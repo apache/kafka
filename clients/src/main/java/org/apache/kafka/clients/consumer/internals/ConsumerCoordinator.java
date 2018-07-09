@@ -77,6 +77,8 @@ public class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
     private final AtomicInteger pendingAsyncCommits;
+    private List<RebalanceConsumerCoordinator> rebalanceCoordinators = null;
+    private Boolean useMultithreadRebalancing = null;
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
@@ -161,6 +163,13 @@ public class ConsumerCoordinator extends AbstractCoordinator {
 
         this.metadata.requestUpdate();
         addMetadataListener();
+    }
+
+    public void setValue(final boolean useMultithreadRebalancing) {
+        if (this.useMultithreadRebalancing == null) {
+            this.useMultithreadRebalancing = useMultithreadRebalancing;
+            this.rebalanceCoordinators = new ArrayList<>();
+        }
     }
 
     @Override
@@ -356,6 +365,16 @@ public class ConsumerCoordinator extends AbstractCoordinator {
 
         maybeAutoCommitOffsetsAsync(currentTime);
         return true;
+    }
+
+    @Override
+    public boolean ensureActiveGroup(final long timeoutMs) {
+        if (useMultithreadRebalancing) {
+            //fetch start offset
+            //fetch end offset (from which the consumer will start polling)
+            //create new RebalanceConsumer
+        }
+        return ensureActiveGroup(timeoutMs, time.milliseconds());
     }
 
     private long remainingTimeAtLeastZero(final long timeoutMs, final long elapsed) {

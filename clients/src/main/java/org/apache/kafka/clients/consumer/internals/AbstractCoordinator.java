@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -114,6 +115,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
+    private AtomicBoolean rebalanceInProgress = new AtomicBoolean(false);
     private MemberState state = MemberState.UNJOINED;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private Node coordinator = null;
@@ -1031,6 +1033,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll(), so we explicitly leave the group.
+                            rebalanceInProgress.compareAndSet(false, true);
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the

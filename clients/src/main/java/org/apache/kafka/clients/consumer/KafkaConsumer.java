@@ -770,6 +770,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.interceptors,
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                     config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
+            this.coordinator.setValue(this.useParallelRebalance);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,

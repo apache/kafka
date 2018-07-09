@@ -24,6 +24,9 @@ import org.apache.kafka.common.utils.Time;
 import java.util.List;
 
 public class RebalanceConsumerCoordinator extends ConsumerCoordinator {
+    final long startOffset;
+    final long endOffset;
+
     public RebalanceConsumerCoordinator(LogContext logContext,
                                         ConsumerNetworkClient client,
                                         String groupId,
@@ -41,9 +44,13 @@ public class RebalanceConsumerCoordinator extends ConsumerCoordinator {
                                         int autoCommitIntervalMs,
                                         ConsumerInterceptors<?, ?> interceptors,
                                         boolean excludeInternalTopics,
-                                        final boolean leaveGroupOnClose) {
+                                        final boolean leaveGroupOnClose,
+                                        final long startOffset,
+                                        final long endOffset) {
         super(logContext, client, groupId, rebalanceTimeoutMs, sessionTimeoutMs, heartbeat, assignors, metadata,
                 subscriptions, metrics, metricGrpPrefix, time, retryBackoffMs, autoCommitEnabled, autoCommitIntervalMs,
                 interceptors, excludeInternalTopics, leaveGroupOnClose);
+        this.startOffset = startOffset;
+        this.endOffset = endOffset;
     }
 }
