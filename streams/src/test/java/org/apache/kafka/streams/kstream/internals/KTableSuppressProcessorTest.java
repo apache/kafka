@@ -154,10 +154,6 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-    private long scaledTime(final long unscaledTime) {
-        return SCALE_FACTOR * unscaledTime;
-    }
-
     @Test
     public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -481,40 +477,11 @@ public class KTableSuppressProcessorTest {
                 )
             );
 
-//            // An event 1ms late should be admitted
-//            driver.pipeInput(recordFactory.create("input", "k1", "v2", scaledTime(1L)));
-//
-//            verify(
-//                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-//                Arrays.asList(
-//                    new KVT<>("v1", 1L, scaledTime(1L)),
-//                    new KVT<>("v2", 1L, scaledTime(1L))
-//                )
-//            );
-//            verify(
-//                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-//                Arrays.asList(
-//                    new KVT<>("v1", 1L, scaledTime(1L)),
-//                    new KVT<>("v2", 1L, scaledTime(1L))
-//                )
-//            );
-//
-//            // An event 2ms late should be rejected
-//            driver.pipeInput(recordFactory.create("input", "k2", "v2", scaledTime(0L)));
-//
-//            verify(
-//                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-//                Arrays.asList(
-//                    new KVT<>("v1", 0L, scaledTime(0L)),
-//                    new KVT<>("v2", 2L, scaledTime(0L))
-//                )
-//            );
-//            verify(
-//                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-//                Collections.emptyList()
-//            );
-
         }
+    }
+
+    private long scaledTime(final long unscaledTime) {
+        return SCALE_FACTOR * unscaledTime;
     }
 
     private <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KVT<K, V>> expectedResults) {

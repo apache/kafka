@@ -50,24 +50,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         valueSerializer = getValueSerializer(suppress);
     }
 
-    private Serializer<Change<V>> getValueSerializer(final Suppress<K, V> suppress) {
-        return (suppress.getIntermediateSuppression() == null
-            || suppress.getIntermediateSuppression().getBufferConfig() == null
-            || suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer() == null
-        )
-            ? null
-            : new ChangedSerializer<>(suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer());
-    }
-
-    private Serializer<K> getKeySerializer(final Suppress<K, V> suppress) {
-        return (suppress.getIntermediateSuppression() == null
-            || suppress.getIntermediateSuppression().getBufferConfig() == null
-            || suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer() == null
-        )
-            ? null
-            : suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer();
-    }
-
     @Override
     public void init(final ProcessorContext context) {
         internalProcessorContext = (InternalProcessorContext) context;
@@ -201,6 +183,23 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         return suppress.getIntermediateSuppression() != null;
     }
 
+    private Serializer<Change<V>> getValueSerializer(final Suppress<K, V> suppress) {
+        return (suppress.getIntermediateSuppression() == null
+            || suppress.getIntermediateSuppression().getBufferConfig() == null
+            || suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer() == null
+        )
+            ? null
+            : new ChangedSerializer<>(suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer());
+    }
+
+    private Serializer<K> getKeySerializer(final Suppress<K, V> suppress) {
+        return (suppress.getIntermediateSuppression() == null
+            || suppress.getIntermediateSuppression().getBufferConfig() == null
+            || suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer() == null
+        )
+            ? null
+            : suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer();
+    }
 
     @Override
     public void close() {

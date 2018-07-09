@@ -381,10 +381,6 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
-        return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
-    }
-
     @Test
     public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
         final String testId = "-shouldSupportFinalResultsForTimeWindows";
@@ -513,6 +509,10 @@ public class SuppressionIntegrationTest {
             driver.close();
             cleanStateAfterTest(driver, input, outputRaw, outputSuppressed);
         }
+    }
+
+    private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
+        return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
     }
 
     private void cleanStateBeforeTest(final String... topic) throws InterruptedException {
