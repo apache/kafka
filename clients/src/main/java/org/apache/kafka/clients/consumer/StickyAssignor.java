@@ -316,10 +316,12 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             ConsumerGenerationPair existingPair = prevAssignment.get(partition);
             if (consumerGeneration.generation > existingPair.generation)
                 prevAssignment.put(partition, consumerGeneration);
-            else if (consumerGeneration.generation == existingPair.generation)
-                // same partition is assigned to two consumers during the same rebalance
-                throw new IllegalStateException("Error: Partition '" + partition + "' had been assigned to " +
-                        "multiple consumers following sticky assignment generation " + consumerGeneration.generation + ".");
+            else if (consumerGeneration.generation == existingPair.generation) {
+                // same partition is assigned to two consumers during the same rebalance.
+                // log an error and skip this record
+                log.error("Partition '" + partition + "' had been assigned to multiple consumers " +
+                        "following sticky assignment generation " + consumerGeneration.generation + ".");
+            }
         }
     }
 
@@ -348,7 +350,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                     if (consumerUserData.generation == existingRecord.generation) {
                         // same partition is assigned to two consumers during the same rebalance.
                         // log an error and skip this record
-                        log.error("Error: Partition '" + partition + "' is assigned to multiple consumers " +
+                        log.error("Partition '" + partition + "' is assigned to multiple consumers " +
                                   "following sticky assignment generation " + consumerUserData.generation + ".");
                     } else if (consumerUserData.generation > existingRecord.generation) {
                         // same partition is assigned to two consumers in different rebalances.
