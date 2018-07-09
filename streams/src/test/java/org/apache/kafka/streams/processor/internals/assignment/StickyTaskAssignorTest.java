@@ -664,18 +664,13 @@ public class StickyTaskAssignorTest {
         taskAssignor.assign(2);
 
         //do not expect too accurate behavior, there is still some limits to our approximation of the "capacity" of a task
-        assertTrue(clients.get(p1).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p1).getNumberOfStandbyStateStores() > 1);
-        assertTrue(clients.get(p2).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p2).getNumberOfStandbyStateStores() > 1);
-        assertTrue(clients.get(p3).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p3).getNumberOfStandbyStateStores() > 1);
-        assertTrue(clients.get(p4).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p4).getNumberOfStandbyStateStores() > 1);
-        assertTrue(clients.get(p5).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p5).getNumberOfStandbyStateStores() > 1);
-        assertTrue(clients.get(p6).getNumberOfStandbyStateStores() < 9
-                   && clients.get(p6).getNumberOfStandbyStateStores() > 1);
+        for (final int processId : clients.keySet()) {
+            if (processId < p1 || processId > p6) {
+                continue;
+            }
+            assertTrue(clients.get(processId).getNumberOfStandbyStateStores() < 9 &&
+                       clients.get(processId).getNumberOfStandbyStateStores() > 1);
+        }
     }
 
     private StickyTaskAssignor<Integer> createTaskAssignor(final TaskId... tasks) {
