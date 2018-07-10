@@ -492,7 +492,7 @@ public class SuppressionIntegrationTest {
                 emptyList()
             );
 
-            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(3L))));
+            produceSynchronously(input, singletonList(new KVT<>("k1", "v1", scaledTime(4L))));
             verifyOutput(
                 outputRaw,
                 asList(
@@ -501,7 +501,7 @@ public class SuppressionIntegrationTest {
                     new KVT<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L)),
                     new KVT<>(scaledWindowKey("k1", 0L, 2L), 3L, scaledTime(1L)),
                     new KVT<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L)),
-                    new KVT<>(scaledWindowKey("k1", 2L, 4L), 2L, scaledTime(3L))
+                    new KVT<>(scaledWindowKey("k1", 4L, 6L), 1L, scaledTime(4L))
                 )
             );
             verifyOutput(
