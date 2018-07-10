@@ -86,6 +86,9 @@ class CsvColumn(object):
 parser = argparse.ArgumentParser(
     description='Script to graph comma-separated files generated during a soak test run.')
 parser.add_argument(
+    '-n', dest='name', action="store",
+    help="Set the name of the graph.")
+parser.add_argument(
     '-s', '--shift-time-axis', dest='shift_time_axis', action='store_true',
     help="Shift the time axis so that all graphs begin at the same time.")
 parser.add_argument(
@@ -104,7 +107,10 @@ for path in cmd_args["csv_files"]:
             x.append(datetime.datetime.fromtimestamp(timestamp))
             y.append(data)
         plt.plot(x, y, label=column.name)
-plt.title('Soak Test Graphs')
+if cmd_args["name"] is None:
+    plt.title('Soak Test Graphs')
+else:
+    plt.title(str(cmd_args["name"]))
 plt.xlabel('time')
 plt.legend()
 plt.show()
