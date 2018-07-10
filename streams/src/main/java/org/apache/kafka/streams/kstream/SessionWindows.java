@@ -68,6 +68,8 @@ public final class SessionWindows {
     private final long gapMs;
     private final long maintainDurationMs;
     private long close;
+    private boolean closeSet;
+
 
     private SessionWindows(final long gapMs, final long maintainDurationMs) {
         this.gapMs = gapMs;
@@ -121,11 +123,12 @@ public final class SessionWindows {
             throw new IllegalArgumentException();
         }
         this.close = afterWindowEndMs;
+        this.closeSet = true;
         return this;
     }
 
     public long close() {
-        return close;
+        return closeSet ? close : maintainMs();
     }
 
     /**

@@ -98,14 +98,15 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // first get the matching windows
             final long timestamp = context().timestamp();
-            final long expiryTime = internalProcessorContext.streamTime() - windows.close() - windows.size();
+            final long closeTime = internalProcessorContext.streamTime() - windows.close();
 
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final Long windowStart = entry.getKey();
-                if (windowStart > expiryTime) {
+                final long windowEnd = entry.getValue().end();
+                if (windowEnd > closeTime) {
                     T oldAgg = windowStore.fetch(key, windowStart);
 
                     if (oldAgg == null) {
@@ -118,10 +119,11 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                     windowStore.put(key, newAgg, windowStart);
                     tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
                 } else {
-                    log.warn(
-                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{}] expiration=[{}]",
-                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, expiryTime
+                    log.debug(
+                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
+                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );
+                    // TODO: use a different metric
                     metrics.skippedRecordsSensor().record();
                 }
             }

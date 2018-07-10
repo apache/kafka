@@ -562,7 +562,6 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-
     @Test
     public void shouldSupportFinalResultsForSessionWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -573,7 +572,7 @@ public class KTableSuppressProcessorTest {
             .windowedBy(
                 SessionWindows
                     .with(5L)
-                    .close(2L)
+                    .close(5L)
             )
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
@@ -606,6 +605,8 @@ public class KTableSuppressProcessorTest {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 7L));
             // late event for first window
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
+            // third window
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 30L));
 
 
             verify(
@@ -615,15 +616,15 @@ public class KTableSuppressProcessorTest {
                     new KVT<>("[k1@0/0]", null, 1L),
                     new KVT<>("[k1@0/1]", 2L, 1L),
                     new KVT<>("[k1@7/7]", 1L, 7L),
-                    new KVT<>("[k1@0/1]", null, 1L),
-                    new KVT<>("[k1@0/1]", 3L, 1L)
+                    new KVT<>("[k1@30/30]", 1L, 30L)
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KVT<>("[k1@0/0]", null, 1L),
-                    new KVT<>("[k1@0/1]", 2L, 1L)
+                    new KVT<>("[k1@0/1]", 2L, 1L),
+                    new KVT<>("[k1@7/7]", 1L, 7L)
                 )
             );
 
