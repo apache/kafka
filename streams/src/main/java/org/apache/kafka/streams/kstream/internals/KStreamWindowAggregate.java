@@ -119,7 +119,8 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                     windowStore.put(key, newAgg, windowStart);
                     tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
                 } else {
-                    log.debug(
+                    // TODO downgrade this to debug
+                    log.error(
                         "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
                         key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );

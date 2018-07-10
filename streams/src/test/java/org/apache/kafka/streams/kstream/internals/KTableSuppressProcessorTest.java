@@ -601,11 +601,14 @@ public class KTableSuppressProcessorTest {
             // first window
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
-            // second window
+
+            // new window
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 7L));
-            // late event for first window
+
+            // late event for first window - this should get dropped from all streams, since the first window is now closed.
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
-            // third window
+
+            // just pushing stream time forward to flush the other events through.
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 30L));
 
 
@@ -622,6 +625,7 @@ public class KTableSuppressProcessorTest {
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
+                    // TODO: it's not strictly necessary to emit these in final mode, but it's also not harmful... maybe?
                     new KVT<>("[k1@0/0]", null, 1L),
                     new KVT<>("[k1@0/1]", 2L, 1L),
                     new KVT<>("[k1@7/7]", 1L, 7L)
