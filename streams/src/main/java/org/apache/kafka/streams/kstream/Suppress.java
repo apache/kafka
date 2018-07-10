@@ -5,9 +5,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 
-@SuppressWarnings({"WeakerAccess", "unused"})
+@SuppressWarnings({"WeakerAccess"})
 public class Suppress<K, V> {
-    private Duration latenessBound = Duration.ofMillis(Long.MAX_VALUE);
     private IntermediateSuppression<K, V> intermediateSuppression = null;
     private TimeDefinition<K, V> timeDefinition = ((context, k, v) -> context.timestamp());
     private BufferConfig<K, V> finalResultsConfig;
@@ -135,8 +134,8 @@ public class Suppress<K, V> {
 
     private Suppress(final Suppress<K, V> other) {
         this.timeDefinition = other.timeDefinition;
-        this.latenessBound = other.latenessBound;
         this.intermediateSuppression = other.intermediateSuppression;
+        this.finalResultsConfig = other.finalResultsConfig;
     }
 
     public static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final BufferConfig<K, V> bufferConfig) {
@@ -163,16 +162,6 @@ public class Suppress<K, V> {
         return suppress;
     }
 
-    private static <K, V> Suppress<K, V> lateEvents(final Duration maxAllowedLateness) {
-        return new Suppress<K, V>().suppressLateEvents(maxAllowedLateness);
-    }
-
-    private Suppress<K, V> suppressLateEvents(final Duration maxAllowedLateness) {
-        final Suppress<K, V> result = new Suppress<>(this);
-        result.latenessBound = maxAllowedLateness;
-        return result;
-    }
-
     public static <K, V> Suppress<K, V> intermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
         return new Suppress<K, V>().<K, V>suppressIntermediateEvents(intermediateSuppression);
     }
@@ -181,10 +170,6 @@ public class Suppress<K, V> {
         final Suppress<K, V> result = new Suppress<>(this);
         result.intermediateSuppression = intermediateSuppression;
         return result;
-    }
-
-    public Duration getLatenessBound() {
-        return latenessBound;
     }
 
     public IntermediateSuppression<K, V> getIntermediateSuppression() {
@@ -204,7 +189,6 @@ public class Suppress<K, V> {
                                                                                       final Suppress<K, V> suppress) {
         return Suppress
             .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
-            .suppressLateEvents(windowCloseTime)
             .suppressIntermediateEvents(
                 IntermediateSuppression
                     .<K, V>withEmitAfter(windowCloseTime)

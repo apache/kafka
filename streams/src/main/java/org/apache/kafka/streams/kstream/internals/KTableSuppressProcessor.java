@@ -130,22 +130,13 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    private void forwardIfTimely(final long time, final K key, final V value) {
-        final long streamTime = internalProcessorContext.streamTime();
-        final long latenessBound = suppress.getLatenessBound().toMillis();
-        System.out.println("k=" + key + ", v=" + value + ", t=" + time + ", st=" + streamTime + ", l=" + latenessBound);
-//        if (time >= (streamTime - latenessBound)) {
-        internalProcessorContext.forward(key, value);
-//        }
-    }
-
     private void setNodeAndForward(final Map.Entry<TimeKey<K>, ContextualRecord<V>> next) {
         final ProcessorNode prevNode = internalProcessorContext.currentNode();
         final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
         internalProcessorContext.setRecordContext(next.getValue().recordContext);
         internalProcessorContext.setCurrentNode(myNode);
         try {
-            forwardIfTimely(next.getValue().time, next.getKey().key, next.getValue().value);
+            internalProcessorContext.forward(next.getKey().key, next.getValue().value);
         } finally {
             internalProcessorContext.setCurrentNode(prevNode);
             internalProcessorContext.setRecordContext(prevRecordContext);
@@ -178,7 +169,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             // adding that key may have put us over the edge...
             enforceSizeBound();
         } else {
-            forwardIfTimely(time, key, value);
+            internalProcessorContext.forward(key, value);
         }
     }
 
