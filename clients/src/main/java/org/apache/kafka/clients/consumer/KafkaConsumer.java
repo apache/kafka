@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetBuffer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -569,6 +570,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
+    private final OffsetBuffer offsetBuffer;
     //private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     //private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     //private boolean rebalanceInProgress;
@@ -674,6 +676,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
           
             this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
+            if (this.useParallelRebalance) {
+                offsetBuffer = new OffsetBuffer();
+            } else {
+                offsetBuffer = null;
+            }
             this.time = Time.SYSTEM;
 
             Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
@@ -734,10 +741,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    time,
-                    true,
-                    new ApiVersions(),
-                    throttleTimeSensor,
+                    time, true, new ApiVersions(), throttleTimeSensor,
                     logContext);
             this.client = new ConsumerNetworkClient(
                     logContext,
@@ -839,6 +843,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.useParallelRebalance = false;
+        this.offsetBuffer = null;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
     }

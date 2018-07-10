@@ -71,7 +71,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         if (!terminated()) {
             return super.poll(timeout);
         }
-        return parentConsumer.poll(timeout);
+        return null;
     }
 
     @Override
