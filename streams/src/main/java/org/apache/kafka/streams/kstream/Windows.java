@@ -38,7 +38,16 @@ public abstract class Windows<W extends Window> {
 
     private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
-    private long allowedLateness = 0;
+
+    private static final long DEFAULT_CLOSE_MS = 0L; // one day
+
+    // track what gets overridden so that we can set
+    // close := 'until' iff it's not already set
+    // If neither close nor 'until' are set, we return the default.
+    // When we remove 'until', we can ditch these fields.
+    private boolean closeSet = false;
+
+    private long closeMs = DEFAULT_CLOSE_MS;
 
     protected Windows() {}
 
@@ -53,12 +62,13 @@ public abstract class Windows<W extends Window> {
         if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException();
         }
-        this.allowedLateness = afterWindowEndMs;
+        closeMs = afterWindowEndMs;
+        closeSet = true;
         return this;
     }
 
     public long close() {
-        return allowedLateness;
+        return closeSet ? closeMs : (maintainMs() - size());
     }
 
     /**

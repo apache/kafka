@@ -1,6 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.integration;
 
-import kafka.common.TopicAlreadyMarkedForDeletionException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -46,6 +61,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -98,7 +114,7 @@ public class SuppressionIntegrationTest {
     @Test
     public void shouldSuppressIntermediateEventsWithEmitAfter() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithEmitAfter";
-        final String appId = getClass().getSimpleName().toLowerCase() + testId;
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
@@ -166,7 +182,7 @@ public class SuppressionIntegrationTest {
     @Test
     public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() throws InterruptedException {
         final String testId = "-shouldNotSuppressIntermediateEventsWithZeroEmitAfter";
-        final String appId = getClass().getSimpleName().toLowerCase() + testId;
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
@@ -236,7 +252,7 @@ public class SuppressionIntegrationTest {
     @Test
     public void shouldSuppressIntermediateEventsWithKeyLimit() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithKeyLimit";
-        final String appId = getClass().getSimpleName().toLowerCase() + testId;
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
@@ -308,7 +324,7 @@ public class SuppressionIntegrationTest {
     @Test
     public void shouldSuppressIntermediateEventsWithBytesLimit() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithBytesLimit";
-        final String appId = getClass().getSimpleName().toLowerCase() + testId;
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
@@ -384,7 +400,7 @@ public class SuppressionIntegrationTest {
     @Test
     public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
         final String testId = "-shouldSupportFinalResultsForTimeWindows";
-        final String appId = getClass().getSimpleName().toLowerCase() + testId;
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
@@ -543,7 +559,7 @@ public class SuppressionIntegrationTest {
     private void safeDelete(final String topic) throws InterruptedException {
         try {
             CLUSTER.deleteTopic(topic);
-        } catch (final TopicAlreadyMarkedForDeletionException ignored) {
+        } catch (final kafka.common.TopicAlreadyMarkedForDeletionException ignored) {
             // ignore
         }
     }
