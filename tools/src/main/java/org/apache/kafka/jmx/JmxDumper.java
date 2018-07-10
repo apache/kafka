@@ -159,7 +159,9 @@ public final class JmxDumper {
 
         public void storeJmx(long time) throws Exception {
             CsvRow row = new CsvRow();
-            row.add(time);
+            float timeSeconds = time;
+            timeSeconds /= 1000;
+            row.add(timeSeconds);
             for (JmxObjectConfig object : file.objects()) {
                 HashMap<String, Object> values = new HashMap<>();
                 List<Attribute> attributeList = null;
