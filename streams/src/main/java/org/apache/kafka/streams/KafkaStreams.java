@@ -200,6 +200,7 @@ public class KafkaStreams {
         }
 
         public boolean isRunning() {
+        // aaaaaadd
             return equals(RUNNING) || equals(REBALANCING);
         }
 
