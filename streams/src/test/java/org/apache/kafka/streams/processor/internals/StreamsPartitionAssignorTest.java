@@ -1279,11 +1279,13 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         assertThat(assignment.size(), equalTo(2));
-        AssignmentInfo c1Info = AssignmentInfo.decode(assignment.get("consumer1").userData());
-        assertThat(c1Info.standbyTasks(), equalTo(standbyTaskMap));
-        assertThat(c1Info.partitionsByHost().isEmpty(), equalTo(true));
-        assertThat(c1Info.activeTasks().containsAll(activeTasks), equalTo(true));
-        assertThat(activeTasks.containsAll(c1Info.activeTasks()), equalTo(true));
+        assertThat(
+            AssignmentInfo.decode(assignment.get("consumer1").userData()),
+            equalTo(new AssignmentInfo(
+                new ArrayList<>(activeTasks),
+                standbyTaskMap,
+                Collections.<HostInfo, Set<TopicPartition>>emptyMap()
+            )));
         assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
 
         AssignmentInfo futureInfo = AssignmentInfo.decode(assignment.get("future-consumer").userData());
