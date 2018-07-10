@@ -98,7 +98,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // first get the matching windows
             final long timestamp = context().timestamp();
-            final long expiryTime = internalProcessorContext.streamTime() - windows.maintainMs();
+            final long expiryTime = internalProcessorContext.streamTime() - windows.close() - windows.size();
 
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 

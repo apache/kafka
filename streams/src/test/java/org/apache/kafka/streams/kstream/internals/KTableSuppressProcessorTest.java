@@ -481,8 +481,8 @@ public class KTableSuppressProcessorTest {
             .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
             .windowedBy(TimeWindows
                 .of(2L)
-                .until(3L)
-                .close(1L)
+                .until(10L)
+                .close(2L)
             )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
@@ -511,7 +511,11 @@ public class KTableSuppressProcessorTest {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 2L));
-            driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 3L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 4L));
+            // this update should get dropped, since the previous event advanced the stream time and closed the window.
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 30L));
 
@@ -522,8 +526,10 @@ public class KTableSuppressProcessorTest {
                     new KVT<>("[k1@0/2]", 1L, 0L),
                     new KVT<>("[k1@0/2]", 2L, 1L),
                     new KVT<>("[k1@2/4]", 1L, 2L),
-                    new KVT<>("[k1@0/2]", 3L, 1L),
+                    new KVT<>("[k1@0/2]", 3L, 0L),
+                    new KVT<>("[k1@2/4]", 2L, 3L),
                     new KVT<>("[k1@0/2]", 4L, 0L),
+                    new KVT<>("[k1@4/6]", 1L, 4L),
                     new KVT<>("[k1@30/32]", 1L, 30L)
                 )
             );
@@ -531,7 +537,8 @@ public class KTableSuppressProcessorTest {
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KVT<>("[k1@0/2]", 4L, 0L),
-                    new KVT<>("[k1@2/4]", 1L, 2L)
+                    new KVT<>("[k1@2/4]", 2L, 3L),
+                    new KVT<>("[k1@4/6]", 1L, 4L)
                 )
             );
 
