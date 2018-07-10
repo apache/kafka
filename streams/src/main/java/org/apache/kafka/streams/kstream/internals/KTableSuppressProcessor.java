@@ -11,19 +11,63 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 
 public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private final Suppress<K, V> suppress;
-    private final LinkedHashMap<K, ContextualRecord<V>> priorityQueue;
+
+    private final Map<K, TimeKey<K>> index = new HashMap<>();
+    private final TreeMap<TimeKey<K>, ContextualRecord<V>> sortedMap = new TreeMap<>();
+
     private InternalProcessorContext internalProcessorContext;
     private long memBufferSize;
     private ProcessorNode myNode;
     private final Serializer<Change<V>> valueSerializer;
+
+    private long lastEmitTime = -1L;
+
+    private static class TimeKey<K> implements Comparable<TimeKey<K>> {
+        private final long time;
+        private final K key;
+
+        private TimeKey(final long time, final K key) {
+
+            this.time = time;
+            this.key = key;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final TimeKey<?> timeKey = (TimeKey<?>) o;
+            return time == timeKey.time &&
+                Objects.equals(key, timeKey.key);
+        }
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash(time, key);
+        }
+
+        @Override
+        public int compareTo(final TimeKey<K> o) {
+            // ordering of keys within a time uses hashCode.
+            final int timeComparison = Long.compare(time, o.time);
+            return timeComparison == 0 ? Integer.compare(key.hashCode(), o.key.hashCode()) : timeComparison;
+        }
+
+        @Override
+        public String toString() {
+            return "TimeKey{time=" + time + ", key=" + key + '}';
+        }
+    }
 
     private static class ContextualRecord<V> {
         private final long time;
@@ -46,7 +90,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
 
     KTableSuppressProcessor(final Suppress<K, V> suppress) {
         this.suppress = suppress;
-        priorityQueue = new LinkedHashMap<>();
         valueSerializer = getValueSerializer(suppress);
     }
 
@@ -65,17 +108,23 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
                     1L,
                     PunctuationType.STREAM_TIME,
                     streamTime -> {
-                        final Set<Map.Entry<K, ContextualRecord<V>>> entries = priorityQueue.entrySet();
-                        final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = entries.iterator();
+                        System.out.println(streamTime + " " + (streamTime - evictionTimeout));
+                        final Set<Map.Entry<TimeKey<K>, ContextualRecord<V>>> entries = sortedMap.entrySet();
+                        final Iterator<Map.Entry<TimeKey<K>, ContextualRecord<V>>> iterator = entries.iterator();
+
                         while (iterator.hasNext()) {
-                            final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
-                            if (next.getValue().recordContext.timestamp() < streamTime - evictionTimeout) {
+                            final Map.Entry<TimeKey<K>, ContextualRecord<V>> next = iterator.next();
+                            final long recordTime = next.getValue().time;
+                            System.out.println(streamTime + " " + next);
+                            if (recordTime < streamTime - evictionTimeout) {
                                 setNodeAndForward(next);
                                 iterator.remove();
+                                index.remove(next.getKey().key);
                             } else {
                                 break;
                             }
                         }
+                        lastEmitTime = streamTime;
                     });
             }
         }
@@ -85,18 +134,18 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         final long streamTime = internalProcessorContext.streamTime();
         final long latenessBound = suppress.getLatenessBound().toMillis();
         System.out.println("k=" + key + ", v=" + value + ", t=" + time + ", st=" + streamTime + ", l=" + latenessBound);
-        if (time >= (streamTime - latenessBound)) {
-            internalProcessorContext.forward(key, value);
-        }
+//        if (time >= (streamTime - latenessBound)) {
+        internalProcessorContext.forward(key, value);
+//        }
     }
 
-    private void setNodeAndForward(final Map.Entry<K, ContextualRecord<V>> next) {
+    private void setNodeAndForward(final Map.Entry<TimeKey<K>, ContextualRecord<V>> next) {
         final ProcessorNode prevNode = internalProcessorContext.currentNode();
         final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
         internalProcessorContext.setRecordContext(next.getValue().recordContext);
         internalProcessorContext.setCurrentNode(myNode);
         try {
-            forwardIfTimely(next.getValue().time, next.getKey(), next.getValue().value);
+            forwardIfTimely(next.getValue().time, next.getKey().key, next.getValue().value);
         } finally {
             internalProcessorContext.setCurrentNode(prevNode);
             internalProcessorContext.setRecordContext(prevRecordContext);
@@ -108,15 +157,23 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         final long time = suppress.getTimeDefinition().time(internalProcessorContext, key, value);
 
         if (intermediateSuppression() && (nonTimeBoundSuppression() || nonInstantaneousTimeBoundSuppression())) {
-            // intermediate suppress is enabled
-            final ContextualRecord<V> previous = priorityQueue.remove(key);
-            if (previous != null) { memBufferSize = memBufferSize - previous.size; }
+            final TimeKey<K> previousTimeKey = index.remove(key);
+            if (previousTimeKey != null) {
+                final ContextualRecord<V> previous = sortedMap.remove(previousTimeKey);
+                if (previous != null) {
+                    memBufferSize = memBufferSize - previous.size;
+                }
+            }
 
             final ProcessorRecordContext recordContext = internalProcessorContext.recordContext();
             final long size = computeRecordSize(key, value, recordContext);
             memBufferSize = memBufferSize + size;
 
-            priorityQueue.put(key, new ContextualRecord<>(time, value, recordContext, size));
+            System.out.println(key + ":" + new ContextualRecord<>(time, value, recordContext, size));
+
+            final TimeKey<K> timeKey = new TimeKey<>(time, key);
+            index.put(key, timeKey);
+            sortedMap.put(timeKey, new ContextualRecord<>(time, value, recordContext, size));
 
             // adding that key may have put us over the edge...
             enforceSizeBound();
@@ -126,16 +183,16 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     }
 
     private void enforceSizeBound() {
-        if (priorityQueue.size() > suppress.getIntermediateSuppression().getBufferConfig().getNumberOfKeysToRemember()
+        if (index.size() > suppress.getIntermediateSuppression().getBufferConfig().getNumberOfKeysToRemember()
             || memBufferSize > suppress.getIntermediateSuppression().getBufferConfig().getBytesToUseForSuppressionStorage()) {
 
             switch (suppress.getIntermediateSuppression().getBufferConfig().getBufferFullStrategy()) {
                 case EMIT:
                     // we only added one, so we only need to remove one.
-                    final Iterator<Map.Entry<K, ContextualRecord<V>>> iterator = priorityQueue.entrySet().iterator();
-                    final Map.Entry<K, ContextualRecord<V>> next = iterator.next();
-                    setNodeAndForward(next);
-                    iterator.remove();
+                    final Map.Entry<TimeKey<K>, ContextualRecord<V>> firstEntry = sortedMap.firstEntry();
+                    setNodeAndForward(firstEntry);
+                    sortedMap.remove(firstEntry.getKey());
+                    index.remove(firstEntry.getKey().key);
                     return;
                 case SHUT_DOWN:
                     throw new RuntimeException("TODO: request graceful shutdown"); // TODO: request graceful shutdown

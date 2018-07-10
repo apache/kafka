@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Suppress;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -395,7 +396,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
 
-    private long allowedLateness() {
+    private long windowClose() {
         String chain = "";
         // Search backward until we find
         StreamsGraphNode node1 = this.parentGraphNode;
@@ -405,14 +406,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 if (processorSupplier instanceof KStreamWindowAggregate) {
                     final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
                     final Windows windows = kStreamWindowAggregate.getWindows();
-                    return windows.allowedLateness();
+                    return windows.close();
+                } else if (processorSupplier instanceof KStreamSessionWindowAggregate) {
+                    final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;
+                    final SessionWindows windows = kStreamSessionWindowAggregate.getWindows();
+                    return windows.close();
                 }
             }
             chain = chain.equals("") ? node1.nodeName() : node1.nodeName() + "->" + chain;
             node1 = node1.parentNode();
         }
         throw new IllegalArgumentException(
-            "Allowed Lateness is only defined for windowed computations. Got [" + chain + "]."
+            "Window close time is only defined for windowed computations. Got [" + chain + "]."
         );
     }
 
@@ -420,7 +425,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private Suppress<K, V> buildSuppress(final Suppress<K, V> suppress) {
         if (suppress.isFinalResultsSuppression()) {
             return (Suppress<K, V>) Suppress.buildFinalResultsSuppression(
-                Duration.ofMillis(allowedLateness()),
+                Duration.ofMillis(windowClose()),
                 (Suppress<Windowed, V>) suppress
             );
         } else {

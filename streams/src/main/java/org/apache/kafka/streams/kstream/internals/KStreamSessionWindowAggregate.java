@@ -58,6 +58,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
         this.sessionMerger = sessionMerger;
     }
 
+    public SessionWindows getWindows() {
+        return windows;
+    }
+
     @Override
     public Processor<K, V> get() {
         return new KStreamSessionWindowAggregateProcessor();

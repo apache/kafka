@@ -403,7 +403,7 @@ public class SuppressionIntegrationTest {
                 TimeWindows
                     .of(scaledTime(2L))
                     .until(scaledTime(3L))
-                    .allowedLateness(scaledTime(1L))
+                    .close(scaledTime(1L))
             )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 

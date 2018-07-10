@@ -200,14 +200,14 @@ public class Suppress<K, V> {
         return finalResultsConfig != null;
     }
 
-    public static <K extends Windowed, V> Suppress<K, V> buildFinalResultsSuppression(final Duration allowedLateness,
+    public static <K extends Windowed, V> Suppress<K, V> buildFinalResultsSuppression(final Duration windowCloseTime,
                                                                                       final Suppress<K, V> suppress) {
         return Suppress
             .usingTimeDefinition(((ProcessorContext context, K k, V v) -> k.window().end()))
-            .suppressLateEvents(allowedLateness)
+            .suppressLateEvents(windowCloseTime)
             .suppressIntermediateEvents(
                 IntermediateSuppression
-                    .<K, V>withEmitAfter(allowedLateness)
+                    .<K, V>withEmitAfter(windowCloseTime)
                     .bufferConfig(suppress.finalResultsConfig)
             );
     }

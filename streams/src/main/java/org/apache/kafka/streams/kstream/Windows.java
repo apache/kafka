@@ -42,15 +42,22 @@ public abstract class Windows<W extends Window> {
 
     protected Windows() {}
 
-    public Windows<W> allowedLateness(final long allowedLateness) {
-        if (allowedLateness < 0) {
+    /**
+     * Reject late events that arrive more than {@code afterWindowEndMs} millis
+     * after the end of its window.
+     *
+     * @param afterWindowEndMs The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
+    public Windows<W> close(final long afterWindowEndMs) {
+        if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException();
         }
-        this.allowedLateness = allowedLateness;
+        this.allowedLateness = afterWindowEndMs;
         return this;
     }
 
-    public long allowedLateness() {
+    public long close() {
         return allowedLateness;
     }
 

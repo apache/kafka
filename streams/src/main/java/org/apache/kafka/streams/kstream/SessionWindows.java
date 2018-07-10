@@ -67,6 +67,7 @@ public final class SessionWindows {
 
     private final long gapMs;
     private final long maintainDurationMs;
+    private long close;
 
     private SessionWindows(final long gapMs, final long maintainDurationMs) {
         this.gapMs = gapMs;
@@ -105,6 +106,29 @@ public final class SessionWindows {
     }
 
     /**
+     * Reject late events that arrive more than {@code afterWindowEndMs} millis
+     * after the end of its window.
+     *
+     * Note that new events may change the boundaries of session windows, so aggressive
+     * close times can lead to surprising results in which a too-late event is rejected and then
+     * a subsequent event moves the window boundary forward.
+     *
+     * @param afterWindowEndMs The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
+    public SessionWindows close(final long afterWindowEndMs) {
+        if (afterWindowEndMs < 0) {
+            throw new IllegalArgumentException();
+        }
+        this.close = afterWindowEndMs;
+        return this;
+    }
+
+    public long close() {
+        return close;
+    }
+
+    /**
      * Return the specified gap for the session windows in milliseconds.
      *
      * @return the inactivity gap of the specified windows
@@ -130,7 +154,7 @@ public final class SessionWindows {
         if (o == null || getClass() != o.getClass()) return false;
         final SessionWindows that = (SessionWindows) o;
         return gapMs == that.gapMs &&
-                maintainDurationMs == that.maintainDurationMs;
+            maintainDurationMs == that.maintainDurationMs;
     }
 
     @Override
