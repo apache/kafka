@@ -123,7 +123,7 @@ public class SubscriptionInfo {
                 break;
             case 3:
             case 4:
-                buf = encodeVersionThree();
+                buf = encodeVersionThree(usedVersion);
                 break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -203,12 +203,12 @@ public class SubscriptionInfo {
         }
     }
 
-    private ByteBuffer encodeVersionThree() {
+    private ByteBuffer encodeVersionThree(int ver) {
         final byte[] endPointBytes = prepareUserEndPoint();
 
         final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
 
-        buf.putInt(3); // used version
+        buf.putInt(ver); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
