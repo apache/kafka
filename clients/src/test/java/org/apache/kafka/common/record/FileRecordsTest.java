@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
+import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,7 +47,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class FileRecordsTest {
+public class FileRecordsTest extends EasyMockSupport {
 
     private byte[][] values = new byte[][] {
             "abcd".getBytes(),
@@ -62,21 +63,28 @@ public class FileRecordsTest {
         this.time = new MockTime();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testAppendProtectsFromOverflow() throws Exception {
-        File file = tempFile();
-        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-        randomAccessFile.setLength(Integer.MAX_VALUE);
-        FileRecords records = new FileRecords(file, randomAccessFile.getChannel(), 0, Integer.MAX_VALUE, false);
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        EasyMock.expect(fileChannelMock.size()).andStubReturn((long) Integer.MAX_VALUE);
+        EasyMock.expect(fileChannelMock.position(Integer.MAX_VALUE)).andReturn(fileChannelMock);
+
+        replayAll();
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
         append(records, values);
     }
 
     @Test(expected = KafkaException.class)
     public void testOpenOversizeFile() throws Exception {
-        File file = tempFile();
-        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-        randomAccessFile.setLength(Integer.MAX_VALUE + 1L);
-        new FileRecords(file, randomAccessFile.getChannel(), 0, Integer.MAX_VALUE, false);
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        EasyMock.expect(fileChannelMock.size()).andStubReturn(Integer.MAX_VALUE + 5L);
+
+        replayAll();
+
+        new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
     }
 
     @Test(expected = IllegalArgumentException.class)

@@ -149,13 +149,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Append log batches to the buffer
+     * Append a set of records to the file. This method is not thread-safe and must be
+     * protected with a lock.
+     *
      * @param records The records to append
      * @return the number of bytes written to the underlying file
      */
     public int append(MemoryRecords records) throws IOException {
-        if (size.get() > Integer.MAX_VALUE - records.sizeInBytes())
-            throw new IllegalStateException("Append of size " + records.sizeInBytes() +
+        if (records.sizeInBytes() > Integer.MAX_VALUE - size.get())
+            throw new IllegalArgumentException("Append of size " + records.sizeInBytes() +
                     " bytes is too large for segment with current file position at " + size.get());
 
         int written = records.writeFullyTo(channel);
