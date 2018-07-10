@@ -26,9 +26,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetBuffer;
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.RebalanceKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -63,6 +64,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -553,6 +555,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Visible for testing
     final Metrics metrics;
+    final Map<String, Object> configs;
 
     private final Logger log;
     private final String clientId;
@@ -571,9 +574,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
     private final OffsetBuffer offsetBuffer;
-    //private Map<TopicPartition, Long> startOffsets = new HashMap<>();
-    //private Map<TopicPartition, Long> endOffsets = new HashMap<>();
-    //private boolean rebalanceInProgress;
+    private final List<RebalanceKafkaConsumer<K, V>> rebalanceConsumers;
+    private Map<TopicPartition, Long> startOffsets = new HashMap<>();
+    private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
     private List<PartitionAssignor> assignors;
 
@@ -619,8 +622,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-            keyDeserializer,
-            valueDeserializer);
+                keyDeserializer,
+                valueDeserializer);
     }
 
     /**
@@ -654,7 +657,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
-             keyDeserializer, valueDeserializer);
+                keyDeserializer, valueDeserializer);
     }
 
     @SuppressWarnings("unchecked")
@@ -662,6 +665,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                           Deserializer<K> keyDeserializer,
                           Deserializer<V> valueDeserializer) {
         try {
+            this.configs = config.originals();
             String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.isEmpty())
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
@@ -674,7 +678,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-          
+
             this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
             if (this.useParallelRebalance) {
                 offsetBuffer = new OffsetBuffer();
@@ -733,8 +737,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    this.metadata,
-                    clientId,
+                    this.metadata, clientId,
                     100, // a fixed large enough value will suffice for max in-flight requests
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
@@ -744,11 +747,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     time, true, new ApiVersions(), throttleTimeSensor,
                     logContext);
             this.client = new ConsumerNetworkClient(
-                    logContext,
-                    netClient,
-                    metadata,
-                    time,
-                    retryBackoffMs,
+                    logContext, netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -797,6 +796,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel);
+            rebalanceConsumers = new ArrayList<>();
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
@@ -828,6 +828,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
                   List<PartitionAssignor> assignors) {
+        this.configs = null;
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
         this.coordinator = coordinator;
@@ -844,6 +845,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.requestTimeoutMs = requestTimeoutMs;
         this.useParallelRebalance = false;
         this.offsetBuffer = null;
+        this.rebalanceConsumers = null;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
     }
@@ -1167,6 +1169,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return poll(timeout.toMillis(), true);
     }
 
+    void getStartAndEndOffsets() {
+        for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
+            startOffsets.put(partition, committed(partition).offset());
+        }
+        seekToEnd(Collections.EMPTY_LIST);
+        for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
+            endOffsets.put(partition, position(partition));
+        }
+
+    }
+
     private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
@@ -1176,7 +1189,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            //rebalanceInProgress = coordinator.isRebalancing();
+
+            if (coordinator.isRebalancing()) {
+                getStartAndEndOffsets();
+                RebalanceKafkaConsumer consumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
+                rebalanceConsumers.add(consumer);
+                new Thread(consumer).start();
+            }
 
             // poll for new data until the timeout expires
             long elapsedTime = 0L;
@@ -1393,37 +1412,37 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-    * Commit the specified offsets for the specified list of topics and partitions.
-    * <p>
-    * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
-    * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
-    * should not be used. The committed offset should be the next message your application will consume,
-    * i.e. lastProcessedMessageOffset + 1.
-    * <p>
-    * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
-    * encountered (in which case it is thrown to the caller), or the timeout expires.
-    * <p>
-    * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-    * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
-    *
-    * @param offsets A map of offsets by partition with associated metadata
-    * @param timeout The maximum amount of time to await completion of the offset commit
-    * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
-    *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-    *             or if there is an active group with the same groupId which is using group management.
-    * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-    *             function is called
-    * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-    *             this function is called
-    * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-    * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-    *             configured groupId. See the exception for more details
-    * @throws java.lang.IllegalArgumentException if the committed offset is negative
-    * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
-    *             is too large or if the topic does not exist).
-    * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
-    *            of the offset commit
-    */
+     * Commit the specified offsets for the specified list of topics and partitions.
+     * <p>
+     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
+     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used. The committed offset should be the next message your application will consume,
+     * i.e. lastProcessedMessageOffset + 1.
+     * <p>
+     * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
+     * encountered (in which case it is thrown to the caller), or the timeout expires.
+     * <p>
+     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     *
+     * @param offsets A map of offsets by partition with associated metadata
+     * @param timeout The maximum amount of time to await completion of the offset commit
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws java.lang.IllegalArgumentException if the committed offset is negative
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the topic does not exist).
+     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
+     *            of the offset commit
+     */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
@@ -1610,7 +1629,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
-     * This method may issue a remote call to the server if there is no current position 
+     * This method may issue a remote call to the server if there is no current position
      * for the given partition.
      * <p>
      * This call will block until the position can be determined, an unrecoverable error is
@@ -2242,7 +2261,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void throwIfNoAssignorsConfigured() {
         if (assignors.isEmpty())
             throw new IllegalStateException("Must configure at least one partition assigner class name to " +
-                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
+                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
 }

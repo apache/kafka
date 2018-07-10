@@ -77,10 +77,7 @@ public class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
     private final AtomicInteger pendingAsyncCommits;
-    private final List<RebalanceKafkaConsumer> rebalanceConsumers;
     private Boolean useMultithreadRebalancing = null;
-    private Map<TopicPartition, Long> startOffsets;
-    private Map<TopicPartition, Long> endOffsets;
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
@@ -159,7 +156,6 @@ public class ConsumerCoordinator extends AbstractCoordinator {
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
         this.pendingAsyncCommits = new AtomicInteger();
-        this.rebalanceConsumers = new ArrayList<>();
 
         if (autoCommitEnabled)
             this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
@@ -175,7 +171,8 @@ public class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     public boolean isRebalancing() {
-        return rebalanceInProgress.get();
+        //return rebalanceInProgress.get();
+        return false;
     }
 
     @Override

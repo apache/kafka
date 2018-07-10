@@ -32,17 +32,14 @@ import java.util.HashSet;
  */
 public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runnable {
     private final Map<TopicPartition, Long> endOffsets;
-    private final KafkaConsumer parentConsumer;
     private final Set<TopicPartition> unfinished;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Map<TopicPartition, Long> startOffsets,
-                                  final Map<TopicPartition, Long> endOffsets,
-                                  final KafkaConsumer parentConsumer) {
+                                  final Map<TopicPartition, Long> endOffsets) {
         super(configs, null, null);
         this.endOffsets = endOffsets;
         this.unfinished = new HashSet<>(startOffsets.keySet());
-        this.parentConsumer = parentConsumer; // the parent consumer is the one with an unbounded offset range
         // send join request -- not done
         //go to start positions i.e. the last committed offsets of the parent consumer
         for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
