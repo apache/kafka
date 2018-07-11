@@ -77,7 +77,7 @@ object ReassignPartitionsCommand extends Logging {
       else
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      props.put(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
+      props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
       Some(JAdminClient.create(props))
     } else {
       None

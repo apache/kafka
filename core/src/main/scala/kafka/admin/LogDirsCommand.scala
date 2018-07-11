@@ -89,7 +89,7 @@ object LogDirsCommand {
         else
             new Properties()
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-        props.put(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
+        props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
         JAdminClient.create(props)
     }
 
