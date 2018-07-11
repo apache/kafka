@@ -79,6 +79,10 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         int maxNumPartitions = 0;
         for (String topic : topics) {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+            if (partitions.isEmpty()) {
+                log.error("Empty partitions for topic {}", topic);
+                throw new RuntimeException("Empty partitions for topic " + topic);
+            }
 
             int numPartitions = partitions.size();
             if (numPartitions > maxNumPartitions)

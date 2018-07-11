@@ -265,7 +265,7 @@ public class StreamThread extends Thread {
                 log.debug("Received error code " + streamThread.shutdownErrorCode.get() +
                     " - shutdown");
                 streamThread.shutdown();
-                return;
+                streamThread.setStateListener(null);
             }
             final long start = time.milliseconds();
             try {
@@ -667,7 +667,7 @@ public class StreamThread extends Thread {
         final AtomicBoolean versionProbingFlag = new AtomicBoolean();
         consumerConfigs.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, versionProbingFlag);
         final AtomicInteger shutdownErrorCode = new AtomicInteger();
-        consumerConfigs.put(StreamsConfig.InternalConfig.SHUTDOWN_ERROR_CODE, shutdownErrorCode);
+        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, shutdownErrorCode);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);

@@ -42,7 +42,6 @@ public class AssignmentInfo {
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
 
     public static final int LATEST_SUPPORTED_VERSION = 4;
-    public static final int VERSION_WITH_ERRORCODE = 4;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -86,16 +85,17 @@ public class AssignmentInfo {
     }
 
     public AssignmentInfo(final int version,
-        final List<TaskId> activeTasks,
-        final Map<TaskId, Set<TopicPartition>> standbyTasks,
-        final Map<HostInfo, Set<TopicPartition>> hostState,
-        final int errCode) {
+                          final List<TaskId> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                          final Map<HostInfo, Set<TopicPartition>> hostState,
+                          final int errCode) {
         this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
         }
     }
+
     // for testing only; don't apply version checks
     AssignmentInfo(final int version,
                    final int latestSupportedVersion,
@@ -333,7 +333,7 @@ public class AssignmentInfo {
         decodeGlobalAssignmentData(assignmentInfo, in);
     }
     private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
-        final DataInputStream in) throws IOException {
+                                              final DataInputStream in) throws IOException {
         decodeVersionThreeData(assignmentInfo, in);
         assignmentInfo.errCode = in.readInt();
     }

@@ -124,7 +124,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
         configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         configurationMap.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, new AtomicBoolean());
-        configurationMap.put(StreamsConfig.InternalConfig.SHUTDOWN_ERROR_CODE, new AtomicInteger());
+        configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         return configurationMap;
     }
 

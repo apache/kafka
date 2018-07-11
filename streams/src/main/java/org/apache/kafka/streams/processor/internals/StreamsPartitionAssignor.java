@@ -213,7 +213,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private PartitionGrouper partitionGrouper;
     private AtomicBoolean versionProbingFlag;
     // flag indicating whether streams app should shutdown
-    private AtomicInteger shutdownErrorCode;
+    private AtomicInteger assignmentErrorCode;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
@@ -293,9 +293,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         versionProbingFlag = (AtomicBoolean) o2;
 
-        final Object ai = configs.get(StreamsConfig.InternalConfig.SHUTDOWN_ERROR_CODE);
+        final Object ai = configs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
         if (ai == null) {
-            final KafkaException fatalException = new KafkaException("ShutdownErrorCode is not specified");
+            final KafkaException fatalException = new KafkaException("assignmentErrorCode is not specified");
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
@@ -306,7 +306,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
-        shutdownErrorCode = (AtomicInteger) ai;
+        assignmentErrorCode = (AtomicInteger) ai;
 
         numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
@@ -810,8 +810,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != Error.NONE.code) {
-          // set flag to shutdown streams app
-            shutdownErrorCode.set(info.errCode());
+            // set flag to shutdown streams app
+            assignmentErrorCode.set(info.errCode());
             return;
         }
         int receivedAssignmentMetadataVersion = info.version();
@@ -860,6 +860,17 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 partitionsByHost = info.partitionsByHost();
                 break;
             case VERSION_THREE:
+                if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
+                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
+                        "Upgrading subscription metadata version to {} for next rebalance.",
+                        usedSubscriptionMetadataVersion,
+                        leaderSupportedVersion,
+                        leaderSupportedVersion);
+                    usedSubscriptionMetadataVersion = leaderSupportedVersion;
+                }
+                processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                partitionsByHost = info.partitionsByHost();
+                break;
             case VERSION_FOUR:
                 if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
                     log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
@@ -973,9 +984,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
+        private Logger log;
 
         CopartitionedTopicsValidator(final String logPrefix) {
             this.logPrefix = logPrefix;
+            final LogContext logContext = new LogContext(logPrefix);
+            log = logContext.logger(getClass());
         }
 
         void validate(final Set<String> copartitionGroup,
@@ -986,13 +1000,15 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             for (final String topic : copartitionGroup) {
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
                     final Integer partitions = metadata.partitionCountForTopic(topic);
+                    if (partitions == null) {
+                        String str = String.format("%sTopic not found: %s", logPrefix, topic);
+                        log.error(str);
+                        throw new IllegalStateException(str);
+                    }
 
                     final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                     Arrays.sort(topics);
                     if (numPartitions == UNKNOWN) {
-                        if (partitions == null) {
-                            throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
-                        }
                         numPartitions = partitions;
                     } else if (numPartitions != partitions) {
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
