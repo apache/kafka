@@ -108,6 +108,7 @@ public class InternalTopicManager {
                     .configs(topicConfig));
             }
 
+            // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
             int remainingRetries = retries;
             boolean retry;
             do {
@@ -130,9 +131,9 @@ public class InternalTopicManager {
                                 "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
                         } else if (cause instanceof TopicExistsException) {
                             createTopicNames.add(createTopicResult.getKey());
-                            log.info(String.format("Topic %s exist already: %s",
+                            log.info("Topic {} exist already: {}",
                                 topicName,
-                                couldNotCreateTopic.getMessage()));
+                                couldNotCreateTopic.toString());
                         } else {
                             throw new StreamsException(String.format("Could not create topic %s.", topicName),
                                 couldNotCreateTopic);
@@ -171,6 +172,9 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
+
+        // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
         int remainingRetries = retries;
         boolean retry;
         do {
@@ -197,8 +201,8 @@ public class InternalTopicManager {
                         log.debug("Could not get number of partitions for topic {} due to timeout. " +
                             "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
                     } else {
-                        final String error = "Could not get number of partitions for topic {}.";
-                        log.debug(error, topicFuture.getKey(), cause.getMessage());
+                        final String error = "Could not get number of partitions for topic {} due to {}";
+                        log.debug(error, topicFuture.getKey(), cause.toString());
                     }
                 }
             }
@@ -221,7 +225,7 @@ public class InternalTopicManager {
                                                              final Map<String, Integer> existingTopicNamesPartitions) {
         final Set<InternalTopicConfig> topicsToBeCreated = new HashSet<>();
         for (final InternalTopicConfig topic : topicsPartitionsMap) {
-            final Integer numberOfPartitions = topic.numberOfPartitions();
+            final int numberOfPartitions = topic.numberOfPartitions();
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
                 if (!existingTopicNamesPartitions.get(topic.name()).equals(numberOfPartitions)) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +

@@ -24,8 +24,6 @@ import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -42,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
@@ -52,6 +51,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,6 +112,17 @@ public final class Utils {
     }
 
     /**
+     * Read a UTF8 string from the current position till the end of a byte buffer. The position of the byte buffer is
+     * not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer) {
+        return utf8(buffer, buffer.remaining());
+    }
+
+    /**
      * Read a UTF8 string from a byte buffer at a given offset. Note that the position of the byte buffer
      * is not affected by this method.
      *
@@ -151,7 +162,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The minimum of all passed values
      */
-    public static long min(long first, long ... rest) {
+    public static long min(long first, long... rest) {
         long min = first;
         for (long r : rest) {
             if (r < min)
@@ -166,7 +177,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The maximum of all passed values
      */
-    public static long max(long first, long ... rest) {
+    public static long max(long first, long... rest) {
         long max = first;
         for (long r : rest) {
             if (r > max)
@@ -505,11 +516,17 @@ public final class Utils {
      * Read a properties file from the given path
      * @param filename The path of the file to read
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
-            props.load(propStream);
+
+        if (filename != null) {
+            try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
+                props.load(propStream);
+            }
+        } else {
+            System.out.println("Did not load any properties since the property file is not specified");
         }
+
         return props;
     }
 
@@ -573,8 +590,7 @@ public final class Utils {
     public static String readFileAsString(String path, Charset charset) throws IOException {
         if (charset == null) charset = Charset.defaultCharset();
 
-        try (FileInputStream stream = new FileInputStream(new File(path))) {
-            FileChannel fc = stream.getChannel();
+        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
             MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
             return charset.decode(bb).toString();
         }
@@ -621,6 +637,65 @@ public final class Utils {
     @SafeVarargs
     public static <T> List<T> mkList(T... elems) {
         return Arrays.asList(elems);
+    }
+
+    /**
+     * Creates a map entry (for use with {@link Utils#mkMap(java.util.Map.Entry[])})
+     *
+     * @param k   The key
+     * @param v   The value
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An entry
+     */
+    public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
+        return new Map.Entry<K, V>() {
+            @Override
+            public K getKey() {
+                return k;
+            }
+
+            @Override
+            public V getValue() {
+                return v;
+            }
+
+            @Override
+            public V setValue(final V value) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    /**
+     * Creates a map from a sequence of entries
+     *
+     * @param entries The entries to map
+     * @param <K>     The key type
+     * @param <V>     The value type
+     * @return A map
+     */
+    @SafeVarargs
+    public static <K, V> Map<K, V> mkMap(final Map.Entry<K, V>... entries) {
+        final LinkedHashMap<K, V> result = new LinkedHashMap<>();
+        for (final Map.Entry<K, V> entry : entries) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkProperties(final Map<String, String> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, String> entry : properties.entrySet()) {
+            result.setProperty(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     /**

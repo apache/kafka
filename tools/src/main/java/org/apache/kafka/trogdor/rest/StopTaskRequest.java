@@ -28,7 +28,7 @@ public class StopTaskRequest extends Message {
 
     @JsonCreator
     public StopTaskRequest(@JsonProperty("id") String id) {
-        this.id = id;
+        this.id = (id == null) ? "" : id;
     }
 
     @JsonProperty

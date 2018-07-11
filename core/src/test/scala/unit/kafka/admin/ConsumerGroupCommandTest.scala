@@ -20,8 +20,7 @@ package kafka.admin
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService, KafkaConsumerGroupService, ZkConsumerGroupService}
-import kafka.consumer.{OldConsumer, Whitelist}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -40,8 +39,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   val topic = "foo"
   val group = "test.group"
 
-  @deprecated("This field will be removed in a future release", "0.11.0.0")
-  private val oldConsumers = new ArrayBuffer[OldConsumer]
   private var consumerGroupService: List[ConsumerGroupService] = List()
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()
 
@@ -62,25 +59,31 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   override def tearDown(): Unit = {
     consumerGroupService.foreach(_.close())
     consumerGroupExecutors.foreach(_.shutdown())
-    oldConsumers.foreach(_.stop())
     super.tearDown()
   }
 
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
-  def createOldConsumer(): Unit = {
-    val consumerProps = new Properties
-    consumerProps.setProperty("group.id", group)
-    consumerProps.setProperty("zookeeper.connect", zkConnect)
-    oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
-  }
-
-  def stopRandomOldConsumer(): Unit = {
-    oldConsumers.head.stop()
+  def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
+    val props = new Properties
+    props.put("bootstrap.servers", brokerList)
+    props.put("group.id", group)
+    val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
+    try {
+      consumer.partitionsFor(topic).asScala.flatMap { partitionInfo =>
+        val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
+        val committed = consumer.committed(tp)
+        if (committed == null)
+          None
+        else
+          Some(tp -> committed.offset)
+      }.toMap
+    } finally {
+      consumer.close()
+    }
   }
 
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
     val opts = new ConsumerGroupCommandOptions(args)
-    val service = if (opts.useOldConsumer) new ZkConsumerGroupService(opts) else new KafkaConsumerGroupService(opts)
+    val service = new ConsumerGroupService(opts)
     consumerGroupService = service :: consumerGroupService
     service
   }

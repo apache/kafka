@@ -32,7 +32,9 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
+import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
 @Category(Array(classOf[IntegrationTest]))
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
@@ -67,6 +69,18 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
       CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
   }
+
+  // Trigger session expiry by reusing the session id in another client
+  def createZooKeeperClientToTriggerSessionExpiry(zooKeeper: ZooKeeper): ZooKeeper = {
+    val dummyWatcher = new Watcher {
+      override def process(event: WatchedEvent): Unit = {}
+    }
+    val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
+      zooKeeper.getSessionId,
+      zooKeeper.getSessionPasswd)
+    assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
+    anotherZkClient
+  }
 }
 
 object ZooKeeperTestHarness {
@@ -78,6 +92,7 @@ object ZooKeeperTestHarness {
   // which reset static JAAS configuration.
   val unexpectedThreadNames = Set(ControllerEventManager.ControllerEventThreadName,
                                   KafkaProducer.NETWORK_THREAD_PREFIX,
+                                  AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
                                   AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
                                   ZkClientEventThreadPrefix)
 
@@ -108,6 +123,10 @@ object ZooKeeperTestHarness {
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
     }
-    assertTrue(s"Found unexpected threads during $context, allThreads=$threads", noUnexpected)
+    assertTrue(
+      s"Found unexpected threads during $context, allThreads=$threads, " +
+        s"unexpected=${threads.filterNot(t => unexpectedThreadNames.forall(s => !t.contains(s)))}",
+      noUnexpected
+    )
   }
 }

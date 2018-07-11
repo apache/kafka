@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
 
 public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
@@ -42,6 +43,10 @@ public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
     public long offset() {
         return value.offset();
+    }
+
+    public Headers headers() {
+        return value.headers();
     }
 
     @Override

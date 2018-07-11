@@ -78,6 +78,19 @@
 		&lt;/dependency&gt;
 	</pre>
 
+	<p>
+	When using Scala you may optionally include the <code>kafka-streams-scala</code> library.  Additional documentation on using the Kafka Streams DSL for Scala is available <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">in the developer guide</a>.
+	<p>
+	To use Kafka Streams DSL for Scala for Scala 2.11 you can use the following maven dependency:
+
+	<pre class="brush: xml;">
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-streams-scala_2.11&lt;/artifactId&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
+
 	<h3><a id="connectapi" href="#connectapi">2.4 Connect API</a></h3>
 
 	The Connect API allows implementing connectors that continually pull from some source data system into Kafka or push from Kafka into some sink data system.

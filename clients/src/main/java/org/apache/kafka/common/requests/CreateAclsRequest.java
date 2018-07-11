@@ -19,12 +19,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -36,6 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class CreateAclsRequest extends AbstractRequest {
@@ -50,8 +53,24 @@ public class CreateAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * Version 1 adds RESOURCE_PATTERN_TYPE, to support more than just literal resource patterns.
+     * For more info, see {@link PatternType}.
+     *
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     */
+    private static final Schema CREATE_ACLS_REQUEST_V1 = new Schema(
+            new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME,
+                    RESOURCE_PATTERN_TYPE,
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_ACLS_REQUEST_V0};
+        return new Schema[]{CREATE_ACLS_REQUEST_V0, CREATE_ACLS_REQUEST_V1};
     }
 
     public static class AclCreation {
@@ -62,9 +81,9 @@ public class CreateAclsRequest extends AbstractRequest {
         }
 
         static AclCreation fromStruct(Struct struct) {
-            Resource resource = RequestUtils.resourceFromStructFields(struct);
+            ResourcePattern pattern = RequestUtils.resourcePatternromStructFields(struct);
             AccessControlEntry entry = RequestUtils.aceFromStructFields(struct);
-            return new AclCreation(new AclBinding(resource, entry));
+            return new AclCreation(new AclBinding(pattern, entry));
         }
 
         public AclBinding acl() {
@@ -72,7 +91,7 @@ public class CreateAclsRequest extends AbstractRequest {
         }
 
         void setStructFields(Struct struct) {
-            RequestUtils.resourceSetStructFields(acl.resource(), struct);
+            RequestUtils.resourcePatternSetStructFields(acl.pattern(), struct);
             RequestUtils.aceSetStructFields(acl.entry(), struct);
         }
 
@@ -106,6 +125,8 @@ public class CreateAclsRequest extends AbstractRequest {
     CreateAclsRequest(short version, List<AclCreation> aclCreations) {
         super(version);
         this.aclCreations = aclCreations;
+
+        validate(aclCreations);
     }
 
     public CreateAclsRequest(Struct struct, short version) {
@@ -139,6 +160,7 @@ public class CreateAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
                 for (int i = 0; i < aclCreations.size(); i++)
                     responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
@@ -151,5 +173,25 @@ public class CreateAclsRequest extends AbstractRequest {
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
         return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(List<AclCreation> aclCreations) {
+        if (version() == 0) {
+            final boolean unsupported = aclCreations.stream()
+                .map(AclCreation::acl)
+                .map(AclBinding::pattern)
+                .map(ResourcePattern::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            }
+        }
+
+        final boolean unknown = aclCreations.stream()
+            .map(AclCreation::acl)
+            .anyMatch(AclBinding::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("You can not create ACL bindings with unknown elements");
+        }
     }
 }

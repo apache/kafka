@@ -29,7 +29,7 @@ import java.util.List;
  * <p>
  * This class is not thread-safe!
  */
-interface MetadataUpdater {
+public interface MetadataUpdater {
 
     /**
      * Gets the current cluster info without blocking.

@@ -19,7 +19,7 @@ package kafka.api
 
 import java.lang.{Long => JLong}
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -27,7 +27,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
@@ -532,6 +532,19 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test(expected = classOf[KafkaException])
+  def testConsecutivelyRunInitTransactions(): Unit = {
+    val producer = createTransactionalProducer(transactionalId = "normalProducer")
+
+    try {
+      producer.initTransactions()
+      producer.initTransactions()
+      fail("Should have raised a KafkaException")
+    } finally {
+      producer.close()
+    }
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
@@ -562,7 +575,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
       groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
     transactionalConsumers += consumer
     consumer
@@ -572,7 +585,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val props = new Properties()
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
       groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
     nonTransactionalConsumers += consumer
     consumer

@@ -109,7 +109,7 @@ public class Sender implements Runnable {
     private final SenderMetrics sensors;
 
     /* the max time to wait for the server to respond to the request*/
-    private final int requestTimeout;
+    private final int requestTimeoutMs;
 
     /* The max time to wait before retrying a request which has failed */
     private final long retryBackoffMs;
@@ -130,7 +130,7 @@ public class Sender implements Runnable {
                   int retries,
                   SenderMetricsRegistry metricsRegistry,
                   Time time,
-                  int requestTimeout,
+                  int requestTimeoutMs,
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
@@ -145,7 +145,7 @@ public class Sender implements Runnable {
         this.retries = retries;
         this.time = time;
         this.sensors = new SenderMetrics(metricsRegistry);
-        this.requestTimeout = requestTimeout;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
@@ -252,6 +252,9 @@ public class Sender implements Runnable {
             // and request metadata update, since there are messages to send to the topic.
             for (String topic : result.unknownLeaderTopics)
                 this.metadata.add(topic);
+
+            log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}", result.unknownLeaderTopics);
+
             this.metadata.requestUpdate();
         }
 
@@ -262,7 +265,7 @@ public class Sender implements Runnable {
             Node node = iter.next();
             if (!this.client.ready(node, now)) {
                 iter.remove();
-                notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
+                notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
             }
         }
 
@@ -277,7 +280,7 @@ public class Sender implements Runnable {
             }
         }
 
-        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
+        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeoutMs, now);
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
@@ -329,7 +332,7 @@ public class Sender implements Runnable {
             return false;
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
-        while (true) {
+        while (!forceClose) {
             Node targetNode = null;
             try {
                 if (nextRequestHandler.needsCoordinator()) {
@@ -339,12 +342,12 @@ public class Sender implements Runnable {
                         break;
                     }
 
-                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeoutMs)) {
                         transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
                 } else {
-                    targetNode = awaitLeastLoadedNodeReady(requestTimeout);
+                    targetNode = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 }
 
                 if (targetNode != null) {
@@ -352,7 +355,7 @@ public class Sender implements Runnable {
                         time.sleep(nextRequestHandler.retryBackoffMs());
 
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
-                            requestBuilder, now, true, nextRequestHandler);
+                            requestBuilder, now, true, requestTimeoutMs, nextRequestHandler);
                     transactionManager.setInFlightTransactionalRequestCorrelationId(clientRequest.correlationId());
                     log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
 
@@ -361,7 +364,7 @@ public class Sender implements Runnable {
                 }
             } catch (IOException e) {
                 log.debug("Disconnect from {} while trying to send request {}. Going " +
-                        "to back off and retry", targetNode, requestBuilder);
+                        "to back off and retry.", targetNode, requestBuilder, e);
                 if (nextRequestHandler.needsCoordinator()) {
                     // We break here so that we pick up the FindCoordinator request immediately.
                     transactionManager.lookupCoordinator(nextRequestHandler);
@@ -406,7 +409,7 @@ public class Sender implements Runnable {
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
-        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
+        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, requestTimeoutMs, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
@@ -420,8 +423,9 @@ public class Sender implements Runnable {
 
     private void maybeWaitForProducerId() {
         while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
+            Node node = null;
             try {
-                Node node = awaitLeastLoadedNodeReady(requestTimeout);
+                node = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
                     InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
@@ -445,7 +449,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
-                log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
+                log.debug("Broker {} disconnected while awaiting InitProducerId response", node, e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
@@ -458,17 +462,18 @@ public class Sender implements Runnable {
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
+        long receivedTimeMs = response.receivedTimeMs();
         int correlationId = requestHeader.correlationId();
         if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                     requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now, 0L);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, 0L);
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -478,13 +483,13 @@ public class Sender implements Runnable {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
                     ProducerBatch batch = batches.get(tp);
-                    completeBatch(batch, partResp, correlationId, now);
+                    completeBatch(batch, partResp, correlationId, now, receivedTimeMs + produceResponse.throttleTimeMs());
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
-                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now);
+                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, 0L);
                 }
             }
         }
@@ -499,7 +504,7 @@ public class Sender implements Runnable {
      * @param now The current POSIX timestamp in milliseconds
      */
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
-                               long now) {
+                               long now, long throttleUntilTimeMs) {
         Errors error = response.error;
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
@@ -557,9 +562,13 @@ public class Sender implements Runnable {
                 failBatch(batch, response, exception, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
-                if (error.exception() instanceof UnknownTopicOrPartitionException)
+                if (error.exception() instanceof UnknownTopicOrPartitionException) {
                     log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
                             "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
+                } else {
+                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
+                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                }
                 metadata.requestUpdate();
             }
 
@@ -569,7 +578,7 @@ public class Sender implements Runnable {
 
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
-            this.accumulator.unmutePartition(batch.topicPartition);
+            this.accumulator.unmutePartition(batch.topicPartition, throttleUntilTimeMs);
     }
 
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
@@ -644,7 +653,7 @@ public class Sender implements Runnable {
      */
     private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
         for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
-            sendProduceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue());
+            sendProduceRequest(now, entry.getKey(), acks, requestTimeoutMs, entry.getValue());
     }
 
     /**
@@ -694,7 +703,8 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
-        ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
+        ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
+                requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

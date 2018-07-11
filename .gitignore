@@ -1,5 +1,6 @@
 dist
 *classes
+*.class
 target/
 build/
 build_eclipse/
@@ -47,3 +48,7 @@ tests/venv
 docs/generated/
 
 .release-settings.json
+
+kafkatest.egg-info/
+systest/
+*.swp

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -46,7 +45,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final boolean isStandby;
     private final ChangelogReader changelogReader;
     private final Map<TopicPartition, Long> offsetLimits;
-    private final Map<TopicPartition, Long> restoredOffsets;
+    private final Map<TopicPartition, Long> standbyRestoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
@@ -67,7 +66,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
                                  final LogContext logContext) throws IOException {
-        super(stateDirectory.directoryForTask(taskId));
+        super(stateDirectory.directoryForTask(taskId), eosEnabled);
 
         this.log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
@@ -79,14 +78,13 @@ public class ProcessorStateManager extends AbstractStateManager {
             partitionForTopic.put(source.topic(), source);
         }
         offsetLimits = new HashMap<>();
-        restoredOffsets = new HashMap<>();
+        standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
+        restoreCallbacks = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
-
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -169,39 +167,16 @@ public class ProcessorStateManager extends AbstractStateManager {
             final int partition = getPartition(topicName);
             final TopicPartition storePartition = new TopicPartition(topicName, partition);
 
-            if (checkpointableOffsets.containsKey(storePartition)) {
-                partitionsAndOffsets.put(storePartition, checkpointableOffsets.get(storePartition));
-            } else {
-                partitionsAndOffsets.put(storePartition, -1L);
-            }
+            partitionsAndOffsets.put(storePartition, checkpointableOffsets.getOrDefault(storePartition, -1L));
         }
         return partitionsAndOffsets;
     }
 
-    List<ConsumerRecord<byte[], byte[]>> updateStandbyStates(final TopicPartition storePartition,
-                                                             final List<ConsumerRecord<byte[], byte[]>> records) {
-        final long limit = offsetLimit(storePartition);
-        List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
-        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-
+    void updateStandbyStates(final TopicPartition storePartition,
+                             final List<KeyValue<byte[], byte[]>> restoreRecords,
+                             final long lastOffset) {
         // restore states from changelog records
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreCallbacks.get(storePartition.topic()));
-
-        long lastOffset = -1L;
-        int count = 0;
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            if (record.offset() < limit) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
-                lastOffset = record.offset();
-            } else {
-                if (remainingRecords == null) {
-                    remainingRecords = new ArrayList<>(records.size() - count);
-                }
-
-                remainingRecords.add(record);
-            }
-            count++;
-        }
 
         if (!restoreRecords.isEmpty()) {
             try {
@@ -212,9 +187,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
 
         // record the restored offset for its change log partition
-        restoredOffsets.put(storePartition, lastOffset + 1);
-
-        return remainingRecords;
+        standbyRestoredOffsets.put(storePartition, lastOffset + 1);
     }
 
     void putOffsetLimit(final TopicPartition partition, final long limit) {
@@ -222,7 +195,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         offsetLimits.put(partition, limit);
     }
 
-    private long offsetLimit(final TopicPartition partition) {
+    long offsetLimit(final TopicPartition partition) {
         final Long limit = offsetLimits.get(partition);
         return limit != null ? limit : Long.MAX_VALUE;
     }
@@ -293,8 +266,8 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     // write the checkpoint
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
-        checkpointableOffsets.putAll(changelogReader.restoredOffsets());
+    public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
+        this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
         for (final StateStore store : stores.values()) {
             final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
@@ -302,11 +275,11 @@ public class ProcessorStateManager extends AbstractStateManager {
             if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
                 final String changelogTopic = storeToChangelogTopic.get(storeName);
                 final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                if (ackedOffsets.containsKey(topicPartition)) {
+                if (checkpointableOffsets.containsKey(topicPartition)) {
                     // store the last offset + 1 (the log position after restoration)
-                    checkpointableOffsets.put(topicPartition, ackedOffsets.get(topicPartition) + 1);
-                } else if (restoredOffsets.containsKey(topicPartition)) {
-                    checkpointableOffsets.put(topicPartition, restoredOffsets.get(topicPartition));
+                    this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
+                } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
+                    this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
                 }
             }
         }
@@ -315,9 +288,9 @@ public class ProcessorStateManager extends AbstractStateManager {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
-        log.trace("Writing checkpoint: {}", checkpointableOffsets);
+        log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
         try {
-            checkpoint.write(checkpointableOffsets);
+            checkpoint.write(this.checkpointableOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to {}: {}", checkpoint, e);
         }
@@ -340,7 +313,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         return globalStores.get(name);
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback callback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback callback) {
         if (callback instanceof BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) callback;
         }

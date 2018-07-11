@@ -49,6 +49,9 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
             return store.get(key);
         }
 
+        @Override
+        public void close() {
+        }
     }
 
 }

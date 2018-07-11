@@ -18,12 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -37,6 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DeleteAclsRequest extends AbstractRequest {
@@ -51,8 +54,24 @@ public class DeleteAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * V1 sees a new `RESOURCE_PATTERN_TYPE_FILTER` that controls how the filter handles different resource pattern types.
+     * For more info, see {@link PatternType}.
+     *
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     */
+    private static final Schema DELETE_ACLS_REQUEST_V1 = new Schema(
+            new Field(FILTERS, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME_FILTER,
+                    RESOURCE_PATTERN_TYPE_FILTER,
+                    PRINCIPAL_FILTER,
+                    HOST_FILTER,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_ACLS_REQUEST_V0};
+        return new Schema[]{DELETE_ACLS_REQUEST_V0, DELETE_ACLS_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<DeleteAclsRequest> {
@@ -79,6 +98,8 @@ public class DeleteAclsRequest extends AbstractRequest {
     DeleteAclsRequest(short version, List<AclBindingFilter> filters) {
         super(version);
         this.filters = filters;
+
+        validate(version, filters);
     }
 
     public DeleteAclsRequest(Struct struct, short version) {
@@ -86,7 +107,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         this.filters = new ArrayList<>();
         for (Object filterStructObj : struct.getArray(FILTERS)) {
             Struct filterStruct = (Struct) filterStructObj;
-            ResourceFilter resourceFilter = RequestUtils.resourceFilterFromStructFields(filterStruct);
+            ResourcePatternFilter resourceFilter = RequestUtils.resourcePatternFilterFromStructFields(filterStruct);
             AccessControlEntryFilter aceFilter = RequestUtils.aceFilterFromStructFields(filterStruct);
             this.filters.add(new AclBindingFilter(resourceFilter, aceFilter));
         }
@@ -102,7 +123,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         List<Struct> filterStructs = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             Struct filterStruct = struct.instance(FILTERS);
-            RequestUtils.resourceFilterSetStructFields(filter.resourceFilter(), filterStruct);
+            RequestUtils.resourcePatternFilterSetStructFields(filter.patternFilter(), filterStruct);
             RequestUtils.aceFilterSetStructFields(filter.entryFilter(), filterStruct);
             filterStructs.add(filterStruct);
         }
@@ -115,6 +136,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
                 for (int i = 0; i < filters.size(); i++) {
                     responses.add(new DeleteAclsResponse.AclFilterResponse(
@@ -129,5 +151,22 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
         return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(short version, List<AclBindingFilter> filters) {
+        if (version == 0) {
+            final boolean unsupported = filters.stream()
+                .map(AclBindingFilter::patternFilter)
+                .map(ResourcePatternFilter::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL && patternType != PatternType.ANY);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            }
+        }
+
+        final boolean unknown = filters.stream().anyMatch(AclBindingFilter::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("Filters contain UNKNOWN elements");
+        }
     }
 }

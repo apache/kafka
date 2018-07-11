@@ -23,8 +23,11 @@ import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -42,6 +45,7 @@ import javax.xml.datatype.Duration;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -51,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -91,6 +96,7 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
 
     private OptionSet options = null;
@@ -109,6 +115,7 @@ public class StreamsResetter {
 
         try {
             parseArguments(args);
+
             final boolean dryRun = options.has(dryRunOption);
 
             final String groupId = options.valueOf(applicationIdOption);
@@ -118,8 +125,8 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            validateNoActiveConsumers(groupId, properties);
             kafkaAdminClient = (KafkaAdminClient) AdminClient.create(properties);
+            validateNoActiveConsumers(groupId, kafkaAdminClient);
 
             allTopics.clear();
             allTopics.addAll(kafkaAdminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -147,18 +154,15 @@ public class StreamsResetter {
     }
 
     private void validateNoActiveConsumers(final String groupId,
-                                           final Properties properties) {
-        kafka.admin.AdminClient olderAdminClient = null;
-        try {
-            olderAdminClient = kafka.admin.AdminClient.create(properties);
-            if (!olderAdminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. "
-                                                + "Make sure to stop all running application instances before running the reset tool.");
-            }
-        } finally {
-            if (olderAdminClient != null) {
-                olderAdminClient.close();
-            }
+                                           final AdminClient adminClient) throws ExecutionException, InterruptedException {
+        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
+                (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000));
+        final List<MemberDescription> members =
+            new ArrayList<MemberDescription>(describeResult.describedGroups().get(groupId).get().members());
+        if (!members.isEmpty()) {
+            throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                    + "and has following members: " + members + ". "
+                    + "Make sure to stop all running application instances before running the reset tool.");
         }
     }
 
@@ -207,6 +211,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
+        executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
 
         // TODO: deprecated in 1.0; can be removed eventually
@@ -217,6 +222,10 @@ public class StreamsResetter {
         } catch (final OptionException e) {
             printHelp(optionParser);
             throw e;
+        }
+
+        if (options.has(executeOption) && options.has(dryRunOption)) {
+            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
         scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
@@ -266,7 +275,6 @@ public class StreamsResetter {
                 notFoundInputTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
-
             }
         }
         for (final String topic : intermediateTopics) {
@@ -275,6 +283,28 @@ public class StreamsResetter {
             } else {
                 topicsToSubscribe.add(topic);
             }
+        }
+
+        if (!notFoundInputTopics.isEmpty()) {
+            System.out.println("Following input topics are not found, skipping them");
+            for (final String topic : notFoundInputTopics) {
+                System.out.println("Topic: " + topic);
+            }
+            topicNotFound = EXIT_CODE_ERROR;
+        }
+
+        if (!notFoundIntermediateTopics.isEmpty()) {
+            System.out.println("Following intermediate topics are not found, skipping them");
+            for (final String topic : notFoundIntermediateTopics) {
+                System.out.println("Topic:" + topic);
+            }
+            topicNotFound = EXIT_CODE_ERROR;
+        }
+
+        // Return early if there are no topics to reset (the consumer will raise an error if we
+        // try to poll with an empty subscription)
+        if (topicsToSubscribe.isEmpty()) {
+            return topicNotFound;
         }
 
         final Properties config = new Properties();
@@ -311,22 +341,6 @@ public class StreamsResetter {
                 }
                 client.commitSync();
             }
-
-            if (notFoundInputTopics.size() > 0) {
-                System.out.println("Following input topics are not found, skipping them");
-                for (final String topic : notFoundInputTopics) {
-                    System.out.println("Topic: " + topic);
-                }
-                topicNotFound = EXIT_CODE_ERROR;
-            }
-
-            if (notFoundIntermediateTopics.size() > 0) {
-                System.out.println("Following intermediate topics are not found, skipping them");
-                for (final String topic : notFoundIntermediateTopics) {
-                    System.out.println("Topic:" + topic);
-                }
-            }
-
         } catch (final Exception e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
@@ -337,8 +351,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void maybeSeekToEnd(final String groupId,
-                                final Consumer<byte[], byte[]> client,
-                                final Set<TopicPartition> intermediateTopicPartitions) {
+                               final Consumer<byte[], byte[]> client,
+                               final Set<TopicPartition> intermediateTopicPartitions) {
         if (intermediateTopicPartitions.size() > 0) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
@@ -368,7 +382,7 @@ public class StreamsResetter {
                 shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
                 final String ts = options.valueOf(toDatetimeOption);
-                final Long timestamp = getDateTime(ts);
+                final long timestamp = getDateTime(ts);
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
@@ -383,8 +397,7 @@ public class StreamsResetter {
             }
 
             for (final TopicPartition p : inputTopicPartitions) {
-                final Long position = client.position(p);
-                System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + position);
+                System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + client.position(p));
             }
         }
     }
@@ -398,8 +411,7 @@ public class StreamsResetter {
             checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = validatedTopicPartitionsAndOffset.get(topicPartition);
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
         }
     }
 
@@ -411,7 +423,7 @@ public class StreamsResetter {
     private void resetByDuration(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Duration duration) throws DatatypeConfigurationException {
         final Date now = new Date();
         duration.negate().addTo(now);
-        final Long timestamp = now.getTime();
+        final long timestamp = now.getTime();
 
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
@@ -421,8 +433,7 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
         }
     }
 
@@ -435,20 +446,19 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
         }
     }
 
     // visible for testing
-    public void shiftOffsetsBy(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Long shiftBy) {
+    public void shiftOffsetsBy(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, long shiftBy) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
         final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long position = client.position(topicPartition);
-            final Long offset = position + shiftBy;
+            final long position = client.position(topicPartition);
+            final long offset = position + shiftBy;
             topicPartitionsAndOffset.put(topicPartition, offset);
         }
 
@@ -479,7 +489,7 @@ public class StreamsResetter {
     }
 
     // visible for testing
-    public Long getDateTime(String timestamp) throws ParseException {
+    public long getDateTime(String timestamp) throws ParseException {
         final String[] timestampParts = timestamp.split("T");
         if (timestampParts.length < 2) {
             throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
@@ -531,10 +541,10 @@ public class StreamsResetter {
                                                        final Map<TopicPartition, Long> endOffsets) {
         final Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> topicPartitionAndOffset : inputTopicPartitionsAndOffset.entrySet()) {
-            final Long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
-            final Long offset = topicPartitionAndOffset.getValue();
+            final long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
+            final long offset = topicPartitionAndOffset.getValue();
             if (offset < endOffset) {
-                final Long beginningOffset = beginningOffsets.get(topicPartitionAndOffset.getKey());
+                final long beginningOffset = beginningOffsets.get(topicPartitionAndOffset.getKey());
                 if (offset > beginningOffset) {
                     validatedTopicPartitionsOffsets.put(topicPartitionAndOffset.getKey(), offset);
                 } else {

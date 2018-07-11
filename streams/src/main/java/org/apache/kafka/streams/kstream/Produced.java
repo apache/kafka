@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import java.util.Objects;
+
 /**
  * This class is used to provide the optional parameters when producing to new topics
  * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced)}.
@@ -153,5 +155,24 @@ public class Produced<K, V> {
     public Produced<K, V> withKeySerde(final Serde<K> keySerde) {
         this.keySerde = keySerde;
         return this;
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final Produced<?, ?> produced = (Produced<?, ?>) o;
+        return Objects.equals(keySerde, produced.keySerde) &&
+               Objects.equals(valueSerde, produced.valueSerde) &&
+               Objects.equals(partitioner, produced.partitioner);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(keySerde, valueSerde, partitioner);
     }
 }

@@ -38,26 +38,9 @@
   <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.common" />
 
-  <subpackage name="javaapi">
-    <subpackage name="consumer">
-      <allow pkg="kafka.consumer" />
-    </subpackage>
-
-    <subpackage name="message">
-      <allow pkg="kafka.message" />
-    </subpackage>
-
-    <subpackage name="producer">
-      <allow pkg="kafka.producer" />
-    </subpackage>
-  </subpackage>
-
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
-    <allow pkg="kafka.javaapi" />
-    <allow pkg="kafka.producer" />
-    <allow pkg="kafka.consumer" />
     <allow pkg="joptsimple" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow class="javax.xml.datatype.Duration" />
@@ -71,9 +54,6 @@
 
   <subpackage name="examples">
     <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="kafka.api" />
-    <allow pkg="kafka.javaapi" />
-    <allow pkg="kafka.message" />
   </subpackage>
 
 </import-control>

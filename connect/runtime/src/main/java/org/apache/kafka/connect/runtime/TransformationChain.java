@@ -17,25 +17,32 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
+    private final RetryWithToleranceOperator retryWithToleranceOperator;
 
-    public TransformationChain(List<Transformation<R>> transformations) {
+    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
         this.transformations = transformations;
+        this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
     public R apply(R record) {
         if (transformations.isEmpty()) return record;
 
-        for (Transformation<R> transformation : transformations) {
-            record = transformation.apply(record);
+        for (final Transformation<R> transformation : transformations) {
+            final R current = record;
+
+            // execute the operation
+            record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
+
             if (record == null) break;
         }
 
@@ -59,10 +66,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     @Override
     public int hashCode() {
         return Objects.hash(transformations);
-    }
-
-    public static <R extends ConnectRecord<R>> TransformationChain<R> noOp() {
-        return new TransformationChain<R>(Collections.<Transformation<R>>emptyList());
     }
 
 }

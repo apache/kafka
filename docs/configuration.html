@@ -90,6 +90,23 @@
   using <code>kafka-configs.sh</code> even if the password config is not being altered. This constraint will be removed in
   a future release.</p>
 
+  <h5>Updating Password Configs in ZooKeeper Before Starting Brokers</h5>
+
+  From Kafka 2.0.0 onwards, <code>kafka-configs.sh</code> enables dynamic broker configs to be updated using ZooKeeper before
+  starting brokers for bootstrapping. This enables all password configs to be stored in encrypted form, avoiding the need for
+  clear passwords in <code>server.properties</code>. The broker config <code>password.encoder.secret</code> must also be specified
+  if any password configs are included in the alter command. Additional encryption parameters may also be specified. Password
+  encoder configs will not be persisted in ZooKeeper. For example, to store SSL key password for listener <code>INTERNAL</code>
+  on broker 0:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type brokers --entity-name 0 --alter --add-config
+    'listener.name.internal.ssl.key.password=key-password,password.encoder.secret=secret,password.encoder.iterations=8192'
+  </pre>
+
+  The configuration <code>listener.name.internal.ssl.key.password</code> will be persisted in ZooKeeper in encrypted
+  form using the provided encoder configs. The encoder secret and iterations are not persisted in ZooKeeper.
+
   <h5>Updating SSL Keystore of an Existing Listener</h5>
   Brokers may be configured with SSL keystores with short validity periods to reduce the risk of compromised certificates.
   Keystores may be updated dynamically without restarting the broker. The config name must be prefixed with the listener prefix
@@ -104,6 +121,20 @@
   If the listener is the inter-broker listener, the update is allowed only if the new keystore is trusted by the truststore
   configured for that listener. For other listeners, no trust validation is performed on the keystore by the broker. Certificates
   must be signed by the same certificate authority that signed the old certificate to avoid any client authentication failures.
+
+  <h5>Updating SSL Truststore of an Existing Listener</h5>
+  Broker truststores may be updated dynamically without restarting the broker to add or remove certificates.
+  Updated truststore will be used to authenticate new client connections. The config name must be prefixed with the
+  listener prefix <code>listener.name.{listenerName}.</code> so that only the truststore config of a specific listener
+  is updated. The following configs may be updated in a single alter request at per-broker level:
+  <ul>
+    <li><code>ssl.truststore.type</code></li>
+    <li><code>ssl.truststore.location</code></li>
+    <li><code>ssl.truststore.password</code></li>
+  </ul>
+  If the listener is the inter-broker listener, the update is allowed only if the existing keystore for that listener is trusted by
+  the new truststore. For other listeners, no trust validation is performed by the broker before the update. Removal of CA certificates
+  used to sign client certificates from the new truststore can lead to client authentication failures.
 
   <h5>Updating Default Topic Configuration</h5>
   Default topic configuration options used by brokers may be updated without broker restart. The configs are applied to topics
@@ -137,6 +168,8 @@
     <li><code>log.message.timestamp.difference.max.ms</code></li>
   </ul>
 
+  From Kafka version 2.0.0 onwards, unclean leader election is automatically enabled by the controller when the config
+  <code>unclean.leader.election.enable</code> is dynamically updated.
   In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
   Controller re-election may be forced by running:
 
@@ -209,7 +242,8 @@
 
   To remove an override you can do
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic
+      --alter --delete-config max.message.bytes
   </pre>
 
   The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.

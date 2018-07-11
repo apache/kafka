@@ -73,7 +73,7 @@ public class TopicConfig {
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
-        "their data.";
+        "their data. If set to -1, no time limit is applied.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC = "<p>The largest record batch size allowed by Kafka. If this " +
@@ -165,4 +165,11 @@ public class TopicConfig {
         "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
         "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
         "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
+        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
+        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
+        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
+        "does not apply to any message format conversion that might be required for replication to followers.";
 }

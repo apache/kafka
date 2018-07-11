@@ -16,26 +16,42 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.io.File;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
+
+import java.io.IOException;
+import java.util.Properties;
 
 public class StreamsEosTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= kafka propFileName command
      *  command := "run" | "process" | "verify"
      */
-    public static void main(final String[] args) {
-        final String kafka = args[0];
-        final String stateDir = args.length > 1 ? args[1] : null;
-        final String command = args.length > 2 ? args[2] : null;
+    public static void main(final String[] args) throws IOException {
+        if (args.length < 2) {
+            System.err.println("StreamsEosTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
+        final String propFileName = args[0];
+        final String command = args[1];
+
+        final Properties streamsProperties = Utils.loadProps(propFileName);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
 
         System.out.println("StreamsTest instance started");
         System.out.println("kafka=" + kafka);
-        System.out.println("stateDir=" + stateDir);
+        System.out.println("props=" + streamsProperties);
         System.out.println("command=" + command);
         System.out.flush();
 
-        if (command == null || stateDir == null) {
+        if (command == null || propFileName == null) {
             System.exit(-1);
         }
 
@@ -44,10 +60,10 @@ public class StreamsEosTest {
                 EosTestDriver.generate(kafka);
                 break;
             case "process":
-                new EosTestClient(kafka, new File(stateDir), false).start();
+                new EosTestClient(streamsProperties, false).start();
                 break;
             case "process-complex":
-                new EosTestClient(kafka, new File(stateDir), true).start();
+                new EosTestClient(streamsProperties, true).start();
                 break;
             case "verify":
                 EosTestDriver.verify(kafka, false);

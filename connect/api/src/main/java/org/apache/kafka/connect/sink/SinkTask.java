@@ -169,5 +169,6 @@ public abstract class SinkTask implements Task {
      * commit has completed. Implementations of this method should only need to perform final cleanup operations, such
      * as closing network connections to the sink system.
      */
+    @Override
     public abstract void stop();
 }

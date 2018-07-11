@@ -28,10 +28,9 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -53,7 +52,7 @@ import static org.junit.Assert.assertFalse;
 public class CachingSessionStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 600;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingSessionStore<String, String> cachingStore;
     private ThreadCache cache;
@@ -67,28 +66,23 @@ public class CachingSessionStoreTest {
         final SessionKeySchema schema = new SessionKeySchema();
         schema.init("topic");
         final int retention = 60000;
-        final int numSegments = 3;
-        underlying = new RocksDBSegmentedBytesStore("test", retention, numSegments, schema);
+        final int segmentInterval = 60_000;
+        underlying = new RocksDBSegmentedBytesStore("test", retention, segmentInterval, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
                                                  Serdes.String(),
-                                                 Segments.segmentInterval(retention, numSegments)
+                                                 segmentInterval
                                                  );
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
-        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic", null));
         cachingStore.init(context, cachingStore);
     }
 
     @After
     public void close() {
-        context.close();
         cachingStore.close();
-    }
-
-    private Bytes bytesKey(final String key) {
-        return Bytes.wrap(key.getBytes());
     }
 
     @Test
@@ -191,13 +185,13 @@ public class CachingSessionStoreTest {
     @Test
     public void shouldFetchCorrectlyAcrossSegments() {
         final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
-        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(60_000, 60_000));
+        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(120_000, 120_000));
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
         cachingStore.flush();
-        final KeyValueIterator<Windowed<Bytes>, byte[]> results = cachingStore.findSessions(keyA, 0, Segments.MIN_SEGMENT_INTERVAL * 2);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> results = cachingStore.findSessions(keyA, 0, 60_000 * 2);
         assertEquals(a1, results.next().key);
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
@@ -208,9 +202,9 @@ public class CachingSessionStoreTest {
     public void shouldFetchRangeCorrectlyAcrossSegments() {
         final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
         final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(0, 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
-        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
-        final Windowed<Bytes> aa3 = new Windowed<>(keyAA, new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(60_000, 60_000));
+        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(60_000 * 2, 60_000 * 2));
+        final Windowed<Bytes> aa3 = new Windowed<>(keyAA, new SessionWindow(60_000 * 2, 60_000 * 2));
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(aa1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
@@ -218,7 +212,7 @@ public class CachingSessionStoreTest {
         cachingStore.put(aa3, "3".getBytes());
         cachingStore.flush();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults = cachingStore.findSessions(keyA, keyAA, 0, Segments.MIN_SEGMENT_INTERVAL * 2);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults = cachingStore.findSessions(keyA, keyAA, 0, 60_000 * 2);
         assertEquals(a1, rangeResults.next().key);
         assertEquals(aa1, rangeResults.next().key);
         assertEquals(a2, rangeResults.next().key);

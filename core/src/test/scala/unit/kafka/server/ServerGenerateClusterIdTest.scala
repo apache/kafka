@@ -19,7 +19,7 @@ package kafka.server
 import scala.concurrent._
 import ExecutionContext.Implicits._
 import scala.concurrent.duration._
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.{Before, After, Test}

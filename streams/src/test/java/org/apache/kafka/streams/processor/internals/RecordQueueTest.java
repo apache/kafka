@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -34,7 +36,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
@@ -54,8 +56,18 @@ public class RecordQueueTest {
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
 
-    final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
-            new RecordCollectorImpl(null, null,  new LogContext("record-queue-test "), new DefaultProductionExceptionHandler()));
+    private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
+
+    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
+        new RecordCollectorImpl(
+            null,
+            null,
+            new LogContext("record-queue-test "),
+            new DefaultProductionExceptionHandler(),
+            skippedRecordsSensor
+        )
+    );
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition(topics[0], 1),
@@ -93,7 +105,7 @@ public class RecordQueueTest {
         assertEquals(TimestampTracker.NOT_KNOWN, queue.timestamp());
 
         // add three 3 out-of-order records with timestamp 2, 1, 3
-        List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
@@ -118,7 +130,7 @@ public class RecordQueueTest {
 
         // add three 3 out-of-order records with timestamp 4, 1, 2
         // now with 3, 4, 1, 2
-        List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
@@ -151,7 +163,7 @@ public class RecordQueueTest {
         assertEquals(0, queue.timeTracker().size());
 
         // add three more records with 4, 5, 6
-        List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 6, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
@@ -185,7 +197,7 @@ public class RecordQueueTest {
     public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-                new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
 
         queue.addRawRecords(records);
     }
@@ -194,24 +206,23 @@ public class RecordQueueTest {
     public void shouldThrowStreamsExceptionWhenValueDeserializationFails() {
         final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-                new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
 
         queue.addRawRecords(records);
     }
 
     @Test
-    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
+    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
         queueThatSkipsDeserializeErrors.addRawRecords(records);
         assertEquals(0, queueThatSkipsDeserializeErrors.size());
     }
 
     @Test
-    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFailsWithSkipHandler() throws Exception {
+    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFailsWithSkipHandler() {
         final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
@@ -224,28 +235,31 @@ public class RecordQueueTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowOnNegativeTimestamp() {
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-                new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-                                                  new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                  new FailOnInvalidTimestamp(),
-                                                  new LogAndContinueExceptionHandler(),
-                                                  null,
-                                                  new LogContext());
+        final RecordQueue queue = new RecordQueue(
+            new TopicPartition(topics[0], 1),
+            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+            new FailOnInvalidTimestamp(),
+            new LogAndContinueExceptionHandler(),
+            new InternalMockProcessorContext(),
+            new LogContext());
+
         queue.addRawRecords(records);
     }
 
     @Test
     public void shouldDropOnNegativeTimestamp() {
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
-                new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-                                                  new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                  new LogAndSkipOnInvalidTimestamp(),
-                                                  new LogAndContinueExceptionHandler(),
-                                                  null,
-                                                  new LogContext());
+        final RecordQueue queue = new RecordQueue(
+            new TopicPartition(topics[0], 1),
+            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+            new LogAndSkipOnInvalidTimestamp(),
+            new LogAndContinueExceptionHandler(),
+            new InternalMockProcessorContext(),
+            new LogContext());
         queue.addRawRecords(records);
 
         assertEquals(0, queue.size());

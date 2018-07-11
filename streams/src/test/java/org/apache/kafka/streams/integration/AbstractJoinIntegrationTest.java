@@ -193,7 +193,7 @@ public abstract class AbstractJoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG));
+        streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
         String expectedFinalResult = null;
 
@@ -234,7 +234,7 @@ public abstract class AbstractJoinIntegrationTest {
      */
     void runTest(final String expectedFinalResult, final String storeName) throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG));
+        streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
         try {
             streams.start();

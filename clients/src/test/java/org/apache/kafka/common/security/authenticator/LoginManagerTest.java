@@ -59,17 +59,17 @@ public class LoginManagerTest {
         JaasContext staticContext = JaasContext.loadClientContext(Collections.<String, Object>emptyMap());
 
         LoginManager dynamicLogin = LoginManager.acquireLoginManager(dynamicContext, "PLAIN",
-                false, configs);
+                DefaultLogin.class, configs);
         assertEquals(dynamicPlainContext, dynamicLogin.cacheKey());
         LoginManager staticLogin = LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256",
-                false, configs);
+                DefaultLogin.class, configs);
         assertNotSame(dynamicLogin, staticLogin);
         assertEquals("KafkaClient", staticLogin.cacheKey());
 
         assertSame(dynamicLogin, LoginManager.acquireLoginManager(dynamicContext, "PLAIN",
-                false, configs));
+                DefaultLogin.class, configs));
         assertSame(staticLogin, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256",
-                false, configs));
+                DefaultLogin.class, configs));
 
         verifyLoginManagerRelease(dynamicLogin, 2, dynamicContext, configs);
         verifyLoginManagerRelease(staticLogin, 2, staticContext, configs);
@@ -86,23 +86,23 @@ public class LoginManagerTest {
         JaasContext scramJaasContext = JaasContext.loadServerContext(listenerName, "SCRAM-SHA-256", configs);
 
         LoginManager dynamicPlainLogin = LoginManager.acquireLoginManager(plainJaasContext, "PLAIN",
-                false, configs);
+                DefaultLogin.class, configs);
         assertEquals(dynamicPlainContext, dynamicPlainLogin.cacheKey());
         LoginManager dynamicDigestLogin = LoginManager.acquireLoginManager(digestJaasContext, "DIGEST-MD5",
-                false, configs);
+                DefaultLogin.class, configs);
         assertNotSame(dynamicPlainLogin, dynamicDigestLogin);
         assertEquals(dynamicDigestContext, dynamicDigestLogin.cacheKey());
         LoginManager staticScramLogin = LoginManager.acquireLoginManager(scramJaasContext, "SCRAM-SHA-256",
-                false, configs);
+                DefaultLogin.class, configs);
         assertNotSame(dynamicPlainLogin, staticScramLogin);
         assertEquals("KafkaServer", staticScramLogin.cacheKey());
 
         assertSame(dynamicPlainLogin, LoginManager.acquireLoginManager(plainJaasContext, "PLAIN",
-                false, configs));
+                DefaultLogin.class, configs));
         assertSame(dynamicDigestLogin, LoginManager.acquireLoginManager(digestJaasContext, "DIGEST-MD5",
-                false, configs));
+                DefaultLogin.class, configs));
         assertSame(staticScramLogin, LoginManager.acquireLoginManager(scramJaasContext, "SCRAM-SHA-256",
-                false, configs));
+                DefaultLogin.class, configs));
 
         verifyLoginManagerRelease(dynamicPlainLogin, 2, plainJaasContext, configs);
         verifyLoginManagerRelease(dynamicDigestLogin, 2, digestJaasContext, configs);
@@ -116,13 +116,13 @@ public class LoginManagerTest {
         for (int i = 0; i < acquireCount - 1; i++)
             loginManager.release();
         assertSame(loginManager, LoginManager.acquireLoginManager(jaasContext, "PLAIN",
-                false, configs));
+                DefaultLogin.class, configs));
 
         // Release all references and verify that new LoginManager is created on next acquire
         for (int i = 0; i < 2; i++) // release all references
             loginManager.release();
         LoginManager newLoginManager = LoginManager.acquireLoginManager(jaasContext, "PLAIN",
-                false, configs);
+                DefaultLogin.class, configs);
         assertNotSame(loginManager, newLoginManager);
         newLoginManager.release();
     }

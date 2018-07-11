@@ -34,7 +34,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
@@ -43,8 +43,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -86,7 +87,7 @@ public class GlobalStateManagerImplTest {
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
-    private MockProcessorContext mockProcessorContext;
+    private InternalMockProcessorContext processorContext;
 
     @Before
     public void before() throws IOException {
@@ -120,8 +121,8 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig);
-        mockProcessorContext = new MockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
-        stateManager.setGlobalProcessorContext(mockProcessorContext);
+        processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
+        stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
     }
 
@@ -488,6 +489,16 @@ public class GlobalStateManagerImplTest {
         assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
     }
 
+    @Test
+    public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
+        stateManager.initialize();
+        initializeConsumer(10, 1, t3);
+        stateManager.register(store3, stateRestoreCallback);
+        stateManager.close(Collections.emptyMap());
+
+        assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
+    }
+
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -496,12 +507,19 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(new LogContext("mock"), topology, consumer, new StateDirectory(streamsConfig, time) {
-            @Override
-            public boolean lockGlobalState() throws IOException {
-                throw new IOException("KABOOM!");
-            }
-        }, stateRestoreListener, streamsConfig);
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("mock"),
+            topology,
+            consumer,
+            new StateDirectory(streamsConfig, time) {
+                @Override
+                public boolean lockGlobalState() throws IOException {
+                    throw new IOException("KABOOM!");
+                }
+            },
+            stateRestoreListener,
+            streamsConfig
+        );
 
         try {
             stateManager.initialize();
@@ -631,7 +649,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(testFile4.exists());
 
         // only delete and recreate store 1 and 3 -- 2 and 4 must be untouched
-        stateManager.reinitializeStateStoresForPartitions(Utils.mkList(t1, t3), mockProcessorContext);
+        stateManager.reinitializeStateStoresForPartitions(Utils.mkList(t1, t3), processorContext);
 
         assertFalse(testFile1.exists());
         assertTrue(testFile2.exists());
@@ -641,7 +659,7 @@ public class GlobalStateManagerImplTest {
 
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
-        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
+        try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {
             stream.write("0\n1\nfoo".getBytes());
         }
     }

@@ -89,7 +89,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Authenticator authenticator = new SslAuthenticator(configs, transportLayer);
+            Authenticator authenticator = new SslAuthenticator(configs, transportLayer, listenerName);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
@@ -152,10 +152,12 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private static class SslAuthenticator implements Authenticator {
         private final SslTransportLayer transportLayer;
         private final KafkaPrincipalBuilder principalBuilder;
+        private final ListenerName listenerName;
 
-        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer) {
+        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName) {
             this.transportLayer = transportLayer;
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
+            this.listenerName = listenerName;
         }
         /**
          * No-Op for plaintext authenticator
@@ -170,7 +172,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         @Override
         public KafkaPrincipal principal() {
             InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
-            SslAuthenticationContext context = new SslAuthenticationContext(transportLayer.sslSession(), clientAddress);
+            // listenerName should only be null in Client mode where principal() should not be called
+            if (listenerName == null)
+                throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
+            SslAuthenticationContext context = new SslAuthenticationContext(
+                    transportLayer.sslSession(),
+                    clientAddress,
+                    listenerName.value());
             return principalBuilder.build(context);
         }
 

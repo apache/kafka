@@ -21,8 +21,6 @@ import java.util.Properties
 
 import kafka.api.Both
 import kafka.utils.JaasTestUtils.JaasSection
-import org.apache.kafka.common.network.ListenerName
-
 
 class MultipleListenersWithDefaultJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
 

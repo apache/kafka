@@ -16,9 +16,9 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.{KafkaException, MessageFormatter}
+import kafka.common.MessageFormatter
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import java.io.PrintStream

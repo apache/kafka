@@ -18,6 +18,8 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
@@ -56,10 +58,12 @@ public class WorkerTaskTest {
     private ConnectMetrics metrics;
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
+    RetryWithToleranceOperator retryWithToleranceOperator;
 
     @Before
     public void setup() {
         metrics = new MockConnectMetrics();
+        retryWithToleranceOperator = RetryWithToleranceOperatorTest.NOOP_OPERATOR;
     }
 
     @After
@@ -77,9 +81,10 @@ public class WorkerTaskTest {
                         TaskStatus.Listener.class,
                         TargetState.class,
                         ClassLoader.class,
-                        ConnectMetrics.class
+                        ConnectMetrics.class,
+                        RetryWithToleranceOperator.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -123,9 +128,10 @@ public class WorkerTaskTest {
                         TaskStatus.Listener.class,
                         TargetState.class,
                         ClassLoader.class,
-                        ConnectMetrics.class
+                        ConnectMetrics.class,
+                        RetryWithToleranceOperator.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -162,9 +168,10 @@ public class WorkerTaskTest {
                         TaskStatus.Listener.class,
                         TargetState.class,
                         ClassLoader.class,
-                        ConnectMetrics.class
+                        ConnectMetrics.class,
+                        RetryWithToleranceOperator.class
                 )
-                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics)
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, retryWithToleranceOperator)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")

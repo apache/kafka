@@ -19,13 +19,14 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
@@ -34,11 +35,13 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
+import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -47,17 +50,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
-
-    private static final short NUM_PARTITIONS = 1;
-
-    private static final short REPLICATION_FACTOR = 3;
-
-    private static final int MESSAGE_SIZE = 512;
-
+    
     private static final int THROTTLE_PERIOD_MS = 100;
 
     private final String id;
@@ -68,19 +64,9 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private ScheduledExecutorService executor;
 
-    private AtomicReference<String> status;
+    private WorkerStatusTracker status;
 
     private KafkaFutureImpl<String> doneFuture;
-
-    /**
-     * Generate a topic name based on a topic number.
-     *
-     * @param topicIndex        The topic number.
-     * @return                  The topic name.
-     */
-    public static String topicIndexToName(int topicIndex) {
-        return String.format("topic%05d", topicIndex);
-    }
 
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {
         this.id = id;
@@ -88,13 +74,15 @@ public class ProduceBenchWorker implements TaskWorker {
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
-        log.info("{}: Activating ProduceBenchWorker.", id);
-        this.executor = Executors.newScheduledThreadPool(1,
+        log.info("{}: Activating ProduceBenchWorker with {}", id, spec);
+        // Create an executor with 2 threads.  We need the second thread so
+        // that the StatusUpdater can run in parallel with SendRecords.
+        this.executor = Executors.newScheduledThreadPool(2,
             ThreadUtils.createThreadFactory("ProduceBenchWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
@@ -105,20 +93,31 @@ public class ProduceBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                if (spec.activeTopics() == 0) {
-                    throw new ConfigException("Can't have activeTopics == 0.");
+                Map<String, NewTopic> newTopics = new HashMap<>();
+                HashSet<TopicPartition> active = new HashSet<>();
+                for (Map.Entry<String, PartitionsSpec> entry :
+                        spec.activeTopics().materialize().entrySet()) {
+                    String topicName = entry.getKey();
+                    PartitionsSpec partSpec = entry.getValue();
+                    newTopics.put(topicName, partSpec.newTopic(topicName));
+                    for (Integer partitionNumber : partSpec.partitionNumbers()) {
+                        active.add(new TopicPartition(topicName, partitionNumber));
+                    }
                 }
-                if (spec.totalTopics() < spec.activeTopics()) {
-                    throw new ConfigException(String.format(
-                        "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
-                            "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
+                if (active.isEmpty()) {
+                    throw new RuntimeException("You must specify at least one active topic.");
                 }
-                List<NewTopic> newTopics = new ArrayList<>();
-                for (int i = 0; i < spec.totalTopics(); i++) {
-                    newTopics.add(new NewTopic(topicIndexToName(i), NUM_PARTITIONS, REPLICATION_FACTOR));
+                for (Map.Entry<String, PartitionsSpec> entry :
+                        spec.inactiveTopics().materialize().entrySet()) {
+                    String topicName = entry.getKey();
+                    PartitionsSpec partSpec = entry.getValue();
+                    newTopics.put(topicName, partSpec.newTopic(topicName));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics);
-                executor.submit(new SendRecords());
+                status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
+                                         spec.adminClientConf(), newTopics, false);
+                status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
+                executor.submit(new SendRecords(active));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
@@ -168,25 +167,34 @@ public class ProduceBenchWorker implements TaskWorker {
     }
 
     public class SendRecords implements Callable<Void> {
+        private final HashSet<TopicPartition> activePartitions;
+
         private final Histogram histogram;
 
         private final Future<?> statusUpdaterFuture;
 
         private final KafkaProducer<byte[], byte[]> producer;
 
+        private final PayloadIterator keys;
+
+        private final PayloadIterator values;
+
         private final Throttle throttle;
 
-        SendRecords() {
+        SendRecords(HashSet<TopicPartition> activePartitions) {
+            this.activePartitions = activePartitions;
             this.histogram = new Histogram(5000);
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
-                new StatusUpdater(histogram), 1, 1, TimeUnit.MINUTES);
+                new StatusUpdater(histogram), 30, 30, TimeUnit.SECONDS);
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue());
-            }
+            // add common client configs to producer properties, and then user-specified producer
+            // configs
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+            this.keys = new PayloadIterator(spec.keyGenerator());
+            this.values = new PayloadIterator(spec.valueGenerator());
             this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 
@@ -194,15 +202,18 @@ public class ProduceBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
-                byte[] key = new byte[MESSAGE_SIZE];
-                byte[] value = new byte[MESSAGE_SIZE];
                 Future<RecordMetadata> future = null;
                 try {
+                    Iterator<TopicPartition> iter = activePartitions.iterator();
                     for (int m = 0; m < spec.maxMessages(); m++) {
-                        for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topicIndexToName(i), key, value);
-                            future = producer.send(record, new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+                        if (!iter.hasNext()) {
+                            iter = activePartitions.iterator();
                         }
+                        TopicPartition partition = iter.next();
+                        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                            partition.topic(), partition.partition(), keys.next(), values.next());
+                        future = producer.send(record,
+                            new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         throttle.increment();
                     }
                 } finally {
@@ -215,10 +226,10 @@ public class ProduceBenchWorker implements TaskWorker {
                 WorkerUtils.abort(log, "SendRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
-                new StatusUpdater(histogram).run();
+                StatusData statusData = new StatusUpdater(histogram).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
-                    histogram.summarize().numSamples(), curTimeMs - startTimeMs, status.get());
+                    histogram.summarize().numSamples(), curTimeMs - startTimeMs, statusData);
             }
             doneFuture.complete("");
             return null;
@@ -231,26 +242,28 @@ public class ProduceBenchWorker implements TaskWorker {
 
     public class StatusUpdater implements Runnable {
         private final Histogram histogram;
-        private final float[] percentiles;
 
         StatusUpdater(Histogram histogram) {
             this.histogram = histogram;
-            this.percentiles = new float[] {0.50f, 0.95f, 0.99f};
         }
 
         @Override
         public void run() {
             try {
-                Histogram.Summary summary = histogram.summarize(percentiles);
-                StatusData statusData = new StatusData(summary.numSamples(), summary.average(),
-                    summary.percentiles().get(0).value(),
-                    summary.percentiles().get(1).value(),
-                    summary.percentiles().get(2).value());
-                String statusDataString = JsonUtil.toJsonString(statusData);
-                status.set(statusDataString);
+                update();
             } catch (Exception e) {
                 WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
+        }
+
+        StatusData update() {
+            Histogram.Summary summary = histogram.summarize(StatusData.PERCENTILES);
+            StatusData statusData = new StatusData(summary.numSamples(), summary.average(),
+                summary.percentiles().get(0).value(),
+                summary.percentiles().get(1).value(),
+                summary.percentiles().get(2).value());
+            status.update(JsonUtil.JSON_SERDE.valueToTree(statusData));
+            return statusData;
         }
     }
 
@@ -258,19 +271,25 @@ public class ProduceBenchWorker implements TaskWorker {
         private final long totalSent;
         private final float averageLatencyMs;
         private final int p50LatencyMs;
-        private final int p90LatencyMs;
+        private final int p95LatencyMs;
         private final int p99LatencyMs;
+
+        /**
+         * The percentiles to use when calculating the histogram data.
+         * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
+         */
+        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
         @JsonCreator
         StatusData(@JsonProperty("totalSent") long totalSent,
                    @JsonProperty("averageLatencyMs") float averageLatencyMs,
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
-                   @JsonProperty("p90LatencyMs") int p90latencyMs,
+                   @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs) {
             this.totalSent = totalSent;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
-            this.p90LatencyMs = p90latencyMs;
+            this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
         }
 
@@ -290,8 +309,8 @@ public class ProduceBenchWorker implements TaskWorker {
         }
 
         @JsonProperty
-        public int p90LatencyMs() {
-            return p90LatencyMs;
+        public int p95LatencyMs() {
+            return p95LatencyMs;
         }
 
         @JsonProperty

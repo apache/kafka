@@ -173,6 +173,7 @@ class _ReverseForwarder(object):
         self.logger = logger
         self._node = node
         self._local_port = local_port
+        self._remote_port = remote_port
 
         self.logger.debug('Forwarding %s port %d to driver port %d', node, remote_port, local_port)
 
@@ -189,6 +190,7 @@ class _ReverseForwarder(object):
         self._accept_thread.join(30)
         if self._accept_thread.isAlive():
             raise RuntimeError("Failed to stop reverse forwarder on %s", self._node)
+        self._transport.cancel_port_forward('', self._remote_port)
 
     def _accept(self):
         while not self._stopping:

@@ -42,7 +42,7 @@ public class QuickUnion<T> {
             throw new NoSuchElementException("id: " + id.toString());
 
         while (!parent.equals(current)) {
-            // do the path compression
+            // do the path splitting
             T grandparent = ids.get(parent);
             ids.put(current, grandparent);
 
