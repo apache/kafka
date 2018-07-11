@@ -95,10 +95,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         return findUnfinished().size() == 0;
     }
 
-    public ConsumerRecords<K, V> storedRecords() {
-        return offsetBuffer.pollOffsets();
-    }
-
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
         if (!terminated()) {
@@ -141,7 +137,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 case POLL:
                     ConsumerRecords<K, V> records = poll(waitTime);
                     result = new RequestResult<>(records);
-                    offsetBuffer.insertOffsets(records);
                     break;
                 default:
                     continue;

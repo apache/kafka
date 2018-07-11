@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
-import org.apache.kafka.clients.consumer.internals.OffsetBuffer;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.RebalanceKafkaConsumer;
@@ -64,7 +63,6 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -573,7 +571,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
-    //private final RebalanceKafkaConsumer rebalanceConsumer;
+    private RebalanceKafkaConsumer rebalanceConsumer;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
@@ -789,7 +787,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel);
-            rebalanceConsumers = new ArrayList<>();
+            rebalanceConsumer = null;
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
@@ -837,8 +835,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.useParallelRebalance = false;
-        this.offsetBuffer = null;
-        this.rebalanceConsumers = null;
+        this.rebalanceConsumer = null;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
     }
@@ -1190,12 +1187,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 if (coordinator.isRebalancing()) {
                     getStartAndEndOffsets();
-                    RebalanceKafkaConsumer consumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
-                    rebalanceConsumers.add(consumer);
-                    new Thread(consumer).start();
-                    /*for (RebalanceKafkaConsumer rebalanceConsumer : rebalanceConsumers) {
-                        rebalanceConsumer.sendRequest(timeoutMs, RebalanceKafkaConsumer.ConsumerRequest.POLL, );
-                    }*/
+                    rebalanceConsumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
+                    new Thread(rebalanceConsumer).start();
                 }
 
                 final long metadataEnd;
