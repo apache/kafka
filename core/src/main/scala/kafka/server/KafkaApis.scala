@@ -1244,13 +1244,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new ListGroupsResponse(requestThrottleMs, error, groups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
     else {
-      val principalGroupAcls: List[Acl] = authorizer.map(_.getAcls().filter(_._1.resourceType == Group).values.flatten.toList).toList.flatten
-        .filter(acl => acl.principal == request.session.principal)
-      if (principalGroupAcls.isEmpty)
+      val filteredGroups = groups.filter(group => authorize(request.session, Describe, new Resource(Group, group.groupId, LITERAL)))
+      if (filteredGroups.isEmpty) {
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           request.body[ListGroupsRequest].getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-      else {
-        val filteredGroups = groups.filter(group => authorize(request.session, Describe, new Resource(Group, group.groupId, LITERAL)))
+      } else {
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new ListGroupsResponse(requestThrottleMs, error, filteredGroups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
       }
