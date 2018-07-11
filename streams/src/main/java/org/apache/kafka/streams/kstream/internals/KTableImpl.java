@@ -369,7 +369,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> suppress(final Suppress suppress) {
+    public KTable<K, V> suppress(final Suppress<K, V> suppress) {
         final SuppressImpl<K, V> suppressImpl = (SuppressImpl<K, V>) suppress;
         final String name = builder.newProcessorName(SUPPRESS_NAME);
 

@@ -103,13 +103,13 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    KTableSuppressProcessor(final Suppress suppress) {
+    KTableSuppressProcessor(final Suppress<K, V> suppress) {
         this.suppress = asSuppressImpl(suppress);
         valueSerializer = getValueSerializer(this.suppress);
     }
 
     @SuppressWarnings("unchecked")
-    private SuppressImpl<K, V> asSuppressImpl(final Suppress suppress) {
+    private SuppressImpl<K, V> asSuppressImpl(final Suppress<K, V> suppress) {
         return (SuppressImpl<K, V>) suppress;
     }
 

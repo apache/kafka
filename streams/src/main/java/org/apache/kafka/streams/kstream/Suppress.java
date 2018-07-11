@@ -23,7 +23,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 
-public interface Suppress {
+@SuppressWarnings("unused") // complaint about the top-level generic parameters, which actually are necessary
+public interface Suppress<K, V> {
 
     interface TimeDefinition<K, V> {
         long time(ProcessorContext context, K k, V v);
@@ -73,7 +74,7 @@ public interface Suppress {
         IntermediateSuppression<K, V> bufferConfig(final BufferConfig<K, V> bufferConfig);
     }
 
-    static <K extends Windowed, V> Suppress emitFinalResultsOnly(final BufferConfig<K, V> bufferConfig) {
+    static <K extends Windowed, V> Suppress<K, V> emitFinalResultsOnly(final BufferConfig<K, V> bufferConfig) {
         if (((BufferConfigImpl<K, V>) bufferConfig).getBufferFullStrategy() == BufferFullStrategy.EMIT) {
             throw new IllegalArgumentException(
                 "The EMIT strategy may produce intermediate results. " +
@@ -84,7 +85,7 @@ public interface Suppress {
         return new SuppressImpl<>(bufferConfig);
     }
 
-    static <K, V> Suppress intermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
+    static <K, V> Suppress<K, V> intermediateEvents(final IntermediateSuppression<K, V> intermediateSuppression) {
         return new SuppressImpl<>(intermediateSuppression);
     }
 }

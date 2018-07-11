@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 
-public class SuppressImpl<K, V> implements Suppress {
+public class SuppressImpl<K, V> implements Suppress<K, V> {
     private IntermediateSuppressionImpl<K, V> intermediateSuppression = null;
     private TimeDefinition<K, V> timeDefinition = (context, k, v) -> context.timestamp();
     private BufferConfig<K, V> finalResultsConfig;
