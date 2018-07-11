@@ -36,6 +36,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 public class AssignmentInfo {
 
@@ -122,7 +124,7 @@ public class AssignmentInfo {
     public ByteBuffer encode() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        try (final DataOutputStream out = new DataOutputStream(baos)) {
+        try (final DataOutputStream out = new DataOutputStream(new GZIPOutputStream(baos))) {
             switch (usedVersion) {
                 case 1:
                     encodeVersionOne(out);
@@ -210,7 +212,7 @@ public class AssignmentInfo {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();
 
-        try (final DataInputStream in = new DataInputStream(new ByteBufferInputStream(data))) {
+        try (final DataInputStream in = new DataInputStream(new GZIPInputStream(new ByteBufferInputStream(data)))) {
             final AssignmentInfo assignmentInfo;
 
             final int usedVersion = in.readInt();
