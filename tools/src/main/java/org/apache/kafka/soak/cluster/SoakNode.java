@@ -20,6 +20,10 @@ package org.apache.kafka.soak.cluster;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.soak.common.SoakLog;
 import org.apache.kafka.soak.role.AwsNodeRole;
+import org.apache.kafka.soak.role.Role;
+
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * Represents a node in the soak cluster.
@@ -42,15 +46,16 @@ public final class SoakNode implements AutoCloseable {
     private final SoakLog soakLog;
 
     /**
-     * The specification for this node.
+     * The roles supported by this node.
      */
-    private SoakNodeSpec spec;
+    private final Map<Class<? extends Role>, Role> roles;
 
-    SoakNode(int nodeIndex, String nodeName, SoakLog soakLog, SoakNodeSpec spec) {
+    SoakNode(int nodeIndex, String nodeName, SoakLog soakLog,
+             Map<Class<? extends Role>, Role> roles) {
         this.nodeIndex = nodeIndex;
         this.nodeName = nodeName;
         this.soakLog = soakLog;
-        this.spec = spec;
+        this.roles = Collections.unmodifiableMap(roles);
     }
 
     public int nodeIndex() {
@@ -65,44 +70,64 @@ public final class SoakNode implements AutoCloseable {
         return soakLog;
     }
 
-    public synchronized String dns() {
-        AwsNodeRole role = spec.role(AwsNodeRole.class);
+    public <R extends Role> R getRole(Class<? extends Role> clazz) {
+        Role role = roles.get(clazz);
+        if (role == null) {
+            return null;
+        }
+        return (R) role;
+    }
+
+    public String dns() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
         if (role == null) {
             return "";
         }
         return role.dns();
     }
 
-    public synchronized String sshIdentityFile() {
-        AwsNodeRole role = spec.role(AwsNodeRole.class);
+    public String privateDns() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
+        if (role == null) {
+            return "";
+        }
+        return role.privateDns();
+    }
+
+    public String publicDns() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
+        if (role == null) {
+            return "";
+        }
+        return role.publicDns();
+    }
+
+    public String sshIdentityFile() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
         if (role == null) {
             return "";
         }
         return role.sshIdentityFile();
     }
 
-    public synchronized String sshUser() {
-        AwsNodeRole role = spec.role(AwsNodeRole.class);
+    public String sshUser() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
         if (role == null) {
             return "";
         }
         return role.sshUser();
     }
 
-    public synchronized int sshPort() {
-        AwsNodeRole role = spec.role(AwsNodeRole.class);
+    public int sshPort() {
+        AwsNodeRole role = getRole(AwsNodeRole.class);
         if (role == null) {
             return 0;
         }
         return role.sshPort();
     }
 
-    public synchronized SoakNodeSpec spec() {
-        return spec;
-    }
-
-    public synchronized void setSpec(SoakNodeSpec spec) {
-        this.spec = spec;
+    public Map<Class<? extends Role>, Role> roles() {
+        return roles;
     }
 
     @Override

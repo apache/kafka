@@ -18,8 +18,6 @@
 package org.apache.kafka.soak.tool;
 
 import org.apache.kafka.soak.cluster.MiniSoakCluster;
-import org.apache.kafka.soak.cluster.SoakNodeSpec;
-import org.apache.kafka.soak.role.Role;
 import org.hamcrest.CoreMatchers;
 import org.junit.Assert;
 import org.junit.Rule;
@@ -38,10 +36,8 @@ public class SoakSshTest {
 
     @Test
     public void testArgParse() throws Exception {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node2", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1", "node2");
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
             try {
                 SoakSsh.parse(miniCluster.cluster(), Collections.<String>emptyList());

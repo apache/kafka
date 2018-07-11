@@ -31,15 +31,17 @@ import java.util.Collection;
 public final class AwsCheckAction extends Action {
     public final static String TYPE = "awsCheck";
 
-    public AwsCheckAction(String scope) {
+    private final AwsNodeRole role;
+
+    public AwsCheckAction(String scope, AwsNodeRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
             new String[] {});
+        this.role = role;
     }
 
     @Override
     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
-        AwsNodeRole role = node.spec().role(AwsNodeRole.class);
         Collection<InstanceDescription> descriptions = cluster.cloud().describeInstances();
         String instanceId = role.instanceId();
         if (instanceId.isEmpty()) {

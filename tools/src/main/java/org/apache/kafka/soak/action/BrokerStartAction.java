@@ -44,21 +44,15 @@ import static org.apache.kafka.soak.action.ActionPaths.KAFKA_LOGS;
 public final class BrokerStartAction extends Action {
     public final static String TYPE = "brokerStart";
 
-    private static final String DEFAULT_JVM_PERFORMANCE_OPTS = "-Xmx3g -Xms3g";
+    private final BrokerRole role;
 
-    private final Map<String, String> conf;
-
-    private final String jvmOptions;
-
-    public BrokerStartAction(String scope, Map<String, String> conf, String jvmOptions) {
+    public BrokerStartAction(String scope, BrokerRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[]{
                 new TargetId(ZooKeeperStartAction.TYPE)
             },
             new String[] {});
-        this.conf = Objects.requireNonNull(conf);
-        this.jvmOptions = jvmOptions.isEmpty() ? DEFAULT_JVM_PERFORMANCE_OPTS :
-            Objects.requireNonNull(jvmOptions);
+        this.role = Objects.requireNonNull(role);
     }
 
     @Override
@@ -97,7 +91,7 @@ public final class BrokerStartAction extends Action {
     public String[] createRunDaemonCommandLine() {
         return new String[]{"-n", "--", "nohup", "env",
             "JMX_PORT=9192",
-            "KAFKA_JVM_PERFORMANCE_OPTS='" + jvmOptions + "'",
+            "KAFKA_JVM_PERFORMANCE_OPTS='" + role.jvmOptions() + "'",
             "KAFKA_LOG4J_OPTS='-Dlog4j.configuration=file:" + ActionPaths.KAFKA_BROKER_LOG4J + "' ",
             ActionPaths.KAFKA_START_SCRIPT, ActionPaths.KAFKA_BROKER_PROPERTIES,
             ">" + ActionPaths.KAFKA_LOGS + "/stdout-stderr.txt", "2>&1", "</dev/null", "&"
@@ -125,7 +119,7 @@ public final class BrokerStartAction extends Action {
         FileOutputStream fos = null;
         OutputStreamWriter osw = null;
         boolean success = false;
-        Map<String, String> effectiveConf = SoakUtil.mergeConfig(conf, getDefaultConf());
+        Map<String, String> effectiveConf = SoakUtil.mergeConfig(role.conf(), getDefaultConf());
         try {
             file = new File(cluster.env().outputDirectory(), String.format("broker-%d.properties",
                 node.nodeIndex()));
@@ -134,7 +128,7 @@ public final class BrokerStartAction extends Action {
             osw.write(String.format("broker.id=%d%n", getBrokerId(cluster, node)));
             osw.write(String.format("listeners=PLAINTEXT://:9092%n"));
             osw.write(String.format("advertised.host.name=%s%n",
-                cluster.nodes().get(node.nodeName()).spec().privateDns()));
+                node.privateDns()));
             osw.write(String.format("log.dirs=%s%n", KAFKA_OPLOGS));
             osw.write(String.format("zookeeper.connect=%s%n", cluster.getZooKeeperConnectString()));
             for (Map.Entry<String, String> entry : effectiveConf.entrySet()) {

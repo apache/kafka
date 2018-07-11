@@ -28,20 +28,23 @@ import org.apache.kafka.soak.tool.SoakWriteClusterFileHook;
 public final class AwsDestroyAction extends Action {
     public final static String TYPE = "awsDestroy";
 
-    public AwsDestroyAction(String scope) {
+    private final AwsNodeRole role;
+
+    public AwsDestroyAction(String scope, AwsNodeRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
             new String[] {});
+        this.role = role;
     }
 
     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
-        AwsNodeRole role = node.spec().role(AwsNodeRole.class);
         String instanceId = role.instanceId();
         if (!instanceId.isEmpty()) {
             cluster.cloud().terminateInstances(instanceId);
         }
-        AwsNodeRole empty = new AwsNodeRole(role, "", "", "");
-        node.setSpec(node.spec().copyWithRole(empty));
+        role.setPublicDns("");
+        role.setPublicDns("");
+        role.setInstanceId("");
         cluster.shutdownManager().addHookIfMissing(new SoakWriteClusterFileHook(cluster));
     }
 }

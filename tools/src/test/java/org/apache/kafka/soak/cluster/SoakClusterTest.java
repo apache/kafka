@@ -25,8 +25,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
-import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -36,33 +36,20 @@ public class SoakClusterTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
-    private MiniSoakCluster createMiniSoakCluster() throws IOException {
+    private MiniSoakCluster createMiniSoakCluster() throws Exception {
         MiniSoakCluster.Builder builder = new MiniSoakCluster.Builder();
-
-        builder.addNode("node0", new SoakNodeSpec(
-            Arrays.asList(
-                new BrokerRole(null, null),
-                new TrogdorAgentRole()
-            )));
-
-        builder.addNode("node1", new SoakNodeSpec(
-            Arrays.asList(
-                new BrokerRole(null, null),
-                new TrogdorAgentRole()
-            )));
-
-        builder.addNode("node2", new SoakNodeSpec(
-            Arrays.asList(
-                new BrokerRole(null, null),
-                new TrogdorAgentRole()
-            )));
-
-        builder.addNode("node3", new SoakNodeSpec(
-            Arrays.asList(
-                new ZooKeeperRole(),
-                new TrogdorCoordinatorRole()
-            )));
-
+        builder.addRole("broker",
+            new BrokerRole(Collections.emptyMap(), ""),
+            "node0", "node1", "node2");
+        builder.addRole("zookeeper",
+            new ZooKeeperRole(),
+            "node3");
+        builder.addRole("trogdorAgentRole",
+            new TrogdorAgentRole(),
+            "node0", "node1", "node2");
+        builder.addRole("trogdorCoordinatorRole",
+            new TrogdorCoordinatorRole(),
+            "node3");
         return builder.build();
     }
 

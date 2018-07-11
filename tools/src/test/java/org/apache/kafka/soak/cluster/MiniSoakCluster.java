@@ -24,6 +24,7 @@ import org.apache.kafka.soak.cloud.MockRemoteCommand;
 import org.apache.kafka.soak.common.NullOutputStream;
 import org.apache.kafka.soak.common.SoakLog;
 import org.apache.kafka.soak.role.AwsNodeRole;
+import org.apache.kafka.soak.role.Role;
 import org.apache.kafka.soak.tool.SoakEnvironment;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
@@ -34,36 +35,58 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.Set;
 
 public class MiniSoakCluster implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MiniSoakCluster.class);
 
+
     public static class Builder {
-        private final Map<String, SoakNodeSpec> nodeSpecs = new TreeMap<>();
+        private final Map<String, Set<String>> nodeNamesToRoles = new HashMap<>();
+        private final Map<String, Role> roles = new HashMap<>();
         private MockCloud cloud = new MockCloud();
 
         public Builder() {
         }
 
-        public Builder addNode(String nodeName, SoakNodeSpec node) {
-            nodeSpecs.put(nodeName, node);
+        public Builder addNodes(String... nodeNames) {
+            for (String nodeName : nodeNames) {
+                Set<String> set = this.nodeNamesToRoles.
+                    computeIfAbsent(nodeName, k -> new HashSet<>());
+            }
             return this;
         }
 
-        public Builder addNodeWithInstanceId(String nodeName, SoakNodeSpec node) throws Exception {
+        public Builder addRole(String roleName, Role role, String... nodeNames) {
+            this.roles.put(roleName, role);
+            for (String nodeName : nodeNames) {
+                Set<String> set = this.nodeNamesToRoles.
+                    computeIfAbsent(nodeName, k -> new HashSet<>());
+                set.add(roleName);
+            }
+            return this;
+        }
+
+        public AwsNodeRole newAwsRoleWithInstanceId() throws Exception {
             String instanceId = cloud.newRunner().run();
             Cloud.InstanceDescription description = cloud.describeInstance(instanceId);
-            nodeSpecs.put(nodeName,
-                node.copyWithRole(new AwsNodeRole(node.role(AwsNodeRole.class),
-                    description.privateDns(),
-                    description.publicDns(),
-                    description.instanceId())));
-            return this;
+            return new AwsNodeRole("exampleImageId",
+                "exampleInstanceType",
+                "",
+                "",
+                0,
+                false,
+                description.privateDns(),
+                description.publicDns(),
+                description.instanceId());
         }
 
-        public MiniSoakCluster build() throws IOException {
+        public MiniSoakCluster build() throws Exception {
             SoakCluster soakCluster = null;
             File tempDirectory = TestUtils.tempDirectory();
             boolean success = false;
@@ -79,10 +102,24 @@ public class MiniSoakCluster implements AutoCloseable {
                     Paths.get(tempDirectory.getAbsolutePath(), "kafka").toString(),
                     outputPath.toString(),
                     0);
+
+                Map<String, SoakNodeSpec> nodes = new HashMap<>();
+                for (Map.Entry<String, Set<String>> entry : nodeNamesToRoles.entrySet()) {
+                    String nodeName = entry.getKey();
+                    List<String> roleNameList = new ArrayList<>();
+                    for (String roleName : entry.getValue()) {
+                        if (!roles.containsKey(roleName)) {
+                            throw new RuntimeException("Failed to find a role named " + roleName);
+                        }
+                        roleNameList.add(roleName);
+                    }
+                    nodes.put(nodeName, new SoakNodeSpec(roleNameList));
+                }
+
                 soakCluster = new SoakCluster(env,
                     cloud,
                     new SoakLog(SoakLog.CLUSTER, NullOutputStream.INSTANCE, true),
-                    new SoakClusterSpec(nodeSpecs));
+                    new SoakClusterSpec(nodes, roles));
                 success = true;
             } finally {
                 if (!success)  {

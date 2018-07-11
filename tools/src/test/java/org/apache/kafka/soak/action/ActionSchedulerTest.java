@@ -20,8 +20,6 @@ package org.apache.kafka.soak.action;
 import org.apache.kafka.soak.cluster.MiniSoakCluster;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
-import org.apache.kafka.soak.cluster.SoakNodeSpec;
-import org.apache.kafka.soak.role.Role;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -43,9 +41,8 @@ public class ActionSchedulerTest {
 
     @Test
     public void testCreateDestroy() throws Throwable {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1");
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
             ActionScheduler.Builder schedulerBuilder =
                 new ActionScheduler.Builder(miniCluster.cluster());
@@ -57,9 +54,8 @@ public class ActionSchedulerTest {
 
     @Test
     public void testInvalidTargetName() throws Throwable {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1");
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
             ActionScheduler.Builder schedulerBuilder =
                 new ActionScheduler.Builder(miniCluster.cluster());
@@ -77,10 +73,8 @@ public class ActionSchedulerTest {
 
     @Test
     public void testRunActions() throws Throwable {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node2", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1", "node2");
         final CyclicBarrier barrier = new CyclicBarrier(3);
         final AtomicInteger numRun = new AtomicInteger(0);
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
@@ -108,10 +102,8 @@ public class ActionSchedulerTest {
 
     @Test
     public void testContainedDependencies() throws Throwable {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node2", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1", "node2");
         Map<String, AtomicInteger> vals = Collections.synchronizedMap(new HashMap<>());
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
             for (final String nodeName : miniCluster.cluster().nodes().keySet()) {
@@ -182,10 +174,8 @@ public class ActionSchedulerTest {
 
     @Test
     public void testAllDependency() throws Throwable {
-        MiniSoakCluster.Builder clusterBuilder = new MiniSoakCluster.Builder();
-        clusterBuilder.addNode("node0", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node1", new SoakNodeSpec(Collections.<Role>emptyList()));
-        clusterBuilder.addNode("node2", new SoakNodeSpec(Collections.<Role>emptyList()));
+        MiniSoakCluster.Builder clusterBuilder =
+            new MiniSoakCluster.Builder().addNodes("node0", "node1", "node2");
         try (MiniSoakCluster miniCluster = clusterBuilder.build()) {
             final AtomicInteger count = new AtomicInteger(0);
             final AtomicInteger numBars = new AtomicInteger(0);

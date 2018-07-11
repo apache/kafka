@@ -63,36 +63,22 @@ public class AwsNodeRole implements Role {
     private final boolean internal;
 
     /**
-     * Configures the private DNS address of a node.
-     * If this is not set, the node has no private DNS address yet.
+     * Configures the private DNS address of a node, or the empty string
+     * if there is none yet.  Protected by the object lock.
      */
-    private final String privateDns;
+    private String privateDns;
 
     /**
-     * Configures the public DNS address of a node.
-     * If this is not set, the node has no public DNS address yet.
+     * Configures the public DNS address of a node, or the empty string
+     * if there is none yet.  Protected by the object lock.
      */
-    private final String publicDns;
+    private String publicDns;
 
     /**
-     * The AWS instance ID, if any.
+     * The AWS instance ID, or the empty string if there is none.
+     * Protected by the object lock.
      */
-    private final String instanceId;
-
-    public AwsNodeRole(AwsNodeRole role,
-                       String privateDns,
-                       String publicDns,
-                       String instanceId) {
-        this(role.imageId,
-            role.instanceType,
-            role.sshIdentityFile,
-            role.sshUser,
-            role.sshPort,
-            role.internal,
-            privateDns,
-            publicDns,
-            instanceId);
-    }
+    private String instanceId;
 
     @JsonCreator
     public AwsNodeRole(@JsonProperty("imageId") String imageId,
@@ -146,30 +132,42 @@ public class AwsNodeRole implements Role {
     }
 
     @JsonProperty
-    public String privateDns() {
+    public synchronized String privateDns() {
         return privateDns;
     }
 
-    @JsonProperty
-    public String publicDns() {
-        return publicDns;
+    public synchronized void setPrivateDns(String privateDns) {
+        this.privateDns = privateDns;
     }
 
     @JsonProperty
-    public String instanceId() {
+    public synchronized String publicDns() {
+        return publicDns;
+    }
+
+    public synchronized void setPublicDns(String publicDns) {
+        this.publicDns = publicDns;
+    }
+
+    @JsonProperty
+    public synchronized String instanceId() {
         return instanceId;
+    }
+
+    public synchronized void setInstanceId(String instanceId) {
+        this.instanceId = instanceId;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
         actions.add(new AwsInitAction(nodeName, this));
-        actions.add(new AwsDestroyAction(nodeName));
-        actions.add(new AwsCheckAction(nodeName));
+        actions.add(new AwsDestroyAction(nodeName, this));
+        actions.add(new AwsCheckAction(nodeName, this));
         return actions;
     }
 
-    public String dns() {
+    public synchronized String dns() {
         if (internal) {
             return privateDns;
         } else {

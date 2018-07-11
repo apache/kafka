@@ -33,6 +33,8 @@ import java.util.Map;
 public class BrokerRole implements Role {
     public static final String KAFKA_CLASS_NAME = "kafka.Kafka";
 
+    private static final String DEFAULT_JVM_PERFORMANCE_OPTS = "-Xmx3g -Xms3g";
+
     private final Map<String, String> conf;
 
     private final String jvmOptions;
@@ -42,7 +44,11 @@ public class BrokerRole implements Role {
                       @JsonProperty("jvmOptions") String jvmOptions) {
         this.conf = conf == null ? Collections.emptyMap() :
             Collections.unmodifiableMap(new HashMap<>(conf));
-        this.jvmOptions = jvmOptions == null ? "" : jvmOptions;
+        if ((jvmOptions == null) || jvmOptions.isEmpty()) {
+            this.jvmOptions = DEFAULT_JVM_PERFORMANCE_OPTS;
+        } else {
+            this.jvmOptions = jvmOptions;
+        }
     }
 
     @JsonProperty
@@ -58,7 +64,7 @@ public class BrokerRole implements Role {
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new BrokerStartAction(nodeName, conf, jvmOptions));
+        actions.add(new BrokerStartAction(nodeName, this));
         actions.add(new BrokerStatusAction(nodeName));
         actions.add(new BrokerStopAction(nodeName));
         return actions;

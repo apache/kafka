@@ -59,15 +59,13 @@ public final class AwsInitAction extends Action {
         // Create a new instance.
         node.log().printf("*** Creating new instance with instance type %s, imageId %s%n",
             role.instanceType(), role.imageId());
-        String instanceId = cluster.cloud().newRunner().
+        role.setInstanceId(cluster.cloud().newRunner().
             instanceType(role.instanceType()).
             imageId(role.imageId()).
-            run();
+            run());
 
         // Make sure that we don't leak an AWS instance if we shut down unexpectedly.
         cluster.shutdownManager().addHookIfMissing(new DestroyAwsInstancesShutdownHook(cluster));
-
-        node.setSpec(node.spec().copyWithRole(new AwsNodeRole(role, "", "", instanceId)));
 
         // Wait for the DNS to be set up.
         do {
@@ -88,21 +86,19 @@ public final class AwsInitAction extends Action {
     }
 
     private boolean checkInstanceDns(SoakCluster cluster, SoakNode node) throws Throwable {
-        AwsNodeRole awsRole = node.spec().role(AwsNodeRole.class);
-        Cloud.InstanceDescription description = cluster.cloud().describeInstance(awsRole.instanceId());
+        Cloud.InstanceDescription description = cluster.cloud().describeInstance(role.instanceId());
         if (description.privateDns().isEmpty()) {
-            node.log().printf("*** Waiting for private DNS name for %s...%n", awsRole.instanceId());
+            node.log().printf("*** Waiting for private DNS name for %s...%n", role.instanceId());
             return false;
         }
         if (description.publicDns().isEmpty()) {
-            node.log().printf("*** Waiting for public DNS name for %s...%n", awsRole.instanceId());
+            node.log().printf("*** Waiting for public DNS name for %s...%n", role.instanceId());
             return false;
         }
         node.log().printf("*** Got privateDnsName = %s, publicDnsName = %s%n",
             description.privateDns(), description.publicDns());
-        node.setSpec(node.spec().copyWithRole(
-            new AwsNodeRole(awsRole, description.privateDns(), description.publicDns(),
-                awsRole.instanceId())));
+        role.setPrivateDns(description.privateDns());
+        role.setPublicDns(description.publicDns());
         return true;
     }
 
@@ -150,7 +146,8 @@ public final class AwsInitAction extends Action {
         private synchronized void terminateInstances() throws Throwable {
             List<String> instanceIds = new ArrayList<>();
             for (SoakNode node : cluster.nodes().values()) {
-                String instanceId = node.spec().role(AwsNodeRole.class).instanceId();
+                AwsNodeRole nodeRole = node.getRole(AwsNodeRole.class);
+                String instanceId = nodeRole.instanceId();
                 if (!instanceId.isEmpty()) {
                     instanceIds.add(instanceId);
                 }
@@ -160,9 +157,9 @@ public final class AwsInitAction extends Action {
                 cluster.clusterLog().info("*** Terminated instance IDs " +
                     Utils.join(instanceIds, ", "));
                 for (SoakNode node : cluster.nodes().values()) {
-                    AwsNodeRole awsRole = node.spec().role(AwsNodeRole.class);
-                    if ((awsRole != null) && instanceIds.contains(awsRole.instanceId())) {
-                        node.log().info("*** Terminated instance " + awsRole.instanceId());
+                    AwsNodeRole nodeRole = node.getRole(AwsNodeRole.class);
+                    if ((nodeRole != null) && instanceIds.contains(nodeRole.instanceId())) {
+                        node.log().info("*** Terminated instance " + nodeRole.instanceId());
                     }
                 }
             }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.soak.cluster;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.soak.action.Action;
 import org.apache.kafka.soak.action.ActionScheduler;
@@ -27,11 +28,12 @@ import org.apache.kafka.soak.role.Role;
 import org.apache.kafka.soak.role.ZooKeeperRole;
 import org.apache.kafka.soak.tool.SoakEnvironment;
 import org.apache.kafka.soak.tool.SoakShutdownManager;
+import org.apache.kafka.soak.tool.SoakTool;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -47,24 +49,27 @@ public final class SoakCluster implements AutoCloseable {
     private final SoakLog clusterLog;
     private final Map<String, SoakNode> nodes;
     private final SoakShutdownManager shutdownManager;
+    private final Map<String, Role> originalRoles;
 
     public SoakCluster(SoakEnvironment env, Cloud cloud, SoakLog clusterLog,
-                       SoakClusterSpec spec) throws IOException {
+                       SoakClusterSpec spec) throws Exception {
         this.env = env;
         this.cloud = cloud;
         this.clusterLog = clusterLog;
         TreeMap<String, SoakNode> nodes = new TreeMap<>();
         int nodeIndex = 0;
-        for (Map.Entry<String, SoakNodeSpec> entry : spec.nodes().entrySet()) {
-            String nodeName = entry.getKey();
-            SoakNodeSpec nodeSpec = entry.getValue();
+        Map<String, Map<Class<? extends Role>, Role>> nodesToRoles = spec.nodesToRoles();
+        for (Map.Entry<String, Map<Class<? extends Role>, Role>> e : nodesToRoles.entrySet()) {
+            String nodeName = e.getKey();
+            Map<Class<? extends Role>, Role> roleMap = e.getValue();
             SoakLog soakLog = SoakLog.fromFile(env.outputDirectory(), nodeName, true);
-            SoakNode node = new SoakNode(nodeIndex, nodeName, soakLog, nodeSpec);
+            SoakNode node = new SoakNode(nodeIndex, nodeName, soakLog, roleMap);
             nodes.put(nodeName, node);
             nodeIndex++;
         }
-        this.nodes = nodes;
+        this.nodes = Collections.unmodifiableMap(nodes);
         this.shutdownManager = new SoakShutdownManager(clusterLog);
+        this.originalRoles = spec.roles();
     }
 
     public SoakLog clusterLog() {
@@ -97,11 +102,9 @@ public final class SoakCluster implements AutoCloseable {
         for (Map.Entry<String, SoakNode> entry : nodes.entrySet()) {
             String nodeName = entry.getKey();
             SoakNode soakNode = entry.getValue();
-            for (Role role : soakNode.spec().roles()) {
-                if (roleClass.isInstance(role)) {
-                    results.put(index, nodeName);
-                    break;
-                }
+            Role role = soakNode.getRole(roleClass);
+            if (role != null) {
+                results.put(index, nodeName);
             }
             index++;
         }
@@ -114,7 +117,7 @@ public final class SoakCluster implements AutoCloseable {
         for (String nodeName : nodesWithRole(BrokerRole.class).values()) {
             bld.append(prefix);
             prefix = ",";
-            bld.append(nodes().get(nodeName).spec().privateDns()).append(":9092");
+            bld.append(nodes().get(nodeName).privateDns()).append(":9092");
         }
         return bld.toString();
     }
@@ -125,7 +128,7 @@ public final class SoakCluster implements AutoCloseable {
         for (String nodeName : nodesWithRole(ZooKeeperRole.class).values()) {
             bld.append(prefix);
             prefix = ",";
-            bld.append(nodes().get(nodeName).spec().privateDns()).append(":2181");
+            bld.append(nodes().get(nodeName).privateDns()).append(":2181");
         }
         return bld.toString();
     }
@@ -183,12 +186,44 @@ public final class SoakCluster implements AutoCloseable {
         return cloud;
     }
 
-    public synchronized SoakClusterSpec toSpec() {
-        TreeMap<String, SoakNodeSpec> nodeSpecs = new TreeMap<>();
-        for (Map.Entry<String, SoakNode> entry : nodes.entrySet()) {
-            nodeSpecs.put(entry.getKey(), entry.getValue().spec());
+    /**
+     * Translate this SoakCluster object back to a spec.
+     *
+     * The spec contains a set of nodes with role names, and a map of role
+     * names to role data.  As much as possible, we will try to use the role
+     * names that we had in the spec which created this cluster.
+     *
+     * @return      The spec.
+     */
+    public SoakClusterSpec toSpec() throws Exception {
+        Map<String, SoakNodeSpec> nodeSpecs = new HashMap<>();
+        Map<String, Role> roles = new HashMap<>();
+        Map<String, String> roleJsonToNames = new HashMap<>();
+        for (Map.Entry<String, Role> entry : originalRoles.entrySet()) {
+            roleJsonToNames.put(SoakTool.JSON_SERDE.
+                writeValueAsString(entry.getValue()), entry.getKey());
         }
-        return new SoakClusterSpec(nodeSpecs);
+        for (Map.Entry<String, SoakNode> entry : nodes.entrySet()) {
+            SoakNode node = entry.getValue();
+            List<String> roleNames = new ArrayList<>();
+            for (Role role : node.roles().values()) {
+                String roleJson = SoakTool.JSON_SERDE.writeValueAsString(role);
+                String roleName = roleJsonToNames.get(roleJson);
+                if (roleName != null) {
+                    roleNames.add(roleName);
+                    roles.put(roleName, role);
+                } else {
+                    JsonNode jsonNode = SoakTool.JSON_SERDE.readTree(roleJson);
+                    String newRoleName = String.format("%s_%s",
+                        node.nodeName(), jsonNode.get("type").textValue());
+                    roleJsonToNames.put(roleJson, newRoleName);
+                    roleNames.add(newRoleName);
+                    roles.put(newRoleName, role);
+                }
+            }
+            nodeSpecs.put(node.nodeName(), new SoakNodeSpec(roleNames));
+        }
+        return new SoakClusterSpec(nodeSpecs, roles);
     }
 
     /**
@@ -205,7 +240,9 @@ public final class SoakCluster implements AutoCloseable {
         builder.addTargetNames(targetNames);
         builder.addActions(additionalActions);
         for (SoakNode node : nodes.values()) {
-            for (Role role : node.spec().roles()) {
+            for (Role role : node.roles().values()) {
+                String roleString = SoakTool.JSON_SERDE.
+                    writeValueAsString(role);
                 builder.addActions(role.createActions(node.nodeName()));
             }
         }

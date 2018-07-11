@@ -108,7 +108,7 @@ public class TrogdorStartAction extends Action  {
                 osw.write(String.format("%s    \"%s\": {%n", prefix, nodeName));
                 prefix = String.format(",%n");
                 osw.write(String.format("      \"hostname\": \"%s\",%n",
-                    soakNode.spec().privateDns()));
+                    soakNode.privateDns()));
                 osw.write(String.format("      \"trogdor.agent.port\": 8888%n"));
                 osw.write(String.format("    }"));
             }
