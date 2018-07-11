@@ -1794,7 +1794,6 @@ public class KafkaConsumerTest {
                 interceptors,
                 excludeInternalTopics,
                 true);
-        consumerCoordinator.setValue(false);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

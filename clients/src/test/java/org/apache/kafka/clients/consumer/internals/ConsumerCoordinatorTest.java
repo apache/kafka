@@ -139,7 +139,6 @@ public class ConsumerCoordinatorTest {
 
         client.setNode(node);
         this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false, true);
-        this.coordinator.setValue(false);
     }
 
     @After
@@ -1730,7 +1729,6 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testHeartbeatThreadClose() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
-        coordinator.setValue(false);
         coordinator.ensureActiveGroup();
         time.sleep(heartbeatIntervalMs + 100);
         Thread.yield(); // Give heartbeat thread a chance to attempt heartbeat

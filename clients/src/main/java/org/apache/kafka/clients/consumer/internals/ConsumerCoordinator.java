@@ -77,7 +77,6 @@ public class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
     private final AtomicInteger pendingAsyncCommits;
-    private Boolean useMultithreadRebalancing = null;
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
@@ -162,12 +161,6 @@ public class ConsumerCoordinator extends AbstractCoordinator {
 
         this.metadata.requestUpdate();
         addMetadataListener();
-    }
-
-    public void setValue(final boolean useMultithreadRebalancing) {
-        if (this.useMultithreadRebalancing == null) {
-            this.useMultithreadRebalancing = useMultithreadRebalancing;
-        }
     }
 
     public boolean isRebalancing() {
@@ -372,7 +365,7 @@ public class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public boolean ensureActiveGroup(final long timeoutMs) {
-        if (useMultithreadRebalancing && rebalanceInProgress.get()) {
+        if (rebalanceInProgress.get()) {
             //fetch start offset
             //fetch end offset (from which the consumer will start polling)
             //create new RebalanceConsumer

@@ -18,9 +18,12 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 
+import java.io.Closeable;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
@@ -30,9 +33,15 @@ import java.util.HashSet;
  * It implements Runnable so that it can be run in concurrency with the old KafkaConsumer (which does not implement
  * Runnable or extends Thread: the user spawns the process, while Kafka internals spawns this one.)
  */
-public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runnable {
+public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runnable, Closeable {
     private final Map<TopicPartition, Long> endOffsets;
     private final Set<TopicPartition> unfinished;
+    private ConsumerRequest request;
+    private RequestResult result;
+    private Duration waitTime;
+    private InputArgument inputArgument;
+    private TaskCompletionCallback callback;
+    private boolean shouldClose;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Map<TopicPartition, Long> startOffsets,
@@ -40,11 +49,30 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         super(configs, null, null);
         this.endOffsets = endOffsets;
         this.unfinished = new HashSet<>(startOffsets.keySet());
-        // send join request -- not done
         //go to start positions i.e. the last committed offsets of the parent consumer
         for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
             super.seek(entry.getKey(), entry.getValue());
         }
+        this.request = null;
+        this.result = null;
+        this.waitTime = null;
+        this.inputArgument = null;
+        this.callback = null;
+        this.shouldClose = false;
+    }
+
+    public RequestResult getResult() {
+        return result;
+    }
+
+    public void sendRequest(Duration waitTime,
+                            ConsumerRequest request,
+                            InputArgument inputArgument,
+                            TaskCompletionCallback callback) {
+        this.request = request;
+        this.waitTime = waitTime;
+        this.inputArgument = inputArgument;
+        this.callback = callback;
     }
 
     private Set<TopicPartition> findUnfinished() {
@@ -73,8 +101,82 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     @Override
     public void run() {
-
+        while (!shouldClose) {
+            switch (request) {
+                case PAUSE:
+                    pause((Collection<TopicPartition>) inputArgument.value);
+                    result = null;
+                    break;
+                case OFFSETS_FOR_TIMES:
+                    result = new RequestResult<>(super.offsetsForTimes((Map<TopicPartition, Long>) inputArgument.value,
+                            waitTime));
+                    break;
+                case END_OFFSETS:
+                    result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument.value,
+                            waitTime));
+                    break;
+                case BEGINNING_OFFSETS:
+                    result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument.value,
+                            waitTime));
+                    break;
+                case COMMIT_ASYNC:
+                    super.commitAsync((OffsetCommitCallback) inputArgument.value);
+                    result = null;
+                    break;
+                case COMMIT_SYNC:
+                    super.commitSync(waitTime);
+                    result = null;
+                    break;
+                case COMMITTED:
+                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument.value));
+                    break;
+                case POLL:
+                    ConsumerRecords<K, V> records = poll(waitTime);
+                    result = new RequestResult<>(records);
+                    break;
+                default:
+                    continue;
+            }
+            callback.onTaskCompete(result);
+            request = null;
+        }
     }
 
-    // other methods still needs to be implemented
+    @Override
+    public void close() {
+        this.shouldClose = true;
+    }
+
+    public enum ConsumerRequest { POLL,
+                                  COMMITTED,
+                                  COMMIT_SYNC,
+                                  COMMIT_ASYNC,
+                                  BEGINNING_OFFSETS,
+                                  END_OFFSETS,
+                                  OFFSETS_FOR_TIMES,
+                                  PAUSE,
+                                  RESUME }
+
+    public class RequestResult<T> {
+        final T value;
+
+        RequestResult(T value) {
+            this.value = value;
+        }
+    }
+
+    public class InputArgument<T> {
+        final T value;
+
+        InputArgument(T value) {
+            this.value = value;
+        }
+    }
+
+    public abstract class TaskCompletionCallback {
+        /**
+         * Can be defined by methods of KafkaConsumer to suit their purposes.
+         */
+        public abstract void onTaskCompete(RequestResult result);
+    }
 }
