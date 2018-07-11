@@ -2382,7 +2382,7 @@ public class KafkaAdminClient extends AdminClient {
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
 
-        final Map<Integer, Queue<String>> coodinators = new ConcurrentHashMap<>();
+        final Map<Integer, Queue<String>> coordinators = new ConcurrentHashMap<>();
         final Map<Integer, FindCoordinatorResponse> fcResponses = new HashMap<>();
         final Queue<String> returnedGroupId = new ConcurrentLinkedQueue<>();
 
@@ -2414,9 +2414,9 @@ public class KafkaAdminClient extends AdminClient {
 
                     fcResponses.putIfAbsent(nodeId, fcResponse);
 
-                    Queue<String> groupIdsForNode = coodinators.getOrDefault(nodeId, new ConcurrentLinkedQueue<>());
+                    Queue<String> groupIdsForNode = coordinators.getOrDefault(nodeId, new ConcurrentLinkedQueue<>());
                     groupIdsForNode.add(groupId);
-                    coodinators.put(nodeId, groupIdsForNode);
+                    coordinators.put(nodeId, groupIdsForNode);
 
                     returnedGroupId.add(groupId);
 
@@ -2441,7 +2441,7 @@ public class KafkaAdminClient extends AdminClient {
                     final long nowDescribeConsumerGroups = time.milliseconds();
                     final long deadline = calcDeadlineMs(nowDescribeConsumerGroups, options.timeoutMs());
 
-                    for (final Map.Entry<Integer, Queue<String>> entry: coodinators.entrySet()) {
+                    for (final Map.Entry<Integer, Queue<String>> entry: coordinators.entrySet()) {
                         final int nodeId = entry.getKey();
                         runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
                             @Override
