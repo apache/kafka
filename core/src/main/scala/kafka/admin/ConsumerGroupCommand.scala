@@ -304,19 +304,15 @@ object ConsumerGroupCommand extends Logging {
         var assignedTopicPartitions = Array[TopicPartition]()
         val offsets = adminClient.listGroupOffsets(group)
         val rowsWithConsumer =
-          if (offsets.isEmpty)
-            List[PartitionAssignmentState]()
-          else {
-            consumers.filter(_.assignment.nonEmpty).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-              val topicPartitions = consumerSummary.assignment
-              assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
-              val partitionOffsets: Map[TopicPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
-                new TopicPartition(topicPartition.topic, topicPartition.partition) -> offsets.get(topicPartition)
-              }.toMap
-              collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
-                partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
-                Some(s"${consumerSummary.clientId}"))
-            }
+          consumers.filter(_.assignment.nonEmpty).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
+            val topicPartitions = consumerSummary.assignment
+            assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
+            val partitionOffsets: Map[TopicPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
+              new TopicPartition(topicPartition.topic, topicPartition.partition) -> offsets.get(topicPartition)
+            }.toMap
+            collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
+              partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+              Some(s"${consumerSummary.clientId}"))
           }
 
         val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
