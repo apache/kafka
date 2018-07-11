@@ -843,11 +843,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
                                                                                    final Serde<K> keySerde,
                                                                                    final Serde<V> valueSerde,
-                                                                                   final String storeName) {
+                                                                                   final String storeName,
+                                                                                   final long retention) {
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 storeName,
-                windows.maintainMs(),
+                retention,
                 windows.size(),
                 true,
                 windows.segmentInterval()
@@ -874,35 +875,50 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
                                                    final JoinWindows windows,
                                                    final Joined<K1, V1, V2> joined) {
-            String thisWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
-            String otherWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
-            String joinThisName = rightOuter ? builder.newProcessorName(OUTERTHIS_NAME) : builder.newProcessorName(JOINTHIS_NAME);
-            String joinOtherName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
-            String joinMergeName = builder.newProcessorName(MERGE_NAME);
+            final String thisWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
+            final String otherWindowStreamName = builder.newProcessorName(WINDOWED_NAME);
+            final String joinThisName = rightOuter ? builder.newProcessorName(OUTERTHIS_NAME) : builder.newProcessorName(JOINTHIS_NAME);
+            final String joinOtherName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
+            final String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindow =
-                createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
+            final StoreBuilder<WindowStore<K1, V1>> thisWindow = createWindowedStateStore(
+                windows,
+                joined.keySerde(),
+                joined.valueSerde(),
+                joinThisName + "-store",
+                joined.retention() == null ? windows.maintainMs() : joined.retention().toMillis()
+            );
 
-            final StoreBuilder<WindowStore<K1, V2>> otherWindow =
-                createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
+            final StoreBuilder<WindowStore<K1, V2>> otherWindow = createWindowedStateStore(
+                    windows,
+                    joined.keySerde(),
+                    joined.otherValueSerde(),
+                    joinOtherName + "-store",
+                joined.retention() == null ? windows.maintainMs() : joined.retention().toMillis()
+                );
 
-            KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
-                                                                                   windows.beforeMs + windows.afterMs + 1,
-                                                                                   windows.maintainMs());
-            KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(),
-                                                                                    windows.beforeMs + windows.afterMs + 1,
-                                                                                    windows.maintainMs());
+            final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(
+                thisWindow.name(),
+                windows.beforeMs + windows.afterMs + 1,
+                joined.retention() == null ? windows.maintainMs() : joined.retention().toMillis()
+            );
+
+            final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(
+                otherWindow.name(),
+                windows.beforeMs + windows.afterMs + 1,
+                joined.retention() == null ? windows.maintainMs() : joined.retention().toMillis()
+            );
 
             final KStreamKStreamJoin<K1, R, ? super V1, ? super V2> joinThis = new KStreamKStreamJoin<>(otherWindow.name(),
-                                                                                                        windows.beforeMs,
-                                                                                                        windows.afterMs,
-                                                                                                        joiner,
-                                                                                                        leftOuter);
+                windows.beforeMs,
+                windows.afterMs,
+                joiner,
+                leftOuter);
             final KStreamKStreamJoin<K1, R, ? super V2, ? super V1> joinOther = new KStreamKStreamJoin<>(thisWindow.name(),
-                                                                                                         windows.afterMs,
-                                                                                                         windows.beforeMs,
-                                                                                                         reverseJoiner(joiner),
-                                                                                                         rightOuter);
+                windows.afterMs,
+                windows.beforeMs,
+                reverseJoiner(joiner),
+                rightOuter);
 
             KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
 

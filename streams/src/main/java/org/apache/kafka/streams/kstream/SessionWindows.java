@@ -21,6 +21,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import java.time.Duration;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
+
 /**
  * A session based window specification used for aggregating events into sessions.
  * <p>
@@ -123,14 +125,8 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        try {
-            //noinspection ResultOfMethodCallIgnored
-            afterWindowEnd.toMillis();
-        } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("Grace period must be expressible in Long milliseconds", e);
-        }
+        this.grace = validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds");
 
-        this.grace = afterWindowEnd;
         return this;
     }
 

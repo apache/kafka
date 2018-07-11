@@ -21,6 +21,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import java.time.Duration;
 import java.util.Map;
 
+import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
+
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and window
  * maintain duration.
@@ -56,14 +58,8 @@ public abstract class Windows<W extends Window> {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        try {
-            //noinspection ResultOfMethodCallIgnored
-            afterWindowEnd.toMillis();
-        } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("Grace period must be expressible in Long milliseconds", e);
-        }
+        grace = validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds");
 
-        grace = afterWindowEnd;
         return this;
     }
 
