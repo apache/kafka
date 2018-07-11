@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.time.Duration;
 import java.util.Objects;
 
 /**
@@ -67,8 +68,7 @@ public final class SessionWindows {
 
     private final long gapMs;
     private final long maintainDurationMs;
-    private long close;
-    private boolean closeSet;
+    private Duration grace;
 
 
     private SessionWindows(final long gapMs, final long maintainDurationMs) {
@@ -108,27 +108,34 @@ public final class SessionWindows {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEndMs} millis
+     * Reject late events that arrive more than {@code afterWindowEnd}
      * after the end of its window.
      *
      * Note that new events may change the boundaries of session windows, so aggressive
      * close times can lead to surprising results in which a too-late event is rejected and then
      * a subsequent event moves the window boundary forward.
      *
-     * @param afterWindowEndMs The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
      */
-    public SessionWindows close(final long afterWindowEndMs) {
-        if (afterWindowEndMs < 0) {
-            throw new IllegalArgumentException();
+    public SessionWindows grace(final Duration afterWindowEnd) {
+        if (afterWindowEnd.isNegative()) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
         }
-        this.close = afterWindowEndMs;
-        this.closeSet = true;
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            afterWindowEnd.toMillis();
+        } catch (final ArithmeticException e) {
+            throw new IllegalArgumentException("Grace period must be expressible in Long milliseconds", e);
+        }
+
+        this.grace = afterWindowEnd;
         return this;
     }
 
-    public long close() {
-        return closeSet ? close : maintainMs();
+    public Duration grace() {
+        return grace != null ? grace : Duration.ofMillis(maintainMs());
     }
 
     /**

@@ -433,8 +433,7 @@ public class KTableSuppressProcessorTest {
             .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
             .windowedBy(TimeWindows
                 .of(2L)
-                .until(3L)
-                .close(1L)
+                .grace(Duration.ofMillis(1L))
             )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
@@ -498,8 +497,7 @@ public class KTableSuppressProcessorTest {
             .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
             .windowedBy(TimeWindows
                 .of(2L)
-                .until(10L)
-                .close(2L)
+                .grace(Duration.ofMillis(2L))
             )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 
@@ -572,7 +570,7 @@ public class KTableSuppressProcessorTest {
             .windowedBy(
                 SessionWindows
                     .with(5L)
-                    .close(5L)
+                    .grace(Duration.ofMillis(5L))
             )
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled());
 

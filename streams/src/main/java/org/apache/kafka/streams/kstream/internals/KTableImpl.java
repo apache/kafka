@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Suppress;
+import org.apache.kafka.streams.kstream.SuppressImpl;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -368,11 +369,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> suppress(final Suppress<K, V> suppress) {
+    public KTable<K, V> suppress(final Suppress suppress) {
+        final SuppressImpl<K, V> suppressImpl = (SuppressImpl<K, V>) suppress;
         final String name = builder.newProcessorName(SUPPRESS_NAME);
 
         final ProcessorSupplier<K, V> suppressionSupplier = () -> new KTableSuppressProcessor<>(
-            buildSuppress(suppress)
+            buildSuppress(suppressImpl)
         );
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(
@@ -396,7 +398,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
 
-    private long windowClose() {
+    private Duration windowGrace() {
         String chain = "";
         // Search backward until we find
         StreamsGraphNode node1 = this.parentGraphNode;
@@ -406,11 +408,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 if (processorSupplier instanceof KStreamWindowAggregate) {
                     final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
                     final Windows windows = kStreamWindowAggregate.getWindows();
-                    return windows.close();
+                    return windows.grace();
                 } else if (processorSupplier instanceof KStreamSessionWindowAggregate) {
                     final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;
                     final SessionWindows windows = kStreamSessionWindowAggregate.getWindows();
-                    return windows.close();
+                    return windows.grace();
                 }
             }
             chain = chain.equals("") ? node1.nodeName() : node1.nodeName() + "->" + chain;
@@ -422,11 +424,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @SuppressWarnings("unchecked")
-    private Suppress<K, V> buildSuppress(final Suppress<K, V> suppress) {
+    private SuppressImpl<K, V> buildSuppress(final SuppressImpl<K, V> suppress) {
         if (suppress.isFinalResultsSuppression()) {
-            return (Suppress<K, V>) Suppress.buildFinalResultsSuppression(
-                Duration.ofMillis(windowClose()),
-                (Suppress<Windowed, V>) suppress
+
+            return (SuppressImpl<K, V>) SuppressImpl.buildFinalResultsSuppression(
+                windowGrace(),
+                (SuppressImpl<? extends Windowed, V>) suppress
             );
         } else {
             return suppress;

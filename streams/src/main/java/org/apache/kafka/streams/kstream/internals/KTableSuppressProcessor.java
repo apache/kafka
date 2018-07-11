@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Suppress;
+import org.apache.kafka.streams.kstream.SuppressImpl;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -35,7 +36,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
-    private final Suppress<K, V> suppress;
+    private final SuppressImpl<K, V> suppress;
 
     private final Map<K, TimeKey<K>> index = new HashMap<>();
     private final TreeMap<TimeKey<K>, ContextualRecord<V>> sortedMap = new TreeMap<>();
@@ -44,8 +45,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
     private long memBufferSize;
     private ProcessorNode myNode;
     private final Serializer<Change<V>> valueSerializer;
-
-    private long lastEmitTime = -1L;
 
     private static class TimeKey<K> implements Comparable<TimeKey<K>> {
         private final long time;
@@ -104,9 +103,14 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         }
     }
 
-    KTableSuppressProcessor(final Suppress<K, V> suppress) {
-        this.suppress = suppress;
-        valueSerializer = getValueSerializer(suppress);
+    KTableSuppressProcessor(final Suppress suppress) {
+        this.suppress = asSuppressImpl(suppress);
+        valueSerializer = getValueSerializer(this.suppress);
+    }
+
+    @SuppressWarnings("unchecked")
+    private SuppressImpl<K, V> asSuppressImpl(final Suppress suppress) {
+        return (SuppressImpl<K, V>) suppress;
     }
 
     @Override
@@ -140,7 +144,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
                                 break;
                             }
                         }
-                        lastEmitTime = streamTime;
                     });
             }
         }
@@ -247,7 +250,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
         return suppress.getIntermediateSuppression() != null;
     }
 
-    private Serializer<Change<V>> getValueSerializer(final Suppress<K, V> suppress) {
+    private Serializer<Change<V>> getValueSerializer(final SuppressImpl<K, V> suppress) {
         return (suppress.getIntermediateSuppression() == null
             || suppress.getIntermediateSuppression().getBufferConfig() == null
             || suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer() == null)
@@ -255,7 +258,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, V> {
             : new ChangedSerializer<>(suppress.getIntermediateSuppression().getBufferConfig().getValueSerializer());
     }
 
-    private Serializer<K> getKeySerializer(final Suppress<K, V> suppress) {
+    private Serializer<K> getKeySerializer(final SuppressImpl<K, V> suppress) {
         return (suppress.getIntermediateSuppression() == null
             || suppress.getIntermediateSuppression().getBufferConfig() == null
             || suppress.getIntermediateSuppression().getBufferConfig().getKeySerializer() == null)

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -39,36 +40,35 @@ public abstract class Windows<W extends Window> {
     private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
 
-    private static final long DEFAULT_CLOSE_MS = 0L; // one day
-
-    // track what gets overridden so that we can set
-    // close := 'until' iff it's not already set
-    // If neither close nor 'until' are set, we return the default.
-    // When we remove 'until', we can ditch these fields.
-    private boolean closeSet = false;
-
-    private long closeMs = DEFAULT_CLOSE_MS;
+    private Duration grace;
 
     protected Windows() {}
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEndMs} millis
+     * Reject late events that arrive more than {@code afterWindowEnd}
      * after the end of its window.
      *
-     * @param afterWindowEndMs The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
      */
-    public Windows<W> close(final long afterWindowEndMs) {
-        if (afterWindowEndMs < 0) {
-            throw new IllegalArgumentException();
+    public Windows<W> grace(final Duration afterWindowEnd) {
+        if (afterWindowEnd.isNegative()) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
         }
-        closeMs = afterWindowEndMs;
-        closeSet = true;
+
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            afterWindowEnd.toMillis();
+        } catch (final ArithmeticException e) {
+            throw new IllegalArgumentException("Grace period must be expressible in Long milliseconds", e);
+        }
+
+        grace = afterWindowEnd;
         return this;
     }
 
-    public long close() {
-        return closeSet ? closeMs : (maintainMs() - size());
+    public Duration grace() {
+        return grace != null ? grace : Duration.ofMillis(maintainMs() - size());
     }
 
     /**

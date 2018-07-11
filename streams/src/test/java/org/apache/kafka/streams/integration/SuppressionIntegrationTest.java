@@ -418,8 +418,7 @@ public class SuppressionIntegrationTest {
             .windowedBy(
                 TimeWindows
                     .of(scaledTime(2L))
-                    .until(scaledTime(3L))
-                    .close(scaledTime(1L))
+                    .grace(Duration.ofMillis(scaledTime(1L)))
             )
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 
