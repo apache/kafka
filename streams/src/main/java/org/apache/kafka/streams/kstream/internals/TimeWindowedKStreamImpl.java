@@ -156,7 +156,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         if (supplier == null) {
             supplier = Stores.persistentWindowStore(
                 materialized.storeName(),
-                windows.maintainMs(),
+                materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs(),
                 windows.size(),
                 false,
                 windows.segmentInterval()

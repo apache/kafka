@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -47,6 +48,25 @@ public class UnlimitedWindowsTest {
             fail("should not allow to set window retention time");
         } catch (final IllegalArgumentException e) {
             // expected
+        }
+    }
+
+    @Test
+    public void gracePeriodShouldEnforceBoundaries() {
+        UnlimitedWindows.of().grace(Duration.ZERO);
+
+        try {
+            UnlimitedWindows.of().grace(Duration.ofNanos(-1));
+            fail("should not accept negatives");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
+
+        try {
+            UnlimitedWindows.of().grace(Duration.ofSeconds(Long.MAX_VALUE));
+            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
+        } catch (final IllegalArgumentException e) {
+            //expected
         }
     }
 

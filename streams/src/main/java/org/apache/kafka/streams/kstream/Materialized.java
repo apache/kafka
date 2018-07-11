@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -60,6 +61,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean loggingEnabled = true;
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
+    protected Duration retention;
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -222,4 +224,18 @@ public class Materialized<K, V, S extends StateStore> {
         return this;
     }
 
+    /**
+     * Configure retention period for window and session stores. Ignored for key/value stores.
+     *
+     * Overridden by pre-configured store suppliers
+     * ({@link Materialized#as(SessionBytesStoreSupplier)} or {@link Materialized#as(WindowBytesStoreSupplier)}).
+     *
+     * @return itself
+     */
+    public Materialized<K, V, S> withRetention(final Duration retention) {
+        Objects.requireNonNull(retention, "Retention must not be null");
+        ApiUtils.validateMillisecondDuration(retention, "Retention must be expressible in milliseconds");
+        this.retention = retention;
+        return this;
+    }
 }

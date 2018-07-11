@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -115,6 +116,7 @@ public class TimeWindowsTest {
         }
     }
 
+    @Deprecated
     @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
@@ -126,6 +128,7 @@ public class TimeWindowsTest {
         }
     }
 
+    @Deprecated
     @Test
     public void retentionTimeMustNoBeSmallerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.of(ANY_SIZE);
@@ -134,6 +137,25 @@ public class TimeWindowsTest {
             fail("should not accept retention time smaller than window size");
         } catch (final IllegalArgumentException e) {
             // expected
+        }
+    }
+
+    @Test
+    public void gracePeriodShouldEnforceBoundaries() {
+        TimeWindows.of(3L).grace(Duration.ZERO);
+
+        try {
+            TimeWindows.of(3L).grace(Duration.ofNanos(-1));
+            fail("should not accept negatives");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
+
+        try {
+            TimeWindows.of(3L).grace(Duration.ofSeconds(Long.MAX_VALUE));
+            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
+        } catch (final IllegalArgumentException e) {
+            //expected
         }
     }
 

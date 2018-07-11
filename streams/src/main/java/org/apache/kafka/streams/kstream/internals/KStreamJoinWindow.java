@@ -35,7 +35,8 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
         if (windowSizeMs > retentionPeriodMs)
             throw new TopologyException("The retention period of the join window "
-                    + windowName + " must be no smaller than its window size.");
+                    + windowName + " must be no smaller than its window size. Got size=["
+                    + windowSizeMs + "], retention=[" + retentionPeriodMs + "]");
     }
 
     @Override

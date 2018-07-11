@@ -165,8 +165,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.persistentSessionStore(materialized.storeName(),
-                                                     windows.maintainMs());
+            supplier = Stores.persistentSessionStore(
+                materialized.storeName(),
+                materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs()
+            );
         }
         final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(supplier,
                                                                                      materialized.keySerde(),

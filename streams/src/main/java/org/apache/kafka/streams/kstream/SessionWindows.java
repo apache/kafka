@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -70,12 +71,13 @@ public final class SessionWindows {
 
     private final long gapMs;
     private final long maintainDurationMs;
-    private Duration grace;
+    private final Duration grace;
 
 
-    private SessionWindows(final long gapMs, final long maintainDurationMs) {
+    private SessionWindows(final long gapMs, final long maintainDurationMs, final Duration grace) {
         this.gapMs = gapMs;
         this.maintainDurationMs = maintainDurationMs;
+        this.grace = grace;
     }
 
     /**
@@ -91,7 +93,7 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
         final long oneDayMs = 24 * 60 * 60_000L;
-        return new SessionWindows(inactivityGapMs, oneDayMs);
+        return new SessionWindows(inactivityGapMs, oneDayMs, null);
     }
 
     /**
@@ -100,13 +102,18 @@ public final class SessionWindows {
      *
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than window gap
+     *
+     * @deprecated since 2.1. Use {@link Materialized#retention}
+     *             or directly configure the retention in a store supplier and use
+     *             {@link Materialized#as(SessionBytesStoreSupplier)}.
      */
+    @Deprecated
     public SessionWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < gapMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than window gap.");
         }
 
-        return new SessionWindows(gapMs, durationMs);
+        return new SessionWindows(gapMs, durationMs, null);
     }
 
     /**
@@ -125,9 +132,11 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        this.grace = validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds");
-
-        return this;
+        return new SessionWindows(
+            gapMs,
+            maintainDurationMs,
+            validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds")
+        );
     }
 
     public Duration grace() {
@@ -160,11 +169,13 @@ public final class SessionWindows {
         if (o == null || getClass() != o.getClass()) return false;
         final SessionWindows that = (SessionWindows) o;
         return gapMs == that.gapMs &&
-            maintainDurationMs == that.maintainDurationMs;
+            maintainDurationMs == that.maintainDurationMs &&
+            Objects.equals(grace, that.grace);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(gapMs, maintainDurationMs);
+
+        return Objects.hash(gapMs, maintainDurationMs, grace);
     }
 }

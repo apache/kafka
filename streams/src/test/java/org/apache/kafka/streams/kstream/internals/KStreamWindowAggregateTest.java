@@ -246,6 +246,7 @@ public class KStreamWindowAggregateTest {
         }
     }
 
+    @Deprecated // testing deprecated functionality (behavior of until)
     @Test
     public void shouldLogAndMeterWhenSkippingExpiredWindow() {
         final StreamsBuilder builder = new StreamsBuilder();

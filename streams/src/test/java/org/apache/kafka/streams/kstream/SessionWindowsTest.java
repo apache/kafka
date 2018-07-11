@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import kafka.network.RequestChannel;
 import org.junit.Test;
 
+import java.time.Duration;
+
+import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsNot.not;
@@ -25,17 +29,37 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 public class SessionWindowsTest {
-
     @Test
     public void shouldSetWindowGap() {
         final long anyGap = 42L;
         assertEquals(anyGap, SessionWindows.with(anyGap).inactivityGap());
     }
 
+    @Deprecated
     @Test
     public void shouldSetWindowRetentionTime() {
         final long anyRetentionTime = 42L;
         assertEquals(anyRetentionTime, SessionWindows.with(1).until(anyRetentionTime).maintainMs());
+    }
+
+
+    @Test
+    public void gracePeriodShouldEnforceBoundaries() {
+        SessionWindows.with(3L).grace(Duration.ZERO);
+
+        try {
+            SessionWindows.with(3L).grace(Duration.ofNanos(-1));
+            fail("should not accept negatives");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
+
+        try {
+            SessionWindows.with(3L).grace(ofSeconds(Long.MAX_VALUE));
+            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -54,6 +78,7 @@ public class SessionWindowsTest {
         assertEquals(windowGap, SessionWindows.with(windowGap).maintainMs());
     }
 
+    @Deprecated
     @Test
     public void retentionTimeMustNotBeNegative() {
         final SessionWindows windowSpec = SessionWindows.with(42);
@@ -70,6 +95,7 @@ public class SessionWindowsTest {
         assertThat(SessionWindows.with(5), equalTo(SessionWindows.with(5)));
     }
 
+    @Deprecated
     @Test
     public void shouldNotBeEqualWhenMaintainMsDifferent() {
         assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(5).until(10))));
@@ -78,5 +104,10 @@ public class SessionWindowsTest {
     @Test
     public void shouldNotBeEqualWhenGapIsDifferent() {
         assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(10))));
+    }
+
+    @Test
+    public void shouldNotBeEqualWhenGraceIsDifferent() {
+        assertThat(SessionWindows.with(5).grace(Duration.ZERO), not(equalTo(SessionWindows.with(5).grace(ofSeconds(2)))));
     }
 }

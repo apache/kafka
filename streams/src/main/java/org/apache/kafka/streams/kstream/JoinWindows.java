@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.Map;
 
@@ -137,8 +139,10 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
+     * @deprecated since 2.1. Use {@link Joined#retention()}.
      */
     @Override
+    @Deprecated
     public JoinWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < size()) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");

@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Map;
@@ -74,8 +76,11 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
+     * @deprecated since 2.1. Use {@link Joined#retention()} or {@link Materialized#retention}
+     *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     // This should always get overridden to provide the correct return type and thus to avoid a cast
+    @Deprecated
     public Windows<W> until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < 0) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
