@@ -36,12 +36,12 @@ import java.util.HashSet;
 public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runnable, Closeable {
     private final Map<TopicPartition, Long> endOffsets;
     private final Set<TopicPartition> unfinished;
-    private ConsumerRequest request;
+    private volatile ConsumerRequest request;
     private RequestResult result;
-    private Duration waitTime;
-    private InputArgument inputArgument;
-    private TaskCompletionCallback callback;
-    private boolean shouldClose;
+    private volatile Duration waitTime;
+    private volatile InputArgument inputArgument;
+    private volatile TaskCompletionCallback callback;
+    private volatile boolean shouldClose;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Map<TopicPartition, Long> startOffsets,
@@ -75,6 +75,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.callback = callback;
     }
 
+    public Set<TopicPartition> unfinishedPartitions() {
+        return unfinished;
+    }
+
     private Set<TopicPartition> findUnfinished() {
         final HashSet<TopicPartition> stillUnfinished = new HashSet<>();
         for (TopicPartition partition : unfinished) {
@@ -89,6 +93,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     public boolean terminated() {
         return findUnfinished().size() == 0;
+    }
+
+    public ConsumerRecords<K, V> storedRecords() {
+        return offsetBuffer.pollOffsets();
     }
 
     @Override
@@ -109,15 +117,15 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     break;
                 case OFFSETS_FOR_TIMES:
                     result = new RequestResult<>(super.offsetsForTimes((Map<TopicPartition, Long>) inputArgument.value,
-                            waitTime));
+                                                                       waitTime));
                     break;
                 case END_OFFSETS:
                     result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument.value,
-                            waitTime));
+                                                                  waitTime));
                     break;
                 case BEGINNING_OFFSETS:
                     result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument.value,
-                            waitTime));
+                                                                        waitTime));
                     break;
                 case COMMIT_ASYNC:
                     super.commitAsync((OffsetCommitCallback) inputArgument.value);
@@ -133,6 +141,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 case POLL:
                     ConsumerRecords<K, V> records = poll(waitTime);
                     result = new RequestResult<>(records);
+                    offsetBuffer.insertOffsets(records);
                     break;
                 default:
                     continue;

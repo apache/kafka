@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Arrays;
 import java.util.PriorityQueue;
+import java.util.List;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -42,11 +44,13 @@ public class OffsetBuffer<K, V> {
         }
     }
 
-    public Map<TopicPartition, ConsumerRecord<K, V>[]> pollOffsets() {
-        Map<TopicPartition, ConsumerRecord<K, V>[]> result = new HashMap<>();
+    public ConsumerRecords<K, V> pollOffsets() {
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> result = new HashMap<>();
         for (Map.Entry<TopicPartition, PriorityQueue<ConsumerRecord<K, V>>> offsetSeq : consumedOffsets.entrySet()) {
-            result.put(offsetSeq.getKey(), offsetSeq.getValue().toArray(new ConsumerRecord[offsetSeq.getValue().size()]));
+            ConsumerRecord<K, V>[] arrayOfRecords = offsetSeq.getValue().toArray(new ConsumerRecord[offsetSeq.getValue().size()]);
+            result.put(offsetSeq.getKey(), Arrays.asList(arrayOfRecords));
+            offsetSeq.getValue().clear();
         }
-        return result;
+        return new ConsumerRecords<>(result);
     }
 }

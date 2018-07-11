@@ -573,7 +573,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
-    private final OffsetBuffer offsetBuffer;
+    protected final OffsetBuffer offsetBuffer;
     private final List<RebalanceKafkaConsumer<K, V>> rebalanceConsumers;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -1188,19 +1188,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-
-            if (coordinator.isRebalancing()) {
-                getStartAndEndOffsets();
-                RebalanceKafkaConsumer consumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
-                rebalanceConsumers.add(consumer);
-                new Thread(consumer).start();
-            }
-
             // poll for new data until the timeout expires
             long elapsedTime = 0L;
             do {
 
                 client.maybeTriggerWakeup();
+
+                if (coordinator.isRebalancing()) {
+                    getStartAndEndOffsets();
+                    RebalanceKafkaConsumer consumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
+                    rebalanceConsumers.add(consumer);
+                    new Thread(consumer).start();
+                    /*for (RebalanceKafkaConsumer rebalanceConsumer : rebalanceConsumers) {
+                        rebalanceConsumer.sendRequest(timeoutMs, RebalanceKafkaConsumer.ConsumerRequest.POLL, );
+                    }*/
+                }
 
                 final long metadataEnd;
                 if (includeMetadataInTimeout) {

@@ -363,17 +363,6 @@ public class ConsumerCoordinator extends AbstractCoordinator {
         return true;
     }
 
-    @Override
-    public boolean ensureActiveGroup(final long timeoutMs) {
-        if (rebalanceInProgress.get()) {
-            //fetch start offset
-            //fetch end offset (from which the consumer will start polling)
-            //create new RebalanceConsumer
-            rebalanceInProgress.compareAndSet(true, false);
-        }
-        return ensureActiveGroup(timeoutMs, time.milliseconds());
-    }
-
     private long remainingTimeAtLeastZero(final long timeoutMs, final long elapsed) {
         return Math.max(0, timeoutMs - elapsed);
     }
