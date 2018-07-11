@@ -1003,7 +1003,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     if (partitions == null) {
                         String str = String.format("%sTopic not found: %s", logPrefix, topic);
                         log.error(str);
-                        throw new IllegalStateException(str);
+                        throw new org.apache.kafka.streams.errors.TopologyException(str);
                     }
 
                     final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
