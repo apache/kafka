@@ -573,8 +573,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
-    protected final OffsetBuffer offsetBuffer;
-    private final List<RebalanceKafkaConsumer<K, V>> rebalanceConsumers;
+    //private final RebalanceKafkaConsumer rebalanceConsumer;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
@@ -680,11 +679,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
-            if (this.useParallelRebalance) {
-                offsetBuffer = new OffsetBuffer();
-            } else {
-                offsetBuffer = null;
-            }
             this.time = Time.SYSTEM;
 
             Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
