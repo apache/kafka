@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.RebalanceKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.TaskCompletionCallback;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -572,6 +573,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
     private RebalanceKafkaConsumer rebalanceConsumer;
+    private RebalanceKafkaConsumer.RequestResult result;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
@@ -1170,6 +1172,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     }
 
+    private ConsumerRecords<K, V> checkRebalance(long timeoutMs) {
+        if (coordinator.isRebalancing() && useParallelRebalance) {
+            getStartAndEndOffsets();
+            if (rebalanceConsumer == null) {
+                rebalanceConsumer = new RebalanceKafkaConsumer(configs, startOffsets, endOffsets);
+            } else {
+                rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
+            }
+        }
+
+        if (coordinator.isRebalancing()) {
+            // for now, just get the implementation done, don't worry about test results
+            rebalanceConsumer.sendRequest(Duration.ofMillis(timeoutMs),
+                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                    null,
+                    new DefaultTaskCompletionCallback());
+            return (ConsumerRecords<K, V>) result.value;
+        }
+        return null;
+    }
+
     private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
@@ -1179,17 +1202,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
+            checkRebalance(timeoutMs);
+
             // poll for new data until the timeout expires
             long elapsedTime = 0L;
             do {
 
                 client.maybeTriggerWakeup();
-
-                if (coordinator.isRebalancing()) {
-                    getStartAndEndOffsets();
-                    rebalanceConsumer = new RebalanceKafkaConsumer(this.configs, startOffsets, endOffsets);
-                    new Thread(rebalanceConsumer).start();
-                }
 
                 final long metadataEnd;
                 if (includeMetadataInTimeout) {
@@ -2252,4 +2271,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
+    private class DefaultTaskCompletionCallback extends TaskCompletionCallback {
+        @Override
+        public void onTaskComplete(RebalanceKafkaConsumer.RequestResult returnValue) {
+            result = returnValue;
+        }
+    }
 }

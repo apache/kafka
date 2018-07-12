@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayList;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collection;
@@ -34,8 +35,11 @@ import java.util.HashSet;
  * Runnable or extends Thread: the user spawns the process, while Kafka internals spawns this one.)
  */
 public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runnable, Closeable {
-    private final Map<TopicPartition, Long> endOffsets;
-    private final Set<TopicPartition> unfinished;
+    private Map<TopicPartition, Long> endOffsets;
+    private Set<TopicPartition> unfinished;
+    // these offset ranges neds to be checkpointed somewhere, right now, this is not tenable
+    private final ArrayList<Map<TopicPartition, Long>> incomingStartOffsets;
+    private final ArrayList<Map<TopicPartition, Long>> incomingEndOffsets;
     private volatile ConsumerRequest request;
     private RequestResult result;
     private volatile Duration waitTime;
@@ -59,6 +63,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.inputArgument = null;
         this.callback = null;
         this.shouldClose = false;
+        this.incomingStartOffsets = new ArrayList<>();
+        this.incomingEndOffsets = new ArrayList<>();
     }
 
     public RequestResult getResult() {
@@ -75,14 +81,39 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.callback = callback;
     }
 
-    public Set<TopicPartition> unfinishedPartitions() {
-        return unfinished;
+    private void alterSubscription(Set<TopicPartition> newSubscription) {
+        if (endOffsets.keySet().containsAll(newSubscription)) {
+            newSubscription.removeAll(endOffsets.keySet());
+        } else {
+            super.unsubscribe();
+        }
+        final HashSet<String> topics = new HashSet<>(newSubscription.size());
+        for (TopicPartition partition : newSubscription) {
+            topics.add(partition.topic());
+        }
+        super.subscribe(topics);
+    }
+
+    private void setNewOffsets(Map<TopicPartition, Long> startOffsets,
+                              Map<TopicPartition, Long> endOffsets) {
+        alterSubscription(startOffsets.keySet());
+        for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+            super.seek(entry.getKey(), entry.getValue());
+        }
+        this.endOffsets = endOffsets;
+        this.unfinished = startOffsets.keySet();
+    }
+
+    public void addNewOffsets(Map<TopicPartition, Long> startOffsets,
+                              Map<TopicPartition, Long> endOffsets) {
+        incomingStartOffsets.add(startOffsets);
+        incomingEndOffsets.add(endOffsets);
     }
 
     private Set<TopicPartition> findUnfinished() {
         final HashSet<TopicPartition> stillUnfinished = new HashSet<>();
         for (TopicPartition partition : unfinished) {
-            if (position(partition) == endOffsets.get(partition)) {
+            if (position(partition) >= endOffsets.get(partition)) {
                 continue;
             }
             stillUnfinished.add(partition);
@@ -92,7 +123,13 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     }
 
     public boolean terminated() {
-        return findUnfinished().size() == 0;
+        if (findUnfinished().size() == 0 && incomingStartOffsets.size() == 0) {
+            return true;
+        }
+        setNewOffsets(incomingStartOffsets.get(0), incomingEndOffsets.get(0));
+        incomingStartOffsets.remove(incomingStartOffsets.get(0));
+        incomingEndOffsets.remove(incomingEndOffsets.get(0));
+        return false;
     }
 
     @Override
@@ -141,7 +178,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 default:
                     continue;
             }
-            callback.onTaskCompete(result);
+            callback.onTaskComplete(result);
             request = null;
         }
     }
@@ -162,7 +199,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                                   RESUME }
 
     public class RequestResult<T> {
-        final T value;
+        public final T value;
 
         RequestResult(T value) {
             this.value = value;
@@ -175,12 +212,5 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         InputArgument(T value) {
             this.value = value;
         }
-    }
-
-    public abstract class TaskCompletionCallback {
-        /**
-         * Can be defined by methods of KafkaConsumer to suit their purposes.
-         */
-        public abstract void onTaskCompete(RequestResult result);
     }
 }
