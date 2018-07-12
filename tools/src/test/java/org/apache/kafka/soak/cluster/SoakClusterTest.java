@@ -39,16 +39,16 @@ public class SoakClusterTest {
     private MiniSoakCluster createMiniSoakCluster() throws Exception {
         MiniSoakCluster.Builder builder = new MiniSoakCluster.Builder();
         builder.addRole("broker",
-            new BrokerRole(Collections.emptyMap(), ""),
+            new BrokerRole(0, Collections.emptyMap(), ""),
             "node0", "node1", "node2");
         builder.addRole("zookeeper",
-            new ZooKeeperRole(),
+            new ZooKeeperRole(0),
             "node3");
         builder.addRole("trogdorAgentRole",
-            new TrogdorAgentRole(),
+            new TrogdorAgentRole(0),
             "node0", "node1", "node2");
         builder.addRole("trogdorCoordinatorRole",
-            new TrogdorCoordinatorRole(),
+            new TrogdorCoordinatorRole(0),
             "node3");
         return builder.build();
     }

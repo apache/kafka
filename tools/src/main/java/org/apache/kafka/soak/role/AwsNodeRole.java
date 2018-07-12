@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class AwsNodeRole implements Role {
+    private final int initialDelayMs;
+
     /**
      * Configures the AWS image ID to use.
      */
@@ -81,7 +83,8 @@ public class AwsNodeRole implements Role {
     private String instanceId;
 
     @JsonCreator
-    public AwsNodeRole(@JsonProperty("imageId") String imageId,
+    public AwsNodeRole(@JsonProperty("initialDelayMs") int initialDelayMs,
+                       @JsonProperty("imageId") String imageId,
                        @JsonProperty("instanceType") String instanceType,
                        @JsonProperty("sshIdentityFile") String sshIdentityFile,
                        @JsonProperty("sshUser") String sshUser,
@@ -90,6 +93,7 @@ public class AwsNodeRole implements Role {
                        @JsonProperty("privateDns") String privateDns,
                        @JsonProperty("publicDns") String publicDns,
                        @JsonProperty("instanceId") String instanceId) {
+        this.initialDelayMs = initialDelayMs;
         this.imageId = imageId == null ? "" : imageId;
         this.instanceType = instanceType == null ? "" : instanceType;
         this.sshIdentityFile = sshIdentityFile == null ? "" : sshIdentityFile;
@@ -99,6 +103,12 @@ public class AwsNodeRole implements Role {
         this.privateDns = privateDns == null ? "" : privateDns;
         this.publicDns = publicDns == null ? "" : publicDns;
         this.instanceId = instanceId == null ? "" : instanceId;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @JsonProperty

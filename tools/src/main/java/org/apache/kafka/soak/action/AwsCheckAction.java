@@ -36,7 +36,8 @@ public final class AwsCheckAction extends Action {
     public AwsCheckAction(String scope, AwsNodeRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
         this.role = role;
     }
 

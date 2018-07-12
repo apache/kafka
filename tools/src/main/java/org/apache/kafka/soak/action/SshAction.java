@@ -38,7 +38,8 @@ public final class SshAction extends Action {
     public SshAction(String scope, Collection<String> command) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            0);
         this.command = Collections.unmodifiableList(new ArrayList<>(command));
     }
 

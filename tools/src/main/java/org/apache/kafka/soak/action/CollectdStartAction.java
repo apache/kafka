@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
+import org.apache.kafka.soak.role.CollectdRole;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -39,10 +40,11 @@ import static org.apache.kafka.soak.action.ActionPaths.COLLECTD_ROOT;
 public final class CollectdStartAction extends Action {
     public final static String TYPE = "collectdStart";
 
-    public CollectdStartAction(String scope) {
+    public CollectdStartAction(String scope, CollectdRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[]{},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

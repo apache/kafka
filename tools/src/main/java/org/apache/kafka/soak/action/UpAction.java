@@ -33,7 +33,8 @@ public final class UpAction extends Action {
                 InitAction.TYPE,
                 SetupAction.TYPE,
                 StartAction.TYPE
-            });
+            },
+            0);
     }
 
     @Override

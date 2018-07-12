@@ -28,10 +28,11 @@ import org.apache.kafka.soak.role.JmxDumperRole;
 public final class JmxDumperStopAction extends Action {
     public final static String TYPE = "jmxStop";
 
-    public JmxDumperStopAction(String scope) {
+    public JmxDumperStopAction(String scope, JmxDumperRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

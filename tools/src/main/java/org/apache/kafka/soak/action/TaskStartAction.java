@@ -23,6 +23,7 @@ import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.JsonTransformer;
 import org.apache.kafka.soak.common.SoakUtil;
 import org.apache.kafka.soak.common.SoakUtil.CoordinatorFunction;
+import org.apache.kafka.soak.role.TaskRole;
 import org.apache.kafka.soak.tool.SoakTool;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
@@ -37,14 +38,15 @@ public class TaskStartAction extends Action  {
 
     private final Map<String, TaskSpec> taskSpecs;
 
-    public TaskStartAction(String scope, Map<String, TaskSpec> taskSpecs) {
+    public TaskStartAction(String scope, TaskRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
                 new TargetId(DaemonStartAction.TYPE),
                 new TargetId(TrogdorDaemonType.COORDINATOR.startType())
             },
-            new String[] {});
-        this.taskSpecs = taskSpecs;
+            new String[] {},
+            role.initialDelayMs());
+        this.taskSpecs = role.taskSpecs();
     }
 
     @Override

@@ -36,7 +36,8 @@ public final class SaveLogsAction extends Action {
             new TargetId[] {
                 new TargetId(DaemonStopAction.TYPE, scope)
             },
-            new String[] {});
+            new String[] {},
+            0);
     }
 
     @Override

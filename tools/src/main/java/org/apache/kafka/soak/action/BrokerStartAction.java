@@ -51,7 +51,8 @@ public final class BrokerStartAction extends Action {
             new TargetId[]{
                 new TargetId(ZooKeeperStartAction.TYPE)
             },
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
         this.role = Objects.requireNonNull(role);
     }
 

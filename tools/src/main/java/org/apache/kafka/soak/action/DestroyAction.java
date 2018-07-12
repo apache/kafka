@@ -31,6 +31,7 @@ public final class DestroyAction extends Action {
             },
             new String[] {
                 AwsDestroyAction.TYPE
-            });
+            },
+            0);
     }
 }

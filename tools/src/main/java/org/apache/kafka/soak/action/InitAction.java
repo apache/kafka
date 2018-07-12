@@ -28,6 +28,7 @@ public final class InitAction extends Action {
             new TargetId[] {},
             new String[] {
                 AwsInitAction.TYPE
-            });
+            },
+            0);
     }
 }

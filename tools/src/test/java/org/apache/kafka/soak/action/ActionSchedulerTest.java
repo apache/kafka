@@ -84,7 +84,8 @@ public class ActionSchedulerTest {
                 schedulerBuilder.addAction(new Action(
                     new ActionId("testAction", nodeName),
                         new TargetId[0],
-                        new String[0]) {
+                        new String[0],
+                        0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         numRun.incrementAndGet();
@@ -115,7 +116,8 @@ public class ActionSchedulerTest {
             schedulerBuilder.addAction(new Action(
                     new ActionId("foo", "node0"),
                     new TargetId[0],
-                    new String[0]) {
+                    new String[0],
+                    0) {
                 @Override
                 public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                     AtomicInteger val = vals.get(node.nodeName());
@@ -131,7 +133,8 @@ public class ActionSchedulerTest {
                     new String[] {
                         "baz",
                         "quux"
-                    }) {
+                    },
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         AtomicInteger val = vals.get(node.nodeName());
@@ -141,7 +144,8 @@ public class ActionSchedulerTest {
                 schedulerBuilder.addAction(new Action(
                     new ActionId("baz", nodeName),
                     new TargetId[] {},
-                    new String[] {}) {
+                    new String[] {},
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         AtomicInteger val = vals.get(node.nodeName());
@@ -153,7 +157,8 @@ public class ActionSchedulerTest {
                     new TargetId[] {
                         new TargetId("baz", nodeName)
                     },
-                    new String[] {}) {
+                    new String[] {},
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         AtomicInteger val = vals.get(node.nodeName());
@@ -184,7 +189,8 @@ public class ActionSchedulerTest {
             schedulerBuilder.addAction(new Action(
                 new ActionId("baz", "node1"),
                 new TargetId[0],
-                new String[0]) {
+                new String[0],
+                0) {
                 @Override
                 public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                     count.incrementAndGet();
@@ -197,7 +203,8 @@ public class ActionSchedulerTest {
                     new String[] {
                         "bar",
                         "quux"
-                    }) {
+                    },
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         count.incrementAndGet();
@@ -206,7 +213,8 @@ public class ActionSchedulerTest {
                 schedulerBuilder.addAction(new Action(
                     new ActionId("quux", nodeName),
                     new TargetId[0],
-                    new String[] {}) {
+                    new String[] {},
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         count.incrementAndGet();
@@ -218,7 +226,8 @@ public class ActionSchedulerTest {
                         new TargetId("quux"),
                         new TargetId("baz", "node1")
                     },
-                    new String[0]) {
+                    new String[0],
+                    0) {
                     @Override
                     public void call(SoakCluster cluster, SoakNode node) throws Throwable {
                         assertEquals(7, count.get());

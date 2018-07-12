@@ -20,6 +20,7 @@ package org.apache.kafka.soak.action;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
+import org.apache.kafka.soak.role.CollectdRole;
 
 import static org.apache.kafka.soak.action.ActionPaths.COLLECTD;
 
@@ -29,10 +30,11 @@ import static org.apache.kafka.soak.action.ActionPaths.COLLECTD;
 public final class CollectdStatusAction extends Action {
     public final static String TYPE = "collectdStatus";
 
-    public CollectdStatusAction(String scope) {
+    public CollectdStatusAction(String scope, CollectdRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

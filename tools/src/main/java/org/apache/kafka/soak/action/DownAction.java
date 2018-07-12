@@ -33,7 +33,8 @@ public final class DownAction extends Action {
                 StopAction.TYPE,
                 SaveLogsAction.TYPE,
                 DestroyAction.TYPE
-            });
+            },
+            0);
     }
 
     @Override

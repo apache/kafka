@@ -52,10 +52,10 @@ public class SoakClusterSpecTest {
             Arrays.asList(new String[] {"zooKeeper", "trogdorCoordinator"}));
         map.put("node3", specB);
         Map<String, Role> roles = new HashMap<>();
-        roles.put("broker", new BrokerRole(Collections.emptyMap(), ""));
-        roles.put("trogdorAgent", new TrogdorAgentRole());
-        roles.put("zooKeeper", new ZooKeeperRole());
-        roles.put("trogdorCoordinator", new TrogdorCoordinatorRole());
+        roles.put("broker", new BrokerRole(0, Collections.emptyMap(), ""));
+        roles.put("trogdorAgent", new TrogdorAgentRole(0));
+        roles.put("zooKeeper", new ZooKeeperRole(0));
+        roles.put("trogdorCoordinator", new TrogdorCoordinatorRole(0));
         return new SoakClusterSpec(map, roles);
     }
 

@@ -35,6 +35,7 @@ public final class DaemonStopAction extends Action {
                 TrogdorDaemonType.COORDINATOR.stopType(),
                 ZooKeeperStopAction.TYPE,
                 JmxDumperStopAction.TYPE
-            });
+            },
+            0);
     }
 }

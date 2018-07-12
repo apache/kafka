@@ -19,6 +19,7 @@ package org.apache.kafka.soak.action;
 
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
+import org.apache.kafka.soak.role.UbuntuNodeRole;
 
 /**
  * Install some necessary components on Ubuntu.
@@ -26,10 +27,11 @@ import org.apache.kafka.soak.cluster.SoakNode;
 public final class UbuntuSetupAction extends Action {
     public final static String TYPE = "ubuntuSetup";
 
-    public UbuntuSetupAction(String scope) {
+    public UbuntuSetupAction(String scope, UbuntuNodeRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

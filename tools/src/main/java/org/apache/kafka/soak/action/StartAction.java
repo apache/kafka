@@ -31,6 +31,7 @@ public final class StartAction extends Action {
             new String[] {
                 DaemonStartAction.TYPE,
                 TaskStartAction.TYPE
-            });
+            },
+            0);
     }
 }

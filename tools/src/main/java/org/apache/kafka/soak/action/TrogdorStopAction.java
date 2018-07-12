@@ -27,10 +27,11 @@ import org.apache.kafka.soak.common.SoakUtil;
 public final class TrogdorStopAction extends Action {
     private final TrogdorDaemonType daemonType;
 
-    public TrogdorStopAction(TrogdorDaemonType daemonType, String nodeName) {
+    public TrogdorStopAction(TrogdorDaemonType daemonType, String nodeName, int initialDelayMs) {
         super(new ActionId(daemonType.stopType(), nodeName),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            initialDelayMs);
         this.daemonType = daemonType;
     }
 

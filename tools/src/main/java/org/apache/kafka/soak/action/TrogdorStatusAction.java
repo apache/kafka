@@ -24,10 +24,11 @@ import org.apache.kafka.soak.common.SoakUtil;
 public class TrogdorStatusAction extends Action {
     private final TrogdorDaemonType daemonType;
 
-    public TrogdorStatusAction(TrogdorDaemonType daemonType, String nodeName) {
+    public TrogdorStatusAction(TrogdorDaemonType daemonType, String nodeName, int initialDelayMs) {
         super(new ActionId(daemonType.statusType(), nodeName),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            initialDelayMs);
         this.daemonType = daemonType;
     }
 

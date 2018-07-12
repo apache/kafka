@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -209,10 +210,17 @@ public final class ActionScheduler implements AutoCloseable {
                         Utils.join(actionData.comesAfter, ", "), actionId);
                     return;
                 }
-                log.debug("Scheduling {}", actionId);
                 actionData.state = ActionState.EXECUTING;
-                nodeExecutors.get(actionId.scope()).submit(
-                    new ExecuteAction(actionData.action, cluster.nodes().get(actionId.scope())));
+                if (actionData.action.initialDelayMs() > 0) {
+                    log.debug("Scheduling {} in {} ms", actionId, actionData.action.initialDelayMs());
+                    nodeExecutors.get(actionId.scope()).schedule(
+                        new ExecuteAction(actionData.action, cluster.nodes().get(actionId.scope())),
+                        actionData.action.initialDelayMs(), TimeUnit.MILLISECONDS);
+                } else {
+                    log.debug("Scheduling {}", actionId);
+                    nodeExecutors.get(actionId.scope()).submit(
+                        new ExecuteAction(actionData.action, cluster.nodes().get(actionId.scope())));
+                }
             } catch (Throwable throwable) {
                 cluster.clusterLog().error("** MaybeSchedule got fatal exception", throwable);
                 shutdownFuture.completeExceptionally(throwable);
@@ -393,7 +401,7 @@ public final class ActionScheduler implements AutoCloseable {
      * A map from node names to executor services.
      * Node executors run actions in separate threads.
      */
-    private final Map<String, ExecutorService> nodeExecutors;
+    private final Map<String, ScheduledExecutorService> nodeExecutors;
 
     private ActionScheduler(SoakCluster cluster,
                             Set<ActionId> targetActions,

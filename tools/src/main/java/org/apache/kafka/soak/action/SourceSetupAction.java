@@ -31,7 +31,8 @@ public final class SourceSetupAction extends Action {
             new TargetId[] {
                 new TargetId(LinuxSetupAction.TYPE, scope)
             },
-            new String[] {});
+            new String[] {},
+            0);
     }
 
     @Override

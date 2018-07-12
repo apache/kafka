@@ -32,24 +32,34 @@ import java.util.Collections;
 public class JmxDumperRole implements Role {
     public static final String CLASS_NAME = "org.apache.kafka.jmx.JmxDumper";
 
-    private final JmxDumpersConfig config;
+    private final int initialDelayMs;
+
+    private final JmxDumpersConfig conf;
 
     @JsonCreator
-    public JmxDumperRole(@JsonProperty("conf") JmxDumpersConfig config) {
-        this.config = (config == null) ? new JmxDumpersConfig(Collections.emptyMap()) : config;
+    public JmxDumperRole(@JsonProperty("initialDelayMs") int initialDelayMs,
+                         @JsonProperty("conf") JmxDumpersConfig conf) {
+        this.initialDelayMs = initialDelayMs;
+        this.conf = (conf == null) ? new JmxDumpersConfig(Collections.emptyMap()) : conf;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @JsonProperty
-    public JmxDumpersConfig config() {
-        return config;
+    public JmxDumpersConfig conf() {
+        return conf;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new JmxDumperStartAction(nodeName, config));
-        actions.add(new JmxDumperStatusAction(nodeName));
-        actions.add(new JmxDumperStopAction(nodeName));
+        actions.add(new JmxDumperStartAction(nodeName, this));
+        actions.add(new JmxDumperStatusAction(nodeName, this));
+        actions.add(new JmxDumperStopAction(nodeName, this));
         return actions;
     }
 };

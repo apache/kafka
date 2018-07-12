@@ -18,6 +18,7 @@
 package org.apache.kafka.soak.role;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.soak.action.Action;
 import org.apache.kafka.soak.action.TrogdorDaemonType;
 import org.apache.kafka.soak.action.TrogdorStartAction;
@@ -28,16 +29,28 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class TrogdorAgentRole implements Role {
+    private final int initialDelayMs;
+
     @JsonCreator
-    public TrogdorAgentRole() {
+    public TrogdorAgentRole(@JsonProperty("initialDelayMs") int initialDelayMs) {
+        this.initialDelayMs = initialDelayMs;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new TrogdorStartAction(TrogdorDaemonType.AGENT, nodeName));
-        actions.add(new TrogdorStatusAction(TrogdorDaemonType.AGENT, nodeName));
-        actions.add(new TrogdorStopAction(TrogdorDaemonType.AGENT, nodeName));
+        actions.add(new TrogdorStartAction(TrogdorDaemonType.AGENT,
+            nodeName, initialDelayMs));
+        actions.add(new TrogdorStatusAction(TrogdorDaemonType.AGENT,
+            nodeName, initialDelayMs));
+        actions.add(new TrogdorStopAction(TrogdorDaemonType.AGENT,
+            nodeName, initialDelayMs));
         return actions;
     }
 };

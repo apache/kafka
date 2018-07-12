@@ -28,12 +28,13 @@ import org.apache.kafka.soak.role.ZooKeeperRole;
 public final class ZooKeeperStopAction extends Action {
     public final static String TYPE = "zooKeeperStop";
 
-    public ZooKeeperStopAction(String scope) {
+    public ZooKeeperStopAction(String scope, ZooKeeperRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
                 new TargetId(BrokerStopAction.TYPE)
             },
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

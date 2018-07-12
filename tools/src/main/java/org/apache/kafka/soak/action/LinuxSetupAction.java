@@ -28,6 +28,7 @@ public final class LinuxSetupAction extends Action {
             new TargetId[] {},
             new String[] {
                 UbuntuSetupAction.TYPE
-            });
+            },
+            0);
     }
 };

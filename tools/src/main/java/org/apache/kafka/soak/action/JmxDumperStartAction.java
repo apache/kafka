@@ -38,20 +38,21 @@ import static org.apache.kafka.soak.action.ActionPaths.KAFKA_RUN_CLASS;
 public final class JmxDumperStartAction extends Action {
     public final static String TYPE = "jmxStart";
 
-    private final JmxDumpersConfig config;
+    private final JmxDumpersConfig conf;
 
-    public JmxDumperStartAction(String scope, JmxDumpersConfig config) {
+    public JmxDumperStartAction(String scope, JmxDumperRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[]{},
-            new String[] {});
-        this.config = config;
+            new String[] {},
+            role.initialDelayMs());
+        this.conf = role.conf();
     }
 
     @Override
     public void call(final SoakCluster cluster, final SoakNode node) throws Throwable {
         File configFile = null;
         try {
-            configFile = writeJmxDumperConfig(cluster, node);
+            configFile = writeJmxDumperConf(cluster, node);
             SoakUtil.killJavaProcess(cluster, node, JmxDumperRole.CLASS_NAME, true);
             cluster.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
             cluster.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
@@ -69,10 +70,10 @@ public final class JmxDumperStartAction extends Action {
             "sudo", "chown", "-R", "`whoami`", JMX_DUMPER_ROOT, JMX_DUMPER_LOGS};
     }
 
-    private File writeJmxDumperConfig(SoakCluster cluster, SoakNode node) throws IOException {
+    private File writeJmxDumperConf(SoakCluster cluster, SoakNode node) throws IOException {
         File file = new File(cluster.env().outputDirectory(),
                 String.format("jmx-dumper-%d.conf", node.nodeIndex()));
-        SoakTool.JSON_SERDE.writeValue(file, config);
+        SoakTool.JSON_SERDE.writeValue(file, conf);
         return file;
     }
 

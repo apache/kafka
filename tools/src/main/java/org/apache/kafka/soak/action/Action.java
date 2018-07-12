@@ -44,12 +44,18 @@ public abstract class Action {
      */
     private final Set<String> contains;
 
-    public Action(ActionId id, TargetId[] comesAfter, String[] contains) {
+    /**
+     * The initial delay in milliseconds to use.
+     */
+    private final int initialDelayMs;
+
+    public Action(ActionId id, TargetId[] comesAfter, String[] contains, int initialDelayMs) {
         this.id = id;
         this.comesAfter = Collections.
             unmodifiableSet(new HashSet<>(Arrays.asList(comesAfter)));
         this.contains = Collections.
             unmodifiableSet(new HashSet<>(Arrays.asList(contains)));
+        this.initialDelayMs = initialDelayMs;
     }
 
     /**
@@ -73,6 +79,13 @@ public abstract class Action {
      */
     public Set<String> contains() {
         return contains;
+    }
+
+    /**
+     * Get the initial delay in milliseconds.
+     */
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     /**

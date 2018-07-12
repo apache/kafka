@@ -28,10 +28,11 @@ import org.apache.kafka.soak.role.BrokerRole;
 public final class BrokerStatusAction extends Action {
     public final static String TYPE = "brokerStatus";
 
-    public BrokerStatusAction(String scope) {
+    public BrokerStatusAction(String scope, BrokerRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

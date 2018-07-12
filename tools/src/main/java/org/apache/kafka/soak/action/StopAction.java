@@ -29,6 +29,7 @@ public final class StopAction extends Action {
             new String[] {
                 TaskStopAction.TYPE,
                 DaemonStopAction.TYPE
-            });
+            },
+            0);
     }
 }

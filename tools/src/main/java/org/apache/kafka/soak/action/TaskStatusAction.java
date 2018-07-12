@@ -23,6 +23,7 @@ import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
 import org.apache.kafka.soak.common.SoakUtil.CoordinatorFunction;
+import org.apache.kafka.soak.role.TaskRole;
 import org.apache.kafka.soak.tool.SoakReturnCode;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.rest.TaskDone;
@@ -39,14 +40,15 @@ public class TaskStatusAction extends Action  {
 
     private final Collection<String> taskIds;
 
-    public TaskStatusAction(String scope, Collection<String> taskIds) {
+    public TaskStatusAction(String scope, TaskRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
                 new TargetId(DaemonStatusAction.TYPE)
             },
-            new String[] {});
-        this.taskIds = Collections.unmodifiableCollection(taskIds == null ?
-            new ArrayList<String>() : taskIds);
+            new String[] {},
+            role.initialDelayMs());
+        this.taskIds = Collections.unmodifiableCollection(
+            new ArrayList<>(role.taskSpecs().keySet()));
     }
 
     @Override

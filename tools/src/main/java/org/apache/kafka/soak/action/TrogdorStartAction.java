@@ -36,10 +36,11 @@ public class TrogdorStartAction extends Action  {
     private final TrogdorDaemonType daemonType;
 
     public TrogdorStartAction(TrogdorDaemonType daemonType,
-            String scope) {
+            String scope, int initialDelayMs) {
         super(new ActionId(daemonType.startType(), scope),
                 new TargetId[]{},
-                new String[]{});
+                new String[]{},
+                initialDelayMs);
         this.daemonType = daemonType;
     }
 

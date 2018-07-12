@@ -18,6 +18,7 @@
 package org.apache.kafka.soak.role;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.soak.action.Action;
 import org.apache.kafka.soak.action.UbuntuSetupAction;
 
@@ -25,14 +26,23 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class UbuntuNodeRole implements Role {
+    private final int initialDelayMs;
+
     @JsonCreator
-    public UbuntuNodeRole() {
+    public UbuntuNodeRole(@JsonProperty("initialDelayMs") int initialDelayMs) {
+        this.initialDelayMs = initialDelayMs;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new UbuntuSetupAction(nodeName));
+        actions.add(new UbuntuSetupAction(nodeName, this));
         return actions;
     }
 };

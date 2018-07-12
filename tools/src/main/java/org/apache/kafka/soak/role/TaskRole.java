@@ -33,11 +33,21 @@ import java.util.TreeMap;
  * A role which runs tasks inside Trogdor.
  */
 public class TaskRole implements Role {
+    private final int initialDelayMs;
+
     private final TreeMap<String, TaskSpec> taskSpecs;
 
     @JsonCreator
-    public TaskRole(@JsonProperty("taskSpecs") TreeMap<String, TaskSpec> taskSpecs) {
+    public TaskRole(@JsonProperty("initialDelayMs") int initialDelayMs,
+                    @JsonProperty("taskSpecs") TreeMap<String, TaskSpec> taskSpecs) {
+        this.initialDelayMs = initialDelayMs;
         this.taskSpecs = taskSpecs == null ? new TreeMap<String, TaskSpec>() : taskSpecs;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @JsonProperty
@@ -48,9 +58,9 @@ public class TaskRole implements Role {
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new TaskStartAction(nodeName, taskSpecs));
-        actions.add(new TaskStatusAction(nodeName, taskSpecs.keySet()));
-        actions.add(new TaskStopAction(nodeName, taskSpecs.keySet()));
+        actions.add(new TaskStartAction(nodeName, this));
+        actions.add(new TaskStatusAction(nodeName, this));
+        actions.add(new TaskStopAction(nodeName, this));
         return actions;
     }
 }

@@ -18,6 +18,7 @@
 package org.apache.kafka.soak.role;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.soak.action.Action;
 import org.apache.kafka.soak.action.ZooKeeperStartAction;
 import org.apache.kafka.soak.action.ZooKeeperStatusAction;
@@ -30,16 +31,25 @@ public class ZooKeeperRole implements Role {
     public static final String ZOOKEEPER_CLASS_NAME =
         "org.apache.zookeeper.server.quorum.QuorumPeerMain";
 
+    private final int initialDelayMs;
+
     @JsonCreator
-    public ZooKeeperRole() {
+    public ZooKeeperRole(@JsonProperty("initialDelayMs") int initialDelayMs) {
+        this.initialDelayMs = initialDelayMs;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new ZooKeeperStartAction(nodeName));
-        actions.add(new ZooKeeperStatusAction(nodeName));
-        actions.add(new ZooKeeperStopAction(nodeName));
+        actions.add(new ZooKeeperStartAction(nodeName, this));
+        actions.add(new ZooKeeperStatusAction(nodeName, this));
+        actions.add(new ZooKeeperStopAction(nodeName, this));
         return actions;
     }
 };

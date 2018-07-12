@@ -75,7 +75,8 @@ public class MiniSoakCluster implements AutoCloseable {
         public AwsNodeRole newAwsRoleWithInstanceId() throws Exception {
             String instanceId = cloud.newRunner().run();
             Cloud.InstanceDescription description = cloud.describeInstance(instanceId);
-            return new AwsNodeRole("exampleImageId",
+            return new AwsNodeRole(0,
+                "exampleImageId",
                 "exampleInstanceType",
                 "",
                 "",

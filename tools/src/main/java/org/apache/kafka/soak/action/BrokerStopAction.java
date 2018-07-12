@@ -28,12 +28,13 @@ import org.apache.kafka.soak.role.BrokerRole;
 public final class BrokerStopAction extends Action {
     public final static String TYPE = "brokerStop";
 
-    public BrokerStopAction(String scope) {
+    public BrokerStopAction(String scope, BrokerRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
                 new TargetId(JmxDumperStopAction.TYPE, scope)
             },
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

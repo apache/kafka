@@ -33,6 +33,7 @@ public final class DaemonStartAction extends Action {
                 TrogdorDaemonType.COORDINATOR.startType(),
                 TrogdorDaemonType.AGENT.startType(),
                 JmxDumperStartAction.TYPE
-            });
+            },
+            0);
     }
 }

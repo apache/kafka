@@ -20,6 +20,7 @@ package org.apache.kafka.soak.action;
 import org.apache.kafka.soak.cluster.SoakCluster;
 import org.apache.kafka.soak.cluster.SoakNode;
 import org.apache.kafka.soak.common.SoakUtil;
+import org.apache.kafka.soak.role.TaskRole;
 import org.apache.kafka.soak.tool.SoakReturnCode;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
@@ -36,11 +37,12 @@ public class TaskStopAction extends Action  {
 
     private final Collection<String> taskIds;
 
-    public TaskStopAction(String nodeName, Collection<String> taskIds) {
+    public TaskStopAction(String nodeName, TaskRole role) {
         super(new ActionId(TYPE, nodeName),
             new TargetId[] {},
-            new String[] {});
-        this.taskIds = taskIds;
+            new String[] {},
+            role.initialDelayMs());
+        this.taskIds = role.taskSpecs().keySet();
     }
 
     @Override

@@ -29,6 +29,7 @@ public final class StatusAction extends Action {
             new String[] {
                 DaemonStatusAction.TYPE,
                 TaskStatusAction.TYPE
-            });
+            },
+            0);
     }
 }

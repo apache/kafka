@@ -33,6 +33,7 @@ public final class DaemonStatusAction extends Action {
                 TrogdorDaemonType.COORDINATOR.statusType(),
                 TrogdorDaemonType.AGENT.statusType(),
                 JmxDumperStatusAction.TYPE
-            });
+            },
+            0);
     }
 }

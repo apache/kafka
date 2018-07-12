@@ -31,6 +31,7 @@ public final class SetupAction extends Action {
             new String[] {
                 SourceSetupAction.TYPE,
                 LinuxSetupAction.TYPE
-            });
+            },
+            0);
     }
 }

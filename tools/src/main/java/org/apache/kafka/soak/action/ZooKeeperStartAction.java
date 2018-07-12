@@ -37,10 +37,11 @@ import static org.apache.kafka.soak.action.ActionPaths.ZK_OPLOGS;
 public class ZooKeeperStartAction extends Action  {
     public final static String TYPE = "zooKeeperStart";
 
-    public ZooKeeperStartAction(String scope) {
+    public ZooKeeperStartAction(String scope, ZooKeeperRole role) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {},
-            new String[] {});
+            new String[] {},
+            role.initialDelayMs());
     }
 
     @Override

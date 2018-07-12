@@ -18,6 +18,7 @@
 package org.apache.kafka.soak.role;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.soak.action.Action;
 import org.apache.kafka.soak.action.CollectdStartAction;
 import org.apache.kafka.soak.action.CollectdStatusAction;
@@ -27,16 +28,25 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class CollectdRole implements Role {
+    private final int initialDelayMs;
+
     @JsonCreator
-    public CollectdRole() {
+    public CollectdRole(@JsonProperty("initialDelayMs") int initialDelayMs) {
+        this.initialDelayMs = initialDelayMs;
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @Override
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
-        actions.add(new CollectdStartAction(nodeName));
-        actions.add(new CollectdStatusAction(nodeName));
-        actions.add(new CollectdStopAction(nodeName));
+        actions.add(new CollectdStartAction(nodeName, this));
+        actions.add(new CollectdStatusAction(nodeName, this));
+        actions.add(new CollectdStopAction(nodeName, this));
         return actions;
     }
 };

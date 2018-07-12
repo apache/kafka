@@ -35,13 +35,17 @@ public class BrokerRole implements Role {
 
     private static final String DEFAULT_JVM_PERFORMANCE_OPTS = "-Xmx3g -Xms3g";
 
+    private final int initialDelayMs;
+
     private final Map<String, String> conf;
 
     private final String jvmOptions;
 
     @JsonCreator
-    public BrokerRole(@JsonProperty("conf") Map<String, String> conf,
+    public BrokerRole(@JsonProperty("initialDelayMs") int initialDelayMs,
+                      @JsonProperty("conf") Map<String, String> conf,
                       @JsonProperty("jvmOptions") String jvmOptions) {
+        this.initialDelayMs = initialDelayMs;
         this.conf = conf == null ? Collections.emptyMap() :
             Collections.unmodifiableMap(new HashMap<>(conf));
         if ((jvmOptions == null) || jvmOptions.isEmpty()) {
@@ -49,6 +53,12 @@ public class BrokerRole implements Role {
         } else {
             this.jvmOptions = jvmOptions;
         }
+    }
+
+    @Override
+    @JsonProperty
+    public int initialDelayMs() {
+        return initialDelayMs;
     }
 
     @JsonProperty
@@ -65,8 +75,8 @@ public class BrokerRole implements Role {
     public Collection<Action> createActions(String nodeName) {
         ArrayList<Action> actions = new ArrayList<>();
         actions.add(new BrokerStartAction(nodeName, this));
-        actions.add(new BrokerStatusAction(nodeName));
-        actions.add(new BrokerStopAction(nodeName));
+        actions.add(new BrokerStatusAction(nodeName, this));
+        actions.add(new BrokerStopAction(nodeName, this));
         return actions;
     }
 };
