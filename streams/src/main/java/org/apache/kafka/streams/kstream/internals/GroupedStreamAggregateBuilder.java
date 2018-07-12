@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNo
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
@@ -62,10 +62,10 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.streamsGraphNode = streamsGraphNode;
     }
 
-    <T> KTable<K, T> build(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
-                           final String functionName,
-                           final StoreBuilder<KeyValueStore<K, T>> storeBuilder,
-                           final boolean isQueryable) {
+    <KR, T> KTable<KR, T> build(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
+                                final String functionName,
+                                final StoreBuilder<? extends StateStore> storeBuilder,
+                                final boolean isQueryable) {
         final String aggFunctionName = builder.newProcessorName(functionName);
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder =
