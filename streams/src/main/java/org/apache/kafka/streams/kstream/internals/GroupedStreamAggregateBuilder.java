@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNo
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
@@ -38,26 +39,11 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
 
-    final Initializer<Long> countInitializer = new Initializer<Long>() {
-        @Override
-        public Long apply() {
-            return 0L;
-        }
-    };
+    final Initializer<Long> countInitializer = () -> 0L;
 
-    final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
-        @Override
-        public Long apply(K aggKey, V value, Long aggregate) {
-            return aggregate + 1;
-        }
-    };
+    final Aggregator<K, V, Long> countAggregator = (aggKey, value, aggregate) -> aggregate + 1;
 
-    final Initializer<V> reduceInitializer = new Initializer<V>() {
-        @Override
-        public V apply() {
-            return null;
-        }
-    };
+    final Initializer<V> reduceInitializer = () -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final Serde<K> keySerde,
@@ -78,11 +64,12 @@ class GroupedStreamAggregateBuilder<K, V> {
 
     <T> KTable<K, T> build(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
                            final String functionName,
-                           final StoreBuilder storeBuilder,
+                           final StoreBuilder<KeyValueStore<K, T>> storeBuilder,
                            final boolean isQueryable) {
         final String aggFunctionName = builder.newProcessorName(functionName);
 
-        OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder =
+            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
         final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
         builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
@@ -92,31 +79,34 @@ class GroupedStreamAggregateBuilder<K, V> {
         StreamsGraphNode parentNode = streamsGraphNode;
 
         if (!sourceName.equals(this.name)) {
-            StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
+            final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
             streamsGraphNode.addChildNode(repartitionNode);
             parentNode = repartitionNode;
         }
 
-        StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
+        final StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder =
+            StatefulProcessorNode.statefulProcessorNodeBuilder();
 
-        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
         statefulProcessorNodeBuilder
             .withProcessorParameters(processorParameters)
             .withNodeName(aggFunctionName)
             .withRepartitionRequired(repartitionRequired)
             .withStoreBuilder(storeBuilder);
 
-        StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
+        final StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
         parentNode.addChildNode(statefulProcessorNode);
 
-        return new KTableImpl<>(builder,
-                                aggFunctionName,
-                                aggregateSupplier,
-                                sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
-                                storeBuilder.name(),
-                                isQueryable,
-                                statefulProcessorNode);
+        return new KTableImpl<>(
+            builder,
+            aggFunctionName,
+            aggregateSupplier,
+            sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
+            storeBuilder.name(),
+            isQueryable,
+            statefulProcessorNode
+        );
     }
 
     /**
