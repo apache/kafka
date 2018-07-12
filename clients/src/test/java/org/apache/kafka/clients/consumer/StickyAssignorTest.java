@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import java.util.Set;
 import org.apache.kafka.clients.consumer.StickyAssignor.ConsumerUserData;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -822,6 +824,61 @@ public class StickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
+    }
+
+    @Test
+    public void testSchemaBackwardCompatibility() {
+        String topic = "topic";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        Map<String, Subscription> subscriptions = new HashMap<>();
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+        subscriptions.put(consumer3, new Subscription(topics(topic)));
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+        TopicPartition tp2 = new TopicPartition(topic, 2);
+
+        List<TopicPartition> c1partitions0 = partitions(tp0, tp2);
+        List<TopicPartition> c2partitions0 = partitions(tp1);
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c1partitions0, 1))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), serializeTopicPartitionAssignmentToOldSchema(c2partitions0)));
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> c1partitions = assignment.get(consumer1);
+        List<TopicPartition> c2partitions = assignment.get(consumer2);
+        List<TopicPartition> c3partitions = assignment.get(consumer3);
+
+        assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1 && c3partitions.size() == 1);
+        assertEquals(2, assignor.generation());
+        assertTrue(c1partitions0.containsAll(c1partitions));
+        assertTrue(c2partitions0.containsAll(c2partitions));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
+        Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
+        List<Struct> topicAssignments = new ArrayList<>();
+        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupDataByTopic(partitions).entrySet()) {
+            Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
+            topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(StickyAssignor.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        ByteBuffer buffer = ByteBuffer.allocate(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
+        StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
     }
 
     private String getTopicName(int i, int maxNum) {

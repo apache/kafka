@@ -186,14 +186,16 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
     // these schemas are used for preserving consumer's previously assigned partitions
     // list and sending it as user data to the leader during a rebalance
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "previous_assignment";
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
+    static final String TOPIC_PARTITIONS_KEY_NAME = "previous_assignment";
+    static final String TOPIC_KEY_NAME = "topic";
+    static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String GENERATION_KEY_NAME = "generation";
-    private static final Schema TOPIC_ASSIGNMENT = new Schema(
+    static final Schema TOPIC_ASSIGNMENT = new Schema(
             new Field(TOPIC_KEY_NAME, Type.STRING),
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
-    private static final Schema STICKY_ASSIGNOR_USER_DATA = new Schema(
+    static final Schema STICKY_ASSIGNOR_USER_DATA_V0 = new Schema(
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)));
+    private static final Schema STICKY_ASSIGNOR_USER_DATA_V1 = new Schema(
             new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)),
             new Field(GENERATION_KEY_NAME, Type.INT32));
 
@@ -790,7 +792,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     static ByteBuffer serializeTopicPartitionAssignment(ConsumerUserData consumerUserData) {
-        Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA);
+        Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(consumerUserData.partitions).entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
@@ -800,14 +802,27 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
         struct.set(GENERATION_KEY_NAME, consumerUserData.generation);
-        ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA.sizeOf(struct));
-        STICKY_ASSIGNOR_USER_DATA.write(buffer, struct);
+        ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA_V1.sizeOf(struct));
+        STICKY_ASSIGNOR_USER_DATA_V1.write(buffer, struct);
         buffer.flip();
         return buffer;
     }
 
     private static ConsumerUserData deserializeTopicPartitionAssignment(ByteBuffer buffer) {
-        Struct struct = STICKY_ASSIGNOR_USER_DATA.read(buffer);
+        Struct struct;
+        ByteBuffer copy = buffer.duplicate();
+        try {
+            struct = STICKY_ASSIGNOR_USER_DATA_V1.read(buffer);
+        } catch (Exception e1) {
+            try {
+                // fall back to older schema
+                struct = STICKY_ASSIGNOR_USER_DATA_V0.read(copy);
+            } catch (Exception e2) {
+                // ignore the consumer's previous assignment if it cannot be parsed
+                return new ConsumerUserData(Arrays.asList(), -2);
+            }
+        }
+
         List<TopicPartition> partitions = new ArrayList<>();
         for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
             Struct assignment = (Struct) structObj;
@@ -818,7 +833,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
         // make sure this is backward compatible
-        int generation = struct.hasField(GENERATION_KEY_NAME) ? struct.getInt(GENERATION_KEY_NAME) : 0;
+        int generation = struct.hasField(GENERATION_KEY_NAME) ? struct.getInt(GENERATION_KEY_NAME) : -1;
         return new ConsumerUserData(partitions, generation);
     }
 
