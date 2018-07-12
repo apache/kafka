@@ -144,12 +144,12 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
-    public synchronized void put(final Bytes key, final byte[] value, final long timestamp) {
+    public synchronized void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
         
-        final Bytes keyBytes = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
+        final Bytes keyBytes = WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,

@@ -77,9 +77,9 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value, final long timestamp) {
-        bytesStore.put(key, value, timestamp);
-        changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, timestamp, maybeUpdateSeqnumForDups()), value);
+    public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+        bytesStore.put(key, value, windowStartTimestamp);
+        changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     @Override
