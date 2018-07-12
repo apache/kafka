@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -653,12 +652,6 @@ public class KafkaProducerTest {
         Future<RecordMetadata> future = producer.send(record);
 
         assertEquals("Cluster has incorrect invalid topic list.", metaDataUpdateResponseCluster.invalidTopics(), metadata.fetch().invalidTopics());
-        try {
-            future.get(0, TimeUnit.MILLISECONDS);
-            fail("Expected InvalidTopicException to be raised");
-        } catch (ExecutionException e) {
-            // expected
-            assertEquals("Expected InvalidTopicException.", e.getCause().getClass(), InvalidTopicException.class);
-        }
+        TestUtils.assertFutureError(future, InvalidTopicException.class);
     }
 }
