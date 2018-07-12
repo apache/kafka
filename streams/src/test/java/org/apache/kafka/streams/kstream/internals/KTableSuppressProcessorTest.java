@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -39,7 +38,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Suppress;
 import org.apache.kafka.streams.kstream.Suppress.BufferConfig;
 import org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression;
 import org.apache.kafka.streams.kstream.TimeWindows;
@@ -67,6 +65,7 @@ import static org.apache.kafka.streams.kstream.Suppress.BufferConfig.withBufferF
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.EMIT;
 import static org.apache.kafka.streams.kstream.Suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withBufferConfig;
+import static org.apache.kafka.streams.kstream.Suppress.IntermediateSuppression.withEmitAfter;
 import static org.apache.kafka.streams.kstream.Suppress.emitFinalResultsOnly;
 import static org.apache.kafka.streams.kstream.Suppress.intermediateEvents;
 
@@ -95,7 +94,7 @@ public class KTableSuppressProcessorTest {
             .count();
 
         valueCounts
-            .suppress(intermediateEvents(IntermediateSuppression.withEmitAfter(Duration.ofMillis(2L))))
+            .suppress(intermediateEvents(withEmitAfter(Duration.ofMillis(2L))))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -186,7 +185,7 @@ public class KTableSuppressProcessorTest {
             .count();
 
         valueCounts
-            .suppress(intermediateEvents(IntermediateSuppression.withEmitAfter(Duration.ZERO)))
+            .suppress(intermediateEvents(withEmitAfter(Duration.ZERO)))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 

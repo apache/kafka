@@ -136,6 +136,13 @@ public class Joined<K, V, VO> {
         return this;
     }
 
+    /**
+     * Configure the retention time for events in the join.
+     * Events are only considered for joining while they are retained.
+     *
+     * @param retention
+     * @return
+     */
     public Joined<K, V, VO> withRetention(final Duration retention) {
         Objects.requireNonNull( retention, "Retention must not be null");
         ApiUtils.validateMillisecondDuration(retention, "Retention must be expressible in milliseconds");

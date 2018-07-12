@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.time.Duration;
@@ -65,6 +64,10 @@ public abstract class Windows<W extends Window> {
         return this;
     }
 
+    /**
+     * Return the window grace period (the time to admit
+     * late-arriving events after the end of the window.
+     */
     public Duration grace() {
         return grace != null ? grace : Duration.ofMillis(maintainMs() - size());
     }
