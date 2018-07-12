@@ -113,12 +113,12 @@ Now edit these new files and set the following properties:
 config/server-1.properties:
     broker.id=1
     listeners=PLAINTEXT://:9093
-    log.dir=/tmp/kafka-logs-1
+    log.dirs=/tmp/kafka-logs-1
 
 config/server-2.properties:
     broker.id=2
     listeners=PLAINTEXT://:9094
-    log.dir=/tmp/kafka-logs-2
+    log.dirs=/tmp/kafka-logs-2
 </pre>
 <p>The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each other's data.</p>
 <p>
