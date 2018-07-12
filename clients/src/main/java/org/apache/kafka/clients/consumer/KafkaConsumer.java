@@ -573,7 +573,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
     private RebalanceKafkaConsumer rebalanceConsumer;
-    private RebalanceKafkaConsumer.RequestResult result;
+    private volatile RebalanceKafkaConsumer.RequestResult result;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
@@ -678,7 +678,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-            this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
+            this.useParallelRebalance = true;
             this.time = Time.SYSTEM;
 
             Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
@@ -836,7 +836,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.useParallelRebalance = false;
+        this.useParallelRebalance = true;
         this.rebalanceConsumer = null;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
@@ -1173,21 +1173,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private ConsumerRecords<K, V> checkRebalance(long timeoutMs) {
+        System.out.println("System is rebalancing: " + coordinator.isRebalancing());
         if (coordinator.isRebalancing() && useParallelRebalance) {
             getStartAndEndOffsets();
             if (rebalanceConsumer == null) {
-                rebalanceConsumer = new RebalanceKafkaConsumer(configs, startOffsets, endOffsets);
+                rebalanceConsumer = new RebalanceKafkaConsumer(configs,
+                                                               keyDeserializer,
+                                                               valueDeserializer,
+                                                               startOffsets,
+                                                               endOffsets);
+                new Thread(rebalanceConsumer).start();
             } else {
                 rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
             }
         }
 
-        if (coordinator.isRebalancing()) {
+        if (rebalanceConsumer != null) {
             // for now, just get the implementation done, don't worry about test results
             rebalanceConsumer.sendRequest(Duration.ofMillis(timeoutMs),
-                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
-                    null,
-                    new DefaultTaskCompletionCallback());
+                                          RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                                          null,
+                                          new DefaultTaskCompletionCallback());
             return (ConsumerRecords<K, V>) result.value;
         }
         return null;
@@ -2140,6 +2146,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void close(Duration timeout) {
+        if (rebalanceConsumer != null) {
+            rebalanceConsumer.close();
+        }
+
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();

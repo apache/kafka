@@ -27,7 +27,7 @@ import org.apache.kafka.common.record.TimestampType;
  * a partition number from which the record is being received, an offset that points 
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
  */
-public class ConsumerRecord<K, V> implements Comparable<ConsumerRecord<K, V>> {
+public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
     public static final int NULL_CHECKSUM = -1;
@@ -233,10 +233,5 @@ public class ConsumerRecord<K, V> implements Comparable<ConsumerRecord<K, V>> {
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers
                + ", key = " + key + ", value = " + value + ")";
-    }
-
-    @Override
-    public int compareTo(ConsumerRecord<K, V> record) {
-        return Long.compare(offset, record.offset);
     }
 }

@@ -163,9 +163,9 @@ public class ConsumerCoordinator extends AbstractCoordinator {
         addMetadataListener();
     }
 
+    // method will automatically set to false upon retrieving value
     public boolean isRebalancing() {
-        //return rebalanceInProgress.get();
-        return false;
+        return rebalanceInProgress.getAndSet(false);
     }
 
     @Override

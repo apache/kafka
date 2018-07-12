@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayList;
 import java.io.Closeable;
@@ -48,12 +49,15 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private volatile boolean shouldClose;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
+                                  final Deserializer<K> keyDeserializer,
+                                  final Deserializer<V> valueDeserializer,
                                   final Map<TopicPartition, Long> startOffsets,
                                   final Map<TopicPartition, Long> endOffsets) {
-        super(configs, null, null);
+        super(configs, keyDeserializer, valueDeserializer);
         this.endOffsets = endOffsets;
         this.unfinished = new HashSet<>(startOffsets.keySet());
         //go to start positions i.e. the last committed offsets of the parent consumer
+        alterSubscription(startOffsets.keySet());
         for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
             super.seek(entry.getKey(), entry.getValue());
         }
@@ -144,6 +148,14 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public void run() {
         while (!shouldClose) {
             switch (request) {
+                case WAKE_UP:
+                    super.wakeup();
+                    result = null;
+                    break;
+                case CLOSE:
+                    super.close(waitTime);
+                    result = null;
+                    break;
                 case PAUSE:
                     pause((Collection<TopicPartition>) inputArgument.value);
                     result = null;
@@ -178,13 +190,21 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 default:
                     continue;
             }
-            callback.onTaskComplete(result);
+            if (callback != null) {
+                callback.onTaskComplete(result);
+            }
             request = null;
         }
     }
 
     @Override
     public void close() {
+        close(Duration.ofMillis(Long.MAX_VALUE));
+    }
+
+    @Override
+    public void close(Duration timeout) {
+        sendRequest(timeout, ConsumerRequest.CLOSE, null, null);
         this.shouldClose = true;
     }
 
@@ -196,7 +216,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                                   END_OFFSETS,
                                   OFFSETS_FOR_TIMES,
                                   PAUSE,
-                                  RESUME }
+                                  RESUME,
+                                  CLOSE,
+                                  WAKE_UP }
 
     public class RequestResult<T> {
         public final T value;
