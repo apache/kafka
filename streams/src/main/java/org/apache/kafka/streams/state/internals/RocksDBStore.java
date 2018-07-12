@@ -44,7 +44,6 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collection;
@@ -79,7 +78,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
+    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     File dbDir;
     private RocksDB db;
@@ -96,11 +95,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     protected volatile boolean open = false;
 
-    RocksDBStore(String name) {
+    RocksDBStore(final String name) {
         this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(String name, String parentDir) {
+    RocksDBStore(final String name, final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
     }
@@ -138,7 +137,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         final Map<String, Object> configs = context.appConfigs();
         final Class<RocksDBConfigSetter> configSetterClass =
-                (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+            (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
         if (configSetterClass != null) {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
@@ -153,7 +152,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException(e);
         }
 
@@ -235,12 +234,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
             // for bulk loading
-            final String[] sstFileNames = dbDir.list(new FilenameFilter() {
-                @Override
-                public boolean accept(final File dir, final String name) {
-                    return name.matches(".*\\.sst");
-                }
-            });
+            final String[] sstFileNames = dbDir.list((dir, name) -> name.matches(".*\\.sst"));
 
             if (sstFileNames != null && sstFileNames.length > 0) {
                 try {
@@ -280,7 +274,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try (final WriteBatch batch = new WriteBatch()) {
             for (final KeyValue<byte[], byte[]> record : records) {
                 if (record.value == null) {
-                    batch.remove(record.key);
+                    batch.delete(record.key);
                 } else {
                     batch.put(record.key, record.value);
                 }
@@ -316,7 +310,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 if (entry.value == null) {
-                    batch.remove(entry.key.get());
+                    batch.delete(entry.key.get());
                 } else {
                     batch.put(entry.key.get(), entry.value);
                 }
@@ -401,6 +395,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         // flush RocksDB
         flushInternal();
     }
+
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
@@ -529,11 +524,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
             if (next == null) {
                 return allDone();
+            } else if (comparator.compare(next.key.get(), this.rawToKey) <= 0) {
+                return next;
             } else {
-                if (comparator.compare(next.key.get(), this.rawToKey) <= 0)
-                    return next;
-                else
-                    return allDone();
+                return allDone();
             }
         }
     }
