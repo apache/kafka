@@ -82,7 +82,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singletonList;
@@ -306,7 +305,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
@@ -341,7 +339,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
@@ -377,7 +374,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.maybeCommit(mockTime.milliseconds());
@@ -527,7 +523,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.setStateListener(
@@ -565,7 +560,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.shutdown();
@@ -594,7 +588,6 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicBoolean(),
             new AtomicInteger()
         );
         thread.shutdown();
@@ -1295,7 +1288,6 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicBoolean(),
                 new AtomicInteger()
                 );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
@@ -1340,7 +1332,6 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicBoolean(),
                 new AtomicInteger()
                 );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());

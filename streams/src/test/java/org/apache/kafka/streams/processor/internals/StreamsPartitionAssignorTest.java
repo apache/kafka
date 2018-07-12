@@ -58,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -123,7 +122,6 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
         configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configurationMap.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, new AtomicBoolean());
         configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         return configurationMap;
     }
@@ -1111,29 +1109,15 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowKafkaExceptionVersionProbingFlagNotConfigured() {
+    public void shouldThrowKafkaExceptionAssignmentErrorCodeNotConfigured() {
         final Map<String, Object> config = configProps();
-        config.remove(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG);
+        config.remove(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
 
         try {
             partitionAssignor.configure(config);
             fail("Should have thrown KafkaException");
         } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(), equalTo("VersionProbingFlag is not specified"));
-        }
-    }
-
-    @Test
-    public void shouldThrowKafkaExceptionIfVersionProbingFlagConfigIsNotAtomicBoolean() {
-        final Map<String, Object> config = configProps();
-        config.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, "i am not an AtomicBoolean");
-
-        try {
-            partitionAssignor.configure(config);
-            fail("Should have thrown KafkaException");
-        } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(),
-                equalTo("java.lang.String is not an instance of java.util.concurrent.atomic.AtomicBoolean"));
+            assertThat(expected.getMessage(), equalTo("assignmentErrorCode is not specified"));
         }
     }
 

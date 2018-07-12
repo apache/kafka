@@ -51,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -72,7 +71,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private String logPrefix;
     public enum Error {
         NONE(0),
-        INCOMPLETE_SOURCE_TOPIC_METADATA(1);
+        INCOMPLETE_SOURCE_TOPIC_METADATA(1),
+        VERSION_PROBING(2);
 
         private final int code;
 
@@ -211,8 +211,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
-    private AtomicBoolean versionProbingFlag;
-    // flag indicating whether streams app should shutdown
+    // error code for the streams app, replaces the original versionProbingFlag
     private AtomicInteger assignmentErrorCode;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
@@ -277,21 +276,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         taskManager = (TaskManager) o;
-
-        final Object o2 = configs.get(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG);
-        if (o2 == null) {
-            final KafkaException fatalException = new KafkaException("VersionProbingFlag is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(o2 instanceof AtomicBoolean)) {
-            final KafkaException fatalException = new KafkaException(String.format("%s is not an instance of %s", o2.getClass().getName(), AtomicBoolean.class.getName()));
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        versionProbingFlag = (AtomicBoolean) o2;
 
         final Object ai = configs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
         if (ai == null) {
@@ -840,7 +824,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 usedSubscriptionMetadataVersion = leaderSupportedVersion;
             }
 
-            versionProbingFlag.set(true);
+            assignmentErrorCode.set(Error.VERSION_PROBING.code);
             return;
         }
 
