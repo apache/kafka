@@ -115,8 +115,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 object ConsumerGroupCommandTest {
 
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
-    val props = if (customPropsOpt.isDefined) new Properties(customPropsOpt.get) else new Properties
+    val props = new Properties
     configure(props)
+    if (customPropsOpt.isDefined)
+      props.putAll(customPropsOpt.get)
     val consumer = new KafkaConsumer(props)
 
     def configure(props: Properties): Unit = {
