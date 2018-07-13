@@ -1173,7 +1173,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private ConsumerRecords<K, V> checkRebalance(long timeoutMs) {
-        System.out.println("System is rebalancing: " + coordinator.isRebalancing());
         if (coordinator.isRebalancing() && useParallelRebalance) {
             getStartAndEndOffsets();
             if (rebalanceConsumer == null) {
