@@ -73,18 +73,23 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             final V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
-            // first try to add the new value
+            // first remove the old value
+            if (value.oldValue != null) {
+                if (newAgg == null) {
+                    throw new StreamsException(
+                        "Previous aggregate for key=[" + key + "] should not be null at this point. Has the topology changed?"
+                    );
+                }
+                newAgg = removeReducer.apply(newAgg, value.oldValue);
+            }
+
+            // then to add the new value
             if (value.newValue != null) {
                 if (newAgg == null) {
                     newAgg = value.newValue;
                 } else {
                     newAgg = addReducer.apply(newAgg, value.newValue);
                 }
-            }
-
-            // then try to remove the old value
-            if (value.oldValue != null) {
-                newAgg = removeReducer.apply(newAgg, value.oldValue);
             }
 
             // update the store with the new value
