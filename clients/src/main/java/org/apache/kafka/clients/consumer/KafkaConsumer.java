@@ -1176,8 +1176,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         final long metadataStart = time.milliseconds();
         long elapsedMs = 0;
         elapsedMs += time.milliseconds() - metadataStart;
-        System.out.println(coordinator.isRebalancing() + " " + useParallelRebalance);
-        if (coordinator.isRebalancing() && useParallelRebalance) {
+        System.out.println(coordinator.isRebalancing(true) + " " + useParallelRebalance);
+        if (coordinator.isRebalancing(false) && useParallelRebalance) {
             System.out.println("Initiating calls");
             getStartAndEndOffsets();
             if (rebalanceConsumer == null) {
