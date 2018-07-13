@@ -1077,7 +1077,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
-            assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
+            TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
         }
     }
