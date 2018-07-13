@@ -131,21 +131,8 @@ object ConsumerGroupCommand extends Logging {
       val result = adminClient.listConsumerGroups(
         withTimeoutMs(new ListConsumerGroupsOptions))
 
-      try {
         val listings = result.all.get.asScala
         listings.map(_.groupId).toList
-      }
-      catch {
-        case e : ExecutionException if e.getCause.isInstanceOf[KafkaException] =>
-          val kafkaException = e.getCause
-          if (kafkaException.getCause != null) {
-            throw kafkaException.getCause
-          }
-          throw kafkaException
-
-        case e: Exception =>
-          throw e
-      }
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
@@ -323,26 +310,19 @@ object ConsumerGroupCommand extends Logging {
         withTimeoutMs(new DescribeConsumerGroupsOptions)
       ).describedGroups()
 
-      try {
-        val group = consumerGroups.get(groupId).get
-        group.state.toString match {
-          case "Empty" | "Dead" =>
-            val partitionsToReset = getPartitionsToReset(groupId)
-            val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
+      val group = consumerGroups.get(groupId).get
+      group.state.toString match {
+        case "Empty" | "Dead" =>
+          val partitionsToReset = getPartitionsToReset(groupId)
+          val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
 
-            // Dry-run is the default behavior if --execute is not specified
-            val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
-            if (!dryRun)
-              getConsumer.commitSync(preparedOffsets.asJava)
-            preparedOffsets
-          case currentState =>
-            printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
-            Map.empty
-        }
-      } catch {
-        case ex: Throwable =>
-          val exceptionMessage = ex.getMessage
-          printError(s"Coordinator not available for the group '$groupId'. Error message: '$exceptionMessage'")
+          // Dry-run is the default behavior if --execute is not specified
+          val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
+          if (!dryRun)
+            getConsumer.commitSync(preparedOffsets.asJava)
+          preparedOffsets
+        case currentState =>
+          printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
           Map.empty
       }
     }

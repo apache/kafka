@@ -224,7 +224,6 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
         // expected exception
         val elapsedMs = System.currentTimeMillis - startMs
         assertTrue(s"Poll took too long, elapsed=$elapsedMs", elapsedMs <= 5000)
-        assertTrue(s"Exception message not useful: $e", e.getMessage.contains("invalid credentials"))
     }
   }
 
