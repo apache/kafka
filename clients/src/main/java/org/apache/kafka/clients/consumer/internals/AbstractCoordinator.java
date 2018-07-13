@@ -463,6 +463,7 @@ public abstract class AbstractCoordinator implements Closeable {
             disableHeartbeatThread();
 
             state = MemberState.REBALANCING;
+            rebalanceInProgress.compareAndSet(false, true);
             joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override
@@ -623,6 +624,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(new GroupAuthorizationException(groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.debug("SyncGroup failed because the group began another rebalance");
+                    rebalanceInProgress.compareAndSet(false, true);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
@@ -1032,6 +1034,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll(), so we explicitly leave the group.
+                            rebalanceInProgress.compareAndSet(false, true);
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the

@@ -102,7 +102,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                               Map<TopicPartition, Long> endOffsets) {
         alterSubscription(startOffsets.keySet());
         for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+            System.out.println("Start offset for topic partition: " + entry.getKey() + " is " + entry.getValue());
             super.seek(entry.getKey(), entry.getValue());
+            System.out.println("End Offset for topic partition: " + entry.getKey() + " is " + endOffsets.get(entry.getKey()));
         }
         this.endOffsets = endOffsets;
         this.unfinished = startOffsets.keySet();
