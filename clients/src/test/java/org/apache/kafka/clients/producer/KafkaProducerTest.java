@@ -635,7 +635,7 @@ public class KafkaProducerTest {
             ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
             new StringSerializer(), new StringSerializer(), metadata, client);
 
-        String invalidTopicName = "topic abc";  // Invalid topic name due to space
+        String invalidTopicName = "topic abc";      // Invalid topic name due to space
         ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
         Set<String> invalidTopic = new HashSet<String>();
