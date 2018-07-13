@@ -1213,7 +1213,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            boolean initialized = false;
             // poll for new data until the timeout expires
             long elapsedTime = 0L;
             do {
@@ -1250,6 +1249,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     ConsumerRecords<K, V> recordsReturned = checkRebalance(Long.MAX_VALUE);
                     final Set<String> topics = new HashSet<>();
+                    if (recordsReturned == null) {
+                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    }
                     for (TopicPartition partition : recordsReturned.partitions()) {
                         if (!topics.contains(partition.topic())) {
                             topics.add(partition.topic());

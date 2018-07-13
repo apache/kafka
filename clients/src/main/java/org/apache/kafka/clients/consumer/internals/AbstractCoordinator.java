@@ -116,6 +116,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     protected AtomicBoolean rebalanceInProgress = new AtomicBoolean(false);
+    protected AtomicBoolean hadPreviousGroup = new AtomicBoolean(false);
     private MemberState state = MemberState.UNJOINED;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private Node coordinator = null;
@@ -285,7 +286,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected synchronized boolean rejoinNeededOrPending() {
         // if there's a pending joinFuture, we should try to complete handling it.
-        if (rejoinNeeded) {
+        if (rejoinNeeded && hadPreviousGroup.get()) {
             rebalanceInProgress.set(true);
         }
         return rejoinNeeded || joinFuture != null;
@@ -626,6 +627,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(new GroupAuthorizationException(groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.debug("SyncGroup failed because the group began another rebalance");
+                    rebalanceInProgress.set(true);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
@@ -824,6 +826,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (error == Errors.NONE) {
                 log.debug("LeaveGroup request returned successfully");
                 future.complete(null);
+                hadPreviousGroup.set(true);
             } else {
                 log.debug("LeaveGroup request failed with error: {}", error.message());
                 future.raise(error);
@@ -856,6 +859,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 log.info("Attempt to heartbeat failed since group is rebalancing");
+                rebalanceInProgress.set(true);
                 requestRejoin();
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (error == Errors.ILLEGAL_GENERATION) {
@@ -1059,6 +1063,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                             // ensures that the coordinator keeps the member in the group for as long
                                             // as the duration of the rebalance timeout. If we stop sending heartbeats,
                                             // however, then the session timeout may expire before we can rejoin.
+                                            rebalanceInProgress.set(true);
                                             heartbeat.receiveHeartbeat(time.milliseconds());
                                         } else {
                                             heartbeat.failHeartbeat();
