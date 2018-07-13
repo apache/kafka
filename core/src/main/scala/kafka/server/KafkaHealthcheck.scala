@@ -117,10 +117,19 @@ class KafkaHealthcheck(brokerId: Int,
 
     @throws[Exception]
     override def handleNewSession() {
-      info("re-registering broker info in ZK for broker " + brokerId)
-      register()
-      info("done re-registering broker")
-      info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
+      try {
+        info("Re-registering broker info in ZK for broker " + brokerId)
+        register()
+        info("Done re-registering broker")
+        info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
+      }
+      catch {
+        case e: Throwable =>
+          // An exception raised here causes the ZkEventThread to stop, since exceptions in it's run() method are
+          // merely logged. If the new session cannot be registered, no further events will occur.
+          fatal("Unable to re-register broker info in Zk for Broker " + brokerId + ". Probably the ephemeral node is not yet gone. Shutting down...", e)
+          Exit.exit(1)
+      }
     }
 
     override def handleSessionEstablishmentError(error: Throwable) {
