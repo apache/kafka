@@ -285,6 +285,9 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected synchronized boolean rejoinNeededOrPending() {
         // if there's a pending joinFuture, we should try to complete handling it.
+        if (rejoinNeeded) {
+            rebalanceInProgress.set(true);
+        }
         return rejoinNeeded || joinFuture != null;
     }
 
@@ -463,7 +466,6 @@ public abstract class AbstractCoordinator implements Closeable {
             disableHeartbeatThread();
 
             state = MemberState.REBALANCING;
-            rebalanceInProgress.compareAndSet(false, true);
             joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override

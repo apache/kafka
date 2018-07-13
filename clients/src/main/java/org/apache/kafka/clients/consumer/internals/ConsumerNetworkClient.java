@@ -214,27 +214,11 @@ public class ConsumerNetworkClient implements Closeable {
         long begin = time.milliseconds();
         long remaining = timeout;
         long now = begin;
-        long count = 0;
-        long previous = 0;
         do {
-            if (previous != remaining) {
-                count++;
-                if (count < 100) {
-                    System.out.println("New remaining time: " + remaining);
-                }
-            }
             poll(remaining, now, future);
             now = time.milliseconds();
             final long elapsed = now - begin;
-            previous = remaining;
             remaining = timeout - elapsed;
-            if (timeout - elapsed <= 10) {
-                System.out.println("Calculating remaining time: " + (timeout - elapsed));
-                count++;
-                if (count == 10000) {
-                    break;
-                }
-            }
         } while (!future.isDone() && remaining > 0);
         return future.isDone();
     }
