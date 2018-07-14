@@ -84,7 +84,7 @@ versions += [
   snappy: "1.1.7.2",
   zkclient: "0.10",
   zookeeper: "3.4.13",
-  zstd: "1.3.4-10"
+  zstd: "1.3.5-2"
 ]
 
 libs += [
