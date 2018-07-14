@@ -138,7 +138,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
   def testConcurrentTopicCreation() {
     val topic = "test.topic"
 
