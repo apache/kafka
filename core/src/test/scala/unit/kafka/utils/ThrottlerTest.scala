@@ -20,7 +20,7 @@ package unit.kafka.utils
 import kafka.utils.Throttler
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Test
-import org.junit.Assert.assertTrue
+import org.junit.Assert.{assertTrue, assertEquals}
 
 
 class ThrottlerTest {
@@ -28,35 +28,45 @@ class ThrottlerTest {
   def testThrottleDesiredRate() {
     val throttleCheckIntervalMs = 100
     val desiredCountPerMs = 1.0
-    val desiredRatePerSec = desiredCountPerMs * 1000
+    val desiredCountPerSec = desiredCountPerMs * 1000
     val desiredCountPerInterval = desiredCountPerMs * throttleCheckIntervalMs
 
     val mockTime = new MockTime()
-    val throttler = new Throttler(desiredRatePerSec = desiredRatePerSec,
+    val throttler = new Throttler(desiredRatePerSec = desiredCountPerSec,
                                   checkIntervalMs = throttleCheckIntervalMs,
                                   time = mockTime)
 
-    val startTime = mockTime.milliseconds()
+    val firstThrottlePeriodStartTime = mockTime.milliseconds()
 
-    // Observe desiredCountPerInterval at t0 = startTime
+    // Observe desiredCountPerInterval at startTime
     throttler.maybeThrottle(desiredCountPerInterval)
+    assertEquals(firstThrottlePeriodStartTime, mockTime.milliseconds())
     mockTime.sleep(throttleCheckIntervalMs + 1)
 
-    // Observe desiredCountPerInterval at t1 = t0 + throttleCheckIntervalMs + 1,
-    // in total observe 2*desiredCountPerInterval, should block until t2 = t0 + 2*throttleCheckIntervalMs
+    // Observe desiredCountPerInterval at startTime + throttleCheckIntervalMs + 1,
+    val firstThrottlePeriodEndTime = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)
+    val secondThrottlePeriodStartTime = mockTime.milliseconds()
+    assertTrue(s"Observe ${2*desiredCountPerInterval} within ${throttleCheckIntervalMs + 1}ms, " +
+      s"should block for ${throttleCheckIntervalMs - 1}ms instead of ${secondThrottlePeriodStartTime - firstThrottlePeriodEndTime}ms.",
+      secondThrottlePeriodStartTime >= firstThrottlePeriodStartTime + 2*throttleCheckIntervalMs)
 
-    // Observe (2*desiredCountPerInterval-desiredCountPerMs) after throttling at t2,
+    // Observe (2*desiredCountPerInterval-desiredCountPerMs) at secondThrottlePeriodStartTime
     throttler.maybeThrottle(2 * desiredCountPerInterval - desiredCountPerMs)
+    assertEquals(secondThrottlePeriodStartTime, mockTime.milliseconds())
     mockTime.sleep(throttleCheckIntervalMs + 1)
 
-    // Observer desiredCountPerMs at t3 = t2 + throttleCheckIntervalMs + 1,
-    // in total observe 2*desiredCountPerInterval, should block until t4 = t2 + 2*throttleCheckIntervalMs
+    // Observe desiredCountPerMs at secondThrottlePeriodStartTime + throttleCheckIntervalMs + 1
+    val secondThrottlePeriodEndTime = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerMs)
+    val now = mockTime.milliseconds()
+    assertTrue(s"Observe ${2*desiredCountPerInterval} within ${throttleCheckIntervalMs + 1}ms, " +
+      s"should block for ${throttleCheckIntervalMs - 1}ms instead of ${now - secondThrottlePeriodEndTime}ms.",
+      now >= secondThrottlePeriodStartTime + 2*throttleCheckIntervalMs)
 
-    // Expect 4*desiredCountPerInterval observation and 4*throttleCheckIntervalMs elapsedTimeMs
-    val elapsedTimeMs = mockTime.milliseconds() - startTime
-    val actualRatePerSec = 4 * desiredCountPerInterval * 1000 / elapsedTimeMs
-    assertTrue(actualRatePerSec <= desiredRatePerSec)
+    val elapsedTimeMs = now - firstThrottlePeriodStartTime
+    val actualCountPerSec = 4 * desiredCountPerInterval * 1000 / elapsedTimeMs
+    assertTrue(s"Actual rate ${actualCountPerSec} is larger than the desired rate ${desiredCountPerSec}",
+      actualCountPerSec <= desiredCountPerSec)
   }
 }
