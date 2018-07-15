@@ -31,8 +31,10 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
-import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLKeyException;
 import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -260,12 +262,14 @@ public class SslTransportLayer implements TransportLayer {
             maybeThrowSslAuthenticationException();
 
             // this exception could be due to a write. If there is data available to unwrap,
-            // process the data so that any SSLExceptions are reported
+            // process the data so that any SSL handshake exceptions are reported
             if (handshakeStatus == HandshakeStatus.NEED_UNWRAP && netReadBuffer.position() > 0) {
                 try {
                     handshakeUnwrap(false);
-                } catch (SSLException e1) {
+                } catch (SSLHandshakeException | SSLProtocolException | SSLPeerUnverifiedException | SSLKeyException e1) {
                     handshakeFailure(e1, false);
+                } catch (SSLException e1) {
+                    log.debug("SSL exception while unwrapping data after IOException, ignoring", e1);
                 }
             }
             // If we get here, this is not a handshake failure, throw the original IOException

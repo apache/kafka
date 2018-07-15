@@ -699,7 +699,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeRead() throws Exception {
-        testIOExceptionsDuringHandshake(true, false);
+        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.READ_IOEXCEPTION);
     }
 
     /**
@@ -707,20 +707,36 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeWrite() throws Exception {
-        testIOExceptionsDuringHandshake(false, true);
+        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.WRITE_IOEXCEPTION);
     }
 
-    private void testIOExceptionsDuringHandshake(boolean failRead, boolean failWrite) throws Exception {
+    /**
+     * Tests that if the remote end closes the connection during SSL handshake while reading data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testRemoteCloseDuringHandshakeRead() throws Exception {
+        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.READ_CLOSE);
+    }
+
+    /**
+     * Tests that if the remote end closes the connection during SSL handshake while writing data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testRemoteCloseDuringHandshakeWrite() throws Exception {
+        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.WRITE_IOEXCEPTION);
+    }
+
+    private void testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode failureMode) throws Exception {
         server = createEchoServer(SecurityProtocol.SSL);
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
-            int readFailureIndex = failRead ? i : Integer.MAX_VALUE;
-            int flushFailureIndex = failWrite ? i : Integer.MAX_VALUE;
             String node = String.valueOf(i);
 
-            channelBuilder.readFailureIndex = readFailureIndex;
-            channelBuilder.flushFailureIndex = flushFailureIndex;
+            channelBuilder.failureMode = failureMode;
+            channelBuilder.failureIndex = i;
             channelBuilder.configure(sslClientConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
 
@@ -975,11 +991,19 @@ public class SslTransportLayerTest {
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
+        enum FailureMode {
+            NONE,
+            READ_IOEXCEPTION,
+            WRITE_IOEXCEPTION,
+            READ_CLOSE,
+            WRITE_CLOSE
+        }
+
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
         private Integer appBufSizeOverride;
-        long readFailureIndex = Long.MAX_VALUE;
-        long flushFailureIndex = Long.MAX_VALUE;
+        FailureMode failureMode = FailureMode.NONE;
+        long failureIndex = Long.MAX_VALUE;
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(Mode mode) {
@@ -1029,8 +1053,22 @@ public class SslTransportLayerTest {
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);
-                numReadsRemaining = new AtomicLong(readFailureIndex);
-                numFlushesRemaining = new AtomicLong(flushFailureIndex);
+                switch (failureMode) {
+                    case READ_IOEXCEPTION:
+                    case READ_CLOSE:
+                        numReadsRemaining = new AtomicLong(failureIndex);
+                        numFlushesRemaining = new AtomicLong(Long.MAX_VALUE);
+                        break;
+                    case WRITE_IOEXCEPTION:
+                    case WRITE_CLOSE:
+                        numReadsRemaining = new AtomicLong(Long.MAX_VALUE);
+                        numFlushesRemaining = new AtomicLong(failureIndex);
+                        break;
+                    default:
+                        numReadsRemaining = new AtomicLong(Long.MAX_VALUE);
+                        numFlushesRemaining = new AtomicLong(Long.MAX_VALUE);
+                        break;
+                }
                 numDelayedFlushesRemaining = new AtomicInteger(flushDelayCount);
             }
 
@@ -1057,16 +1095,33 @@ public class SslTransportLayerTest {
 
             @Override
             protected int readFromSocketChannel() throws IOException {
-                if (numReadsRemaining.decrementAndGet() == 0 && !ready())
-                    throw new IOException("Test exception during read");
+                if (numReadsRemaining.decrementAndGet() == 0 && !ready()) {
+                    switch (failureMode) {
+                        case READ_IOEXCEPTION:
+                            throw new IOException("Test exception during read");
+                        case READ_CLOSE:
+                            super.close();
+                            break;
+                        default:
+                            break;
+                    }
+                }
                 return super.readFromSocketChannel();
             }
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
-                if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
-                    throw new IOException("Test exception during write");
-                else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
+                if (numFlushesRemaining.decrementAndGet() == 0 && !ready()) {
+                    switch (failureMode) {
+                        case WRITE_IOEXCEPTION:
+                            throw new IOException("Test exception during write");
+                        case WRITE_CLOSE:
+                            super.close();
+                            break;
+                        default:
+                            break;
+                    }
+                } else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
                     return false;
                 resetDelayedFlush();
                 return super.flush(buf);
