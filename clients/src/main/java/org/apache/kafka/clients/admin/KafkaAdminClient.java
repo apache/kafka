@@ -2414,7 +2414,7 @@ public class KafkaAdminClient extends AdminClient {
                     coordinators.put(nodeId, groupIdsForNode);
                     returnedGroupId.add(groupId);
 
-                    // If all the groupIds are processed, send the group request
+                    // If all the groupIds are processed, send the group request.
                     if (returnedGroupId.size() == groupIds.size()) {
                         sendGroupRequests();
                     }
@@ -2427,7 +2427,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     returnedGroupId.add(groupId);
 
-                    // If all the groupIds are processed, send the group request
+                    // If all the groupIds are processed, send the group request.
                     if (returnedGroupId.size() == groupIds.size()) {
                         sendGroupRequests();
                     }
