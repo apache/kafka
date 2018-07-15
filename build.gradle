@@ -514,6 +514,12 @@ for ( sv in availableScalaVersions ) {
     startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:uploadArchives']
   }
+
+  tasks.create(name: "uploadStreamsScalaArchives_${taskSuffix}", type: GradleBuild) {
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
+    tasks = ['streams:streams-scala:uploadArchives']
+  }
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file', 'connect:basic-auth-extension']
