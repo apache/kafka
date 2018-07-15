@@ -136,8 +136,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2372,19 +2370,16 @@ public class KafkaAdminClient extends AdminClient {
             if (groupIdIsUnrepresentable(groupId)) {
                 KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
-                                                                         groupId + "' cannot be represented in a request."));
+                        groupId + "' cannot be represented in a request."));
                 futures.put(groupId, future);
             } else if (!futures.containsKey(groupId)) {
                 futures.put(groupId, new KafkaFutureImpl<ConsumerGroupDescription>());
             }
         }
 
-        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
-        // all consumer groups this coordinator host
-
-        final Map<Integer, Queue<String>> coordinators = new ConcurrentHashMap<>();
+        final Map<Integer, Queue<String>> coordinators = new HashMap<>();
         final Map<Integer, FindCoordinatorResponse> fcResponses = new HashMap<>();
-        final Queue<String> returnedGroupId = new ConcurrentLinkedQueue<>();
+        final Queue<String> returnedGroupId = new LinkedList<>();
 
         for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
             // skip sending request for those futures that already failed.
@@ -2414,14 +2409,14 @@ public class KafkaAdminClient extends AdminClient {
 
                     fcResponses.putIfAbsent(nodeId, fcResponse);
 
-                    Queue<String> groupIdsForNode = coordinators.getOrDefault(nodeId, new ConcurrentLinkedQueue<>());
+                    Queue<String> groupIdsForNode = coordinators.getOrDefault(nodeId, new LinkedList<>());
                     groupIdsForNode.add(groupId);
                     coordinators.put(nodeId, groupIdsForNode);
-
                     returnedGroupId.add(groupId);
 
+                    // If all the groupIds are processed, send the group request
                     if (returnedGroupId.size() == groupIds.size()) {
-                        sendGroupRequest();
+                        sendGroupRequests();
                     }
                 }
 
@@ -2432,12 +2427,13 @@ public class KafkaAdminClient extends AdminClient {
 
                     returnedGroupId.add(groupId);
 
+                    // If all the groupIds are processed, send the group request
                     if (returnedGroupId.size() == groupIds.size()) {
-                        sendGroupRequest();
+                        sendGroupRequests();
                     }
                 }
 
-                void sendGroupRequest() {
+                void sendGroupRequests() {
                     final long nowDescribeConsumerGroups = time.milliseconds();
                     final long deadline = calcDeadlineMs(nowDescribeConsumerGroups, options.timeoutMs());
 
