@@ -507,7 +507,6 @@ public class NetworkClient implements KafkaClient {
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
-            System.out.println("Selector waiting for request response with time: " + Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
             this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);

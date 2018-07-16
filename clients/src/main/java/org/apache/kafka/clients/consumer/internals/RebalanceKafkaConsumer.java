@@ -56,9 +56,17 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         super(configs, keyDeserializer, valueDeserializer);
         this.endOffsets = endOffsets;
         this.unfinished = new HashSet<>(startOffsets.keySet());
-        //go to start positions i.e. the last committed offsets of the parent consumer
-        alterSubscription(startOffsets.keySet());
         for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+            if (entry.getValue().equals(endOffsets.get(entry.getKey()))) {
+                unfinished.remove(entry.getKey());
+            }
+        }
+        //go to start positions i.e. the last committed offsets of the parent consumer
+        alterSubscription(unfinished);
+        for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+            if (!unfinished.contains(entry.getKey())) {
+                continue;
+            }
             super.seek(entry.getKey(), entry.getValue());
         }
         this.request = null;
@@ -91,11 +99,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         } else {
             super.unsubscribe();
         }
-        final HashSet<String> topics = new HashSet<>(newSubscription.size());
-        for (TopicPartition partition : newSubscription) {
-            topics.add(partition.topic());
-        }
-        super.subscribe(topics);
+        super.assign(newSubscription);
     }
 
     private void setNewOffsets(Map<TopicPartition, Long> startOffsets,
@@ -117,7 +121,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private Set<TopicPartition> findUnfinished() {
         final HashSet<TopicPartition> stillUnfinished = new HashSet<>();
         for (TopicPartition partition : unfinished) {
-            if (position(partition) >= endOffsets.get(partition)) {
+            if (super.position(partition) >= endOffsets.get(partition)) {
                 continue;
             }
             stillUnfinished.add(partition);

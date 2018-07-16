@@ -1385,8 +1385,8 @@ public class KafkaConsumerTest {
                 return body instanceof FetchRequest && ((FetchRequest) body).fetchData().containsKey(tp0);
             }
         }, fetchResponse(tp0, 1, 1), node);
-        time.sleep(heartbeatIntervalMs);
-        Thread.sleep(heartbeatIntervalMs);
+        time.sleep(heartbeatIntervalMs * 3);
+        Thread.sleep(heartbeatIntervalMs * 3);
         consumer.updateAssignmentMetadataIfNeeded(0L);
         consumer.updateAssignmentMetadataIfNeeded(0L);
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
