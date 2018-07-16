@@ -242,6 +242,7 @@ public class AssignmentInfo {
             final AssignmentInfo assignmentInfo;
 
             final int usedVersion = in.readInt();
+            int latestSupportedVersion;
             switch (usedVersion) {
                 case 1:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);
@@ -252,13 +253,13 @@ public class AssignmentInfo {
                     decodeVersionTwoData(assignmentInfo, in);
                     break;
                 case 3:
-                    final int latestSupportedVersion = in.readInt();
+                    latestSupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 case 4:
-                    final int latestSupportedVer = in.readInt();
-                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVer);
+                  latestSupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
                     decodeVersionFourData(assignmentInfo, in);
                     break;
                 default:
