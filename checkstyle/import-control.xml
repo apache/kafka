@@ -215,7 +215,7 @@
     <allow pkg="org.glassfish.jersey" />
   </subpackage>
 
-  <subpackage name="soak">
+  <subpackage name="castle">
     <allow pkg="com.amazonaws.services" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="javax.servlet" />
@@ -223,7 +223,7 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.jmx"/>
-    <allow pkg="org.apache.kafka.soak" />
+    <allow pkg="org.apache.kafka.castle" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
     <allow pkg="org.apache.log4j" />
