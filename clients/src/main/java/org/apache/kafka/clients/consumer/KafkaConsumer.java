@@ -573,6 +573,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
     private RebalanceKafkaConsumer rebalanceConsumer;
+    private boolean isChildConsumer;
+    private Thread consumerThread;
     private volatile RebalanceKafkaConsumer.RequestResult result;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -789,7 +791,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel);
-            rebalanceConsumer = null;
+            this.rebalanceConsumer =  null;
+            this.consumerThread = null;
+            this.isChildConsumer = false;
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
@@ -836,10 +840,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.useParallelRebalance = true;
+        this.useParallelRebalance = false;
         this.rebalanceConsumer = null;
+        this.consumerThread = null;
+        this.isChildConsumer = false;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
+    }
+
+    private void setTrueIfConsumerIsChild() {
+        this.isChildConsumer = true;
     }
 
     /**
@@ -1172,33 +1182,42 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     }
 
-    private ConsumerRecords<K, V> checkRebalance(long timeoutMs) {
+    private void checkRebalanceAndPoll(long timeoutMs) {
+        if (useParallelRebalance && rebalanceConsumer == null && !isChildConsumer) {
+            rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
+            consumerThread = new Thread(rebalanceConsumer);
+        }
         final long metadataStart = time.milliseconds();
         long elapsedMs = 0;
         elapsedMs += time.milliseconds() - metadataStart;
         if (coordinator.isRebalancing(false) && useParallelRebalance) {
             getStartAndEndOffsets();
-            if (rebalanceConsumer == null) {
-                rebalanceConsumer = new RebalanceKafkaConsumer(configs,
-                        keyDeserializer,
-                        valueDeserializer,
-                        startOffsets,
-                        endOffsets);
-                new Thread(rebalanceConsumer).start();
-            } else {
-                rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
+            if (!consumerThread.isAlive()) {
+                consumerThread.start();
             }
+            rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
         }
 
-        if (rebalanceConsumer != null) {
-            // for now, just get the implementation done, don't worry about test results
+        if (consumerThread != null && consumerThread.isAlive()) {
             rebalanceConsumer.sendRequest(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
-                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
-                    null,
-                    new DefaultTaskCompletionCallback());
-            return (ConsumerRecords<K, V>) result.value;
+                                          RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                             null,
+                                          new DefaultTaskCompletionCallback());
         }
-        return null;
+    }
+
+    private RebalanceKafkaConsumer.RequestResult pollForResults(long timeoutMs) {
+        final long now = time.milliseconds();
+        long elapsed = 0L;
+        boolean condition = true;
+        while (result == null && condition) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException exc) { }
+            elapsed = time.milliseconds() - now;
+            condition = remainingTimeAtLeastZero(timeoutMs, elapsed) != 0;
+        }
+        return condition ? result : null;
     }
 
     private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
@@ -1209,6 +1228,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
+
+            checkRebalanceAndPoll(timeoutMs);
 
             // poll for new data until the timeout expires
             long elapsedTime = 0L;
@@ -1243,8 +1264,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
                         client.pollNoWakeup();
                     }
-
-                    //ConsumerRecords<K, V> recordsReturned = checkRebalance(Long.MAX_VALUE);
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }

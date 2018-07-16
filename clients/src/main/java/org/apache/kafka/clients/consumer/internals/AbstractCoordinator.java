@@ -1033,7 +1033,6 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll(), so we explicitly leave the group.
-                            System.out.println("Rebalance in progress set to true");
                             rebalanceInProgress.set(true);
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
