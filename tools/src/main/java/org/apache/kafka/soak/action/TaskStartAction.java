@@ -51,7 +51,6 @@ public class TaskStartAction extends Action  {
 
     @Override
     public void call(final SoakCluster cluster, SoakNode node) throws Throwable {
-        Thread.sleep(cluster.env().trogdorTaskDelayMs());
         SoakUtil.invokeCoordinator(cluster, node, new CoordinatorFunction<Void>() {
             @Override
             public Void apply(CoordinatorClient coordinatorClient) throws Exception {

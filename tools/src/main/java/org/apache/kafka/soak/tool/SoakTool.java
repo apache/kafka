@@ -66,7 +66,6 @@ public final class SoakTool {
     private static final String SOAK_OUTPUT_DIRECTORY_DEFAULT = "/tmp/soak";
     private static final String SOAK_VERBOSE = "SOAK_VERBOSE";
     private static final boolean SOAK_VERBOSE_DEFAULT = false;
-    private static final String SOAK_TROGDOR_TASK_DELAY = "SOAK_TROGDOR_TASK_DELAY";
     private static final int SOAK_TROGDOR_TASK_DELAY_DEFAULT = 15000;
 
     private static final String SOAK_DESCRIPTION = String.format(
@@ -186,13 +185,6 @@ public final class SoakTool {
             .dest(SOAK_TARGETS)
             .metavar(SOAK_TARGETS)
             .help("The target action(s) to run.");
-        parser.addArgument("--trogdor-task-delay")
-            .action(store())
-            .type(Integer.class)
-            .dest(SOAK_TROGDOR_TASK_DELAY)
-            .metavar(SOAK_TROGDOR_TASK_DELAY)
-            .setDefault(getEnvInt(SOAK_TROGDOR_TASK_DELAY, SOAK_TROGDOR_TASK_DELAY_DEFAULT))
-            .help("The number of milliseconds to delay before starting the trogdor tasks.");
         parser.addArgument("-v")
             .action(storeTrue())
             .type(Boolean.class)
@@ -224,8 +216,7 @@ public final class SoakTool {
                     res.getString(SOAK_AWS_SECURITY_KEYPAIR),
                     res.getInt(SOAK_TIMEOUT_SECONDS),
                     res.getString(SOAK_KAFKA_PATH),
-                    res.getString(SOAK_OUTPUT_DIRECTORY),
-                    res.getInt(SOAK_TROGDOR_TASK_DELAY));
+                    res.getString(SOAK_OUTPUT_DIRECTORY));
             File clusterInputPath = new File(env.clusterInputPath());
             SoakClusterSpec clusterSpec =
                 SoakTool.JSON_SERDE.readValue(clusterInputPath, SoakClusterSpec.class);

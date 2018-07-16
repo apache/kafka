@@ -27,12 +27,11 @@ public final class SoakEnvironment {
     private final int timeoutSecs;
     private final String kafkaPath;
     private final String outputDirectory;
-    private final int trogdorTaskDelayMs;
 
     public SoakEnvironment(String clusterInputPath, String clusterOutputPath,
                            String awsSecurityGroup, String awsSecurityKeyPair,
                            int timeoutSecs, String kafkaPath,
-                           String outputDirectory, int trogdorTaskDelayMs) {
+                           String outputDirectory) {
         this.clusterInputPath = toAbsolutePath(clusterInputPath);
         this.clusterOutputPath = toAbsolutePath(clusterOutputPath);
         this.awsSecurityGroup = awsSecurityGroup;
@@ -40,7 +39,6 @@ public final class SoakEnvironment {
         this.timeoutSecs = timeoutSecs;
         this.kafkaPath = toAbsolutePath(kafkaPath);
         this.outputDirectory = toAbsolutePath(outputDirectory);
-        this.trogdorTaskDelayMs = trogdorTaskDelayMs;
     }
 
     private String toAbsolutePath(String path) {
@@ -76,9 +74,5 @@ public final class SoakEnvironment {
 
     public String outputDirectory() {
         return outputDirectory;
-    }
-
-    public int trogdorTaskDelayMs() {
-        return trogdorTaskDelayMs;
     }
 };

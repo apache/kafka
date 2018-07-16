@@ -79,7 +79,7 @@ public class SoakClusterSpecTest {
     public void testToSoakCluster() throws Exception {
         SoakClusterSpec clusterSpec = createSoakClusterSpec();
         SoakCluster cluster = new SoakCluster(
-            new SoakEnvironment("", "", "", "", 360, "", "", 360),
+            new SoakEnvironment("", "", "", "", 360, "", ""),
             new MockCloud(),
             SoakLog.fromStdout("cluster", true),
             clusterSpec);

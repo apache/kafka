@@ -101,8 +101,7 @@ public class MiniSoakCluster implements AutoCloseable {
                     "",
                     360,
                     Paths.get(tempDirectory.getAbsolutePath(), "kafka").toString(),
-                    outputPath.toString(),
-                    0);
+                    outputPath.toString());
 
                 Map<String, SoakNodeSpec> nodes = new HashMap<>();
                 for (Map.Entry<String, Set<String>> entry : nodeNamesToRoles.entrySet()) {
