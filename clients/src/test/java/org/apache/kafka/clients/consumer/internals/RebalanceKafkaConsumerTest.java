@@ -82,18 +82,39 @@ public class RebalanceKafkaConsumerTest {
         final Thread consumerThread = new Thread(consumer);
         consumerThread.start();
 
-        // wait for a tenth of a second so that we can be sure consumerThread has started
+        // wait for a tenth of a second to ensure thread has properly started.
         try {
             Thread.sleep(100);
         } catch (InterruptedException exc) { }
 
         consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
+        waitForRequestResult();
+        assertFalse(consumerThread.isAlive());
+        requestResult = null;
+    }
+
+    @Test
+    public void testConsumerPoll() {
+        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        final Thread consumerThread = new Thread(consumer);
+        consumerThread.start();
+
+        consumer.sendRequest(Duration.ofMillis(1000), RebalanceKafkaConsumer.ConsumerRequest.POLL, null, new MockTaskCompletionCallback());
+        waitForRequestResult();
+        requestResult = null;
+
+        consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
+        waitForRequestResult();
+        assertFalse(consumerThread.isAlive());
+        requestResult = null;
+    }
+
+    private void waitForRequestResult() {
         while (requestResult == null) {
             try {
                 Thread.sleep(10);
             } catch (InterruptedException exc) { }
         }
-        assertFalse(consumerThread.isAlive());
     }
 
     private RebalanceKafkaConsumer<byte[], byte[]> newConsumer() {

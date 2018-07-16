@@ -144,7 +144,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 continue;
             }
 
-            // Cases which have no return value will h ave their result be marked as a boolean value: true.
+            // Cases which have no return value will have their result be marked as a boolean value: true.
             // This is intended as a marker to represent that a particular operation has succeeded or has finished.
             switch (request) {
                 case WAKE_UP:
@@ -152,7 +152,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case CLOSE:
-                    System.out.println("Has started close procedure");
                     super.close(waitTime);
                     result = new RequestResult<>(true);
                     break;
