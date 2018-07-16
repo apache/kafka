@@ -29,6 +29,15 @@ buildscript {
     classpath 'org.scoverage:gradle-scoverage:2.3.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
     classpath 'org.owasp:dependency-check-gradle:3.2.1'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.10.0"
+  }
+}
+
+apply plugin: "com.diffplug.gradle.spotless"
+spotless {
+  scala {
+    target 'streams/**/*.scala'
+    scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
   }
 }
 
