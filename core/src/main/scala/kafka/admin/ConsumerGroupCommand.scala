@@ -630,7 +630,7 @@ object ConsumerGroupCommand extends Logging {
       rows.foldRight("")(_ + "\n" + _)
     }
 
-    def deleteGroups(): Map[String, Errors] = {
+    def deleteGroups(): Map[String, Throwable] = {
       val groupsToDelete = opts.options.valuesOf(opts.groupOpt).asScala.toList
       val deletedGroups = adminClient.deleteConsumerGroups(
         groupsToDelete.asJava,
@@ -639,14 +639,13 @@ object ConsumerGroupCommand extends Logging {
 
       val result = deletedGroups.mapValues { f =>
         Try(f.get) match {
-          case _: Success[_] => Errors.NONE
-          case Failure(ee: ExecutionException) => Errors.forException(ee.getCause)
-          case Failure(e) => Errors.forException(e)
+          case _: Success[_] => null
+          case Failure(e) => e
         }
       }
 
       val (success, failed) = result.partition {
-        case (_, error) => error == Errors.NONE
+        case (_, error) => error == null
       }
 
       if (failed.isEmpty) {
