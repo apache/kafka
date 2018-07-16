@@ -67,26 +67,26 @@ public class IntegrationTestUtils {
      * Records state transition for StreamThread
      */
     public static class StateListenerStub implements StreamThread.StateListener {
-      boolean runningToRevokedSeen = false;
-      boolean revokedToPendingShutdownSeen = false;
-      @Override
-      public void onChange(final Thread thread,
-          final ThreadStateTransitionValidator newState,
-          final ThreadStateTransitionValidator oldState) {
-        if (oldState == StreamThread.State.RUNNING && newState == StreamThread.State.PARTITIONS_REVOKED) {
-            runningToRevokedSeen = true;
-        } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
-            revokedToPendingShutdownSeen = true;
+        boolean runningToRevokedSeen = false;
+        boolean revokedToPendingShutdownSeen = false;
+        @Override
+        public void onChange(final Thread thread,
+            final ThreadStateTransitionValidator newState,
+            final ThreadStateTransitionValidator oldState) {
+            if (oldState == StreamThread.State.RUNNING && newState == StreamThread.State.PARTITIONS_REVOKED) {
+                runningToRevokedSeen = true;
+            } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
+                revokedToPendingShutdownSeen = true;
+            }
         }
-      }
 
-      public boolean revokedToPendingShutdownSeen() {
-          return revokedToPendingShutdownSeen;
-      }
+        public boolean revokedToPendingShutdownSeen() {
+            return revokedToPendingShutdownSeen;
+        }
 
-      public boolean runningToRevokedSeen() {
-          return runningToRevokedSeen;
-      }
+        public boolean runningToRevokedSeen() {
+            return runningToRevokedSeen;
+        }
     }
 
     /**
