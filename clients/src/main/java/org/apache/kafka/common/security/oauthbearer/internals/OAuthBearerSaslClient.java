@@ -88,19 +88,12 @@ public class OAuthBearerSaslClient implements SaslClient {
                 case SEND_CLIENT_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0)
                         throw new SaslException("Expected empty challenge");
-                    SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
 
                     CallbackHandler cbHandler = callbackHandler();
                     cbHandler.handle(new Callback[] {callback});
 
-                    try {
-                        callbackHandler.handle(new Callback[]{extensionsCallback});
-                    } catch (UnsupportedCallbackException e) {
-                        log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
-                                callbackHandler);
-                    } catch (Throwable e) {
-                        throw new SaslException("SASL extensions could not be obtained", e);
-                    }
+                    SaslExtensionsCallback extensionsCallback = parseCustomExtensions();
+
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
 
                     String message = String.format("n,,auth=Bearer %s", callback.token().value());
@@ -134,6 +127,20 @@ public class OAuthBearerSaslClient implements SaslClient {
             setState(State.FAILED);
             throw new SaslException(e.getMessage(), e);
         }
+    }
+
+    private SaslExtensionsCallback parseCustomExtensions() throws SaslException {
+        SaslExtensionsCallback callback = new SaslExtensionsCallback();
+        try {
+            callbackHandler.handle(new Callback[] { new SaslExtensionsCallback() } );
+        } catch (UnsupportedCallbackException e) {
+            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+                    callbackHandler);
+        } catch (Throwable e) {
+            throw new SaslException("SASL extensions could not be obtained", e);
+        }
+
+        return callback;
     }
 
     @Override
