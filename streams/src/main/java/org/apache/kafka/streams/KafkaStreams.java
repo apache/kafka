@@ -345,14 +345,14 @@ public class KafkaStreams {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setStreamThreadStateListener(StreamThread.StateListener listener) {
-      if (state == State.CREATED) {
-        for (StreamThread thread : threads) {
-          thread.setStateListener(listener);
+        if (state == State.CREATED) {
+            for (StreamThread thread : threads) {
+                thread.setStateListener(listener);
+            }
+        } else {
+            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
+                "Current state is: " + state);
         }
-      } else {
-        throw new IllegalStateException("Can only set StateListener in CREATED state. " +
-            "Current state is: " + state);
-      }
     }
 
     /**
