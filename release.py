@@ -45,8 +45,8 @@ CAPITALIZED_PROJECT_NAME = "kafka".upper()
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 # Location of the local git repository
 REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
-# Remote name which points to Apache git
-PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
+# Remote name, which points to Github by default
+PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
 
 delete_gitrefs = False
@@ -77,6 +77,7 @@ def print_output(output):
 def cmd(action, cmd, *args, **kwargs):
     if isinstance(cmd, basestring) and not kwargs.get("shell", False):
         cmd = cmd.split()
+    allow_failure = kwargs.pop("allow_failure", False)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -92,6 +93,9 @@ def cmd(action, cmd, *args, **kwargs):
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
+
+        if allow_failure:
+            return
 
         print("*************************************************")
         print("*** First command failure occurred here.      ***")
@@ -126,9 +130,9 @@ def sftp_mkdir(dir):
     try:
        cmd_str  = """
 cd %s
-mkdir %s
+-mkdir %s
 """ % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str)
+       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
@@ -162,6 +166,32 @@ if not user_ok("""Requirements:
       signing.keyId=your-gpgkeyId
       signing.password=your-gpg-passphrase
       signing.secretKeyRingFile=/Users/your-id/.gnupg/secring.gpg (if you are using GPG 2.1 and beyond, then this file will no longer exist anymore, and you have to manually create it from the new private key directory with "gpg --export-secret-keys -o ~/.gnupg/secring.gpg")
+8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e.,
+       <server>
+          <id>apache.releases.https</id>
+          <username>your-apache-id</username>
+          <password>your-apache-passwd</password>
+        </server>
+	<server>
+            <id>your-gpgkeyId</id>
+            <passphrase>your-gpg-passphase</passphrase>
+        </server>
+        <profile>
+            <id>gpg-signing</id>
+            <properties>
+                <gpg.keyname>your-gpgkeyId</gpg.keyname>
+                <gpg.passphraseServerId>your-gpgkeyId</gpg.passphraseServerId>
+            </properties>
+        </profile>
+9. You may also need to update some gnupgp configs:
+	~/.gnupg/gpg-agent.conf
+	allow-loopback-pinentry
+
+	~/.gnupg/gpg.conf
+	use-agent
+	pinentry-mode loopback
+
+	echo RELOADAGENT | gpg-connect-agent
 
 If any of these are missing, see https://cwiki.apache.org/confluence/display/KAFKA/Release+Process for instructions on setting them up.
 
@@ -214,7 +244,6 @@ if not rc:
 # Prereq checks
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
-
 jdk7_java_home = get_pref(prefs, 'jdk7', lambda: raw_input("Enter the path for JAVA_HOME for a JDK7 compiler (blank to use default JAVA_HOME): "))
 jdk7_env = dict(os.environ) if jdk7_java_home.strip() else None
 if jdk7_env is not None: jdk7_env['JAVA_HOME'] = jdk7_java_home
@@ -262,6 +291,12 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
+cmd("update streams quickstart pom", ["sed", "-i", ".orig"," s/-SNAPSHOT//", "streams/quickstart/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml"])
+cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
 # Command in explicit list due to messages with spaces
 cmd("Commiting version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -277,6 +312,8 @@ if os.path.exists(work_dir):
 os.makedirs(work_dir)
 print("Temporary build working director:", work_dir)
 kafka_dir = os.path.join(work_dir, 'kafka')
+streams_quickstart_dir = os.path.join(kafka_dir, 'streams/quickstart')
+print("Streams quickstart dir", streams_quickstart_dir)
 cmd("Creating staging area for release artifacts", "mkdir kafka-" + rc_tag, cwd=work_dir)
 artifacts_dir = os.path.join(work_dir, "kafka-" + rc_tag)
 cmd("Cloning clean copy of repo", "git clone %s kafka" % REPO_HOME, cwd=work_dir)
@@ -306,7 +343,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "gradle", cwd=kafka_dir, env=jdk7_env)
 cmd("Building artifacts", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=kafka_dir, env=jdk7_env)
-# This should be removed with KAFKA-4421
+# This should be removed when Java7 is dropped (cf. KAFKA-4421)
 cmd("Building artifacts for Scala 2.12", "./gradlew releaseTarGz -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
 cmd("Copying artifacts", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
@@ -324,7 +361,7 @@ for filename in os.listdir(artifacts_dir):
     dir, fname = os.path.split(full_path)
     cmd("Generating MD5 for " + full_path, "gpg --print-md md5 %s > %s.md5" % (fname, fname), shell=True, cwd=dir)
     cmd("Generating SHA1 for " + full_path, "gpg --print-md sha1 %s > %s.sha1" % (fname, fname), shell=True, cwd=dir)
-    cmd("Generating SHA2 for " + full_path, "gpg --print-md sha512 %s > %s.sha2" % (fname, fname), shell=True, cwd=dir)
+    cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
@@ -338,16 +375,16 @@ sftp_cmds = ""
 for root, dirs, files in os.walk(artifacts_dir):
     assert root.startswith(artifacts_dir)
 
-    for file in files:
-        local_path = os.path.join(root, file)
-        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
-        sftp_cmds += "\nput %s %s" % (local_path, remote_path)
-
     for dir in dirs:
         sftp_mkdir(os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], dir))
 
-if sftp_cmds:
-    cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
+    for file in files:
+        local_path = os.path.join(root, file)
+        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
+        sftp_cmds = """
+put %s %s
+""" % (local_path, remote_path)
+        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
@@ -355,6 +392,7 @@ if not user_ok("Going to build and upload mvn artifacts based on these settings:
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk7_env)
 cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk7_env)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
@@ -383,11 +421,11 @@ Some suggested steps:
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.asc &&
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.md5 &&
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha1 &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha2 &&
+      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha512 &&
       gpg --verify kafka-%(release_version)s-src.tgz.asc kafka-%(release_version)s-src.tgz &&
       gpg --print-md md5 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.md5 &&
       gpg --print-md sha1 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha1 &&
-      gpg --print-md sha512 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha2 &&
+      gpg --print-md sha512 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha512 &&
       rm kafka-%(release_version)s-src.tgz* &&
       echo "OK" || echo "Failed"
  * Validate the javadocs look ok. They are at http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
@@ -439,7 +477,7 @@ https://repository.apache.org/content/groups/staging/
 http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
 
 * Tag to be voted upon (off %(dev_branch)s branch) is the %(release_version)s tag:
-https://git-wip-us.apache.org/repos/asf?p=kafka.git;a=tag;h=%(rc_githash)s
+https://github.com/apache/kafka/releases/tag/%(rc_tag)s
 
 * Documentation:
 http://kafka.apache.org/%(docs_version)s/documentation.html
@@ -449,7 +487,7 @@ http://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk7/<BUILD NUMBER>/
-System tests: https://jenkins.confluent.io/job/system-test-kafka-%(dev_branch)s/<BUILD_NUMBER>/
+System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 /**************************************
 
