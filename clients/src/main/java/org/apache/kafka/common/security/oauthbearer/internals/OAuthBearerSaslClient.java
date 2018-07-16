@@ -30,6 +30,8 @@ import javax.security.sasl.SaslClientFactory;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.security.SaslExtensions;
+import org.apache.kafka.common.security.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -86,10 +88,28 @@ public class OAuthBearerSaslClient implements SaslClient {
                 case SEND_CLIENT_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0)
                         throw new SaslException("Expected empty challenge");
-                    callbackHandler().handle(new Callback[] {callback});
+                    SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
+
+                    CallbackHandler cbHandler = callbackHandler();
+                    cbHandler.handle(new Callback[] {callback});
+
+                    try {
+                        callbackHandler.handle(new Callback[]{extensionsCallback});
+                    } catch (UnsupportedCallbackException e) {
+                        log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+                                callbackHandler);
+                    } catch (Throwable e) {
+                        throw new SaslException("SASL extensions could not be obtained", e);
+                    }
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
-                    return String.format("n,,auth=Bearer %s", callback.token().value())
-                            .getBytes(StandardCharsets.UTF_8);
+
+                    String message = String.format("n,,auth=Bearer %s", callback.token().value());
+                    if (!extensionsCallback.extensions().isEmpty()) {
+                        String extensions = new SaslExtensions(extensionsCallback.extensions()).toString();
+                        message += String.format(",%s", extensions);
+                    }
+
+                    return message.getBytes(StandardCharsets.UTF_8);
                 case RECEIVE_SERVER_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0) {
                         String jsonErrorResponse = new String(challenge, StandardCharsets.UTF_8);

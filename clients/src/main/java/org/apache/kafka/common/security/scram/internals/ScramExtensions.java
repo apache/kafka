@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.security.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 
 import java.util.Collections;
@@ -23,8 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-public class ScramExtensions {
-    private final Map<String, String> extensionMap;
+public class ScramExtensions extends SaslExtensions {
 
     public ScramExtensions() {
         this(Collections.<String, String>emptyMap());
@@ -38,43 +38,7 @@ public class ScramExtensions {
         this.extensionMap = extensionMap;
     }
 
-    public String extensionValue(String name) {
-        return extensionMap.get(name);
-    }
-
-    public Set<String> extensionNames() {
-        return extensionMap.keySet();
-    }
-
     public boolean tokenAuthenticated() {
         return Boolean.parseBoolean(extensionMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
-    }
-
-    @Override
-    public String toString() {
-        return mapToString(extensionMap);
-    }
-
-    private static Map<String, String> stringToMap(String extensions) {
-        Map<String, String> extensionMap = new HashMap<>();
-
-        if (!extensions.isEmpty()) {
-            String[] attrvals = extensions.split(",");
-            for (String attrval : attrvals) {
-                String[] array = attrval.split("=", 2);
-                extensionMap.put(array[0], array[1]);
-            }
-        }
-        return extensionMap;
-    }
-
-    private static String mapToString(Map<String, String> extensionMap) {
-        StringBuilder builder = new StringBuilder();
-        for (Map.Entry<String, String> entry : extensionMap.entrySet()) {
-            builder.append(entry.getKey());
-            builder.append('=');
-            builder.append(entry.getValue());
-        }
-        return builder.toString();
     }
 }

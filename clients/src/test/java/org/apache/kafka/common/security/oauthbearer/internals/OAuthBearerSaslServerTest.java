@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.SaslExtensions;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -80,6 +81,20 @@ public class OAuthBearerSaslServerTest {
     }
 
     @Test
+    public void savesCustomExtensionAsNegotiatedPorperty() throws Exception {
+        Map<String, String> customExtensions = new HashMap<>();
+        customExtensions.put("firstKey", "value1");
+        customExtensions.put("secondKey", "value2");
+
+        byte[] nextChallenge = saslServer
+                .evaluateResponse(clientInitialResponseText(null, customExtensions).getBytes(StandardCharsets.UTF_8));
+
+        assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+        assertEquals("value1", saslServer.getNegotiatedProperty("firstKey"));
+        assertEquals("value2", saslServer.getNegotiatedProperty("secondKey"));
+    }
+
+    @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponseText(USER).getBytes(StandardCharsets.UTF_8));
@@ -101,6 +116,10 @@ public class OAuthBearerSaslServerTest {
 
     private String clientInitialResponseText(String authorizationId)
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+        return clientInitialResponseText(authorizationId, new HashMap<>());
+    }
+    private String clientInitialResponseText(String authorizationId, Map<String, String> customExtensions)
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         LOGIN_CALLBACK_HANDLER.handle(new Callback[] {callback});
         OAuthBearerToken token = callback.token();
@@ -108,6 +127,11 @@ public class OAuthBearerSaslServerTest {
         String clientInitialResponseText = "n,"
                 + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",auth=Bearer "
                 + compactSerialization;
+        if (!customExtensions.isEmpty()) {
+            // TODO: Test SaslExtensions
+            clientInitialResponseText += String.format(",%s", new SaslExtensions(customExtensions).toString());
+        }
+        System.out.println(clientInitialResponseText);
         return clientInitialResponseText;
     }
 }

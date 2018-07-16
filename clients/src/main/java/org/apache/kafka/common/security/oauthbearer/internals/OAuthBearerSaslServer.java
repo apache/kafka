@@ -33,10 +33,12 @@ import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.SaslExtensions;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.apache.kafka.common.security.scram.internals.ScramExtensions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,14 +55,22 @@ public class OAuthBearerSaslServer implements SaslServer {
     private static final String NEGOTIATED_PROPERTY_KEY_TOKEN = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token";
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
+    private static final String KEY = "[A-Za-z]+";
+    private static final String VALUE = "[\\x01-\\x7F]+";
+    private static final String EXTENSIONS = String.format("(,%s=%s)*", KEY, VALUE);
+
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
-            String.format("n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)", SASLNAME));
+            String.format(
+                    "n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)(?<extensions>%s)",
+                    SASLNAME,
+                    EXTENSIONS));
 
     private final AuthenticateCallbackHandler callbackHandler;
 
     private boolean complete;
     private OAuthBearerToken tokenForNegotiatedProperty = null;
     private String errorMessage = null;
+    private SaslExtensions extensions;
 
     public OAuthBearerSaslServer(CallbackHandler callbackHandler) {
         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
@@ -97,6 +107,8 @@ public class OAuthBearerSaslServer implements SaslServer {
                 log.debug(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
             throw new SaslException(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
         }
+
+        String extString = matcher.group("extensions");
         String authzid = matcher.group("authzid");
         String authorizationId = authzid != null ? authzid : "";
         if (!"bearer".equalsIgnoreCase(matcher.group("scheme"))) {
@@ -106,6 +118,7 @@ public class OAuthBearerSaslServer implements SaslServer {
                 log.debug(msg);
             throw new SaslException(msg);
         }
+        this.extensions = extString.startsWith(",") ? new SaslExtensions(extString.substring(1)) : new SaslExtensions();
         String tokenValue = matcher.group("token");
         return process(tokenValue, authorizationId);
     }
@@ -126,7 +139,10 @@ public class OAuthBearerSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName) ? tokenForNegotiatedProperty : null;
+        if (NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName))
+            return tokenForNegotiatedProperty;
+
+        return this.extensions.extensionValue(propName);
     }
 
     @Override
