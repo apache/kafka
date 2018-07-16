@@ -207,11 +207,15 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                     // the store is already open here.
                     bulkLoadSegments = new HashSet<>(segments.allSegments());
                 }
-                final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-                if (record.value == null) {
-                    batch.remove(record.key);
-                } else {
-                    batch.put(record.key, record.value);
+                try {
+                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+                    if (record.value == null) {
+                        batch.remove(record.key);
+                    } else {
+                        batch.put(record.key, record.value);
+                    }
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
                 }
             }
         }
