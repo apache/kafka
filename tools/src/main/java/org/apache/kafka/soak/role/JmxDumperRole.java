@@ -40,7 +40,7 @@ public class JmxDumperRole implements Role {
     public JmxDumperRole(@JsonProperty("initialDelayMs") int initialDelayMs,
                          @JsonProperty("conf") JmxDumpersConfig conf) {
         this.initialDelayMs = initialDelayMs;
-        this.conf = (conf == null) ? new JmxDumpersConfig(Collections.emptyMap()) : conf;
+        this.conf = (conf == null) ? new JmxDumpersConfig() : conf;
     }
 
     @Override

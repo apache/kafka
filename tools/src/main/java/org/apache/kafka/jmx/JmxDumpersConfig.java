@@ -17,10 +17,9 @@
 
 package org.apache.kafka.jmx;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,19 +28,15 @@ import java.util.Map;
  * Maps host:port pairs to DumperConfig objects.
  */
 public final class JmxDumpersConfig {
-    private final Map<String, JmxDumperConfig> map;
+    private final Map<String, JmxDumperConfig> map = new HashMap<>();
 
-    @JsonCreator
-    public JmxDumpersConfig(@JsonProperty("map") Map<String, JmxDumperConfig> map) {
-        this.map = Collections.unmodifiableMap((map == null) ? new HashMap<>() : map);
+    @JsonAnySetter
+    public void add(String key, JmxDumperConfig value) {
+        map.put(key == null ? "" : key, value);
     }
 
-    @JsonProperty
+    @JsonAnyGetter
     public Map<String, JmxDumperConfig> map() {
         return map;
     }
-
-    //Map<String, JmxDumperConfig> map() {
-        //return map;
-    //}
 }
