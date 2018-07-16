@@ -18,9 +18,11 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class WindowsTest {
 
@@ -53,6 +55,26 @@ public class WindowsTest {
     public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
         assertEquals(anyNotNegativeRetentionTime, new TestWindows().until(anyNotNegativeRetentionTime).maintainMs());
+    }
+
+
+    @Test
+    public void gracePeriodShouldEnforceBoundaries() {
+        new TestWindows().grace(Duration.ZERO);
+
+        try {
+            new TestWindows().grace(Duration.ofNanos(-1));
+            fail("should not accept negatives");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
+
+        try {
+            new TestWindows().grace(Duration.ofSeconds(Long.MAX_VALUE));
+            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)

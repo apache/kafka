@@ -56,10 +56,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final boolean repartitionRequired,
                             final StreamsGraphNode streamsGraphNode) {
         super(builder, name, sourceNodes, streamsGraphNode);
-        Objects.requireNonNull(windows, "windows can't be null");
         this.valSerde = valSerde;
         this.keySerde = keySerde;
-        this.windows = windows;
+        this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name, streamsGraphNode);
     }
 
@@ -164,16 +163,32 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         );
     }
 
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private <VR> StoreBuilder<WindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.persistentWindowStore(
-                materialized.storeName(),
-                windows.maintainMs(),
-                windows.size(),
-                false,
-                windows.segmentInterval()
-            );
+            if (materialized.retention() != null) {
+                // new style retention: use Materialized retention and default segmentInterval
+                final long retentionPeriod = materialized.retention().toMillis();
+
+                supplier = Stores.persistentWindowStore(
+                    materialized.storeName(),
+                    retentionPeriod,
+                    windows.size(),
+                    false
+                );
+
+            } else {
+                // old style retention: use deprecated Windows retention/segmentInterval.
+                supplier = Stores.persistentWindowStore(
+                    materialized.storeName(),
+                    windows.maintainMs(),
+                    windows.size(),
+                    false,
+                    windows.segmentInterval()
+                );
+                // note:
+            }
         }
         final StoreBuilder<WindowStore<K, VR>> builder = Stores.windowStoreBuilder(
             supplier,

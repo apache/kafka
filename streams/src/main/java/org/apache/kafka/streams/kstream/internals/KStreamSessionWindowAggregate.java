@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -23,9 +24,11 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.metrics.Sensors;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -73,12 +76,17 @@ class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSup
         private SessionStore<K, Agg> store;
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private InternalProcessorContext internalProcessorContext;
+        private Sensor lateEventDropSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            internalProcessorContext = (InternalProcessorContext) context;
             metrics = (StreamsMetricsImpl) context.metrics();
+            lateEventDropSensor = Sensors.lateEventDropSensor(internalProcessorContext);
+
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
@@ -95,6 +103,8 @@ class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSup
                 metrics.skippedRecordsSensor().record();
                 return;
             }
+
+            final long closeTime = internalProcessorContext.streamTime() - windows.grace().toMillis();
 
             final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
@@ -119,6 +129,14 @@ class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSup
 
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
+            if (mergedWindow.end() <= closeTime) {
+                LOG.debug(
+                    "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
+                    key, context().topic(), context().partition(), context().offset(), context().timestamp(), mergedWindow.start(), mergedWindow.end(), closeTime
+                );
+                lateEventDropSensor.record();
+                return;
+            }
             if (!mergedWindow.equals(newSessionWindow)) {
                 for (final KeyValue<Windowed<K>, Agg> session : merged) {
                     store.remove(session.key);

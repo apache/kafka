@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -123,8 +124,12 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @param durationMs the window retention time
      * @return itself
      * @throws IllegalArgumentException if {@code duration} is smaller than the window size
+     *
+     * @deprecated since 2.1. Use {@link Materialized#retention} or directly configure the retention in a store supplier
+     *             and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     @Override
+    @Deprecated
     public TimeWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < sizeMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
@@ -141,6 +146,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @return the window maintain duration
      */
     @Override
+    @Deprecated
     public long maintainMs() {
         return Math.max(super.maintainMs(), sizeMs);
     }

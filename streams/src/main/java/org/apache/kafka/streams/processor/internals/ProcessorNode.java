@@ -84,6 +84,11 @@ public class ProcessorNode<K, V> {
     }
 
     public void init(final InternalProcessorContext context) {
+        if (context == null) {
+            throw new StreamsException(String.format("failed to initialize processor %s", name), new NullPointerException());
+        }
+        final ProcessorNode priorNode = context.currentNode();
+        context.setCurrentNode(this);
         try {
             nodeMetrics = new NodeMetrics(context.metrics(), name, context);
             final long startNs = time.nanoseconds();
@@ -93,6 +98,8 @@ public class ProcessorNode<K, V> {
             nodeMetrics.nodeCreationSensor.record(time.nanoseconds() - startNs);
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
+        } finally {
+            context.setCurrentNode(priorNode);
         }
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -45,6 +46,16 @@ public class UnlimitedWindowsTest {
         try {
             windowSpec.until(42);
             fail("should not allow to set window retention time");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void gracePeriodShouldNotBeSettable() {
+        try {
+            UnlimitedWindows.of().grace(Duration.ZERO);
+            fail("should not be able to set grace period");
         } catch (final IllegalArgumentException e) {
             // expected
         }

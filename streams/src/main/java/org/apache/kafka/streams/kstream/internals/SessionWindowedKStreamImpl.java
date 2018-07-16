@@ -174,12 +174,22 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         );
     }
 
+    @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs();
+
+            if (windows.inactivityGap() > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the session store "
+                                                       + materialized.storeName()
+                                                       + " must be no smaller than the session inactivity gap. "
+                                                       + "Got gap=[" + windows.inactivityGap()
+                                                       + "], retention=[" + retentionPeriod + "]");
+            }
             supplier = Stores.persistentSessionStore(
                 materialized.storeName(),
-                windows.maintainMs()
+                retentionPeriod
             );
         }
         final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(

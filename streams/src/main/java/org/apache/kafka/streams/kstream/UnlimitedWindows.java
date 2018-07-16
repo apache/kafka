@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -99,6 +100,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException on every invocation
      */
     @Override
+    @Deprecated
     public UnlimitedWindows until(final long durationMs) {
         throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
     }
@@ -110,8 +112,20 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return the window retention time that is {@link Long#MAX_VALUE}
      */
     @Override
+    @Deprecated
     public long maintainMs() {
         return Long.MAX_VALUE;
+    }
+
+    /**
+     * Throws an {@link IllegalArgumentException} because the window never ends and the
+     * grace period is therefore meaningless.
+     *
+     * @throws IllegalArgumentException on every invocation
+     */
+    @Override
+    public Windows<UnlimitedWindow> grace(final Duration afterWindowEnd) {
+        throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 
     @Override

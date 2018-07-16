@@ -137,8 +137,10 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
+     * @deprecated since 2.1. Use {@link Joined#retention()}.
      */
     @Override
+    @Deprecated
     public JoinWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < size()) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
@@ -153,8 +155,10 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link Joined#retention()} or {@link Materialized#retention} instead.
      */
     @Override
+    @Deprecated
     public long maintainMs() {
         return Math.max(super.maintainMs(), size());
     }
