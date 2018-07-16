@@ -80,7 +80,7 @@ object ConsumerGroupCommand extends Logging {
 
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
     println(s"Error: $msg")
-    e.foreach(debug("Exception in consumer group command", _))
+    e.foreach(_.printStackTrace())
   }
 
   def convertTimestamp(timeString: String): java.lang.Long = {

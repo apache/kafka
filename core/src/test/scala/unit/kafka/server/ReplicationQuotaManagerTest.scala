@@ -50,7 +50,7 @@ class ReplicationQuotaManagerTest {
     quota.updateQuota(new Quota(100, true))
 
     //Quota should not be broken when we start
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
 
     //First window is fixed, so we'll skip it
     time.sleep(1000)
@@ -60,24 +60,24 @@ class ReplicationQuotaManagerTest {
     quota.record(1)
 
     //Then it should not break the quota
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
 
     //When we record half the quota (half way through the window), we still should not break
     quota.record(149) //150B, 1.5s
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
 
     //Add a byte to push over quota
     quota.record(1) //151B, 1.5s
 
     //Then it should break the quota
     assertEquals(151 / 1.5, rate(metrics), 0) //151B, 1.5s
-    assertTrue(quota.isQuotaExceeded())
+    assertTrue(quota.isQuotaExceeded)
 
     //When we sleep for the remaining half the window
     time.sleep(500) //151B, 2s
 
     //Then Our rate should have halved (i.e back down below the quota)
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
     assertEquals(151d / 2, rate(metrics), 0.1) //151B, 2s
 
     //When we sleep for another half a window (now half way through second window)
@@ -86,14 +86,14 @@ class ReplicationQuotaManagerTest {
 
     //Then the rate should be exceeded again
     assertEquals(250 / 2.5, rate(metrics), 0) //250B, 2.5s
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
     quota.record(1)
-    assertTrue(quota.isQuotaExceeded())
+    assertTrue(quota.isQuotaExceeded)
     assertEquals(251 / 2.5, rate(metrics), 0)
 
     //Sleep for 2 more window
     time.sleep(2 * 1000) //so now at 3.5s
-    assertFalse(quota.isQuotaExceeded())
+    assertFalse(quota.isQuotaExceeded)
     assertEquals(251d / 4.5, rate(metrics), 0)
   }
 
