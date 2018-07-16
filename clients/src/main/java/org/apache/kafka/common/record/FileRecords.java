@@ -55,11 +55,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
      * The constructor is visible for tests.
      */
-    public FileRecords(File file,
-                       FileChannel channel,
-                       int start,
-                       int end,
-                       boolean isSlice) throws IOException {
+    FileRecords(File file,
+                FileChannel channel,
+                int start,
+                int end,
+                boolean isSlice) throws IOException {
         this.file = file;
         this.channel = channel;
         this.start = start;
@@ -71,6 +71,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // don't check the file size if this is just a slice view
             size.set(end - start);
         } else {
+            if (channel.size() > Integer.MAX_VALUE)
+                throw new KafkaException("The size of segment " + file + " (" + channel.size() +
+                        ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE);
+
             int limit = Math.min((int) channel.size(), end);
             size.set(limit - start);
 
@@ -131,9 +135,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public FileRecords slice(int position, int size) throws IOException {
         if (position < 0)
-            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
+            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
+        if (position > sizeInBytes() - start)
+            throw new IllegalArgumentException("Slice from position " + position + " exceeds end position of " + this);
         if (size < 0)
-            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + file);
+            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
         int end = this.start + position + size;
         // handle integer overflow or if end is beyond the end of the file
@@ -143,11 +149,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Append log batches to the buffer
+     * Append a set of records to the file. This method is not thread-safe and must be
+     * protected with a lock.
+     *
      * @param records The records to append
      * @return the number of bytes written to the underlying file
      */
     public int append(MemoryRecords records) throws IOException {
+        if (records.sizeInBytes() > Integer.MAX_VALUE - size.get())
+            throw new IllegalArgumentException("Append of size " + records.sizeInBytes() +
+                    " bytes is too large for segment with current file position at " + size.get());
+
         int written = records.writeFullyTo(channel);
         size.getAndAdd(written);
         return written;
