@@ -69,10 +69,24 @@ public class RebalanceKafkaConsumerTest {
     }
 
     @Test
+    public void testAddOffsetsMethod() {
+        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer(startOffsets, startOffsets);
+        consumer.addNewOffsets(startOffsets, endOffsets);
+        assertTrue(consumer.position(t1p) == 0L);
+        assertTrue(consumer.position(t2p) == 1L);
+    }
+
+    @Test
     public void testConsumerClose() {
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
         consumerThread.start();
+
+        // wait for a tenth of a second so that we can be sure consumerThread has started
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException exc) { }
+
         consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
         while (requestResult == null) {
             try {

@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -46,7 +47,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private volatile Duration waitTime;
     private volatile InputArgument inputArgument;
     private volatile TaskCompletionCallback callback;
-    private volatile boolean shouldClose;
+    private final AtomicBoolean shouldClose;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeserializer,
@@ -55,28 +56,14 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                                   final Map<TopicPartition, Long> endOffsets) {
         super(configs, keyDeserializer, valueDeserializer);
         this.offsetRanges = new HashMap<>();
-        //go to start positions i.e. the last committed offsets of the parent consumer
-        final HashSet<TopicPartition> partitionsToAssign = new HashSet<>();
-        for (final Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
-            if (entry.getValue().equals(endOffsets.get(entry.getKey()))) {
-                continue;
-            }
-            ArrayList<OffsetInterval> intervals = new ArrayList<>();
-            intervals.add(new OffsetInterval(entry.getValue(), endOffsets.get(entry.getKey())));
-            offsetRanges.put(entry.getKey(), intervals);
-            partitionsToAssign.add(entry.getKey());
-        }
-        super.assign(partitionsToAssign);
-        for (final TopicPartition partition : partitionsToAssign) {
-            super.seek(partition, offsetRanges.get(partition).get(0).startOffset);
-        }
-        this.assignedPartitions = partitionsToAssign;
+        this.assignedPartitions = new HashSet<>();
+        addNewOffsets(startOffsets, endOffsets);
         this.request = null;
         this.result = null;
         this.waitTime = null;
         this.inputArgument = null;
         this.callback = null;
-        this.shouldClose = false;
+        this.shouldClose = new AtomicBoolean(false);
     }
 
     public RequestResult getResult() {
@@ -108,6 +95,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             offsetRanges.get(entry.getKey()).add(new OffsetInterval(entry.getValue(), endOffsets.get(entry.getKey())));
         }
         super.assign(assignedPartitions);
+        // go to assigned positions i.e. last committed offset
         for (TopicPartition partition : newPartitions) {
             super.seek(partition, offsetRanges.get(partition).get(0).startOffset);
         }
@@ -151,20 +139,26 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     @Override
     public void run() {
-        while (!shouldClose) {
+        while (!shouldClose.get()) {
+            if (request == null) {
+                continue;
+            }
+
+            // Cases which have no return value will h ave their result be marked as a boolean value: true.
+            // This is intended as a marker to represent that a particular operation has succeeded or has finished.
             switch (request) {
                 case WAKE_UP:
                     super.wakeup();
-                    result = null;
+                    result = new RequestResult<>(true);
                     break;
                 case CLOSE:
+                    System.out.println("Has started close procedure");
                     super.close(waitTime);
-                    // intended as a marker to represent that a particular operation has succeeded
                     result = new RequestResult<>(true);
                     break;
                 case PAUSE:
                     pause((Collection<TopicPartition>) inputArgument.value);
-                    result = null;
+                    result = new RequestResult<>(true);
                     break;
                 case OFFSETS_FOR_TIMES:
                     result = new RequestResult<>(super.offsetsForTimes((Map<TopicPartition, Long>) inputArgument.value,
@@ -180,11 +174,11 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     break;
                 case COMMIT_ASYNC:
                     super.commitAsync((OffsetCommitCallback) inputArgument.value);
-                    result = null;
+                    result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
                     super.commitSync(waitTime);
-                    result = null;
+                    result = new RequestResult<>(true);
                     break;
                 case COMMITTED:
                     result = new RequestResult<>(super.committed((TopicPartition) inputArgument.value));
@@ -203,23 +197,14 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    @Override
-    public void close() {
-        close(Duration.ofMillis(Long.MAX_VALUE));
-    }
-
-    @Override
-    public void close(Duration timeout) {
-        sendRequest(timeout, ConsumerRequest.CLOSE, null, null);
-        this.shouldClose = true;
-    }
-
     public void close(Duration timeout, TaskCompletionCallback callback) {
         sendRequest(timeout, ConsumerRequest.CLOSE, null, callback);
-        this.shouldClose = true;
+        this.shouldClose.set(true);
+        System.out.println(shouldClose.get());
     }
 
-    public enum ConsumerRequest { POLL,
+    public enum ConsumerRequest {
+        POLL,
         COMMITTED,
         COMMIT_SYNC,
         COMMIT_ASYNC,
