@@ -1176,9 +1176,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         final long metadataStart = time.milliseconds();
         long elapsedMs = 0;
         elapsedMs += time.milliseconds() - metadataStart;
-        System.out.println(coordinator.isRebalancing(true) + " " + useParallelRebalance);
         if (coordinator.isRebalancing(false) && useParallelRebalance) {
-            System.out.println("Initiating calls");
             getStartAndEndOffsets();
             if (rebalanceConsumer == null) {
                 rebalanceConsumer = new RebalanceKafkaConsumer(configs,
@@ -1193,7 +1191,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
 
         if (rebalanceConsumer != null) {
-            System.out.println("Sending request");
             // for now, just get the implementation done, don't worry about test results
             rebalanceConsumer.sendRequest(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
                     RebalanceKafkaConsumer.ConsumerRequest.POLL,
@@ -1247,20 +1244,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
-                    ConsumerRecords<K, V> recordsReturned = checkRebalance(Long.MAX_VALUE);
-                    final Set<String> topics = new HashSet<>();
-                    if (recordsReturned == null) {
-                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
-                    }
-                    for (TopicPartition partition : recordsReturned.partitions()) {
-                        if (!topics.contains(partition.topic())) {
-                            topics.add(partition.topic());
-                            for (ConsumerRecord<K, V> record : recordsReturned.records(partition.topic())) {
-                                System.out.println("Record for " + partition.topic() + " is " + record.toString());
-                            }
-                        }
-                    }
-
+                    //ConsumerRecords<K, V> recordsReturned = checkRebalance(Long.MAX_VALUE);
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
