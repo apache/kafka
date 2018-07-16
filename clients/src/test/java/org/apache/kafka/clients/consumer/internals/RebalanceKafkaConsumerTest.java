@@ -26,7 +26,10 @@ import org.junit.Test;
 import java.util.Map;
 import java.util.HashMap;
 
+import java.time.Duration;
+
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class RebalanceKafkaConsumerTest {
     private final String topic1 = "test1";
@@ -35,13 +38,14 @@ public class RebalanceKafkaConsumerTest {
     private final TopicPartition t2p = new TopicPartition(topic2, 0);
     private final Map<TopicPartition, Long> startOffsets = new HashMap<>();
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
+    private RebalanceKafkaConsumer.RequestResult requestResult = null;
 
     @Before
     public void setUpOffsets() {
         startOffsets.put(t1p, 0L);
         startOffsets.put(t2p, 1L);
         endOffsets.put(t1p, 4L);
-        endOffsets.put(t1p, 5L);
+        endOffsets.put(t2p, 5L);
     }
 
     @Test
@@ -56,6 +60,26 @@ public class RebalanceKafkaConsumerTest {
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(t1p, 1L);
         assertTrue(newConsumer(offsets, offsets).subscription().size() == 0);
+    }
+
+    @Test
+    public void testIfTerminated() {
+        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        assertFalse(consumer.terminated());
+    }
+
+    @Test
+    public void testConsumerClose() {
+        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        final Thread consumerThread = new Thread(consumer);
+        consumerThread.start();
+        consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
+        while (requestResult == null) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException exc) { }
+        }
+        assertFalse(consumerThread.isAlive());
     }
 
     private RebalanceKafkaConsumer<byte[], byte[]> newConsumer() {
@@ -79,5 +103,12 @@ public class RebalanceKafkaConsumerTest {
                 new ByteArrayDeserializer(),
                 beginningOffsets,
                 finishingOffsets);
+    }
+
+    private class MockTaskCompletionCallback extends TaskCompletionCallback {
+        @Override
+        public void onTaskComplete(RebalanceKafkaConsumer.RequestResult result) {
+            requestResult = result;
+        }
     }
 }
