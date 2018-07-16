@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
+import org.apache.kafka.streams.processor.internals.StreamThread
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.test.TestUtils
@@ -101,11 +102,57 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
 
     val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
-
     streams.close()
 
     import collection.JavaConverters._
     assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
+  }
+
+    @Test def testShouldCountClicksPerRegionWithMissingTopic(): Unit = {
+
+    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced,
+    // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
+    // get these instances automatically
+    import Serdes._
+
+    val streamsConfiguration: Properties = getStreamsConfiguration()
+
+    val builder = new StreamsBuilder()
+
+    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
+
+    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic+"1")
+
+    // Compute the total per region by summing the individual click counts per region.
+    val clicksPerRegion: KTable[String, Long] =
+      userClicksStream
+
+      // Join the stream against the table.
+        .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
+
+        // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
+        .map((_, regionWithClicks) => regionWithClicks)
+
+        // Compute the total per region by summing the individual click counts per region.
+        .groupByKey
+        .reduce(_ + _)
+
+    // Write the (continuously updating) results to the output topic.
+    clicksPerRegion.toStream.to(outputTopic)
+
+    val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
+    val listener = new IntegrationTestUtils.StateListenerStub()
+    streams.setStreamThreadStateListener(listener)
+    streams.start()
+
+    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
+      produceNConsume(userClicksTopic, userRegionsTopic, outputTopic, false)
+    while (!listener.revokedToPendingShutdownSeen()) {
+      Thread.sleep(3)
+    }
+    streams.close()
+    assertEquals(listener.runningToRevokedSeen(), true)
+    assertEquals(listener.revokedToPendingShutdownSeen(), true)
   }
 
   @Test def testShouldCountClicksPerRegionJava(): Unit = {
@@ -217,7 +264,8 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
 
   private def produceNConsume(userClicksTopic: String,
                               userRegionsTopic: String,
-                              outputTopic: String): java.util.List[KeyValue[String, Long]] = {
+                              outputTopic: String,
+                              waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
 
     import collection.JavaConverters._
 
@@ -237,9 +285,13 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
                                                        mockTime,
                                                        false)
 
-    // consume and verify result
-    val consumerConfig = getConsumerConfig()
+    if (waitTillRecordsReceived) {
+      // consume and verify result
+      val consumerConfig = getConsumerConfig()
 
-    IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedClicksPerRegion.size)
+          IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedClicksPerRegion.size)
+    } else {
+      java.util.Collections.emptyList()
+    }
   }
 }
