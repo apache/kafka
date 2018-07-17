@@ -20,9 +20,7 @@ import org.apache.kafka.common.security.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class ScramExtensions extends SaslExtensions {
 

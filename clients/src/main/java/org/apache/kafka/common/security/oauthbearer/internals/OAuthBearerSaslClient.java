@@ -132,7 +132,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     private SaslExtensionsCallback parseCustomExtensions() throws SaslException {
         SaslExtensionsCallback callback = new SaslExtensionsCallback();
         try {
-            callbackHandler.handle(new Callback[] { callback } );
+            callbackHandler.handle(new Callback[] {callback});
         } catch (UnsupportedCallbackException e) {
             log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
                     callbackHandler);
