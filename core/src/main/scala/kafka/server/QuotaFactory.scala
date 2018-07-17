@@ -67,7 +67,7 @@ object QuotaFactory extends Logging {
     QuotaManagers(
       new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
       new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
-      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallback),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, schedulerOpt, threadNamePrefix, clientQuotaCallback),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
       new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time),
