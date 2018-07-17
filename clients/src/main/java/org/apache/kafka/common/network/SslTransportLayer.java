@@ -256,8 +256,6 @@ public class SslTransportLayer implements TransportLayer {
                 read = readFromSocketChannel();
 
             doHandshake();
-        } catch (SSLHandshakeException | SSLProtocolException | SSLPeerUnverifiedException | SSLKeyException e) {
-            handshakeFailure(e, true);
         } catch (SSLException e) {
             maybeProcessHandshakeFailure(e, true, null);
         } catch (IOException e) {
@@ -268,8 +266,6 @@ public class SslTransportLayer implements TransportLayer {
             if (handshakeStatus == HandshakeStatus.NEED_UNWRAP && netReadBuffer.position() > 0) {
                 try {
                     handshakeUnwrap(false);
-                } catch (SSLHandshakeException | SSLProtocolException | SSLPeerUnverifiedException | SSLKeyException e1) {
-                    handshakeFailure(e1, false);
                 } catch (SSLException e1) {
                     maybeProcessHandshakeFailure(e1, false, e);
                 }
@@ -831,8 +827,9 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
-    // SSLPeerUnverifiedException or SSLKeyException if the cause is known. But the SSL engine may
-    // throw exceptions using the base class SSLException in a few cases:
+    // SSLPeerUnverifiedException or SSLKeyException if the cause is known. These exceptions indicate
+    // authentication failures (e.g. configuration errors) which should not be retried. But the SSL engine
+    // may also throw exceptions using the base class SSLException in a few cases:
     //   a) If there are no matching ciphers or TLS version or the private key is invalid, client will be
     //      unable to process the server message and an SSLException is thrown:
     //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
@@ -843,7 +840,10 @@ public class SslTransportLayer implements TransportLayer {
     // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception
     // when we are not sure, we will treat only the first exception string as a handshake exception.
     private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
-        if (sslException.getMessage().contains("Unrecognized SSL message"))
+        if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||
+                sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException) {
+            handshakeFailure(sslException, flush);
+        } else if (sslException.getMessage().contains("Unrecognized SSL message"))
             handshakeFailure(sslException, flush);
         else if (ioException == null)
             throw sslException;
