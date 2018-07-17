@@ -679,7 +679,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-            this.useParallelRebalance = true;
+            this.useParallelRebalance = config.getBoolean(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG);
             this.time = Time.SYSTEM;
 
             Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
