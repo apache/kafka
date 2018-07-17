@@ -57,16 +57,16 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testUnresolvableConnectString(): Unit = {
-    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time, "testMetricGroup",
-      "testMetricType").close()
+    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", zkSessionTimeout, connectionTimeoutMs = 10,
+      Int.MaxValue, time, "testMetricGroup", "testMetricType").close()
   }
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue, time, "testMetricGroup",
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 10, Int.MaxValue, time, "testMetricGroup",
       "testMetricType").close()
   }
 
