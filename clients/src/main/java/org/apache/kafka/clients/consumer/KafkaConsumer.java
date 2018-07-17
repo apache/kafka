@@ -573,7 +573,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean useParallelRebalance;
     private RebalanceKafkaConsumer rebalanceConsumer;
-    private boolean isChildConsumer;
     private Thread consumerThread;
     private volatile RebalanceKafkaConsumer.RequestResult result;
     private Map<TopicPartition, Long> startOffsets = new HashMap<>();
@@ -793,7 +792,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     isolationLevel);
             this.rebalanceConsumer =  null;
             this.consumerThread = null;
-            this.isChildConsumer = false;
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
@@ -843,13 +841,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.useParallelRebalance = false;
         this.rebalanceConsumer = null;
         this.consumerThread = null;
-        this.isChildConsumer = false;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
-    }
-
-    private void setTrueIfConsumerIsChild() {
-        this.isChildConsumer = true;
     }
 
     /**
@@ -1129,11 +1122,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public ConsumerRecords<K, V> poll(final long timeout) {
-        return poll(timeout, false);
+        return poll(timeout, false, true);
     }
 
     /**
-     * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
+     * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to have
      * subscribed to any topics or partitions before polling for data.
      * <p>
      * On each poll, consumer will try to use the last consumed offset as the starting offset and fetch sequentially. The last
@@ -1168,10 +1161,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        return poll(timeout.toMillis(), true);
+        return poll(timeout.toMillis(), true, true);
     }
 
-    void getStartAndEndOffsets() {
+    private void getStartAndEndOffsets() {
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
             startOffsets.put(partition, committed(partition).offset());
         }
@@ -1183,7 +1176,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void checkRebalanceAndPoll(long timeoutMs) {
-        if (useParallelRebalance && rebalanceConsumer == null && !isChildConsumer) {
+        if (useParallelRebalance && rebalanceConsumer == null) {
             rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
             consumerThread = new Thread(rebalanceConsumer);
         }
@@ -1206,21 +1199,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private RebalanceKafkaConsumer.RequestResult pollForResults(long timeoutMs) {
-        final long now = time.milliseconds();
-        long elapsed = 0L;
-        boolean condition = true;
+    private RebalanceKafkaConsumer.RequestResult pollForResults(final long timeoutMs, final long now) {
+        long elapsed = time.milliseconds() - now;
+        boolean condition = remainingTimeAtLeastZero(timeoutMs, elapsed) != 0;
         while (result == null && condition) {
             try {
-                Thread.sleep(1);
+                Thread.sleep(retryBackoffMs);
             } catch (InterruptedException exc) { }
             elapsed = time.milliseconds() - now;
             condition = remainingTimeAtLeastZero(timeoutMs, elapsed) != 0;
         }
-        return condition ? result : null;
+        return result;
     }
 
-    private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
+    // method only intended for the use of RebalanceKafkaConsumer (it is created to ensure that no internals are exposed)
+    protected ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
+        return poll(timeoutMs, includeMetadataInTimeout, false);
+    }
+
+    private ConsumerRecords<K, V>  mergeRecords(final ConsumerRecords<K, V> records1, final ConsumerRecords<K, V> records2) {
+        final HashMap<TopicPartition, List<ConsumerRecord<K, V>>> map = new HashMap<>();
+        for (final TopicPartition partition : records1.partitions()) {
+            map.put(partition, records1.records(partition));
+        }
+        for (final TopicPartition partition : records2.partitions()) {
+            if (!map.containsKey(partition)) {
+                map.put(partition, records2.records(partition));
+            } else {
+                map.get(partition).addAll(records2.records(partition));
+            }
+        }
+        return new ConsumerRecords<>(map);
+    }
+
+    private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout, final boolean checkRebalance) {
         acquireAndEnsureOpen();
         try {
             if (timeoutMs < 0) throw new IllegalArgumentException("Timeout must not be negative");
@@ -1229,10 +1241,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            checkRebalanceAndPoll(timeoutMs);
+            final long checkRebalanceStart = time.milliseconds();
+            if (checkRebalance) {
+                checkRebalanceAndPoll(timeoutMs);
+            }
 
             // poll for new data until the timeout expires
-            long elapsedTime = 0L;
+            long elapsedTime = time.milliseconds() - checkRebalanceStart;
             do {
 
                 client.maybeTriggerWakeup();
@@ -1265,6 +1280,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
+                    if (consumerThread != null && consumerThread.isAlive() && result == null) {
+                        ConsumerRecords<K, V> offsetLagRecords =
+                                (ConsumerRecords<K, V>) pollForResults(timeoutMs, checkRebalanceStart).value;
+                        if (offsetLagRecords == null) {
+                            return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                        } else {
+                            return mergeRecords(offsetLagRecords, this.interceptors.onConsume(new ConsumerRecords<>(records)));
+                        }
+                    }
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
