@@ -37,13 +37,7 @@ import org.scalatest.junit.JUnitSuite
  * Test suite that verifies the shutdown of StreamThread when metadata is incomplete during stream-table joins in Kafka Streams
  * <p>
  */
-class StreamToTableJoinWithIncompleteMetadataIntegrationTest extends StreamToTableJoinScalaIntegrationTestImplicitSerdes {
-
-  @Test override def testShouldCountClicksPerRegion(): Unit = {
-  }
-
-  @Test override def testShouldCountClicksPerRegionJava(): Unit = {
-  }
+class StreamToTableJoinWithIncompleteMetadataIntegrationTest extends StreamToTableJoinScalaIntegrationTestBase {
 
   @Test def testShouldAutoShutdownOnIncompleteMetadata(): Unit = {
 
