@@ -82,7 +82,7 @@ versions += [
   slf4j: "1.7.25",
   snappy: "1.1.7.2",
   zkclient: "0.10",
-  zookeeper: "3.4.12"
+  zookeeper: "3.4.13"
 ]
 
 libs += [
