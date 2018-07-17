@@ -794,8 +794,8 @@ object TestUtils extends Logging {
         Thread.sleep(waitTime.min(pause))
       }
       catch {
-        case _: RetriableException if retry < maxRetries => {
-          debug("Retrying")
+        case e: RetriableException if retry < maxRetries => {
+          debug("Retrying after error", e)
           retry += 1
         }
         case e : Throwable => throw e
