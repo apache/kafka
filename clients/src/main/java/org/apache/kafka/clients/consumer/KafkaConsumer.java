@@ -2200,8 +2200,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void close(Duration timeout) {
-        if (rebalanceConsumer != null) {
-            rebalanceConsumer.close();
+        if (rebalanceConsumer != null && consumerThread.isAlive()) {
+            rebalanceConsumer.close(timeout, null);
+        } else if (rebalanceConsumer != null) {
+            rebalanceConsumer.close(timeout);
         }
 
         if (timeout.toMillis() < 0)
