@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -69,7 +70,7 @@ public class OAuthBearerSaslServerTest {
     private OAuthBearerSaslServer saslServer;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         saslServer = new OAuthBearerSaslServer(VALIDATOR_CALLBACK_HANDLER);
     }
 
@@ -92,6 +93,18 @@ public class OAuthBearerSaslServerTest {
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
         assertEquals("value1", saslServer.getNegotiatedProperty("firstKey"));
         assertEquals("value2", saslServer.getNegotiatedProperty("secondKey"));
+    }
+
+    @Test
+    public void returnsNullForNonExistentProperty() throws Exception {
+        Map<String, String> customExtensions = new HashMap<>();
+        customExtensions.put("firstKey", "value1");
+
+        byte[] nextChallenge = saslServer
+                .evaluateResponse(clientInitialResponseText(null, customExtensions).getBytes(StandardCharsets.UTF_8));
+
+        assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+        assertNull(saslServer.getNegotiatedProperty("secondKey"));
     }
 
     @Test
@@ -128,10 +141,8 @@ public class OAuthBearerSaslServerTest {
                 + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",auth=Bearer "
                 + compactSerialization;
         if (!customExtensions.isEmpty()) {
-            // TODO: Test SaslExtensions
             clientInitialResponseText += String.format(",%s", new SaslExtensions(customExtensions).toString());
         }
-        System.out.println(clientInitialResponseText);
         return clientInitialResponseText;
     }
 }

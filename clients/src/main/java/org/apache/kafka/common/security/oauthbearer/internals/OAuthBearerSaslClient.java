@@ -99,7 +99,7 @@ public class OAuthBearerSaslClient implements SaslClient {
                     String message = String.format("n,,auth=Bearer %s", callback.token().value());
                     if (!extensionsCallback.extensions().isEmpty()) {
                         String extensions = new SaslExtensions(extensionsCallback.extensions()).toString();
-                        message += String.format(",%s", extensions);
+                        message += ',' + extensions;
                     }
 
                     return message.getBytes(StandardCharsets.UTF_8);
@@ -132,7 +132,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     private SaslExtensionsCallback parseCustomExtensions() throws SaslException {
         SaslExtensionsCallback callback = new SaslExtensionsCallback();
         try {
-            callbackHandler.handle(new Callback[] { new SaslExtensionsCallback() } );
+            callbackHandler.handle(new Callback[] { callback } );
         } catch (UnsupportedCallbackException e) {
             log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
                     callbackHandler);

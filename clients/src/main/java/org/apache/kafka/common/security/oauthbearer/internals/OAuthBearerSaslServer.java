@@ -38,7 +38,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
-import org.apache.kafka.common.security.scram.internals.ScramExtensions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,7 +117,7 @@ public class OAuthBearerSaslServer implements SaslServer {
                 log.debug(msg);
             throw new SaslException(msg);
         }
-        this.extensions = extString.startsWith(",") ? new SaslExtensions(extString.substring(1)) : new SaslExtensions();
+        extensions = extString.startsWith(",") ? new SaslExtensions(extString.substring(1)) : new SaslExtensions();
         String tokenValue = matcher.group("token");
         return process(tokenValue, authorizationId);
     }
@@ -142,7 +141,7 @@ public class OAuthBearerSaslServer implements SaslServer {
         if (NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName))
             return tokenForNegotiatedProperty;
 
-        return this.extensions.extensionValue(propName);
+        return extensions.extensionValue(propName);
     }
 
     @Override
