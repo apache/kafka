@@ -64,7 +64,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.inputArgument = null;
         this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
-        System.out.println("Has been successfully instantiated: RebalanceKafkaConsumer instance :)");
     }
 
     public RequestResult getResult() {

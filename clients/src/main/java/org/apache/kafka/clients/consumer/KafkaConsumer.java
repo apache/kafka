@@ -1161,13 +1161,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        System.out.println("Has called poll(Duration)");
         return poll(timeout.toMillis(), true, true);
     }
 
     private void getStartAndEndOffsets() {
+        coordinator.ensureActiveGroup();
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
-            startOffsets.put(partition, committed(partition).offset());
+            OffsetAndMetadata offsetMetadata = committed(partition);
+            startOffsets.put(partition, offsetMetadata == null ? 0L : offsetMetadata.offset());
         }
         seekToEnd(Collections.EMPTY_LIST);
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
@@ -1177,7 +1178,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void checkRebalanceAndPoll(long timeoutMs) {
-        log.debug("use.parallel.rebalance has been set to " + useParallelRebalance);
         if (useParallelRebalance && rebalanceConsumer == null) {
             rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
             consumerThread = new Thread(rebalanceConsumer);
@@ -1187,10 +1187,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         elapsedMs += time.milliseconds() - metadataStart;
         if (coordinator.isRebalancing(false) && useParallelRebalance) {
             getStartAndEndOffsets();
+            rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
             if (!consumerThread.isAlive()) {
                 consumerThread.start();
             }
-            rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
         }
 
         if (consumerThread != null && consumerThread.isAlive()) {
@@ -1269,7 +1269,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             final long checkRebalanceStart = time.milliseconds();
-            System.out.println("checkRebalance is set to: " + checkRebalance);
             if (checkRebalance) {
                 checkRebalanceAndPoll(timeoutMs);
             }
