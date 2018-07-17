@@ -885,8 +885,8 @@ private[kafka] class Processor(val id: Int,
 
 class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
 
-  private var defaultMaxConnectionsPerIp = defaultMax
-  private var maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var defaultMaxConnectionsPerIp = defaultMax
+  @volatile private var maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   private val counts = mutable.Map[InetAddress, Int]()
 
   def inc(address: InetAddress) {

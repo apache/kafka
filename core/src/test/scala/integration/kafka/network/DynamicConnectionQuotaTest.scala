@@ -57,7 +57,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val socketServer = servers.head.socketServer
     val localAddress = InetAddress.getByName("127.0.0.1")
     def connectionCount = socketServer.connectionCount(localAddress)
-
+    val initialConnectionCount = connectionCount
     val maxConnectionsPerIP = 5
 
     val props = new Properties
@@ -65,7 +65,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIP.toString))
 
     //wait for adminClient connections to close
-    Thread.sleep(500)
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connection count mismatch")
 
     //create connections up to maxConnectionsPerIP - 1, leave space for one connection
     var conns = (connectionCount until (maxConnectionsPerIP - 1)).map(_ => connect(socketServer))
@@ -81,7 +81,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     intercept[IOException](sendProduceRequest())
 
     conns.foreach(conn => conn.close())
-    Thread.sleep(500)
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connection count mismatch")
 
     // Increase MaxConnectionsPerIpOverrides for localhost to 7
     val maxConnectionsPerIPOverride = 7
@@ -89,7 +89,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$maxConnectionsPerIPOverride"))
 
     //wait for adminClient connections to close
-    Thread.sleep(500)
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connection count mismatch")
 
     //create connections up to maxConnectionsPerIPOverride - 1, leave space for one connection
     conns = (connectionCount until maxConnectionsPerIPOverride - 1).map(_ => connect(socketServer))
