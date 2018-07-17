@@ -52,7 +52,7 @@ public class SaslExtensions {
 
     /*
         Converts an extensions string into a Map<String, String>.
-        "key=hey,keyTwo=hi,keyThree=hello" => { key: "hey", keyTwo: "hi", keyThree: "hello" }
+        stringToMap("key=hey,keyTwo=hi,keyThree=hello") => { key: "hey", keyTwo: "hi", keyThree: "hello" }
      */
     protected static Map<String, String> stringToMap(String extensions) {
         Map<String, String> extensionMap = new HashMap<>();
@@ -70,7 +70,7 @@ public class SaslExtensions {
     /*
         Converts a Map class into an extensions string, concatenating keys and values
         Example:
-            { key: "hello", keyTwo: "hi" } => "key=hello,keyTwo=hi"
+            mapToString({ key: "hello", keyTwo: "hi" }) => "key=hello,keyTwo=hi"
      */
     protected static String mapToString(Map<String, String> extensionMap) {
         ArrayList<String> keyValuePairs = new ArrayList<>();

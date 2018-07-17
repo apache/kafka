@@ -88,16 +88,13 @@ public class OAuthBearerSaslClient implements SaslClient {
                 case SEND_CLIENT_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0)
                         throw new SaslException("Expected empty challenge");
-
-                    CallbackHandler cbHandler = callbackHandler();
-                    cbHandler.handle(new Callback[] {callback});
-
+                    callbackHandler().handle(new Callback[] {callback});
                     SaslExtensionsCallback extensionsCallback = parseCustomExtensions();
 
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
 
                     String message = String.format("n,,auth=Bearer %s", callback.token().value());
-                    if (!extensionsCallback.extensions().isEmpty()) {
+                    if (extensionsCallback.extensions().size() > 0) {
                         String extensions = new SaslExtensions(extensionsCallback.extensions()).toString();
                         message += ',' + extensions;
                     }
@@ -127,20 +124,6 @@ public class OAuthBearerSaslClient implements SaslClient {
             setState(State.FAILED);
             throw new SaslException(e.getMessage(), e);
         }
-    }
-
-    private SaslExtensionsCallback parseCustomExtensions() throws SaslException {
-        SaslExtensionsCallback callback = new SaslExtensionsCallback();
-        try {
-            callbackHandler.handle(new Callback[] {callback});
-        } catch (UnsupportedCallbackException e) {
-            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
-                    callbackHandler);
-        } catch (Throwable e) {
-            throw new SaslException("SASL extensions could not be obtained", e);
-        }
-
-        return callback;
     }
 
     @Override
@@ -176,6 +159,20 @@ public class OAuthBearerSaslClient implements SaslClient {
     private void setState(State state) {
         log.debug("Setting SASL/{} client state to {}", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, state);
         this.state = state;
+    }
+
+    private SaslExtensionsCallback parseCustomExtensions() throws SaslException {
+        SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
+        try {
+            callbackHandler().handle(new Callback[] {extensionsCallback});
+        } catch (UnsupportedCallbackException e) {
+            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+                    callbackHandler());
+        } catch (Throwable e) {
+            throw new SaslException("SASL extensions could not be obtained", e);
+        }
+
+        return extensionsCallback;
     }
 
     public static class OAuthBearerSaslClientFactory implements SaslClientFactory {

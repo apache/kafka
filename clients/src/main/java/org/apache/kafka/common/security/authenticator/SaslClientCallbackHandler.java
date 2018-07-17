@@ -38,6 +38,8 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
  * configured for the client should be supported by this callback handler. See
  * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
  * for the list of SASL callback handlers required for each SASL mechanism.
+ *
+ * For adding custom SASL extensions, a `Map` should be attached to the subject's public credentials
  */
 public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
 

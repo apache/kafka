@@ -38,13 +38,14 @@ import static org.junit.Assert.fail;
 
 public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
-    private Map<String, String> TEST_EXTENSIONS = new LinkedHashMap<String, String>()
-    {{
-        put("One", "1");
-        put("Two", "2");
-        put("Three", "3");
-    }};
-    private final String ERROR_MESSAGE = "Error as expected!";
+    private Map<String, String> testExtensions = new LinkedHashMap<String, String>() {
+        {
+            put("One", "1");
+            put("Two", "2");
+            put("Three", "3");
+        }
+    };
+    private final String errorMessage = "Error as expected!";
 
     public class ExtensionsCallbackHandler implements AuthenticateCallbackHandler {
         private boolean configured = false;
@@ -70,9 +71,9 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
                     ((OAuthBearerTokenCallback) callback).token(createMock(OAuthBearerUnsecuredJws.class));
                 else if (callback instanceof SaslExtensionsCallback) {
                     if (toThrow)
-                        throw new ConfigException(ERROR_MESSAGE);
+                        throw new ConfigException(errorMessage);
                     else
-                        ((SaslExtensionsCallback) callback).extensions(TEST_EXTENSIONS);
+                        ((SaslExtensionsCallback) callback).extensions(testExtensions);
                 } else
                     throw new UnsupportedCallbackException(callback);
             }
@@ -95,7 +96,7 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
     @Test
     public void testNoExtensionsDoesNotAttachAnythingToFirstClientMessage() throws Exception {
-        TEST_EXTENSIONS.clear();
+        testExtensions.clear();
         String expectedToken = "n,,auth=Bearer null";
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(false));
 
@@ -113,7 +114,7 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
         } catch (SaslException e) {
             // assert it has caught our expected exception
             assertEquals(ConfigException.class, e.getCause().getClass());
-            assertEquals(ERROR_MESSAGE, e.getCause().getMessage());
+            assertEquals(errorMessage, e.getCause().getMessage());
         }
 
     }

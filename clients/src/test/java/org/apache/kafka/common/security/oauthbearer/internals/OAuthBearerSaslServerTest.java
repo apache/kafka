@@ -82,7 +82,7 @@ public class OAuthBearerSaslServerTest {
     }
 
     @Test
-    public void savesCustomExtensionAsNegotiatedPorperty() throws Exception {
+    public void savesCustomExtensionAsNegotiatedProperty() throws Exception {
         Map<String, String> customExtensions = new HashMap<>();
         customExtensions.put("firstKey", "value1");
         customExtensions.put("secondKey", "value2");
@@ -131,8 +131,9 @@ public class OAuthBearerSaslServerTest {
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
         return clientInitialResponseText(authorizationId, new HashMap<>());
     }
+
     private String clientInitialResponseText(String authorizationId, Map<String, String> customExtensions)
-            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         LOGIN_CALLBACK_HANDLER.handle(new Callback[] {callback});
         OAuthBearerToken token = callback.token();
@@ -141,7 +142,7 @@ public class OAuthBearerSaslServerTest {
                 + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",auth=Bearer "
                 + compactSerialization;
         if (!customExtensions.isEmpty()) {
-            clientInitialResponseText += String.format(",%s", new SaslExtensions(customExtensions).toString());
+            clientInitialResponseText += ',' + new SaslExtensions(customExtensions).toString();
         }
         return clientInitialResponseText;
     }

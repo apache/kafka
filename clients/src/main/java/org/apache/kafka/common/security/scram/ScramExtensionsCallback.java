@@ -18,5 +18,9 @@ package org.apache.kafka.common.security.scram;
 
 import org.apache.kafka.common.security.SaslExtensionsCallback;
 
+
+/**
+ * @deprecated As of 2.1.0, use {@link SaslExtensionsCallback} instead. This will be removed in a future major release.
+ */
 @Deprecated
 public class ScramExtensionsCallback extends SaslExtensionsCallback { }
