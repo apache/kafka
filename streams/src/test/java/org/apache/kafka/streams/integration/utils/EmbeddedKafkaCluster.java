@@ -20,19 +20,14 @@ import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,7 +36,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
@@ -54,7 +48,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private static final int TOPIC_DELETION_TIMEOUT = 30000;
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
-    private AdminClient adminClient = null;
 
     private final Properties brokerConfig;
     public final MockTime time;
@@ -109,19 +102,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());
         }
-        adminClient = createAdminClient();
-    }
-
-    private AdminClient createAdminClient() {
-        Properties adminClientConfig = new Properties();
-        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        Object listeners = brokerConfig.get(KafkaConfig$.MODULE$.ListenersProp());
-        if (listeners != null && listeners.toString().contains("SSL")) {
-            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
-            adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
-        }
-        return AdminClient.create(adminClientConfig);
     }
 
     private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
@@ -134,7 +114,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * Stop the Kafka cluster.
      */
     private void stop() {
-        adminClient.close();
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
@@ -285,6 +264,24 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
+    /**
+     * Deletes all topics and blocks until all topics got deleted.
+     *
+     * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
+     */
+    public void deleteAllTopicsAndWait(final long timeoutMs) throws InterruptedException {
+        Set<String> topics = brokers[0].listTopics();
+        for (final String topic : topics) {
+            try {
+                brokers[0].deleteTopic(topic);
+            } catch (final UnknownTopicOrPartitionException e) { }
+        }
+
+        if (timeoutMs > 0) {
+            TestUtils.waitForCondition(new TopicsDeletedCondition(topics), timeoutMs, "Topics not deleted after " + timeoutMs + " milli seconds.");
+        }
+    }
+
     public void deleteAndRecreateTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
         createTopics(topics);
@@ -306,14 +303,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             Collections.addAll(deletedTopics, topics);
         }
 
+        private TopicsDeletedCondition(final Set<String> topics) {
+            deletedTopics.addAll(topics);
+        }
+
         @Override
         public boolean conditionMet() {
-            try {
-                final Set<String> allTopics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
-                return !allTopics.removeAll(deletedTopics);
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+            final Set<String> allTopics = new HashSet<>(
+                    JavaConverters.seqAsJavaListConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava());
+            return !allTopics.removeAll(deletedTopics);
         }
     }
 
@@ -326,12 +324,9 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            try {
-                final Set<String> allTopics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
-                return allTopics.equals(remainingTopics);
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+            final Set<String> allTopics = new HashSet<>(
+                    JavaConverters.seqAsJavaListConverter(brokers[0].kafkaServer().zkClient().getAllTopicsInCluster()).asJava());
+            return allTopics.equals(remainingTopics);
         }
     }
 

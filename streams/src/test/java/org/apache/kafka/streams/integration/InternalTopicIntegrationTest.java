@@ -113,14 +113,15 @@ public class InternalTopicIntegrationTest {
     }
 
     private Properties getTopicProperties(final String changelog) {
-        try (AdminClient adminClient = createAdminClient()) {
-            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, changelog);
+        try (final AdminClient adminClient = createAdminClient()) {
+            final ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, changelog);
             try {
-                Config config =  adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
-                Properties properties = new Properties();
-                for (ConfigEntry configEntry: config.entries()) {
-                    if (configEntry.source() ==  ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG)
+                final Config config =  adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
+                final Properties properties = new Properties();
+                for (final ConfigEntry configEntry : config.entries()) {
+                    if (configEntry.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG) {
                         properties.put(configEntry.name(), configEntry.value());
+                    }
                 }
                 return properties;
             } catch (InterruptedException | ExecutionException e) {
@@ -130,7 +131,7 @@ public class InternalTopicIntegrationTest {
     }
 
     private AdminClient createAdminClient() {
-        Properties adminClientConfig = new Properties();
+        final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         return AdminClient.create(adminClientConfig);
     }
