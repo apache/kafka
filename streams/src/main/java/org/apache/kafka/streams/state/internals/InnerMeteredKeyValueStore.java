@@ -87,7 +87,8 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     }
 
     @Override
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         final String name = name();
         final String tagKey = "task-id";
         final String taskName = context.taskId().toString();
@@ -151,12 +152,9 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
         // register and possibly restore the state from the logs
         if (restoreTime.shouldRecord()) {
-            measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    inner.init(InnerMeteredKeyValueStore.this.context, InnerMeteredKeyValueStore.this.root);
-                    return null;
-                }
+            measureLatency(() -> {
+                inner.init(InnerMeteredKeyValueStore.this.context, InnerMeteredKeyValueStore.this.root);
+                return null;
             }, restoreTime);
         } else {
             inner.init(InnerMeteredKeyValueStore.this.context, InnerMeteredKeyValueStore.this.root);
@@ -176,12 +174,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     public V get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(new Action<V>() {
-                    @Override
-                    public V execute() {
-                        return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
-                    }
-                }, getTime);
+                return measureLatency(() -> typeConverter.outerValue(inner.get(typeConverter.innerKey(key))), getTime);
             } else {
                 return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
             }
@@ -195,12 +188,9 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     public void put(final K key, final V value) {
         try {
             if (putTime.shouldRecord()) {
-                measureLatency(new Action<V>() {
-                    @Override
-                    public V execute() {
-                        inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
-                        return null;
-                    }
+                measureLatency(() -> {
+                    inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+                    return null;
                 }, putTime);
             } else {
                 inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
@@ -214,12 +204,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     @Override
     public V putIfAbsent(final K key, final V value) {
         if (putIfAbsentTime.shouldRecord()) {
-            return measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    return typeConverter.outerValue(inner.putIfAbsent(typeConverter.innerKey(key), typeConverter.innerValue(value)));
-                }
-            }, putIfAbsentTime);
+            return measureLatency(() -> typeConverter.outerValue(inner.putIfAbsent(typeConverter.innerKey(key), typeConverter.innerValue(value))), putIfAbsentTime);
         } else {
             return typeConverter.outerValue(inner.putIfAbsent(typeConverter.innerKey(key), typeConverter.innerValue(value)));
         }
@@ -229,12 +214,9 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
         if (putAllTime.shouldRecord()) {
-            measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    inner.putAll(typeConverter.innerEntries(entries));
-                    return null;
-                }
+            measureLatency(() -> {
+                inner.putAll(typeConverter.innerEntries(entries));
+                return null;
             }, putAllTime);
         } else {
             inner.putAll(typeConverter.innerEntries(entries));
@@ -245,12 +227,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     public V delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(new Action<V>() {
-                    @Override
-                    public V execute() {
-                        return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
-                    }
-                }, deleteTime);
+                return measureLatency(() -> typeConverter.outerValue(inner.delete(typeConverter.innerKey(key))), deleteTime);
             } else {
                 return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
             }
@@ -261,7 +238,8 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     }
 
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from,
+                                        final K to) {
         return new MeteredKeyValueIterator(this.inner.range(typeConverter.innerKey(from), typeConverter.innerKey(to)), this.rangeTime);
     }
 
@@ -273,12 +251,9 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     @Override
     public void flush() {
         if (flushTime.shouldRecord()) {
-            measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    inner.flush();
-                    return null;
-                }
+            measureLatency(() -> {
+                inner.flush();
+                return null;
             }, flushTime);
         } else {
             inner.flush();
@@ -301,7 +276,8 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
         private final Sensor sensor;
         private final long startNs;
 
-        MeteredKeyValueIterator(KeyValueIterator<IK, IV> iter, Sensor sensor) {
+        MeteredKeyValueIterator(final KeyValueIterator<IK, IV> iter,
+                                final Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();

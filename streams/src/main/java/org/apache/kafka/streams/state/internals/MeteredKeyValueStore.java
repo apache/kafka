@@ -16,68 +16,89 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Metered {@link KeyValueStore} wrapper is used for recording operation metrics, and hence its
+ * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
- *
+ * The inner {@link KeyValueStore} of this class is of type &lt;Bytes,byte[]&gt;, hence we use {@link Serde}s
+ * to convert from &lt;K,V&gt; to &lt;Bytes,byte[]&gt;
  * @param <K>
  * @param <V>
  */
 public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
-    protected final Time time;
-    private final InnerMeteredKeyValueStore<K, K, V, V> innerMetered;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private StateSerdes<K, V> serdes;
+    private final InnerMeteredKeyValueStore<K, Bytes, V, byte[]> innerMetered;
 
-    // always wrap the store with the metered store
-    public MeteredKeyValueStore(final KeyValueStore<K, V> inner,
-                                final String metricScope,
-                                final Time time) {
+    MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
+                         final String metricScope,
+                         final Time time,
+                         final Serde<K> keySerde,
+                         final Serde<V> valueSerde) {
         super(inner);
-        this.time = time != null ? time : Time.SYSTEM;
-        this.innerMetered = new InnerMeteredKeyValueStore<>(inner, metricScope, new InnerMeteredKeyValueStore.TypeConverter<K, K, V, V>() {
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        innerMetered = new InnerMeteredKeyValueStore<>(inner, metricScope, new InnerMeteredKeyValueStore.TypeConverter<K, Bytes, V, byte[]>() {
             @Override
-            public K innerKey(final K key) {
-                return key;
+            public Bytes innerKey(final K key) {
+                return Bytes.wrap(serdes.rawKey(key));
             }
 
             @Override
-            public V innerValue(final V value) {
-                return value;
+            public byte[] innerValue(final V value) {
+                // do not check on null, but rely on user serde to handle it
+                return serdes.rawValue(value);
             }
 
             @Override
-            public List<KeyValue<K, V>> innerEntries(final List<KeyValue<K, V>> from) {
-                return from;
+            public List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {
+                final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
+                for (final KeyValue<K, V> entry : from) {
+                    byteEntries.add(KeyValue.pair(innerKey(entry.key), serdes.rawValue(entry.value)));
+
+                }
+                return byteEntries;
             }
 
             @Override
-            public V outerValue(final V value) {
-                return value;
+            public V outerValue(final byte[] value) {
+                return value == null ? null : serdes.valueFrom(value);
             }
 
             @Override
-            public KeyValue<K, V> outerKeyValue(final KeyValue<K, V> from) {
-                return from;
+            public KeyValue<K, V> outerKeyValue(final KeyValue<Bytes, byte[]> keyValue) {
+                return KeyValue.pair(serdes.keyFrom(keyValue.key.get()), keyValue.value == null ? null : serdes.valueFrom(keyValue.value));
             }
 
             @Override
-            public K outerKey(final K key) {
-                return key;
+            public K outerKey(final Bytes key) {
+                return serdes.keyFrom(key.get());
             }
         }, time);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
+        this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         innerMetered.init(context, root);
     }
 
@@ -112,7 +133,8 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     }
 
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from,
+                                        final K to) {
         return innerMetered.range(from, to);
     }
 
@@ -125,5 +147,4 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public void flush() {
         innerMetered.flush();
     }
-
 }

@@ -51,7 +51,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
-public class MeteredKeyValueBytesStoreTest {
+public class MeteredKeyValueStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
     private final Map<String, String> tags = mkMap(
@@ -64,7 +64,7 @@ public class MeteredKeyValueBytesStoreTest {
     @Mock(type = MockType.NICE)
     private ProcessorContext context;
 
-    private MeteredKeyValueBytesStore<String, String> metered;
+    private MeteredKeyValueStore<String, String> metered;
     private final String key = "key";
     private final Bytes keyBytes = Bytes.wrap(key.getBytes());
     private final String value = "value";
@@ -73,7 +73,7 @@ public class MeteredKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        metered = new MeteredKeyValueBytesStore<>(
+        metered = new MeteredKeyValueStore<>(
             inner,
             "scope",
             new MockTime(),
@@ -102,7 +102,7 @@ public class MeteredKeyValueBytesStoreTest {
 
         final KafkaMetric metric = metric("put-rate");
 
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -115,7 +115,7 @@ public class MeteredKeyValueBytesStoreTest {
         assertThat(metered.get(key), equalTo(value));
 
         final KafkaMetric metric = metric("get-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -128,7 +128,7 @@ public class MeteredKeyValueBytesStoreTest {
         metered.putIfAbsent(key, value);
 
         final KafkaMetric metric = metric("put-if-absent-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -147,7 +147,7 @@ public class MeteredKeyValueBytesStoreTest {
         metered.putAll(Collections.singletonList(KeyValue.pair(key, value)));
 
         final KafkaMetric metric = metric("put-all-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -160,7 +160,7 @@ public class MeteredKeyValueBytesStoreTest {
         metered.delete(key);
 
         final KafkaMetric metric = metric("delete-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -177,7 +177,7 @@ public class MeteredKeyValueBytesStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("range-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -194,7 +194,7 @@ public class MeteredKeyValueBytesStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric(new MetricName("all-rate", "stream-scope-metrics", "", tags));
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -207,7 +207,7 @@ public class MeteredKeyValueBytesStoreTest {
         metered.flush();
 
         final KafkaMetric metric = metric("flush-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
