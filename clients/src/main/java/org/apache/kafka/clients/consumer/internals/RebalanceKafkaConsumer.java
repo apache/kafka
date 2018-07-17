@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -45,7 +46,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private volatile ConsumerRequest request;
     private RequestResult result;
     private volatile Duration waitTime;
-    private volatile InputArgument inputArgument;
+    private volatile Object inputArgument;
     private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
 
@@ -66,13 +67,17 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.shouldClose = new AtomicBoolean(false);
     }
 
+    public Map<TopicPartition, ArrayList<OffsetInterval>> getOffsetRanges() {
+        return offsetRanges;
+    }
+
     public RequestResult getResult() {
         return result;
     }
 
     public void sendRequest(Duration waitTime,
                             ConsumerRequest request,
-                            InputArgument inputArgument,
+                            Object inputArgument,
                             TaskCompletionCallback callback) {
         this.request = request;
         this.waitTime = waitTime;
@@ -156,11 +161,11 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case PAUSE:
-                    pause((Collection<TopicPartition>) inputArgument.value);
+                    pause((Collection<TopicPartition>) inputArgument);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
-                    super.commitAsync((OffsetCommitCallback) inputArgument.value);
+                    super.commitAsync((OffsetCommitCallback) inputArgument);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
@@ -168,7 +173,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMITTED:
-                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument.value));
+                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument));
                     break;
                 case POLL:
                     ConsumerRecords<K, V> records = poll(waitTime);
@@ -207,15 +212,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    public class InputArgument<T> {
-        final T value;
-
-        InputArgument(T value) {
-            this.value = value;
-        }
-    }
-
-    private class OffsetInterval {
+    private static class OffsetInterval {
         public final long startOffset;
         public final long endOffset;
 
@@ -224,5 +221,51 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             this.startOffset = startOffset;
             this.endOffset = endOffset;
         }
+
+        public boolean containsOffset(final long offset) {
+            return offset >= startOffset && offset <= endOffset;
+        }
+    }
+
+    public static class OffsetInclusion {
+        private final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata;
+        private final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata;
+
+        public OffsetInclusion(final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata,
+                               final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata) {
+            this.parentConsumerMetadata = parentConsumerMetadata;
+            this.childConsumerMetadata = childConsumerMetadata;
+        }
+
+        public HashMap<TopicPartition, OffsetAndMetadata> getParentConsumerMetadata() {
+            return parentConsumerMetadata;
+        }
+
+        public HashMap<TopicPartition, OffsetAndMetadata> getChildConsumerMetadata() {
+            return childConsumerMetadata;
+        }
+    }
+
+    public static OffsetInclusion getRanges(final RebalanceKafkaConsumer consumer, final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
+        final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = new HashMap<>();
+        final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = new HashMap<>();
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsToCommit.entrySet()) {
+            if (consumer.getOffsetRanges().containsKey(entry.getKey())) {
+                boolean added = false;
+                for (final OffsetInterval interval : (ArrayList<OffsetInterval>) consumer.getOffsetRanges().get(entry.getKey())) {
+                    if (interval.containsOffset(entry.getValue().offset())) {
+                        added = true;
+                        childConsumerMetadata.put(entry.getKey(), entry.getValue());
+                        break;
+                    }
+                }
+                if (!added) {
+                    parentConsumerMetadata.put(entry.getKey(), entry.getValue());
+                }
+            } else {
+                parentConsumerMetadata.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return new OffsetInclusion(parentConsumerMetadata, childConsumerMetadata);
     }
 }

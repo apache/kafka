@@ -1174,17 +1174,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
             endOffsets.put(partition, position(partition));
         }
-
     }
 
-    private void checkRebalanceAndPoll(long timeoutMs) {
+    private void checkRebalance() {
         if (useParallelRebalance && rebalanceConsumer == null) {
             rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
             consumerThread = new Thread(rebalanceConsumer);
         }
-        final long metadataStart = time.milliseconds();
-        long elapsedMs = 0;
-        elapsedMs += time.milliseconds() - metadataStart;
         if (coordinator.isRebalancing(false) && useParallelRebalance) {
             getStartAndEndOffsets();
             rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
@@ -1192,6 +1188,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 consumerThread.start();
             }
         }
+    }
+
+    private void checkRebalanceAndPoll(long timeoutMs) {
+
+        final long now = time.milliseconds();
+        checkRebalance();
+        final long elapsedMs = time.milliseconds() - now;
 
         if (consumerThread != null && consumerThread.isAlive()) {
             rebalanceConsumer.sendRequest(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
@@ -1581,10 +1584,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+        commitAsync(offsets, callback, false);
+    }
+
+    //This is intended for use by both the original KafkaConsumer and RebalanceKafkaConsumer
+    protected void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback, final boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
             log.debug("Committing offsets: {}", offsets);
-            coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer, offsets);
+                final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
+                final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
+                rebalanceConsumer.sendRequest(null,
+                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
+                                              childConsumerMetadata,
+                                      null);
+                coordinator.commitOffsetsAsync(parentConsumerMetadata, callback);
+            } else {
+                coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
+            }
         } finally {
             release();
         }
