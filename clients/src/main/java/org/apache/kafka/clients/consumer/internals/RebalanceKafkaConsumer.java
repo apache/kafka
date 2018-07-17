@@ -161,15 +161,15 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case PAUSE:
-                    pause((Collection<TopicPartition>) inputArgument);
+                    super.pause((Collection<TopicPartition>) inputArgument);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
-                    super.commitAsync((OffsetCommitCallback) inputArgument);
+                    super.commitAsync(null, (OffsetCommitCallback) inputArgument, true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
-                    super.commitSync(waitTime);
+                    super.commitSync((Map<TopicPartition, OffsetAndMetadata>) inputArgument, waitTime, true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMITTED:

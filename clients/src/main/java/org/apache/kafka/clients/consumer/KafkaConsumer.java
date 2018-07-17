@@ -1515,9 +1515,26 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
+        commitSync(offsets, timeout, false);
+    }
+
+    protected void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout, final boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
-            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), timeout.toMillis())) {
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer, offsets);
+                final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
+                final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
+                rebalanceConsumer.sendRequest(timeout,
+                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
+                                              childConsumerMetadata,
+                                              null);
+                if (!coordinator.commitOffsetsSync(parentConsumerMetadata, timeout.toMillis())) {
+                    throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
+                            "committing offsets " + offsets);
+                }
+            } else if (!coordinator.commitOffsetsSync(offsets, timeout.toMillis())) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
             }
