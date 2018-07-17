@@ -22,29 +22,29 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
 /**
- *  This class allows to access the {@link InternalTopologyBuilder} a {@link Topology} object.
+ *  This class allows to access the {@link KafkaStreams} a {@link StreamThread.StateListener} object.
  *
  */
 public class KafkaStreamsWrapper extends KafkaStreams {
 
-  public KafkaStreamsWrapper(final Topology topology,
-      final Properties props) {
-    super(topology, props);
-  }
-  /**
-   * An app can set a single {@link StreamThread.StateListener} so that the app is notified when state changes.
-   *
-   * @param listener a new StreamThread state listener
-   * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
-   */
-  public void setStreamThreadStateListener(StreamThread.StateListener listener) {
-      if (state == State.CREATED) {
-          for (StreamThread thread : threads) {
-              thread.setStateListener(listener);
-          }
-      } else {
-          throw new IllegalStateException("Can only set StateListener in CREATED state. " +
-              "Current state is: " + state);
-      }
-  }
+    public KafkaStreamsWrapper(final Topology topology,
+        final Properties props) {
+        super(topology, props);
+    }
+    /**
+     * An app can set a single {@link StreamThread.StateListener} so that the app is notified when state changes.
+     *
+     * @param listener a new StreamThread state listener
+     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     */
+    public void setStreamThreadStateListener(StreamThread.StateListener listener) {
+        if (state == State.CREATED) {
+            for (StreamThread thread : threads) {
+                thread.setStateListener(listener);
+            }
+        } else {
+            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
+                "Current state is: " + state);
+        }
+    }
 }

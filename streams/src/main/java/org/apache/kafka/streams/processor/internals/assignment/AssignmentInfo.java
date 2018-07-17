@@ -261,7 +261,7 @@ public class AssignmentInfo {
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 case 4:
-                  latestSupportedVersion = in.readInt();
+                    latestSupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
                     decodeVersionFourData(assignmentInfo, in);
                     break;

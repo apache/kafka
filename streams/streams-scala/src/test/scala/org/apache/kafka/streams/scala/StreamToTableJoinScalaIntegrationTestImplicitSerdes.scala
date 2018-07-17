@@ -108,53 +108,6 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 
-  @Test def testShouldAutoShutdownOnIncompleteMetadata(): Unit = {
-
-    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced,
-    // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
-    // get these instances automatically
-    import Serdes._
-
-    val streamsConfiguration: Properties = getStreamsConfiguration()
-
-    val builder = new StreamsBuilder()
-
-    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
-
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic+"1")
-
-    // Compute the total per region by summing the individual click counts per region.
-    val clicksPerRegion: KTable[String, Long] =
-      userClicksStream
-
-      // Join the stream against the table.
-        .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
-
-        // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-        .map((_, regionWithClicks) => regionWithClicks)
-
-        // Compute the total per region by summing the individual click counts per region.
-        .groupByKey
-        .reduce(_ + _)
-
-    // Write the (continuously updating) results to the output topic.
-    clicksPerRegion.toStream.to(outputTopic)
-
-    val streams: KafkaStreamsWrapper = new KafkaStreamsWrapper(builder.build(), streamsConfiguration)
-    val listener = new IntegrationTestUtils.StateListenerStub()
-    streams.setStreamThreadStateListener(listener)
-    streams.start()
-
-    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
-      produceNConsume(userClicksTopic, userRegionsTopic, outputTopic, false)
-    while (!listener.revokedToPendingShutdownSeen()) {
-      Thread.sleep(3)
-    }
-    streams.close()
-    assertEquals(listener.runningToRevokedSeen(), true)
-    assertEquals(listener.revokedToPendingShutdownSeen(), true)
-  }
-
   @Test def testShouldCountClicksPerRegionJava(): Unit = {
 
     import java.lang.{Long => JLong}
@@ -220,7 +173,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 
-  private def getStreamsConfiguration(): Properties = {
+  def getStreamsConfiguration(): Properties = {
     val streamsConfiguration: Properties = new Properties()
 
     streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "stream-table-join-scala-integration-test")
@@ -262,7 +215,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     p
   }
 
-  private def produceNConsume(userClicksTopic: String,
+  def produceNConsume(userClicksTopic: String,
                               userRegionsTopic: String,
                               outputTopic: String,
                               waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
