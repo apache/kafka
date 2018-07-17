@@ -348,11 +348,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
-    Map<String, Assignment> errorAssignment(Map<UUID, ClientMetadata> clientsMetadata,
-        String topic, int errorCode) {
-        log.error(topic + " is unknown yet during rebalance," +
-            " please make sure they have been pre-created before starting the Streams application.");
-        Map<String, Assignment> assignment = new HashMap<>();
+    Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+                                            final String topic,
+                                            final int errorCode) {
+        log.error("{} is unknown yet during rebalance," +
+            " please make sure they have been pre-created before starting the Streams application.", topic);
+        final Map<String, Assignment> assignment = new HashMap<>();
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             for (final String consumerId : clientMetadata.consumers) {
                 assignment.put(consumerId, new Assignment(
@@ -457,7 +458,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
-            for (String topic : topicsInfo.sourceTopics) {
+            for (final String topic : topicsInfo.sourceTopics) {
                 if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
                     !metadata.topics().contains(topic)) {
                     return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
@@ -800,7 +801,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             assignmentErrorCode.set(info.errCode());
             return;
         }
-        int receivedAssignmentMetadataVersion = info.version();
+        final int receivedAssignmentMetadataVersion = info.version();
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {
@@ -866,7 +867,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         leaderSupportedVersion);
                     usedSubscriptionMetadataVersion = leaderSupportedVersion;
                 }
-                processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
             default:
@@ -920,6 +921,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                                final Map<TaskId, Set<TopicPartition>> activeTasks,
                                                final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+    }
+
+    private void processVersionFourAssignment(final AssignmentInfo info,
+                                               final List<TopicPartition> partitions,
+                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+        processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
     // for testing
