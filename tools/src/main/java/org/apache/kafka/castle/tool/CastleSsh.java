@@ -104,7 +104,7 @@ public final class CastleSsh {
             }
         } else if (args.nodeNames().size() == 1) {
             CastleNode node = cluster.nodes().get(args.nodeNames().get(0));
-            RemoteCommand command = cluster.cloud().remoteCommand(node).
+            RemoteCommand command = node.cloud().remoteCommand(node).
                 argList(args.command());
             command.exec();
         } else {

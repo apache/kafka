@@ -17,6 +17,7 @@
 
 package org.apache.kafka.castle.cluster;
 
+import org.apache.kafka.castle.cloud.Cloud;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.castle.common.CastleLog;
 import org.apache.kafka.castle.role.AwsNodeRole;
@@ -50,12 +51,18 @@ public final class CastleNode implements AutoCloseable {
      */
     private final Map<Class<? extends Role>, Role> roles;
 
+    /**
+     * The cloud associated with this node.
+     */
+    private final Cloud cloud;
+
     CastleNode(int nodeIndex, String nodeName, CastleLog castleLog,
-             Map<Class<? extends Role>, Role> roles) {
+                Map<Class<? extends Role>, Role> roles, Cloud cloud) {
         this.nodeIndex = nodeIndex;
         this.nodeName = nodeName;
         this.castleLog = castleLog;
         this.roles = Collections.unmodifiableMap(roles);
+        this.cloud = cloud;
     }
 
     public int nodeIndex() {
@@ -124,6 +131,10 @@ public final class CastleNode implements AutoCloseable {
             return 0;
         }
         return role.sshPort();
+    }
+
+    public Cloud cloud() {
+        return cloud;
     }
 
     public Map<Class<? extends Role>, Role> roles() {

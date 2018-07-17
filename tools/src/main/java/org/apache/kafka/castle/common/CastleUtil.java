@@ -103,7 +103,7 @@ public final class CastleUtil {
      */
     public static final void killProcess(CastleCluster cluster,
             CastleNode node, String processPattern, String signalType) throws Exception {
-        cluster.cloud().remoteCommand(node).
+        node.cloud().remoteCommand(node).
             argList(killProcessArgs(processPattern, signalType)).
             mustRun();
     }
@@ -133,7 +133,7 @@ public final class CastleUtil {
      */
     public static final void killJavaProcess(CastleCluster cluster,
                                              CastleNode node, String processPattern, boolean force) throws Exception {
-        cluster.cloud().remoteCommand(node).
+        node.cloud().remoteCommand(node).
             argList(killJavaProcessArgs(processPattern, force)).
             mustRun();
     }
@@ -163,7 +163,7 @@ public final class CastleUtil {
                                                         CastleNode node, String processPattern) throws Exception {
         String effectivePattern = "[" + processPattern.substring(0, 1) + "]" + processPattern.substring(1);
         StringBuilder stringBuilder = new StringBuilder();
-        int retVal = cluster.cloud().remoteCommand(node).
+        int retVal = node.cloud().remoteCommand(node).
             captureOutput(stringBuilder).
             args("-n", "--", "ps", "aux", "|", "awk", "'/" + effectivePattern + "/ { print $2 }'").
             run();
@@ -192,7 +192,7 @@ public final class CastleUtil {
     public static final CastleReturnCode getJavaProcessStatus(CastleCluster cluster,
                                                             CastleNode node, String processPattern) throws Exception {
         StringBuilder stringBuilder = new StringBuilder();
-        int retVal = cluster.cloud().remoteCommand(node).
+        int retVal = node.cloud().remoteCommand(node).
             captureOutput(stringBuilder).
             args("-n", "--", "jcmd", "|", "grep", processPattern).
             run();

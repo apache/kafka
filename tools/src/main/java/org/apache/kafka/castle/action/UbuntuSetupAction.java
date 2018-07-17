@@ -37,7 +37,7 @@ public final class UbuntuSetupAction extends Action {
     @Override
     public void call(CastleCluster cluster, CastleNode node) throws Throwable {
         node.log().printf("*** %s: Beginning UbuntuSetup...%n", node.nodeName());
-        cluster.cloud().remoteCommand(node).args("-n", "--",
+        node.cloud().remoteCommand(node).args("-n", "--",
             "sudo", "dpkg", "--configure", "-a", "&&",
             "sudo", "apt-get", "update", "-y", "&&",
             "sudo", "apt-get", "install", "-y", "iptables", "rsync", "wget", "curl", "collectd-core",

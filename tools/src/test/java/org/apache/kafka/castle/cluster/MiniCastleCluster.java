@@ -18,12 +18,9 @@
 package org.apache.kafka.castle.cluster;
 
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.castle.cloud.Cloud;
-import org.apache.kafka.castle.cloud.MockCloud;
 import org.apache.kafka.castle.cloud.MockRemoteCommand;
 import org.apache.kafka.castle.common.NullOutputStream;
 import org.apache.kafka.castle.common.CastleLog;
-import org.apache.kafka.castle.role.AwsNodeRole;
 import org.apache.kafka.castle.role.Role;
 import org.apache.kafka.castle.tool.CastleEnvironment;
 import org.apache.kafka.test.TestUtils;
@@ -45,19 +42,16 @@ import java.util.Set;
 public class MiniCastleCluster implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MiniCastleCluster.class);
 
-
     public static class Builder {
         private final Map<String, Set<String>> nodeNamesToRoles = new HashMap<>();
         private final Map<String, Role> roles = new HashMap<>();
-        private MockCloud cloud = new MockCloud();
 
         public Builder() {
         }
 
         public Builder addNodes(String... nodeNames) {
             for (String nodeName : nodeNames) {
-                Set<String> set = this.nodeNamesToRoles.
-                    computeIfAbsent(nodeName, k -> new HashSet<>());
+                this.nodeNamesToRoles.putIfAbsent(nodeName, new HashSet<>());
             }
             return this;
         }
@@ -65,26 +59,9 @@ public class MiniCastleCluster implements AutoCloseable {
         public Builder addRole(String roleName, Role role, String... nodeNames) {
             this.roles.put(roleName, role);
             for (String nodeName : nodeNames) {
-                Set<String> set = this.nodeNamesToRoles.
-                    computeIfAbsent(nodeName, k -> new HashSet<>());
-                set.add(roleName);
+                this.nodeNamesToRoles.computeIfAbsent(nodeName, k -> new HashSet<>()).add(roleName);
             }
             return this;
-        }
-
-        public AwsNodeRole newAwsRoleWithInstanceId() throws Exception {
-            String instanceId = cloud.newRunner().run();
-            Cloud.InstanceDescription description = cloud.describeInstance(instanceId);
-            return new AwsNodeRole(0,
-                "exampleImageId",
-                "exampleInstanceType",
-                "",
-                "",
-                0,
-                false,
-                description.privateDns(),
-                description.publicDns(),
-                description.instanceId());
         }
 
         public MiniCastleCluster build() throws Exception {
@@ -97,8 +74,6 @@ public class MiniCastleCluster implements AutoCloseable {
                 CastleEnvironment env = new CastleEnvironment(
                     Paths.get(tempDirectory.getAbsolutePath(), "input_cluster.json").toString(),
                     Paths.get(tempDirectory.getAbsolutePath(), "output_cluster.json").toString(),
-                    "",
-                    "",
                     360,
                     Paths.get(tempDirectory.getAbsolutePath(), "kafka").toString(),
                     outputPath.toString());
@@ -117,7 +92,6 @@ public class MiniCastleCluster implements AutoCloseable {
                 }
 
                 castleCluster = new CastleCluster(env,
-                    cloud,
                     new CastleLog(CastleLog.CLUSTER, NullOutputStream.INSTANCE, true),
                     new CastleClusterSpec(nodes, roles));
                 success = true;
@@ -126,7 +100,7 @@ public class MiniCastleCluster implements AutoCloseable {
                     Utils.delete(tempDirectory);
                 }
             }
-            return new MiniCastleCluster(castleCluster, tempDirectory, cloud);
+            return new MiniCastleCluster(castleCluster, tempDirectory);
         }
     }
 
@@ -134,20 +108,13 @@ public class MiniCastleCluster implements AutoCloseable {
 
     private final File tempDirectory;
 
-    private final MockCloud cloud;
-
-    private MiniCastleCluster(CastleCluster cluster, File tempDirectory, MockCloud cloud) throws IOException {
+    private MiniCastleCluster(CastleCluster cluster, File tempDirectory) throws IOException {
         this.cluster = cluster;
         this.tempDirectory = tempDirectory;
-        this.cloud = cloud;
     }
 
     public CastleCluster cluster() {
         return cluster;
-    }
-
-    public MockCloud cloud() {
-        return cloud;
     }
 
     public String[] rsyncToCommandLine(String nodeName, String local, String remote) {

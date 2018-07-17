@@ -77,7 +77,8 @@ public class TaskStartAction extends Action  {
         Map<String, TaskSpec> transformedSpecs = new TreeMap<>();
         for (Map.Entry<String, TaskSpec> entry : taskSpecs.entrySet()) {
             JsonNode inputNode = CastleTool.JSON_SERDE.valueToTree(entry.getValue());
-            JsonNode outputNode = JsonTransformer.transform(inputNode, transforms);
+            JsonNode outputNode = JsonTransformer.
+                transform(inputNode, new JsonTransformer.MapSubstituter(transforms));
             TaskSpec taskSpec = CastleTool.JSON_SERDE.
                 treeToValue(outputNode, TaskSpec.class);
             transformedSpecs.put(entry.getKey(), taskSpec);

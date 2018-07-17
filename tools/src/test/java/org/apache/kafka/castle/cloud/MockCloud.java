@@ -32,6 +32,13 @@ import java.util.Map;
 public class MockCloud implements Cloud {
     private final Logger log = LoggerFactory.getLogger(MockCloud.class);
 
+    public static final class Settings {
+        @Override
+        public String toString() {
+            return "MockCloud()";
+        }
+    }
+
     private final class CommandResponseTracker {
         private final String nodeName;
         private final HashMap<List<String>, ArrayDeque<MockCommandResponse>> commandResponses;
@@ -74,6 +81,8 @@ public class MockCloud implements Cloud {
         }
     }
 
+    private final Settings settings;
+
     private Map<String, InstanceDescription> instances = new HashMap<>();
 
     private final HashMap<String, CommandResponseTracker> commandResponseTrackers = new HashMap<>();
@@ -94,6 +103,10 @@ public class MockCloud implements Cloud {
                 return instanceId;
             }
         }
+    }
+
+    public MockCloud(Settings settings) {
+        this.settings = settings;
     }
 
     @Override
@@ -184,5 +197,10 @@ public class MockCloud implements Cloud {
     @Override
     public void close() throws Exception {
         // Nothing to do here
+    }
+
+    @Override
+    public String toString() {
+        return settings.toString();
     }
 }

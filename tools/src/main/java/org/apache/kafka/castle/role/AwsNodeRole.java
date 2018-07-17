@@ -23,12 +23,26 @@ import org.apache.kafka.castle.action.Action;
 import org.apache.kafka.castle.action.AwsCheckAction;
 import org.apache.kafka.castle.action.AwsDestroyAction;
 import org.apache.kafka.castle.action.AwsInitAction;
+import org.apache.kafka.castle.cloud.Cloud;
+import org.apache.kafka.castle.cloud.Ec2Cloud;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 public class AwsNodeRole implements Role {
     private final int initialDelayMs;
+
+    /**
+     * The AWS keypair to use.
+     */
+    private final String keyPair;
+
+    /**
+     * The AWS security group to use.
+     */
+    private final String securityGroup;
 
     /**
      * Configures the AWS image ID to use.
@@ -84,6 +98,8 @@ public class AwsNodeRole implements Role {
 
     @JsonCreator
     public AwsNodeRole(@JsonProperty("initialDelayMs") int initialDelayMs,
+                       @JsonProperty("keyPair") String keyPair,
+                       @JsonProperty("securityGroup") String securityGroup,
                        @JsonProperty("imageId") String imageId,
                        @JsonProperty("instanceType") String instanceType,
                        @JsonProperty("sshIdentityFile") String sshIdentityFile,
@@ -94,6 +110,8 @@ public class AwsNodeRole implements Role {
                        @JsonProperty("publicDns") String publicDns,
                        @JsonProperty("instanceId") String instanceId) {
         this.initialDelayMs = initialDelayMs;
+        this.keyPair = keyPair == null ? "" : keyPair;
+        this.securityGroup = securityGroup == null ? "" : securityGroup;
         this.imageId = imageId == null ? "" : imageId;
         this.instanceType = instanceType == null ? "" : instanceType;
         this.sshIdentityFile = sshIdentityFile == null ? "" : sshIdentityFile;
@@ -109,6 +127,16 @@ public class AwsNodeRole implements Role {
     @JsonProperty
     public int initialDelayMs() {
         return initialDelayMs;
+    }
+
+    @JsonProperty
+    public String keyPair() {
+        return this.keyPair;
+    }
+
+    @JsonProperty
+    public String securityGroup() {
+        return securityGroup;
     }
 
     @JsonProperty
@@ -183,5 +211,16 @@ public class AwsNodeRole implements Role {
         } else {
             return publicDns;
         }
+    }
+
+    @Override
+    public Cloud cloud(ConcurrentHashMap<String, Cloud> cloudCache) {
+        Ec2Cloud.Settings settings = new Ec2Cloud.Settings(keyPair, securityGroup);
+        return cloudCache.computeIfAbsent(settings.toString(), new Function<String, Cloud>() {
+            @Override
+            public Cloud apply(String s) {
+                return new Ec2Cloud(settings);
+            }
+        });
     }
 };

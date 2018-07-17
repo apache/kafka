@@ -19,15 +19,16 @@ package org.apache.kafka.castle.tool;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.castle.common.JsonTransformer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.castle.action.ActionRegistry;
 import org.apache.kafka.castle.action.ActionScheduler;
-import org.apache.kafka.castle.cloud.Ec2Cloud;
 import org.apache.kafka.castle.cluster.CastleCluster;
 import org.apache.kafka.castle.cluster.CastleClusterSpec;
 import org.apache.kafka.castle.common.CastleLog;
@@ -35,7 +36,9 @@ import org.apache.kafka.castle.common.CastleLog;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -57,8 +60,6 @@ public final class CastleTool {
 
     private static final String CASTLE_CLUSTER_INPUT_PATH = "CASTLE_CLUSTER_INPUT_PATH";
     private static final String CASTLE_CLUSTER_OUTPUT_PATH = "CASTLE_CLUSTER_OUTPUT_PATH";
-    private static final String CASTLE_AWS_SECURITY_GROUP = "CASTLE_AWS_SECURITY_GROUP";
-    private static final String CASTLE_AWS_SECURITY_KEYPAIR = "CASTLE_AWS_SECURITY_KEYPAIR";
     private static final String CASTLE_TIMEOUT_SECONDS = "CASTLE_TIMEOUT_SECONDS";
     private static final String CASTLE_TARGETS = "CASTLE_TARGETS";
     private static final String CASTLE_KAFKA_PATH = "CASTLE_KAFKA_PATH";
@@ -66,7 +67,7 @@ public final class CastleTool {
     private static final String CASTLE_OUTPUT_DIRECTORY_DEFAULT = "/tmp/castle";
     private static final String CASTLE_VERBOSE = "CASTLE_VERBOSE";
     private static final boolean CASTLE_VERBOSE_DEFAULT = false;
-    private static final int CASTLE_TROGDOR_TASK_DELAY_DEFAULT = 15000;
+    private static final String CASTLE_PREFIX = "CASTLE_";
 
     private static final String CASTLE_DESCRIPTION = String.format(
         "The Kafka castle cluster tool.%n" +
@@ -123,6 +124,29 @@ public final class CastleTool {
         return defaultValue;
     }
 
+    public static class CastleSubstituter implements JsonTransformer.Substituter {
+        @Override
+        public String substitute(String key) {
+            System.out.println("key = " + key);
+            if (!key.startsWith(CASTLE_PREFIX)) {
+                return null;
+            }
+            String value = System.getenv(key);
+            System.out.println("key = " + key + ", value = " + value);
+            if (value == null) {
+                throw new RuntimeException("You must set the environment variable " + key +
+                    " to use this configuration file.");
+            }
+            return value;
+        }
+    }
+
+    private static CastleClusterSpec readClusterSpec(File clusterInputPath) throws Throwable {
+        JsonNode confNode = CastleTool.JSON_SERDE.readTree(clusterInputPath);
+        JsonNode transofmredConfNode = JsonTransformer.transform(confNode, new CastleSubstituter());
+        return CastleTool.JSON_SERDE.treeToValue(transofmredConfNode, CastleClusterSpec.class);
+    }
+
     public static void main(String[] args) throws Throwable {
         ArgumentParser parser = ArgumentParsers
             .newArgumentParser("castle-tool")
@@ -143,20 +167,6 @@ public final class CastleTool {
             .metavar(CASTLE_CLUSTER_OUTPUT_PATH)
             .setDefault(getEnv(CASTLE_CLUSTER_OUTPUT_PATH, ""))
             .help("The path to use when writing a new castle cluster file.");
-        parser.addArgument("--sg")
-            .action(store())
-            .type(String.class)
-            .dest(CASTLE_AWS_SECURITY_GROUP)
-            .metavar(CASTLE_AWS_SECURITY_GROUP)
-            .setDefault(getEnv(CASTLE_AWS_SECURITY_GROUP, ""))
-            .help("The AWS security group name to use.");
-        parser.addArgument("--keypair")
-            .action(store())
-            .type(String.class)
-            .dest(CASTLE_AWS_SECURITY_KEYPAIR)
-            .metavar(CASTLE_AWS_SECURITY_KEYPAIR)
-            .setDefault(getEnv(CASTLE_AWS_SECURITY_KEYPAIR, ""))
-            .help("The AWS keypair name to use.");
         parser.addArgument("-t", "--timeout")
             .action(store())
             .type(Integer.class)
@@ -212,37 +222,32 @@ public final class CastleTool {
             CastleEnvironment env = new CastleEnvironment(
                     res.getString(CASTLE_CLUSTER_INPUT_PATH),
                     clusterOutputPath,
-                    res.getString(CASTLE_AWS_SECURITY_GROUP),
-                    res.getString(CASTLE_AWS_SECURITY_KEYPAIR),
                     res.getInt(CASTLE_TIMEOUT_SECONDS),
                     res.getString(CASTLE_KAFKA_PATH),
                     res.getString(CASTLE_OUTPUT_DIRECTORY));
             File clusterInputPath = new File(env.clusterInputPath());
-            CastleClusterSpec clusterSpec =
-                CastleTool.JSON_SERDE.readValue(clusterInputPath, CastleClusterSpec.class);
+            CastleClusterSpec clusterSpec = readClusterSpec(clusterInputPath);
             Files.createDirectories(Paths.get(env.outputDirectory()));
             CastleLog clusterLog = CastleLog.fromStdout("cluster", res.getBoolean(CASTLE_VERBOSE));
 
             CastleReturnCode exitCode;
-            try (Ec2Cloud cloud = new Ec2Cloud(env.awsSecurityKeyPair(), env.awsSecurityGroup())) {
-                try (CastleCluster cluster = new CastleCluster(env, cloud, clusterLog, clusterSpec)) {
-                    Runtime.getRuntime().addShutdownHook(new Thread() {
-                        @Override
-                        public void run() {
-                            cluster.shutdownManager().shutdown();
-                        }
-                    });
-                    if (targets.contains(CastleSsh.COMMAND)) {
-                        CastleSsh.run(cluster, targets);
-                    } else {
-                        try (ActionScheduler scheduler = cluster.createScheduler(targets,
-                            ActionRegistry.INSTANCE.actions(cluster.nodes().keySet()))) {
-                            scheduler.await(env.timeoutSecs(), TimeUnit.SECONDS);
-                        }
+            try (CastleCluster cluster = new CastleCluster(env, clusterLog, clusterSpec)) {
+                Runtime.getRuntime().addShutdownHook(new Thread() {
+                    @Override
+                    public void run() {
+                        cluster.shutdownManager().shutdown();
                     }
-                    cluster.shutdownManager().shutdown();
-                    exitCode = cluster.shutdownManager().returnCode();
+                });
+                if (targets.contains(CastleSsh.COMMAND)) {
+                    CastleSsh.run(cluster, targets);
+                } else {
+                    try (ActionScheduler scheduler = cluster.createScheduler(targets,
+                        ActionRegistry.INSTANCE.actions(cluster.nodes().keySet()))) {
+                        scheduler.await(env.timeoutSecs(), TimeUnit.SECONDS);
+                    }
                 }
+                cluster.shutdownManager().shutdown();
+                exitCode = cluster.shutdownManager().returnCode();
             }
             System.exit(exitCode.code());
         } catch (Throwable exception) {

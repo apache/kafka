@@ -20,8 +20,10 @@ package org.apache.kafka.castle.role;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.apache.kafka.castle.action.Action;
+import org.apache.kafka.castle.cloud.Cloud;
 
 import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A role which a particular castle cluster node can have.
@@ -54,4 +56,13 @@ public interface Role {
      * @param nodeName      The name of this node.
      */
     Collection<Action> createActions(String nodeName);
+
+    /**
+     * Get or create the cloud accessor associated with this role, or null if there is none.
+     *
+     * @param cloudCache    A cache mapping cloud instance names to cloud objects.
+     */
+    default Cloud cloud(ConcurrentHashMap<String, Cloud> cloudCache) {
+        return null;
+    }
 };

@@ -27,7 +27,6 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -35,22 +34,23 @@ public class JsonTransformerTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
-    private final Map<String, String> transforms = Collections.unmodifiableMap(
+    private final JsonTransformer.MapSubstituter substituter =
+        new JsonTransformer.MapSubstituter(Collections.unmodifiableMap(
             new HashMap<String, String>() {{
                 put("foo", "bar");
                 put("baz", "quux");
-            }});
+            }}));
 
     @Test
     public void testTransformString() throws Exception {
-        assertEquals("", JsonTransformer.transformString("", transforms));
-        assertEquals("foo", JsonTransformer.transformString("foo", transforms));
-        assertEquals("bar", JsonTransformer.transformString("%{foo}", transforms));
-        assertEquals("%foo", JsonTransformer.transformString("%foo", transforms));
-        assertEquals("%{foo}", JsonTransformer.transformString("\\%{foo}", transforms));
-        assertEquals("barquux", JsonTransformer.transformString("%{foo}%{baz}%{blah}", transforms));
-        assertEquals("", JsonTransformer.transformString("%{blah}", transforms));
-        assertEquals("", JsonTransformer.transformString("%{foo", transforms));
+        assertEquals("", JsonTransformer.transformString("", substituter));
+        assertEquals("foo", JsonTransformer.transformString("foo", substituter));
+        assertEquals("bar", JsonTransformer.transformString("%{foo}", substituter));
+        assertEquals("%foo", JsonTransformer.transformString("%foo", substituter));
+        assertEquals("%{foo}", JsonTransformer.transformString("\\%{foo}", substituter));
+        assertEquals("barquux", JsonTransformer.transformString("%{foo}%{baz}%{blah}", substituter));
+        assertEquals("", JsonTransformer.transformString("%{blah}", substituter));
+        assertEquals("", JsonTransformer.transformString("%{foo", substituter));
     }
 
     private static final class TestNestedJsonObject {
@@ -105,7 +105,7 @@ public class JsonTransformerTest {
         };
         TestJsonObject inputObject = new TestJsonObject(foos, 123456);
         JsonNode inputNode = CastleTool.JSON_SERDE.valueToTree(inputObject);
-        JsonNode outputNode = JsonTransformer.transform(inputNode, transforms);
+        JsonNode outputNode = JsonTransformer.transform(inputNode, substituter);
         TestJsonObject outputObject = CastleTool.JSON_SERDE.treeToValue(outputNode, TestJsonObject.class);
         assertEquals(inputObject.quux, outputObject.quux);
         assertEquals("bar", outputObject.foos[0].foo);

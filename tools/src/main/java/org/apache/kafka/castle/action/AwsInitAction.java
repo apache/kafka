@@ -60,7 +60,7 @@ public final class AwsInitAction extends Action {
         // Create a new instance.
         node.log().printf("*** Creating new instance with instance type %s, imageId %s%n",
             role.instanceType(), role.imageId());
-        role.setInstanceId(cluster.cloud().newRunner().
+        role.setInstanceId(node.cloud().newRunner().
             instanceType(role.instanceType()).
             imageId(role.imageId()).
             run());
@@ -87,7 +87,7 @@ public final class AwsInitAction extends Action {
     }
 
     private boolean checkInstanceDns(CastleCluster cluster, CastleNode node) throws Throwable {
-        Cloud.InstanceDescription description = cluster.cloud().describeInstance(role.instanceId());
+        Cloud.InstanceDescription description = node.cloud().describeInstance(role.instanceId());
         if (description.privateDns().isEmpty()) {
             node.log().printf("*** Waiting for private DNS name for %s...%n", role.instanceId());
             return false;
@@ -105,7 +105,7 @@ public final class AwsInitAction extends Action {
 
     private boolean checkInstanceSsh(CastleCluster cluster, CastleNode node) throws Throwable {
         try {
-            cluster.cloud().remoteCommand(node).args("-n", "--", "echo").mustRun();
+            node.cloud().remoteCommand(node).args("-n", "--", "echo").mustRun();
         } catch (Exception e) {
             node.log().printf("*** Unable to ssh to %s: %s%n",
                 node.nodeName(), e.getMessage());
@@ -147,20 +147,18 @@ public final class AwsInitAction extends Action {
         private synchronized void terminateInstances() throws Throwable {
             List<String> instanceIds = new ArrayList<>();
             for (CastleNode node : cluster.nodes().values()) {
-                AwsNodeRole nodeRole = node.getRole(AwsNodeRole.class);
-                String instanceId = nodeRole.instanceId();
-                if (!instanceId.isEmpty()) {
-                    instanceIds.add(instanceId);
+                AwsNodeRole awsRole = node.getRole(AwsNodeRole.class);
+                if ((awsRole != null) && (!awsRole.instanceId().isEmpty())) {
+                    instanceIds.add(awsRole.instanceId());
                 }
             }
             if (!instanceIds.isEmpty()) {
-                cluster.cloud().terminateInstances(instanceIds.toArray(new String[0]));
-                cluster.clusterLog().info("*** Terminated instance IDs " +
+                cluster.clusterLog().info("*** Terminating instance IDs " +
                     Utils.join(instanceIds, ", "));
                 for (CastleNode node : cluster.nodes().values()) {
-                    AwsNodeRole nodeRole = node.getRole(AwsNodeRole.class);
-                    if ((nodeRole != null) && instanceIds.contains(nodeRole.instanceId())) {
-                        node.log().info("*** Terminated instance " + nodeRole.instanceId());
+                    AwsNodeRole awsRole = node.getRole(AwsNodeRole.class);
+                    if ((awsRole != null) && (!awsRole.instanceId().isEmpty())) {
+                        node.cloud().terminateInstances(awsRole.instanceId());
                     }
                 }
             }

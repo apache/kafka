@@ -54,10 +54,10 @@ public final class JmxDumperStartAction extends Action {
         try {
             configFile = writeJmxDumperConf(cluster, node);
             CastleUtil.killJavaProcess(cluster, node, JmxDumperRole.CLASS_NAME, true);
-            cluster.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
                 JMX_DUMPER_PROPERTIES).mustRun();
-            cluster.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
         } finally {
             CastleUtil.deleteFileOrLog(node.log(), configFile);
         }

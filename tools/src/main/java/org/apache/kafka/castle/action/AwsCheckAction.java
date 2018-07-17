@@ -43,7 +43,7 @@ public final class AwsCheckAction extends Action {
 
     @Override
     public void call(CastleCluster cluster, CastleNode node) throws Throwable {
-        Collection<InstanceDescription> descriptions = cluster.cloud().describeInstances();
+        Collection<InstanceDescription> descriptions = node.cloud().describeInstances();
         String instanceId = role.instanceId();
         if (instanceId.isEmpty()) {
             CastleLog.printToAll(String.format("*** No AWS instanceID configured.%n"),

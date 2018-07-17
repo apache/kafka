@@ -17,7 +17,6 @@
 
 package org.apache.kafka.castle.cluster;
 
-import org.apache.kafka.castle.cloud.MockCloud;
 import org.apache.kafka.castle.common.CastleLog;
 import org.apache.kafka.castle.role.BrokerRole;
 import org.apache.kafka.castle.role.Role;
@@ -79,8 +78,7 @@ public class CastleClusterSpecTest {
     public void testToCastleCluster() throws Exception {
         CastleClusterSpec clusterSpec = createCastleClusterSpec();
         CastleCluster cluster = new CastleCluster(
-            new CastleEnvironment("", "", "", "", 360, "", ""),
-            new MockCloud(),
+            new CastleEnvironment("", "", 360, "", ""),
             CastleLog.fromStdout("cluster", true),
             clusterSpec);
         assertEquals(new HashSet<>(Arrays.asList(

@@ -28,23 +28,49 @@ import java.util.Map;
 
 public class JsonTransformer {
     /**
+     * Retrieves the value of a given key.
+     */
+    public interface Substituter {
+        /**
+         * Figure out what value to substitute into the JSON for the given key.
+         *
+         * @param key   The key.
+         * @return      null if no substitution should be made; the text, otherwise.
+         */
+        String substitute(String key);
+    }
+
+    public static class MapSubstituter implements Substituter {
+        private final Map<String, String> map;
+
+        public MapSubstituter(Map<String, String> map) {
+            this.map = map;
+        }
+
+        @Override
+        public String substitute(String key) {
+            return map.get(key);
+        }
+    }
+
+    /**
      * Given a JsonNode, return a deep copy of that JSON node.  All of the String values
      * will be transformed using the provided transforms map.
      *
      * @param input         The JsonNode to copy.  Will not be modified.
-     * @param transforms    The transforms.
+     * @param substituter   The substitutor to use.
      * @return              A deep copy of the input node.
      */
-    public static JsonNode transform(JsonNode input, Map<String, String> transforms) {
+    public static JsonNode transform(JsonNode input, Substituter substituter) {
         switch (input.getNodeType()) {
             case STRING:
-                return TextNode.valueOf(transformString(input.textValue(), transforms));
+                return TextNode.valueOf(transformString(input.textValue(), substituter));
             case ARRAY:
                 ArrayNode arrayResult = new ArrayNode(JsonNodeFactory.instance);
                 int index = 0;
                 for (Iterator<JsonNode> iter = input.elements(); iter.hasNext(); ) {
                     JsonNode child = iter.next();
-                    arrayResult.insert(index, transform(child, transforms));
+                    arrayResult.insert(index, transform(child, substituter));
                     index++;
                 }
                 return arrayResult;
@@ -52,7 +78,8 @@ public class JsonTransformer {
                 ObjectNode objectResult = new ObjectNode(JsonNodeFactory.instance);
                 for (Iterator<Map.Entry<String, JsonNode>> iter = input.fields(); iter.hasNext(); ) {
                     Map.Entry<String, JsonNode> entry = iter.next();
-                    objectResult.set(entry.getKey(), transform(entry.getValue(), transforms));
+                    objectResult.set(transformString(entry.getKey(), substituter),
+                        transform(entry.getValue(), substituter));
                 }
                 return objectResult;
             default:
@@ -68,10 +95,10 @@ public class JsonTransformer {
      * backslash can be used to insert a literal backslash.
      *
      * @param input         The input string.
-     * @param transforms    The transforms map.
+     * @param substituter   The substitutor to use.
      * @return              The transformed string.
      */
-    public static String transformString(String input, Map<String, String> transforms) {
+    public static String transformString(String input, Substituter substituter) {
         StringBuilder output = new StringBuilder();
         char delimiter = '\0';
         String variableName = "";
@@ -92,12 +119,13 @@ public class JsonTransformer {
                     break;
                 case '{':
                     if (c == '}') {
-                        String value = transforms.get(variableName);
-                        variableName = "";
+                        String value = substituter.substitute(variableName);
                         if (value == null) {
-                            value = "";
+                            output.append("%{" + variableName + "}");
+                        } else {
+                            output.append(value);
                         }
-                        output.append(value);
+                        variableName = "";
                         delimiter = '\0';
                     } else {
                         variableName = variableName + c;

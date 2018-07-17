@@ -63,12 +63,12 @@ public final class BrokerStartAction extends Action {
             configFile = writeBrokerConfig(cluster, node);
             log4jFile = writeBrokerLog4j(cluster, node);
             CastleUtil.killJavaProcess(cluster, node, KAFKA_CLASS_NAME, true);
-            cluster.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
                 ActionPaths.KAFKA_BROKER_PROPERTIES).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
                 ActionPaths.KAFKA_BROKER_LOG4J).mustRun();
-            cluster.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
         } finally {
             CastleUtil.deleteFileOrLog(node.log(), configFile);
             CastleUtil.deleteFileOrLog(node.log(), log4jFile);
@@ -76,7 +76,7 @@ public final class BrokerStartAction extends Action {
         CastleUtil.waitFor(5, 30000, new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return 0 == cluster.cloud().remoteCommand(node).args(
+                return 0 == node.cloud().remoteCommand(node).args(
                     CastleUtil.checkJavaProcessStatusArgs(KAFKA_CLASS_NAME)).run();
             }
         });

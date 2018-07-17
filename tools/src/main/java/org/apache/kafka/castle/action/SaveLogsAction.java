@@ -48,9 +48,9 @@ public final class SaveLogsAction extends Action {
         }
         Files.createDirectories(Paths.get(cluster.env().outputDirectory(),
             "logs", node.nodeName()));
-        int lsStatus = cluster.cloud().remoteCommand(node).args("ls", ActionPaths.LOGS_ROOT).run();
+        int lsStatus = node.cloud().remoteCommand(node).args("ls", ActionPaths.LOGS_ROOT).run();
         if (lsStatus == 0) {
-            cluster.cloud().remoteCommand(node).
+            node.cloud().remoteCommand(node).
                 syncFrom(ActionPaths.LOGS_ROOT + "/",
                     cluster.env().outputDirectory() + "/logs/" + node.nodeName() + "/").
                 mustRun();

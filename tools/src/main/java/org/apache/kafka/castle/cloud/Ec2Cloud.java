@@ -63,8 +63,7 @@ public final class Ec2Cloud implements Cloud, Runnable {
 
     private static final String INSTANCE_TYPE_DEFAULT = "m1.small";
 
-    private final String keyPair;
-    private final String securityGroup;
+    private final Settings settings;
     private final AmazonEC2 ec2;
     private final Thread thread;
     private final List<Ec2Runner> runs = new ArrayList<>();
@@ -73,6 +72,22 @@ public final class Ec2Cloud implements Cloud, Runnable {
     private final List<TerminateInstance> terminates = new ArrayList<>();
     private boolean shouldExit = false;
     private long nextCallTimeMs = 0;
+
+    public final static class Settings {
+        private final String keyPair;
+        private final String securityGroup;
+
+        public Settings(String keyPair, String securityGroup) {
+            this.keyPair = keyPair;
+            this.securityGroup = securityGroup;
+        }
+
+        @Override
+        public String toString() {
+            return "Ec2Cloud(keyPair=" + keyPair +
+                ", securityGroup=" + securityGroup + ")";
+        }
+    }
 
     private final class Ec2Runner extends Runner {
         private final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
@@ -136,9 +151,8 @@ public final class Ec2Cloud implements Cloud, Runnable {
         }
     }
 
-    public Ec2Cloud(String keyPair, String securityGroup) {
-        this.keyPair = keyPair;
-        this.securityGroup = securityGroup;
+    public Ec2Cloud(Settings settings) {
+        this.settings = settings;
         this.ec2 = AmazonEC2ClientBuilder.defaultClient();
         this.thread = new Thread(this, "Ec2CloudThread");
         this.thread.start();
@@ -216,23 +230,23 @@ public final class Ec2Cloud implements Cloud, Runnable {
             Iterator<Ec2Runner> runInstanceIterator = batchRuns.iterator();
             Exception failureException = new RuntimeException("Unable to create instance");
             try {
-                if (keyPair.isEmpty()) {
-                    throw new RuntimeException("You must specify a keypair with --keypair in " +
+                if (settings.keyPair.isEmpty()) {
+                    throw new RuntimeException("You must specify a keypair in " +
                         "order to create a new AWS instance.");
                 }
-                if (securityGroup.isEmpty()) {
-                    throw new RuntimeException("You must specify a security group with --sg in " +
+                if (settings.securityGroup.isEmpty()) {
+                    throw new RuntimeException("You must specify a security group in " +
                         "order to create a new AWS instance.");
                 }
                 log.info("Ec2Cloud#makeCalls.  batchRuns.size={}, imageId={}, keyName={}, securityGroups={}",
-                    batchRuns.size(), firstRunner.imageId, keyPair, securityGroup);
+                    batchRuns.size(), firstRunner.imageId, settings.keyPair, settings.securityGroup);
                 RunInstancesRequest req = new RunInstancesRequest()
                     .withInstanceType(firstRunner.instanceType)
                     .withImageId(firstRunner.imageId)
                     .withMinCount(batchRuns.size())
                     .withMaxCount(batchRuns.size())
-                    .withKeyName(keyPair)
-                    .withSecurityGroups(securityGroup);
+                    .withKeyName(settings.keyPair)
+                    .withSecurityGroups(settings.securityGroup);
                 RunInstancesResult result = ec2.runInstances(req);
                 Reservation reservation = result.getReservation();
                 Iterator<Instance> instanceIterator = reservation.getInstances().iterator();
@@ -282,12 +296,12 @@ public final class Ec2Cloud implements Cloud, Runnable {
             }
         } else if (!describeAlls.isEmpty()) {
             try {
-                if (keyPair.isEmpty()) {
+                if (settings.keyPair.isEmpty()) {
                     throw new RuntimeException("You must specify a keypair with --keypair in " +
                         "order to describe all AWS instances.");
                 }
                 DescribeInstancesRequest req = new DescribeInstancesRequest().withFilters(
-                    new Filter("key-name", Collections.singletonList(keyPair)));
+                    new Filter("key-name", Collections.singletonList(settings.keyPair)));
                 ArrayList<InstanceDescription> all = new ArrayList<>();
                 DescribeInstancesResult result = ec2.describeInstances(req);
                 for (Reservation reservation : result.getReservations()) {
@@ -398,5 +412,10 @@ public final class Ec2Cloud implements Cloud, Runnable {
     @Override
     public RemoteCommand remoteCommand(CastleNode node) {
         return new CastleRemoteCommand(node);
+    }
+
+    @Override
+    public String toString() {
+        return settings.toString();
     }
 }

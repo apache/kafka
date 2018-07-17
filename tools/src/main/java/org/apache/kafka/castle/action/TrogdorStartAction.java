@@ -51,12 +51,12 @@ public class TrogdorStartAction extends Action  {
             configFile = writeTrogdorConfig(cluster, node);
             log4jFile = writeTrogdorLog4j(cluster, node);
             CastleUtil.killJavaProcess(cluster, node, daemonType.className(), false);
-            cluster.cloud().remoteCommand(node).args(createSetupPathsCommandLine(daemonType)).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).args(createSetupPathsCommandLine(daemonType)).mustRun();
+            node.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
                 daemonType.propertiesPath()).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
                 daemonType.log4jConfPath()).mustRun();
-            cluster.cloud().remoteCommand(node).args(
+            node.cloud().remoteCommand(node).args(
                 runDaemonCommandLine(daemonType, node.nodeName())).mustRun();
         } finally {
             CastleUtil.deleteFileOrLog(node.log(), configFile);
@@ -65,7 +65,7 @@ public class TrogdorStartAction extends Action  {
         CastleUtil.waitFor(5, 30000, new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return 0 == cluster.cloud().remoteCommand(node).args(
+                return 0 == node.cloud().remoteCommand(node).args(
                     CastleUtil.checkJavaProcessStatusArgs(daemonType.className())).run();
             }
         });

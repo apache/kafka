@@ -51,12 +51,12 @@ public class ZooKeeperStartAction extends Action  {
             configFile = writeZooKeeperConfig(cluster, node);
             log4jFile = writeZooKeeperLog4j(cluster, node);
             CastleUtil.killJavaProcess(cluster, node, ZooKeeperRole.ZOOKEEPER_CLASS_NAME, false);
-            cluster.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).args(createSetupPathsCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).syncTo(configFile.getAbsolutePath(),
                 ActionPaths.ZK_PROPERTIES).mustRun();
-            cluster.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
+            node.cloud().remoteCommand(node).syncTo(log4jFile.getAbsolutePath(),
                 ActionPaths.ZK_LOG4J).mustRun();
-            cluster.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
+            node.cloud().remoteCommand(node).args(createRunDaemonCommandLine()).mustRun();
         } finally {
             CastleUtil.deleteFileOrLog(node.log(), configFile);
             CastleUtil.deleteFileOrLog(node.log(), log4jFile);
@@ -64,7 +64,7 @@ public class ZooKeeperStartAction extends Action  {
         CastleUtil.waitFor(5, 30000, new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return 0 == cluster.cloud().remoteCommand(node).args(
+                return 0 == node.cloud().remoteCommand(node).args(
                     CastleUtil.checkJavaProcessStatusArgs(ZooKeeperRole.ZOOKEEPER_CLASS_NAME)).run();
             }
         });

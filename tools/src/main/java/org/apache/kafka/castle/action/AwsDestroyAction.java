@@ -41,7 +41,7 @@ public final class AwsDestroyAction extends Action {
     public void call(CastleCluster cluster, CastleNode node) throws Throwable {
         String instanceId = role.instanceId();
         if (!instanceId.isEmpty()) {
-            cluster.cloud().terminateInstances(instanceId);
+            node.cloud().terminateInstances(instanceId);
         }
         role.setPublicDns("");
         role.setPublicDns("");

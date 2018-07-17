@@ -22,20 +22,15 @@ import java.nio.file.Paths;
 public final class CastleEnvironment {
     private final String clusterInputPath;
     private final String clusterOutputPath;
-    private final String awsSecurityGroup;
-    private final String awsSecurityKeyPair;
     private final int timeoutSecs;
     private final String kafkaPath;
     private final String outputDirectory;
 
     public CastleEnvironment(String clusterInputPath, String clusterOutputPath,
-                           String awsSecurityGroup, String awsSecurityKeyPair,
                            int timeoutSecs, String kafkaPath,
                            String outputDirectory) {
         this.clusterInputPath = toAbsolutePath(clusterInputPath);
         this.clusterOutputPath = toAbsolutePath(clusterOutputPath);
-        this.awsSecurityGroup = awsSecurityGroup;
-        this.awsSecurityKeyPair = awsSecurityKeyPair;
         this.timeoutSecs = timeoutSecs;
         this.kafkaPath = toAbsolutePath(kafkaPath);
         this.outputDirectory = toAbsolutePath(outputDirectory);
@@ -54,14 +49,6 @@ public final class CastleEnvironment {
 
     public String clusterOutputPath() {
         return clusterOutputPath;
-    }
-
-    public String awsSecurityGroup() {
-        return awsSecurityGroup;
-    }
-
-    public String awsSecurityKeyPair() {
-        return awsSecurityKeyPair;
     }
 
     public int timeoutSecs() {
