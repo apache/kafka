@@ -46,7 +46,7 @@ public class CopartitionedTopicsValidatorTest {
         partitions.put(new TopicPartition("second", 1), new PartitionInfo("second", 1, null, null, null));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = IllegalStateException.class)
     public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
         validator.validate(Collections.singleton("topic"),
                            Collections.<String, StreamsPartitionAssignor.InternalTopicMetadata>emptyMap(),
