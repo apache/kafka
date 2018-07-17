@@ -260,7 +260,7 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
-            if (streamThread.assignmentErrorCode.get() != 0) {
+            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.getCode()) {
                 log.debug("Received error code " + streamThread.assignmentErrorCode.get() +
                     " - shutdown");
                 streamThread.shutdown();
@@ -271,7 +271,7 @@ public class StreamThread extends Thread {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
-                if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.VERSION_PROBING.getCode()) {
+                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.getCode()) {
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {

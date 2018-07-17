@@ -151,7 +151,7 @@ public class AssignmentInfo {
                     encodeVersionTwo(out);
                     break;
                 case 3:
-                    encodeVersionThree(3, out);
+                    encodeVersionThree(out);
                     break;
                 case 4:
                     encodeVersionFour(out);
@@ -219,15 +219,18 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeVersionThree(int version, final DataOutputStream out) throws IOException {
-        out.writeInt(version);
+    private void encodeVersionThree(final DataOutputStream out) throws IOException {
+        out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        encodeVersionThree(4, out);
+        out.writeInt(4);
+        out.writeInt(LATEST_SUPPORTED_VERSION);
+        encodeActiveAndStandbyTaskAssignment(out);
+        encodePartitionsByHost(out);
         out.writeInt(errCode);
     }
 

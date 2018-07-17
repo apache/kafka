@@ -136,7 +136,7 @@ public class KafkaStreams {
     private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
-    private final StreamThread[] threads;
+    protected final StreamThread[] threads;
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
@@ -209,7 +209,7 @@ public class KafkaStreams {
     }
 
     private final Object stateLock = new Object();
-    private volatile State state = State.CREATED;
+    protected volatile State state = State.CREATED;
 
     private boolean waitOnState(final State targetState, final long waitMs) {
         long begin = time.milliseconds();
@@ -335,23 +335,6 @@ public class KafkaStreams {
         } else {
             throw new IllegalStateException("Can only set StateListener in CREATED state. " +
                     "Current state is: " + state);
-        }
-    }
-
-    /**
-     * An app can set a single {@link StreamThread.StateListener} so that the app is notified when state changes.
-     *
-     * @param listener a new StreamThread state listener
-     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
-     */
-    public void setStreamThreadStateListener(StreamThread.StateListener listener) {
-        if (state == State.CREATED) {
-            for (StreamThread thread : threads) {
-                thread.setStateListener(listener);
-            }
-        } else {
-            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
-                "Current state is: " + state);
         }
     }
 

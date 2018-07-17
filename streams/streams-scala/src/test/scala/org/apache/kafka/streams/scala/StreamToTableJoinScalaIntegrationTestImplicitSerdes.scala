@@ -108,7 +108,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 
-    @Test def testShouldCountClicksPerRegionWithMissingTopic(): Unit = {
+  @Test def testShouldAutoShutdownOnIncompleteMetadata(): Unit = {
 
     // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced,
     // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
@@ -140,7 +140,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     // Write the (continuously updating) results to the output topic.
     clicksPerRegion.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
+    val streams: KafkaStreamsWrapper = new KafkaStreamsWrapper(builder.build(), streamsConfiguration)
     val listener = new IntegrationTestUtils.StateListenerStub()
     streams.setStreamThreadStateListener(listener)
     streams.start()

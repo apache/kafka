@@ -90,6 +90,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     return NONE;
                 case 1:
                     return INCOMPLETE_SOURCE_TOPIC_METADATA;
+                case 2:
+                    return VERSION_PROBING;
                 default:
                     throw new IllegalArgumentException("Unknown error code: " + code);
             }
@@ -987,7 +989,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     if (partitions == null) {
                         String str = String.format("%sTopic not found: %s", logPrefix, topic);
                         log.error(str);
-                        throw new org.apache.kafka.streams.errors.TopologyException(str);
+                        throw new IllegalStateException(str);
                     }
 
                     final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
