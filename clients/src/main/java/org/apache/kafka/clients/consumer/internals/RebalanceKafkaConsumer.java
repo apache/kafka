@@ -64,6 +64,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.inputArgument = null;
         this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
+        System.out.println("Has been successfully instantiated: RebalanceKafkaConsumer instance :)");
     }
 
     public RequestResult getResult() {
@@ -159,18 +160,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     pause((Collection<TopicPartition>) inputArgument.value);
                     result = new RequestResult<>(true);
                     break;
-                case OFFSETS_FOR_TIMES:
-                    result = new RequestResult<>(super.offsetsForTimes((Map<TopicPartition, Long>) inputArgument.value,
-                            waitTime));
-                    break;
-                case END_OFFSETS:
-                    result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument.value,
-                            waitTime));
-                    break;
-                case BEGINNING_OFFSETS:
-                    result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument.value,
-                            waitTime));
-                    break;
                 case COMMIT_ASYNC:
                     super.commitAsync((OffsetCommitCallback) inputArgument.value);
                     result = new RequestResult<>(true);
@@ -199,7 +188,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public void close(Duration timeout, TaskCompletionCallback callback) {
         sendRequest(timeout, ConsumerRequest.CLOSE, null, callback);
         this.shouldClose.set(true);
-        System.out.println(shouldClose.get());
     }
 
     public enum ConsumerRequest {
@@ -207,9 +195,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         COMMITTED,
         COMMIT_SYNC,
         COMMIT_ASYNC,
-        BEGINNING_OFFSETS,
-        END_OFFSETS,
-        OFFSETS_FOR_TIMES,
         PAUSE,
         RESUME,
         CLOSE,

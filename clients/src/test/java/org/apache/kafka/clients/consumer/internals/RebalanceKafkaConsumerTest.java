@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -69,14 +70,6 @@ public class RebalanceKafkaConsumerTest {
     }
 
     @Test
-    public void testAddOffsetsMethod() {
-        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer(startOffsets, startOffsets);
-        consumer.addNewOffsets(startOffsets, endOffsets);
-        assertTrue(consumer.position(t1p) == 0L);
-        assertTrue(consumer.position(t2p) == 1L);
-    }
-
-    @Test
     public void testConsumerClose() {
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
@@ -99,8 +92,12 @@ public class RebalanceKafkaConsumerTest {
         final Thread consumerThread = new Thread(consumer);
         consumerThread.start();
 
-        consumer.sendRequest(Duration.ofMillis(1000), RebalanceKafkaConsumer.ConsumerRequest.POLL, null, new MockTaskCompletionCallback());
+        consumer.sendRequest(Duration.ofMillis(1000),
+                             RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                null,
+                             new MockTaskCompletionCallback());
         waitForRequestResult();
+        assertTrue(((ConsumerRecords) requestResult.value).count() == 0);
         requestResult = null;
 
         consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());

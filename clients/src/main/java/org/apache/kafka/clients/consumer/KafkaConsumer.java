@@ -1161,6 +1161,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
+        System.out.println("Has called poll(Duration)");
         return poll(timeout.toMillis(), true, true);
     }
 
@@ -1176,6 +1177,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void checkRebalanceAndPoll(long timeoutMs) {
+        log.debug("use.parallel.rebalance has been set to " + useParallelRebalance);
         if (useParallelRebalance && rebalanceConsumer == null) {
             rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
             consumerThread = new Thread(rebalanceConsumer);
@@ -1232,6 +1234,31 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return new ConsumerRecords<>(map);
     }
 
+    private ConsumerRecords<K, V> processRecords(final long timeoutMs,
+                                                 final long checkRebalanceStart,
+                                                 final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
+        // before returning the fetched records, we can send off the next round of fetches
+        // and avoid block waiting for their responses to enable pipelining while the user
+        // is handling the fetched records.
+        //
+        // NOTE: since the consumed position has already been updated, we must not allow
+        // wakeups or any other errors to be triggered prior to returning the fetched records.
+        if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
+            client.pollNoWakeup();
+        }
+
+        if (consumerThread != null && consumerThread.isAlive() && result == null) {
+            ConsumerRecords<K, V> offsetLagRecords =
+                    (ConsumerRecords<K, V>) pollForResults(timeoutMs, checkRebalanceStart).value;
+            if (offsetLagRecords == null) {
+                return this.interceptors.onConsume(new ConsumerRecords<>(records));
+            } else {
+                return mergeRecords(offsetLagRecords, this.interceptors.onConsume(new ConsumerRecords<>(records)));
+            }
+        }
+        return this.interceptors.onConsume(new ConsumerRecords<>(records));
+    }
+
     private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout, final boolean checkRebalance) {
         acquireAndEnsureOpen();
         try {
@@ -1242,6 +1269,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             final long checkRebalanceStart = time.milliseconds();
+            System.out.println("checkRebalance is set to: " + checkRebalance);
             if (checkRebalance) {
                 checkRebalanceAndPoll(timeoutMs);
             }
@@ -1270,26 +1298,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remainingTimeAtLeastZero(timeoutMs, elapsedTime));
 
                 if (!records.isEmpty()) {
-                    // before returning the fetched records, we can send off the next round of fetches
-                    // and avoid block waiting for their responses to enable pipelining while the user
-                    // is handling the fetched records.
-                    //
-                    // NOTE: since the consumed position has already been updated, we must not allow
-                    // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
-                        client.pollNoWakeup();
-                    }
-
-                    if (consumerThread != null && consumerThread.isAlive() && result == null) {
-                        ConsumerRecords<K, V> offsetLagRecords =
-                                (ConsumerRecords<K, V>) pollForResults(timeoutMs, checkRebalanceStart).value;
-                        if (offsetLagRecords == null) {
-                            return this.interceptors.onConsume(new ConsumerRecords<>(records));
-                        } else {
-                            return mergeRecords(offsetLagRecords, this.interceptors.onConsume(new ConsumerRecords<>(records)));
-                        }
-                    }
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    return processRecords(timeoutMs, checkRebalanceStart, records);
                 }
 
                 final long fetchEnd = time.milliseconds();
