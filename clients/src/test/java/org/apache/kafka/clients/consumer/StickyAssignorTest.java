@@ -865,6 +865,44 @@ public class StickyAssignorTest {
         assertTrue(assignor.isSticky());
     }
 
+    @Test
+    public void testConflictingPreviousAssignments() {
+        String topic = "topic";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 2);
+        Map<String, Subscription> subscriptions = new HashMap<>();
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+
+        // both c1 and c2 have partition 1 assigned to them in generation 1
+        List<TopicPartition> c1partitions0 = partitions(tp0, tp1);
+        List<TopicPartition> c2partitions0 = partitions(tp0, tp1);
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c1partitions0, 1))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c2partitions0, 1))));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> c1partitions = assignment.get(consumer1);
+        List<TopicPartition> c2partitions = assignment.get(consumer2);
+
+        assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1);
+        System.out.println(c1partitions);
+        System.out.println(c2partitions);
+        assertEquals(2, assignor.generation());
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
     static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
         Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
         List<Struct> topicAssignments = new ArrayList<>();
