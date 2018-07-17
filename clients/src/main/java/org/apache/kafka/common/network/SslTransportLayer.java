@@ -256,8 +256,10 @@ public class SslTransportLayer implements TransportLayer {
                 read = readFromSocketChannel();
 
             doHandshake();
-        } catch (SSLException e) {
+        } catch (SSLHandshakeException | SSLProtocolException | SSLPeerUnverifiedException | SSLKeyException e) {
             handshakeFailure(e, true);
+        } catch (SSLException e) {
+            maybeProcessHandshakeFailure(e, true, null);
         } catch (IOException e) {
             maybeThrowSslAuthenticationException();
 
@@ -269,7 +271,7 @@ public class SslTransportLayer implements TransportLayer {
                 } catch (SSLHandshakeException | SSLProtocolException | SSLPeerUnverifiedException | SSLKeyException e1) {
                     handshakeFailure(e1, false);
                 } catch (SSLException e1) {
-                    log.debug("SSL exception while unwrapping data after IOException, ignoring", e1);
+                    maybeProcessHandshakeFailure(e1, false, e);
                 }
             }
             // If we get here, this is not a handshake failure, throw the original IOException
@@ -826,6 +828,29 @@ public class SslTransportLayer implements TransportLayer {
         handshakeException = new SslAuthenticationException("SSL handshake failed", sslException);
         if (!flush || flush(netWriteBuffer))
             throw handshakeException;
+    }
+
+    // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
+    // SSLPeerUnverifiedException or SSLKeyException if the cause is known. But the SSL engine may
+    // throw exceptions using the base class SSLException in a few cases:
+    //   a) If there are no matching ciphers or TLS version or the private key is invalid, client will be
+    //      unable to process the server message and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
+    //   b) If server closes the connection gracefully during handshake, client may receive close_notify
+    //      and and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Received close_notify during handshake
+    // We want to handle a) as a non-retriable SslAuthenticationException and b) as a retriable IOException.
+    // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception
+    // when we are not sure, we will treat only the first exception string as a handshake exception.
+    private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
+        if (sslException.getMessage().contains("Unrecognized SSL message"))
+            handshakeFailure(sslException, flush);
+        else if (ioException == null)
+            throw sslException;
+        else {
+            log.debug("SSLException while unwrapping data after IOException, original IOException will be propagated", sslException);
+            throw ioException;
+        }
     }
 
     // If handshake has already failed, throw the authentication exception.

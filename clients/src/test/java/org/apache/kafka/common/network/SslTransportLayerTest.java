@@ -699,7 +699,8 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeRead() throws Exception {
-        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.READ_IOEXCEPTION);
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.THROW_IO_EXCEPTION, FailureAction.NO_OP);
     }
 
     /**
@@ -707,7 +708,28 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeWrite() throws Exception {
-        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.WRITE_IOEXCEPTION);
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, FailureAction.THROW_IO_EXCEPTION);
+    }
+
+    /**
+     * Tests that if the remote end closes connection ungracefully  during SSL handshake while reading data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testUngracefulRemoteCloseDuringHandshakeRead() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(server::closeSocketChannels, FailureAction.NO_OP);
+    }
+
+    /**
+     * Tests that if the remote end closes connection ungracefully during SSL handshake while writing data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testUngracefulRemoteCloseDuringHandshakeWrite() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeSocketChannels);
     }
 
     /**
@@ -715,8 +737,9 @@ public class SslTransportLayerTest {
      * the disconnection is not treated as an authentication failure.
      */
     @Test
-    public void testRemoteCloseDuringHandshakeRead() throws Exception {
-        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.READ_CLOSE);
+    public void testGracefulRemoteCloseDuringHandshakeRead() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeKafkaChannels);
     }
 
     /**
@@ -724,18 +747,20 @@ public class SslTransportLayerTest {
      * the disconnection is not treated as an authentication failure.
      */
     @Test
-    public void testRemoteCloseDuringHandshakeWrite() throws Exception {
-        testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode.WRITE_IOEXCEPTION);
+    public void testGracefulRemoteCloseDuringHandshakeWrite() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(server::closeKafkaChannels, FailureAction.NO_OP);
     }
 
-    private void testIOExceptionsDuringHandshake(TestSslChannelBuilder.FailureMode failureMode) throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
+    private void testIOExceptionsDuringHandshake(FailureAction readFailureAction,
+                                                 FailureAction flushFailureAction) throws Exception {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
             String node = String.valueOf(i);
 
-            channelBuilder.failureMode = failureMode;
+            channelBuilder.readFailureAction = readFailureAction;
+            channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(sslClientConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
@@ -750,7 +775,9 @@ public class SslTransportLayerTest {
                     break;
                 }
                 if (selector.disconnected().containsKey(node)) {
-                    assertEquals(ChannelState.State.AUTHENTICATE, selector.disconnected().get(node).state());
+                    ChannelState.State state = selector.disconnected().get(node).state();
+                    assertTrue("Unexpected channel state " + state,
+                            state == ChannelState.State.AUTHENTICATE || state == ChannelState.State.READY);
                     break;
                 }
             }
@@ -989,21 +1016,23 @@ public class SslTransportLayerTest {
         return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
     }
 
-    private static class TestSslChannelBuilder extends SslChannelBuilder {
+    @FunctionalInterface
+    private interface FailureAction {
+        FailureAction NO_OP = () -> { };
+        FailureAction THROW_IO_EXCEPTION = () -> {
+            throw new IOException("Test IO exception");
+        };
+        void run() throws IOException;
+    }
 
-        enum FailureMode {
-            NONE,
-            READ_IOEXCEPTION,
-            WRITE_IOEXCEPTION,
-            READ_CLOSE,
-            WRITE_CLOSE
-        }
+    private static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
         private Integer appBufSizeOverride;
-        FailureMode failureMode = FailureMode.NONE;
-        long failureIndex = Long.MAX_VALUE;
+        private long failureIndex = Long.MAX_VALUE;
+        FailureAction readFailureAction = FailureAction.NO_OP;
+        FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(Mode mode) {
@@ -1053,22 +1082,8 @@ public class SslTransportLayerTest {
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);
-                switch (failureMode) {
-                    case READ_IOEXCEPTION:
-                    case READ_CLOSE:
-                        numReadsRemaining = new AtomicLong(failureIndex);
-                        numFlushesRemaining = new AtomicLong(Long.MAX_VALUE);
-                        break;
-                    case WRITE_IOEXCEPTION:
-                    case WRITE_CLOSE:
-                        numReadsRemaining = new AtomicLong(Long.MAX_VALUE);
-                        numFlushesRemaining = new AtomicLong(failureIndex);
-                        break;
-                    default:
-                        numReadsRemaining = new AtomicLong(Long.MAX_VALUE);
-                        numFlushesRemaining = new AtomicLong(Long.MAX_VALUE);
-                        break;
-                }
+                numReadsRemaining = new AtomicLong(failureIndex);
+                numFlushesRemaining = new AtomicLong(failureIndex);
                 numDelayedFlushesRemaining = new AtomicInteger(flushDelayCount);
             }
 
@@ -1095,33 +1110,16 @@ public class SslTransportLayerTest {
 
             @Override
             protected int readFromSocketChannel() throws IOException {
-                if (numReadsRemaining.decrementAndGet() == 0 && !ready()) {
-                    switch (failureMode) {
-                        case READ_IOEXCEPTION:
-                            throw new IOException("Test exception during read");
-                        case READ_CLOSE:
-                            super.close();
-                            break;
-                        default:
-                            break;
-                    }
-                }
+                if (numReadsRemaining.decrementAndGet() == 0 && !ready())
+                    readFailureAction.run();
                 return super.readFromSocketChannel();
             }
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
-                if (numFlushesRemaining.decrementAndGet() == 0 && !ready()) {
-                    switch (failureMode) {
-                        case WRITE_IOEXCEPTION:
-                            throw new IOException("Test exception during write");
-                        case WRITE_CLOSE:
-                            super.close();
-                            break;
-                        default:
-                            break;
-                    }
-                } else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
+                if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
+                    flushFailureAction.run();
+                else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
                     return false;
                 resetDelayedFlush();
                 return super.flush(buf);
