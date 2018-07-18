@@ -830,7 +830,12 @@ public class StreamsConfig extends AbstractConfig {
      * @param props properties that specify Kafka Streams and internal consumer/producer configuration
      */
     public StreamsConfig(final Map<?, ?> props) {
-        super(CONFIG, props);
+        this(props, true);
+    }
+
+    protected StreamsConfig(final Map<?, ?> props,
+                            final boolean doLog) {
+        super(CONFIG, props, doLog);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
     }
 

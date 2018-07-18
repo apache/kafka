@@ -166,6 +166,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
+    private final class InternalStreamsConfig extends StreamsConfig {
+        private InternalStreamsConfig(final Map<?, ?> props) {
+            super(props, false);
+        }
+    }
+
     protected static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
         @Override
         public int compare(final TopicPartition p1,
@@ -208,7 +214,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
      */
     @Override
     public void configure(final Map<String, ?> configs) {
-        final StreamsConfig streamsConfig = new StreamsConfig(configs);
+        final StreamsConfig streamsConfig = new InternalStreamsConfig(configs);
 
         // Setting the logger with the passed in client thread name
         logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
