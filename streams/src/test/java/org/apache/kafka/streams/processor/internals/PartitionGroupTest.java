@@ -140,6 +140,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info);
         // 1:[5, 2, 4]
         // 2:[4, 6]
+        // st: 4 as partition st is now {5, 4}
         assertEquals(partition1, info.partition());
         assertEquals(3L, record.timestamp);
         assertEquals(5, group.numBuffered());
@@ -151,6 +152,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info);
         // 1:[5, 2, 4]
         // 2:[6]
+        // st: 5 as partition st is now {5, 6}
         assertEquals(partition2, info.partition());
         assertEquals(4L, record.timestamp);
         assertEquals(4, group.numBuffered());
