@@ -1167,7 +1167,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void getStartAndEndOffsets() {
         coordinator.ensureActiveGroup();
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
-            OffsetAndMetadata offsetMetadata = committed(partition);
+            OffsetAndMetadata offsetMetadata = committed(partition, Duration.ofMillis(requestTimeoutMs), true);
             startOffsets.put(partition, offsetMetadata == null ? 0L : offsetMetadata.offset());
         }
         seekToEnd(Collections.EMPTY_LIST);
