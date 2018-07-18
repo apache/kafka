@@ -1314,6 +1314,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    public boolean childConsumerIsAlive() {
+        if (rebalanceConsumer != null) {
+            return consumerThread.isAlive();
+        }
+        return false;
+    }
+
     /**
      * Visible for testing
      */

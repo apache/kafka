@@ -171,6 +171,30 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
+  def testSecondaryThreadIsAliveWithNewRebalanceMode() {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG, true.toString)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    //get initial assignment
+    consumer0.poll(0)
+
+    Thread.sleep(3500)
+
+    consumer0.poll(0)
+
+    //test if child consumer thread is alive
+    assertTrue(consumer0.childConsumerIsAlive())
+  }
+
+  @Test
   def testMaxPollIntervalMsDelayInRevocation() {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
