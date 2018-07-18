@@ -125,12 +125,10 @@ public final class CastleTool {
     public static class CastleSubstituter implements JsonTransformer.Substituter {
         @Override
         public String substitute(String key) {
-            System.out.println("key = " + key);
             if (!key.startsWith(CASTLE_PREFIX)) {
                 return null;
             }
             String value = System.getenv(key);
-            System.out.println("key = " + key + ", value = " + value);
             if (value == null) {
                 throw new RuntimeException("You must set the environment variable " + key +
                     " to use this configuration file.");
