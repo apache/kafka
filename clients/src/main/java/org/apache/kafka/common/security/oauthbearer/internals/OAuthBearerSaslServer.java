@@ -54,7 +54,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
-            String.format("n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)", SASLNAME));
+            String.format("n,(a=(?<authzid>%s))?,\u0001auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)\u0001\u0001", SASLNAME));
 
     private final AuthenticateCallbackHandler callbackHandler;
 

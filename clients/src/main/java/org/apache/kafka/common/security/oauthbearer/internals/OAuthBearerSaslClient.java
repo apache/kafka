@@ -88,7 +88,7 @@ public class OAuthBearerSaslClient implements SaslClient {
                         throw new SaslException("Expected empty challenge");
                     callbackHandler().handle(new Callback[] {callback});
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
-                    return String.format("n,,auth=Bearer %s", callback.token().value())
+                    return String.format("n,,\u0001auth=Bearer %s\u0001\u0001", callback.token().value())
                             .getBytes(StandardCharsets.UTF_8);
                 case RECEIVE_SERVER_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0) {

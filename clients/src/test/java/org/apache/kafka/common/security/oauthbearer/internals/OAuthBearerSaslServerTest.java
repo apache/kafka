@@ -94,20 +94,25 @@ public class OAuthBearerSaslServerTest {
     @Test
     public void illegalToken() throws Exception {
         byte[] bytes = saslServer
-                .evaluateResponse((clientInitialResponseText(null) + "AB").getBytes(StandardCharsets.UTF_8));
+                .evaluateResponse((clientInitialResponseText(null, true)).getBytes(StandardCharsets.UTF_8));
         String challenge = new String(bytes, StandardCharsets.UTF_8);
         assertEquals("{\"status\":\"invalid_token\"}", challenge);
     }
 
     private String clientInitialResponseText(String authorizationId)
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+        return clientInitialResponseText(authorizationId, false);
+    }
+
+    private String clientInitialResponseText(String authorizationId, boolean illegalToken)
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         LOGIN_CALLBACK_HANDLER.handle(new Callback[] {callback});
         OAuthBearerToken token = callback.token();
         String compactSerialization = token.value();
         String clientInitialResponseText = "n,"
-                + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",auth=Bearer "
-                + compactSerialization;
+                + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",\u0001auth=Bearer "
+                + compactSerialization + (illegalToken ? "AB" : "") + "\u0001\u0001";
         return clientInitialResponseText;
     }
 }
