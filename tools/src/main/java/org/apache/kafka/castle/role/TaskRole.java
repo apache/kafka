@@ -23,11 +23,17 @@ import org.apache.kafka.castle.action.Action;
 import org.apache.kafka.castle.action.TaskStartAction;
 import org.apache.kafka.castle.action.TaskStatusAction;
 import org.apache.kafka.castle.action.TaskStopAction;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * A role which runs tasks inside Trogdor.
@@ -35,13 +41,31 @@ import java.util.TreeMap;
 public class TaskRole implements Role {
     private final int initialDelayMs;
 
-    private final TreeMap<String, TaskSpec> taskSpecs;
+    private final Map<String, TaskSpec> taskSpecs;
+
+    private final NavigableSet<String> waitFor;
 
     @JsonCreator
     public TaskRole(@JsonProperty("initialDelayMs") int initialDelayMs,
-                    @JsonProperty("taskSpecs") TreeMap<String, TaskSpec> taskSpecs) {
+                    @JsonProperty("taskSpecs") TreeMap<String, TaskSpec> taskSpecs,
+                    @JsonProperty("waitFor") List<String> waitFor) {
         this.initialDelayMs = initialDelayMs;
-        this.taskSpecs = taskSpecs == null ? new TreeMap<String, TaskSpec>() : taskSpecs;
+        this.taskSpecs = Collections.unmodifiableMap(taskSpecs == null ?
+            Collections.emptyMap() : new TreeMap<>(taskSpecs));
+        if ((waitFor == null) || (waitFor.isEmpty())) {
+            this.waitFor = Collections.unmodifiableNavigableSet(
+                new TreeSet<>(this.taskSpecs.keySet()));
+        } else {
+            for (String taskId : waitFor) {
+                if (!taskSpecs.containsKey(taskId)) {
+                    throw new RuntimeException("waitFor contains task ID " +
+                        taskId + ", but only task ID(s) " + Utils.mkList(taskSpecs.keySet(), ", ") +
+                        " appear in taskSpecs.");
+                }
+            }
+            this.waitFor = Collections.unmodifiableNavigableSet(
+                new TreeSet<>(waitFor));
+        }
     }
 
     @Override
@@ -51,8 +75,13 @@ public class TaskRole implements Role {
     }
 
     @JsonProperty
-    public TreeMap<String, TaskSpec> taskSpecs() {
+    public Map<String, TaskSpec> taskSpecs() {
         return taskSpecs;
+    }
+
+    @JsonProperty
+    public NavigableSet<String> waitFor() {
+        return waitFor;
     }
 
     @Override

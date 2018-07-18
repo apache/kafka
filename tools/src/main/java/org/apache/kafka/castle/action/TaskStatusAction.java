@@ -38,7 +38,7 @@ import java.util.Collections;
 public class TaskStatusAction extends Action  {
     public final static String TYPE = "taskStatus";
 
-    private final Collection<String> taskIds;
+    private final TaskRole role;
 
     public TaskStatusAction(String scope, TaskRole role) {
         super(new ActionId(TYPE, scope),
@@ -47,8 +47,7 @@ public class TaskStatusAction extends Action  {
             },
             new String[] {},
             role.initialDelayMs());
-        this.taskIds = Collections.unmodifiableCollection(
-            new ArrayList<>(role.taskSpecs().keySet()));
+        this.role = role;
     }
 
     @Override
@@ -66,7 +65,7 @@ public class TaskStatusAction extends Action  {
                     }
                 });
             ObjectNode results = new ObjectNode(JsonNodeFactory.instance);
-            for (String taskId : taskIds) {
+            for (String taskId : role.taskSpecs().keySet()) {
                 TaskState state = response.tasks().get(taskId);
                 if (state == null) {
                     cluster.clusterLog().printf("Unable to find task %s%n", taskId);
@@ -85,7 +84,9 @@ public class TaskStatusAction extends Action  {
                 } else {
                     cluster.clusterLog().printf("Task %s is in progress with status %s%n",
                         taskId, state.status());
-                    cluster.shutdownManager().changeReturnCode(CastleReturnCode.IN_PROGRESS);
+                    if (role.waitFor().contains(taskId)) {
+                        cluster.shutdownManager().changeReturnCode(CastleReturnCode.IN_PROGRESS);
+                    }
                 }
             }
         } catch (Throwable e) {
