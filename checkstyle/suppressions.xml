@@ -7,6 +7,9 @@
 <suppressions>
 
     <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
+    <!-- hotfixes -->
+    <suppress checks="Indentation"
+              files="(UpdateMetadataRequest).java"/>
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"

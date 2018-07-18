@@ -17,6 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -47,7 +49,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
         private final Map<String, Uuid> topicIds;
+        private Lock buildLock = new ReentrantLock();
 
+        // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
+        private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
@@ -59,6 +64,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public UpdateMetadataRequest build(short version) {
+            // the following inner blocks are not indented in order to make hotfix cherry-picking easier
+            buildLock.lock();
+            try {
+            UpdateMetadataRequest updateMetadataRequest = requestCache.get(version);
+            if (updateMetadataRequest == null) {
             if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
                     if (version == 0) {
@@ -94,7 +104,13 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-            return new UpdateMetadataRequest(data, version);
+            updateMetadataRequest = new UpdateMetadataRequest(data, version);
+            requestCache.put(version, updateMetadataRequest);
+            }
+            return updateMetadataRequest;
+            } finally {
+                buildLock.unlock();
+            }
         }
 
         private static Map<String, UpdateMetadataTopicState> groupByTopic(Map<String, Uuid> topicIds, List<UpdateMetadataPartitionState> partitionStates) {
