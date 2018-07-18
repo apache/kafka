@@ -52,7 +52,6 @@ import org.apache.kafka.common.errors.InvalidOffsetException
 class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
     extends AbstractIndex[Long, Int](_file, baseOffset, maxIndexSize, writable) {
 
-  override def hotEntries = 512
   override def entrySize = 8
 
   /* the last offset in the index */

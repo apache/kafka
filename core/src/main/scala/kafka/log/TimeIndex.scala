@@ -55,7 +55,6 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
 
-  override def hotEntries = 340
   override def entrySize = 12
 
   // We override the full check to reserve the last time index entry slot for the on roll call.
