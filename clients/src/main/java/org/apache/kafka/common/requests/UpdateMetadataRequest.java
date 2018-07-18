@@ -45,6 +45,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
 
+        // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
+        private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
+
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers) {
             super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
@@ -54,6 +57,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public UpdateMetadataRequest build(short version) {
+            UpdateMetadataRequest updateMetadataRequest = requestCache.get(version);
+            if (updateMetadataRequest == null) {
             if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
                     if (version == 0) {
@@ -88,7 +93,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-            return new UpdateMetadataRequest(data, version);
+            updateMetadataRequest = new UpdateMetadataRequest(data, version);
+            requestCache.put(version, updateMetadataRequest);
+            }
+            return updateMetadataRequest;
         }
 
         private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
@@ -118,6 +126,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     private final UpdateMetadataRequestData data;
+    // LIKAFKA-18349 - Cache the UpdateMetadataRequest struct to reduce memory usage
+    private Struct struct = null;
 
     UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
@@ -206,7 +216,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version());
+        if (struct == null) {
+            struct = data.toStruct(version());
+        }
+        return struct;
     }
 
     // Visible for testing
