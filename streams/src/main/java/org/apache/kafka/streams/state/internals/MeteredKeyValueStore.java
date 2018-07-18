@@ -290,7 +290,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
         for (final KeyValue<K, V> entry : from) {
             byteEntries.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
-
         }
         return byteEntries;
     }
