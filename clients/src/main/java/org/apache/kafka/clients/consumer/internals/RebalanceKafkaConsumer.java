@@ -152,6 +152,12 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             // Cases which have no return value will have their result be marked as a boolean value: true.
             // This is intended as a marker to represent that a particular operation has succeeded or has finished.
             switch (request) {
+                case END_OFFSETS:
+                    result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
+                    break;
+                case BEGINNING_OFFSETS:
+                    result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
+                    break;
                 case WAKE_UP:
                     super.wakeup();
                     result = new RequestResult<>(true);
@@ -202,7 +208,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         PAUSE,
         RESUME,
         CLOSE,
-        WAKE_UP }
+        WAKE_UP,
+        BEGINNING_OFFSETS,
+        END_OFFSETS }
 
     public class RequestResult<T> {
         public final T value;

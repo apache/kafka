@@ -1527,7 +1527,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 rebalanceConsumer.sendRequest(timeout,
-                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
+                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_SYNC,
                                               childConsumerMetadata,
                                               null);
                 if (!coordinator.commitOffsetsSync(parentConsumerMetadata, timeout.toMillis())) {
@@ -2119,8 +2119,33 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+        return beginningOffsets(partitions, timeout, false);
+    }
+
+    // Intended for use by RebalanceKakfaConsumer as well
+    protected Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout, final boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                rebalanceConsumer.sendRequest(timeout,
+                                              RebalanceKafkaConsumer.ConsumerRequest.BEGINNING_OFFSETS,
+                                              partitions,
+                                              new DefaultTaskCompletionCallback());
+                final Map<TopicPartition, Long> offsets1 = fetcher.beginningOffsets(partitions, timeout.toMillis());
+                final Map<TopicPartition, Long> offsets2 = (Map<TopicPartition, Long>) pollForResults(timeout.toMillis(), time.milliseconds()).value;
+                final Map<TopicPartition, Long> result = new HashMap<>();
+                for (final TopicPartition partition : partitions) {
+                    final long pos1 = offsets1.get(partition);
+                    final long pos2 = offsets2.get(partition);
+                    if (pos1 < pos2) {
+                        result.put(partition, pos1);
+                    } else {
+                        result.put(partition, pos2);
+                    }
+                }
+                return result;
+            }
             return fetcher.beginningOffsets(partitions, timeout.toMillis());
         } finally {
             release();
@@ -2174,8 +2199,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+        return endOffsets(partitions, timeout, false);
+    }
+
+    protected Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout, final boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+
+                rebalanceConsumer.sendRequest(timeout, RebalanceKafkaConsumer.ConsumerRequest.END_OFFSETS, partitions, new DefaultTaskCompletionCallback());
+                final Map<TopicPartition, Long> offsets1 = fetcher.endOffsets(partitions, timeout.toMillis());
+                final Map<TopicPartition, Long> offsets2 = (Map<TopicPartition, Long>) pollForResults(timeout.toMillis(), time.milliseconds()).value;
+                final Map<TopicPartition, Long> result = new HashMap<>();
+                for (final TopicPartition partition : partitions) {
+                    final long pos1 = offsets1.get(partition);
+                    final long pos2 = offsets2.get(partition);
+                    if (pos1 > pos2) {
+                        result.put(partition, pos1);
+                    } else {
+                        result.put(partition, pos2);
+                    }
+                }
+                return result;
+            }
             return fetcher.endOffsets(partitions, timeout.toMillis());
         } finally {
             release();
