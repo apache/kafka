@@ -47,7 +47,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -116,18 +115,17 @@ public class ConnectStressWorker implements TaskWorker {
         }
     }
 
-    public class ConnectLoop implements Callable<Void> {
+    public class ConnectLoop implements Runnable {
         @Override
-        public Void call() throws Exception {
-            Properties props = new Properties();
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.commonClientConf());
-            AdminClientConfig conf = new AdminClientConfig(props);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
-            ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
-
+        public void run() {
             try {
+                Properties props = new Properties();
+                props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
+                WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.commonClientConf());
+                AdminClientConfig conf = new AdminClientConfig(props);
+                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
+                ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
                 while (true) {
                     throttle.increment();
                     long lastNow = throttle.lastNow();
@@ -149,7 +147,6 @@ public class ConnectStressWorker implements TaskWorker {
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConnectionStressCallable", e, doneFuture);
             }
-            return null;
         }
 
         private boolean attemptConnection(AdminClientConfig conf,

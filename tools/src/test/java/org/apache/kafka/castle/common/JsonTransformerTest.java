@@ -37,9 +37,9 @@ public class JsonTransformerTest {
     private final JsonTransformer.MapSubstituter substituter =
         new JsonTransformer.MapSubstituter(Collections.unmodifiableMap(
             new HashMap<String, String>() {{
-                put("foo", "bar");
-                put("baz", "quux");
-            }}));
+                    put("foo", "bar");
+                    put("baz", "quux");
+                }}));
 
     @Test
     public void testTransformString() throws Exception {

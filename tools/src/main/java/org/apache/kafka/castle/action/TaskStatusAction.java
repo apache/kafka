@@ -31,10 +31,6 @@ import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-
 public class TaskStatusAction extends Action  {
     public final static String TYPE = "taskStatus";
 
