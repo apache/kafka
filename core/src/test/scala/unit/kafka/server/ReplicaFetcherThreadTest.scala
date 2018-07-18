@@ -20,6 +20,7 @@ import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.log.LogManager
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
@@ -257,6 +258,35 @@ class ReplicaFetcherThreadTest {
 
     assertEquals("results from leader epoch request should have undefined offset", expected, result)
     verify(mockBlockingSend)
+  }
+
+  @Test
+  def shouldNotBuildLeaderEpochRequestForPartitionsWithUndefinedEpochInCache(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+
+    // Setup all dependencies
+    val quota = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val replica = createNiceMock(classOf[Replica])
+    val partition = createMock(classOf[Partition])
+    val replicaManager = createMock(classOf[ReplicaManager])
+
+
+    //Stubs
+    expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
+    expect(leaderEpochs.latestEpoch).andReturn(UNDEFINED_EPOCH)
+    stub(replica, partition, replicaManager)
+
+    replay(leaderEpochs, replicaManager, createMock(classOf[LogManager]), quota, replica)
+
+    //Create the fetcher thread
+    val thread = new PartiallyMockedReplicaFetcherThread("bob", 0, brokerEndPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, None)
+
+    // Test
+    val ResultWithPartitions(epochRequests, partitionsWithError) = thread.buildLeaderEpochRequest(List(t1p0 -> new PartitionFetchState(1, true)))
+
+    assertEquals(1, partitionsWithError.size) // t1p0's latestEpoch() returned UNDEFINED_EPOCH
+    assertEquals(0, epochRequests.size)
   }
 
   @Test
