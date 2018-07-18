@@ -1122,6 +1122,20 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
+    public void shouldThrowKafkaExceptionIfVersionProbingFlagConfigIsNotAtomicInteger() {
+        final Map<String, Object> config = configProps();
+        config.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, "i am not an AtomicInteger");
+
+        try {
+            partitionAssignor.configure(config);
+            fail("Should have thrown KafkaException");
+        } catch (final KafkaException expected) {
+            assertThat(expected.getMessage(),
+                equalTo("java.lang.String is not an instance of java.util.concurrent.atomic.AtomicInteger"));
+        }
+    }
+
+    @Test
     public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersionsV1V2() {
         shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(1, 2);
     }
