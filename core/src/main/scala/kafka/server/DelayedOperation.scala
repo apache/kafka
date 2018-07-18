@@ -147,6 +147,8 @@ abstract class DelayedOperation(override val delayMs: Long,
 
 object DelayedOperationPurgatory {
 
+  private val Shards = 512 // Shard the watcher list to reduce lock contention
+
   def apply[T <: DelayedOperation](purgatoryName: String,
                                    brokerId: Int = 0,
                                    purgeInterval: Int = 1000,
@@ -183,9 +185,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     }
   }
 
-  private val Shards = 512 // Shard the watcher list to reduce lock contention
-  private val watcherLists = Array.fill[WatcherList](Shards)(new WatcherList)
-  private def getWatcherList(key: Any): WatcherList = {
+  private val watcherLists = Array.fill[WatcherList](DelayedOperationPurgatory.Shards)(new WatcherList)
+  private def watcherList(key: Any): WatcherList = {
     watcherLists(Math.abs(key.hashCode() % watcherLists.length))
   }
 
@@ -285,7 +286,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * @return the number of completed operations during this process
    */
   def checkAndComplete(key: Any): Int = {
-    val wl = getWatcherList(key)
+    val wl = watcherList(key)
     val watchers = inLock(wl.watchersLock) { wl.watchersForKey.get(key) }
     if(watchers == null)
       0
@@ -299,11 +300,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * even when it has been completed, this number may be larger than the number of real operations watched
    */
   def watched(): Int = {
-    var sum = 0
-    for (wl <- watcherLists) {
-      sum += wl.allWatchers.map(_.countWatched).sum
-    }
-    sum
+    watcherLists.foldLeft(0) { _ + _.allWatchers.map(_.countWatched).sum }
   }
 
   /**
@@ -315,7 +312,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     * Cancel watching on any delayed operations for the given key. Note the operation will not be completed
     */
   def cancelForKey(key: Any): List[T] = {
-    val wl = getWatcherList(key)
+    val wl = watcherList(key)
     inLock(wl.watchersLock) {
       val watchers = wl.watchersForKey.remove(key)
       if (watchers != null)
@@ -330,7 +327,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
    */
   private def watchForOperation(key: Any, operation: T) {
-    val wl = getWatcherList(key)
+    val wl = watcherList(key)
     inLock(wl.watchersLock) {
       val watcher = wl.watchersForKey.getAndMaybePut(key)
       watcher.watch(operation)
@@ -341,7 +338,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * Remove the key from watcher lists if its list is empty
    */
   private def removeKeyIfEmpty(key: Any, watchers: Watchers) {
-    val wl = getWatcherList(key)
+    val wl = watcherList(key)
     inLock(wl.watchersLock) {
       // if the current key is no longer correlated to the watchers to remove, skip
       if (wl.watchersForKey.get(key) != watchers)
@@ -444,10 +441,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       // a little overestimated total number of operations.
       estimatedTotalOperations.getAndSet(delayed)
       debug("Begin purging watch lists")
-      var purged = 0
-      for (wl <- watcherLists) {
-        purged += wl.allWatchers.map(_.purgeCompleted()).sum
-      }
+      var purged = watcherLists.foldLeft(0) { _ + _.allWatchers.map(_.purgeCompleted()).sum }
       debug("Purged %d elements from watch lists.".format(purged))
     }
   }
