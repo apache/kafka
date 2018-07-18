@@ -96,6 +96,11 @@ public class AwsNodeRole implements Role {
      */
     private String instanceId;
 
+    /**
+     * The AWS region to use.  If this is empty, the default region will be used.
+     */
+    private String region;
+
     @JsonCreator
     public AwsNodeRole(@JsonProperty("initialDelayMs") int initialDelayMs,
                        @JsonProperty("keyPair") String keyPair,
@@ -108,7 +113,8 @@ public class AwsNodeRole implements Role {
                        @JsonProperty("internal") boolean internal,
                        @JsonProperty("privateDns") String privateDns,
                        @JsonProperty("publicDns") String publicDns,
-                       @JsonProperty("instanceId") String instanceId) {
+                       @JsonProperty("instanceId") String instanceId,
+                       @JsonProperty("region") String region) {
         this.initialDelayMs = initialDelayMs;
         this.keyPair = keyPair == null ? "" : keyPair;
         this.securityGroup = securityGroup == null ? "" : securityGroup;
@@ -121,6 +127,7 @@ public class AwsNodeRole implements Role {
         this.privateDns = privateDns == null ? "" : privateDns;
         this.publicDns = publicDns == null ? "" : publicDns;
         this.instanceId = instanceId == null ? "" : instanceId;
+        this.region = region == null ? "" : region;
     }
 
     @Override
@@ -192,6 +199,11 @@ public class AwsNodeRole implements Role {
         return instanceId;
     }
 
+    @JsonProperty
+    public String region() {
+        return region;
+    }
+
     public synchronized void setInstanceId(String instanceId) {
         this.instanceId = instanceId;
     }
@@ -215,7 +227,7 @@ public class AwsNodeRole implements Role {
 
     @Override
     public Cloud cloud(ConcurrentHashMap<String, Cloud> cloudCache) {
-        Ec2Cloud.Settings settings = new Ec2Cloud.Settings(keyPair, securityGroup);
+        Ec2Cloud.Settings settings = new Ec2Cloud.Settings(keyPair, securityGroup, region);
         return cloudCache.computeIfAbsent(settings.toString(), new Function<String, Cloud>() {
             @Override
             public Cloud apply(String s) {

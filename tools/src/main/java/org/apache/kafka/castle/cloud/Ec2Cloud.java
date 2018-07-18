@@ -76,16 +76,19 @@ public final class Ec2Cloud implements Cloud, Runnable {
     public final static class Settings {
         private final String keyPair;
         private final String securityGroup;
+        private final String region;
 
-        public Settings(String keyPair, String securityGroup) {
+        public Settings(String keyPair, String securityGroup, String region) {
             this.keyPair = keyPair;
             this.securityGroup = securityGroup;
+            this.region = region;
         }
 
         @Override
         public String toString() {
             return "Ec2Cloud(keyPair=" + keyPair +
-                ", securityGroup=" + securityGroup + ")";
+                ", securityGroup=" + securityGroup +
+                ", region=" + region + ")";
         }
     }
 
@@ -153,7 +156,11 @@ public final class Ec2Cloud implements Cloud, Runnable {
 
     public Ec2Cloud(Settings settings) {
         this.settings = settings;
-        this.ec2 = AmazonEC2ClientBuilder.defaultClient();
+        AmazonEC2ClientBuilder ec2Builder = AmazonEC2ClientBuilder.standard();
+        if (!settings.region.isEmpty()) {
+            ec2Builder.setRegion(settings.region);
+        }
+        this.ec2 = ec2Builder.build();
         this.thread = new Thread(this, "Ec2CloudThread");
         this.thread.start();
     }
