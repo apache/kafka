@@ -127,6 +127,9 @@ public class ConnectStressWorker implements TaskWorker {
                     conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
                 ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
                 while (true) {
+                    if (doneFuture.isDone()) {
+                        break;
+                    }
                     throttle.increment();
                     long lastNow = throttle.lastNow();
                     boolean success = attemptConnection(conf, updater);
