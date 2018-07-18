@@ -146,7 +146,7 @@ public class TrogdorStartAction extends Action  {
             osw.write(String.format("log4j.appender.kafkaAppender.layout=org.apache.log4j.PatternLayout%n"));
             osw.write(String.format("log4j.appender.kafkaAppender.layout.ConversionPattern=%s%n%n",
                 "[%d] %p %m (%c)%n"));
-            osw.write(String.format("log4j.logger.org.apache.kafka=DEBUG%n"));
+            osw.write(String.format("log4j.logger.org.apache.kafka=INFO%n"));
             osw.write(String.format("%n"));
             success = true;
             return file;
