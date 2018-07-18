@@ -99,7 +99,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotMigrateActiveTaskToOtherProcess() {
+    public void shouldMigrateActiveTaskToOtherProcessOverStickiness() {
         createClientWithPreviousActiveTasks(p1, 1, task00);
         createClientWithPreviousActiveTasks(p2, 1, task01);
 
@@ -119,7 +119,7 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
         secondAssignor.assign(0);
 
-        assertThat(clients.get(p1).activeTasks(), hasItems(task01));
+        assertThat(clients.get(p1).activeTasks(), hasItems(task00));
         assertThat(clients.get(p2).activeTasks(), hasItems(task02));
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
@@ -547,7 +547,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
+    public void shouldLoadBalanceWhenAssigningTasksNotPreviouslyActiveToNewClient() {
         final TaskId task10 = new TaskId(0, 10);
         final TaskId task11 = new TaskId(0, 11);
         final TaskId task12 = new TaskId(1, 2);
@@ -570,14 +570,14 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
 
-        assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
-        assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task11, task22)));
+        assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task11)));
+        assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task02, task03)));
         assertThat(c3.activeTasks(), equalTo(Utils.mkSet(task20, task21, task23)));
-        assertThat(newClient.activeTasks(), equalTo(Utils.mkSet(task02, task03, task10)));
+        assertThat(newClient.activeTasks(), equalTo(Utils.mkSet(task13, task22, task10)));
     }
 
     @Test
-    public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
+    public void shouldFavorLoadBalancingTasksNotPreviouslyActiveToMultipleNewClients() {
         final TaskId task10 = new TaskId(0, 10);
         final TaskId task11 = new TaskId(0, 11);
         final TaskId task12 = new TaskId(1, 2);
@@ -601,10 +601,10 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
 
-        assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
-        assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task11, task22)));
-        assertThat(bounce1.activeTasks(), equalTo(Utils.mkSet(task20, task21, task23)));
-        assertThat(bounce2.activeTasks(), equalTo(Utils.mkSet(task02, task03, task10)));
+        assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task11)));
+        assertThat(c2.activeTasks(), equalTo(Utils.mkSet(task00, task02, task03)));
+        assertThat(bounce1.activeTasks(), equalTo(Utils.mkSet(task20, task21, task13)));
+        assertThat(bounce2.activeTasks(), equalTo(Utils.mkSet(task22, task23, task10)));
     }
 
     @Test
@@ -616,7 +616,7 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
+    public void shouldAssignTasksToNewClientConsideringLoadBalancingFirstBetweenExistingClients() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02);
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task04, task05);
         final ClientState newClient = createClient(p3, 1);
@@ -629,13 +629,13 @@ public class StickyTaskAssignorTest {
         assertThat(c1.activeTaskCount(), equalTo(2));
         assertThat(c2.activeTasks(), not(hasItems(task00)));
         assertThat(c2.activeTasks(), not(hasItems(task01)));
-        assertThat(c2.activeTasks(), not(hasItems(task02)));
+        assertThat(c2.activeTasks(), hasItems(task02));
         assertThat(c2.activeTaskCount(), equalTo(2));
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
     @Test
-    public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
+    public void shouldAssignTasksToNewClientsConsideringLoadBalancingFirstBetweenExistingAndBouncedClients() {
         final TaskId task06 = new TaskId(0, 6);
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02, task06);
         final ClientState c2 = createClient(p2, 1);
@@ -650,7 +650,7 @@ public class StickyTaskAssignorTest {
         assertThat(c1.activeTaskCount(), equalTo(3));
         assertThat(c2.activeTasks(), not(hasItems(task00)));
         assertThat(c2.activeTasks(), not(hasItems(task01)));
-        assertThat(c2.activeTasks(), not(hasItems(task02)));
+        assertThat(c2.activeTasks(), hasItems(task02));
         assertThat(c2.activeTaskCount(), equalTo(2));
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
