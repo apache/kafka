@@ -1308,12 +1308,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             } while (elapsedTime < timeoutMs);
 
+            if (result != null) {
+                return (ConsumerRecords<K, V>) result.value;
+            }
             return ConsumerRecords.empty();
         } finally {
             release();
         }
     }
 
+    /**
+     * Indicates whether or not the child consumer is alive.
+     *
+     * @return true if the secondary consumer thread created is alive.
+     *         false if not alive or has null value
+     */
     public boolean childConsumerIsAlive() {
         if (rebalanceConsumer != null) {
             return consumerThread.isAlive();
@@ -1843,13 +1852,33 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
+        return committed(partition, timeout, false);
+    }
+
+    protected OffsetAndMetadata committed(TopicPartition partition, final Duration timeout, boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                rebalanceConsumer.sendRequest(timeout, RebalanceKafkaConsumer.ConsumerRequest.COMMITTED, partition, new DefaultTaskCompletionCallback());
+            }
+            final long start = time.milliseconds();
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
                     Collections.singleton(partition), timeout.toMillis());
+            Map<TopicPartition, OffsetAndMetadata> offsets2 = null;
+            if (!isChildConsumer && useParallelRebalance) {
+                offsets2 = (Map<TopicPartition, OffsetAndMetadata>) pollForResults(remainingTimeAtLeastZero(timeout.toMillis(),
+                                                                                   time.milliseconds() - start),
+                                                                                   time.milliseconds()).value;
+            }
+
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
+            }
+
+            if (offsets2 != null && offsets2.get(partition) != null) {
+                return offsets2.get(partition);
             }
             return offsets.get(partition);
         } finally {
@@ -1978,9 +2007,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void pause(Collection<TopicPartition> partitions) {
+        pause(partitions, false);
+    }
+
+    protected void pause(Collection<TopicPartition> partitions, boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
             log.debug("Pausing partitions {}", partitions);
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.PAUSE, partitions, null);
+            }
             for (TopicPartition partition: partitions) {
                 subscriptions.pause(partition);
             }
@@ -1998,9 +2035,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void resume(Collection<TopicPartition> partitions) {
+        resume(partitions, false);
+    }
+
+    protected void resume(Collection<TopicPartition> partitions, boolean isChildConsumer) {
         acquireAndEnsureOpen();
         try {
             log.debug("Resuming partitions {}", partitions);
+            if (!isChildConsumer && useParallelRebalance) {
+                checkRebalance();
+                rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.RESUME, partitions, null);
+            }
             for (TopicPartition partition: partitions) {
                 subscriptions.resume(partition);
             }
@@ -2317,6 +2362,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void wakeup() {
+        this.client.wakeup();
+    }
+
+    protected void wakeup(boolean isChildConsumer) {
+        if (!isChildConsumer && useParallelRebalance) {
+            checkRebalance();
+            rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.WAKE_UP, null, null);
+        }
         this.client.wakeup();
     }
 

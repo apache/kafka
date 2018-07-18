@@ -152,6 +152,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             // Cases which have no return value will have their result be marked as a boolean value: true.
             // This is intended as a marker to represent that a particular operation has succeeded or has finished.
             switch (request) {
+                case RESUME:
+                    super.resume((Collection<TopicPartition>) inputArgument, true);
+                    result = new RequestResult<>(true);
+                    break;
                 case END_OFFSETS:
                     result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
                     break;
@@ -159,7 +163,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
                     break;
                 case WAKE_UP:
-                    super.wakeup();
+                    super.wakeup(true);
                     result = new RequestResult<>(true);
                     break;
                 case CLOSE:
@@ -167,7 +171,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case PAUSE:
-                    super.pause((Collection<TopicPartition>) inputArgument);
+                    super.pause((Collection<TopicPartition>) inputArgument, true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
@@ -179,7 +183,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMITTED:
-                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument));
+                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument, waitTime, true));
                     break;
                 case POLL:
                     ConsumerRecords<K, V> records = poll(waitTime);
