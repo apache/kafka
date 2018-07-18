@@ -26,7 +26,7 @@ public final class DaemonStopAction extends Action {
     public DaemonStopAction(String scope) {
         super(new ActionId(TYPE, scope),
             new TargetId[] {
-                new TargetId(TaskStopAction.TYPE, scope)
+                new TargetId(TaskStopAction.TYPE)
             },
             new String[] {
                 BrokerStopAction.TYPE,
