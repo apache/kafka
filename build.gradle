@@ -473,13 +473,13 @@ task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 for ( sv in availableScalaVersions ) {
   String taskSuffix = sv.replaceAll("\\.", "_")
 
-  tasks.create(name: "jar_scala_${taskSuffix}", type: GradleBuild) {
+  tasks.create(name: "jarScala_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:jar', 'streams:streams-scala:jar']
   }
 
-  tasks.create(name: "test_scala_${taskSuffix}", type: GradleBuild) {
+  tasks.create(name: "testScala_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:test', 'streams:streams-scala:test']
@@ -527,14 +527,14 @@ def withDefScalaVersions(taskName) {
 }
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jar_scala') + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jarScala') + pkgs.collect { it + ":jar" }) { }
 
 tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
 
 tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: withDefScalaVersions('test_scala') + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: withDefScalaVersions('testScala') + pkgs.collect { it + ":test" }) { }
 
 tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
