@@ -297,7 +297,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def thread_dump(self, node):
         for pid in self.pids(node):
-            node.account.signal(pid, signal.SIGQUIT, allow_fail=False)
+            try:
+                node.account.signal(pid, signal.SIGQUIT, allow_fail=True)
+            except:
+                self.logger.warn("Could not dump threads on node")
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
