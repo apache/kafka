@@ -200,10 +200,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             new Field(GENERATION_KEY_NAME, Type.INT32));
 
     private List<TopicPartition> memberAssignment = null;
-    // this generation is specific to sticky assignor and is used to validate
-    // assignments reported by each consumer during a rebalance
-    private int generation = 0;
     private PartitionMovements partitionMovements;
+    private int generation; // consumer group generation
 
     static final class ConsumerUserData {
         List<TopicPartition> partitions;
@@ -223,8 +221,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
+    @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions) {
+                                                    Map<String, Subscription> subscriptions,
+                                                    int generation) {
+        this.generation = generation;
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
@@ -335,14 +336,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // note that a conflict could exists only if user data is for different generations
 
         Map<TopicPartition, ConsumerGenerationPair> partitionConsumer = new HashMap<>();
-        int maxGeneration = this.generation;
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData == null || !userData.hasRemaining()) continue;
             ConsumerUserData consumerUserData = deserializeTopicPartitionAssignment(userData);
-            if (consumerUserData.generation > maxGeneration)
-                maxGeneration = consumerUserData.generation;
 
             for (TopicPartition partition: consumerUserData.partitions) {
                 if (!partitionConsumer.containsKey(partition))
@@ -381,7 +379,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        this.generation = maxGeneration + 1;
+        ++generation;
     }
 
     @Override

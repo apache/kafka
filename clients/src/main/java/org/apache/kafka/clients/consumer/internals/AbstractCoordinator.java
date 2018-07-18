@@ -753,6 +753,10 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation;
     }
 
+    protected Generation latestGeneration() {
+        return generation;
+    }
+
     /**
      * Check whether given generation id is matching the record within current generation.
      * Only using in unit tests.

@@ -29,7 +29,7 @@ import java.util.Set;
  * {@link org.apache.kafka.clients.consumer.KafkaConsumer}. Members of the consumer group subscribe
  * to the topics they are interested in and forward their subscriptions to a Kafka broker serving
  * as the group coordinator. The coordinator selects one member to perform the group assignment and
- * propagates the subscriptions of all members to it. Then {@link #assign(Cluster, Map)} is called
+ * propagates the subscriptions of all members to it. Then {@link #assign(Cluster, Map, int)} is called
  * to perform the assignment and the results are forwarded back to each respective members
  *
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
@@ -42,7 +42,7 @@ public interface PartitionAssignor {
     /**
      * Return a serializable object representing the local member's subscription. This can include
      * additional information as well (e.g. local host/rack information) which can be leveraged in
-     * {@link #assign(Cluster, Map)}.
+     * {@link #assign(Cluster, Map, int)}.
      * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
      *               and variants
      * @return Non-null subscription with optional user data
@@ -56,12 +56,25 @@ public interface PartitionAssignor {
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
-    Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
+    default Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        return assign(metadata, subscriptions, 0);
+    }
 
+    /**
+     * Perform the group assignment given the member subscriptions, current cluster metadata and group generation.
+     * @param metadata Current topic/broker metadata known by consumer
+     * @param subscriptions Subscriptions from all members provided through {@link #subscription(Set)}
+     * @param generation Current group generation id
+     * @return A map from the members to their respective assignment. This should have one entry
+     *         for all members who in the input subscription map.
+     */
+    default Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions, int generation) {
+        return assign(metadata, subscriptions);
+    }
 
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.
-     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map, int)}
      */
     void onAssignment(Assignment assignment);
 
