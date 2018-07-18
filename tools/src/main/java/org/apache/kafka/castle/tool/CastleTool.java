@@ -36,9 +36,7 @@ import org.apache.kafka.castle.common.CastleLog;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
