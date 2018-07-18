@@ -69,7 +69,8 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
             return Collections.emptyMap();
         }
     };
-    private long streamTime = TimestampTracker.NOT_KNOWN;
+
+    private long streamTime = RecordQueue.NOT_KNOWN;
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
