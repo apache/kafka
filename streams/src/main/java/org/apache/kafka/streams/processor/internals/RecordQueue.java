@@ -98,13 +98,7 @@ public class RecordQueue {
             fifoQueue.addLast(rawRecord);
         }
 
-        maybeUpdateHeadRecord();
-
-        // update the partition timestamp if the current head
-        // record's timestamp has exceed its value
-        if (headRecord != null && headRecord.timestamp > partitionTime) {
-            partitionTime = headRecord.timestamp;
-        }
+        maybeUpdateTimestamp();
 
         return size();
     }
@@ -118,13 +112,7 @@ public class RecordQueue {
         final StampedRecord recordToReturn = headRecord;
         headRecord = null;
 
-        // update the partition timestamp if the popped head
-        // record's timestamp has exceed its value
-        if (recordToReturn != null && recordToReturn.timestamp > partitionTime) {
-            partitionTime = recordToReturn.timestamp;
-        }
-
-        maybeUpdateHeadRecord();
+        maybeUpdateTimestamp();
 
         return recordToReturn;
     }
@@ -166,7 +154,7 @@ public class RecordQueue {
         partitionTime = NOT_KNOWN;
     }
 
-    private void maybeUpdateHeadRecord() {
+    private void maybeUpdateTimestamp() {
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
             final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, raw);
@@ -199,6 +187,11 @@ public class RecordQueue {
             }
 
             headRecord = new StampedRecord(deserialized, timestamp);
+
+            // update the partition timestamp if the current head record's timestamp has exceed its value
+            if (timestamp > partitionTime) {
+                partitionTime = timestamp;
+            }
         }
     }
 }
