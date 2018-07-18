@@ -488,9 +488,7 @@ for ( sv in availableScalaVersions ) {
   tasks.create(name: "srcJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    // core has a separate source jar for each scala version, streams-scala source is included
-    // in the single streams sources jar
-    tasks = ['core:srcJar']
+    tasks = ['core:srcJar', 'streams:streams-scala:srcJar']
   }
 
   tasks.create(name: "docsJar_${taskSuffix}", type: GradleBuild) {
