@@ -25,7 +25,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,23 +78,24 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         final List<TaskId> allTasksSorted = new ArrayList<>(taskIds);
         Collections.sort(allTasksSorted);
 
-        for (final Iterator<TaskId> taskIdIterator = allTasksSorted.iterator(); taskIdIterator.hasNext(); ) {
-            final TaskId taskId = taskIdIterator.next();
+        for (final TaskId taskId : allTasksSorted) {
             // first try and re-assign existing active tasks to clients that previously had
             // the same active task
+
             if (previousActiveTaskAssignment.containsKey(taskId) &&
                 maybeAssignPreviousActiveTask(tasksPerThread, assigned, taskId)) {
-                taskIdIterator.remove();
-
-                // try and assign any remaining unassigned tasks to clients that previously
-                // have seen the task.
-            } else if (previousStandbyTaskAssignment.containsKey(taskId) &&
-                       maybeAssignPreviousStandbyTask(tasksPerThread, assigned, taskId)) {
-                taskIdIterator.remove();
-                // assign any remaining unassigned tasks
-            } else {
-                allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
+                continue;
             }
+
+            // try and assign any remaining unassigned tasks to clients that previously
+            // have seen the task.
+            if (previousStandbyTaskAssignment.containsKey(taskId) &&
+                maybeAssignPreviousStandbyTask(tasksPerThread, assigned, taskId)) {
+                continue;
+            }
+
+            // assign any remaining unassigned tasks
+            allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
 
         }
     }
