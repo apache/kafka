@@ -98,7 +98,13 @@ public class RecordQueue {
             fifoQueue.addLast(rawRecord);
         }
 
-        maybeUpdateTimestamp();
+        maybeUpdateHeadRecord();
+
+        // update the partition timestamp if the current head
+        // record's timestamp has exceed its value
+        if (headRecord != null && headRecord.timestamp > partitionTime) {
+            partitionTime = headRecord.timestamp;
+        }
 
         return size();
     }
@@ -112,7 +118,13 @@ public class RecordQueue {
         final StampedRecord recordToReturn = headRecord;
         headRecord = null;
 
-        maybeUpdateTimestamp();
+        // update the partition timestamp if the popped head
+        // record's timestamp has exceed its value
+        if (recordToReturn != null && recordToReturn.timestamp > partitionTime) {
+            partitionTime = recordToReturn.timestamp;
+        }
+
+        maybeUpdateHeadRecord();
 
         return recordToReturn;
     }
@@ -154,7 +166,7 @@ public class RecordQueue {
         partitionTime = NOT_KNOWN;
     }
 
-    private void maybeUpdateTimestamp() {
+    private void maybeUpdateHeadRecord() {
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
             final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, raw);
@@ -187,13 +199,6 @@ public class RecordQueue {
             }
 
             headRecord = new StampedRecord(deserialized, timestamp);
-
-            // update the partition timestamp if its currently
-            // tracked min timestamp has exceed its value; this will
-            // usually only take effect for the first added batch
-            if (timestamp > partitionTime) {
-                partitionTime = timestamp;
-            }
         }
     }
 }
