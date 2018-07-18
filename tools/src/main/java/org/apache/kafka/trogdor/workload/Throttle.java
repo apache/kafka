@@ -24,12 +24,14 @@ public class Throttle {
     private final int periodMs;
     private int count;
     private long prevPeriod;
+    private long lastNow;
 
     Throttle(int maxPerPeriod, int periodMs) {
         this.maxPerPeriod = maxPerPeriod;
         this.periodMs = periodMs;
         this.count = maxPerPeriod;
         this.prevPeriod = -1;
+        this.lastNow = 0;
     }
 
     synchronized public boolean increment() throws InterruptedException {
@@ -39,17 +41,21 @@ public class Throttle {
                 count++;
                 return throttled;
             }
-            long now = time().milliseconds();
-            long curPeriod = now / periodMs;
+            lastNow = time().milliseconds();
+            long curPeriod = lastNow / periodMs;
             if (curPeriod <= prevPeriod) {
                 long nextPeriodMs = (curPeriod + 1) * periodMs;
-                delay(nextPeriodMs - now);
+                delay(nextPeriodMs - lastNow);
                 throttled = true;
             } else {
                 prevPeriod = curPeriod;
                 count = 0;
             }
         }
+    }
+
+    public synchronized long lastNow() {
+        return lastNow;
     }
 
     protected Time time() {
