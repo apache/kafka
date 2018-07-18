@@ -76,44 +76,58 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         final int tasksPerThread = taskIds.size() / totalCapacity;
         final Set<TaskId> assigned = new HashSet<>();
 
-        // first try and re-assign existing active tasks to clients that previously had
-        // the same active task
-        for (final Map.Entry<TaskId, ID> entry : previousActiveTaskAssignment.entrySet()) {
-            final TaskId taskId = entry.getKey();
-            if (taskIds.contains(taskId)) {
-                final ClientState client = clients.get(entry.getValue());
-                if (client.hasUnfulfilledQuota(tasksPerThread)) {
-                    assignTaskToClient(assigned, taskId, client);
-                }
+        final List<TaskId> allTasksSorted = new ArrayList<>(taskIds);
+        Collections.sort(allTasksSorted);
+
+        for (final Iterator<TaskId> taskIdIterator = allTasksSorted.iterator(); taskIdIterator.hasNext(); ) {
+            final TaskId taskId = taskIdIterator.next();
+            // first try and re-assign existing active tasks to clients that previously had
+            // the same active task
+            if (previousActiveTaskAssignment.containsKey(taskId) &&
+                maybeAssignPreviousActiveTask(tasksPerThread, assigned, taskId)) {
+                taskIdIterator.remove();
+
+                // try and assign any remaining unassigned tasks to clients that previously
+                // have seen the task.
+            } else if (previousStandbyTaskAssignment.containsKey(taskId) &&
+                       maybeAssignPreviousStandbyTask(tasksPerThread, assigned, taskId)) {
+
+                taskIdIterator.remove();
+                // assign any remaining unassigned tasks
+            } else {
+                allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
+            }
+
+        }
+    }
+
+    private boolean maybeAssignPreviousActiveTask(final int tasksPerThread,
+                                                  final Set<TaskId> assigned,
+                                                  final TaskId taskId) {
+        boolean isAssigned = false;
+        final ID clientId = previousActiveTaskAssignment.get(taskId);
+        final ClientState client = clients.get(clientId);
+        if (client.hasUnfulfilledQuota(tasksPerThread)) {
+            assignTaskToClient(assigned, taskId, client);
+            isAssigned = true;
+        }
+        return isAssigned;
+    }
+
+    private boolean maybeAssignPreviousStandbyTask(final int tasksPerThread,
+                                                   final Set<TaskId> assigned,
+                                                   final TaskId taskId) {
+        boolean isAssigned = false;
+        final Set<ID> clientIds = previousStandbyTaskAssignment.get(taskId);
+        for (final ID clientId : clientIds) {
+            final ClientState client = clients.get(clientId);
+            if (client.hasUnfulfilledQuota(tasksPerThread)) {
+                assignTaskToClient(assigned, taskId, client);
+                isAssigned = true;
+                break;
             }
         }
-
-        final Set<TaskId> unassigned = new HashSet<>(taskIds);
-        unassigned.removeAll(assigned);
-
-        // try and assign any remaining unassigned tasks to clients that previously
-        // have seen the task.
-        for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
-            final TaskId taskId = iterator.next();
-            final Set<ID> clientIds = previousStandbyTaskAssignment.get(taskId);
-            if (clientIds != null) {
-                for (final ID clientId : clientIds) {
-                    final ClientState client = clients.get(clientId);
-                    if (client.hasUnfulfilledQuota(tasksPerThread)) {
-                        assignTaskToClient(assigned, taskId, client);
-                        iterator.remove();
-                        break;
-                    }
-                }
-            }
-        }
-
-        // assign any remaining unassigned tasks
-        List<TaskId> sortedTasks = new ArrayList<>(unassigned);
-        Collections.sort(sortedTasks);
-        for (final TaskId taskId : sortedTasks) {
-            allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
-        }
+        return isAssigned;
     }
 
     private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
