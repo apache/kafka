@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
-import org.apache.kafka.common.security.SaslExtensions;
+import org.apache.kafka.common.security.internals.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 
 import java.util.Collections;
