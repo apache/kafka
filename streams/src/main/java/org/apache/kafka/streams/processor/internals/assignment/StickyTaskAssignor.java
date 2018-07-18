@@ -91,7 +91,6 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 // have seen the task.
             } else if (previousStandbyTaskAssignment.containsKey(taskId) &&
                        maybeAssignPreviousStandbyTask(tasksPerThread, assigned, taskId)) {
-
                 taskIdIterator.remove();
                 // assign any remaining unassigned tasks
             } else {
@@ -284,7 +283,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
                 if (!active && !pairs.contains(pair(task1, taskId))) {
                     return true;
                 }
-                if (!pairs.contains(pair(task1, taskId)) && task1.topicGroupId != taskId.topicGroupId) {
+                if (!pairs.contains(pair(task1, taskId))) {
                     return true;
                 }
             }
