@@ -208,7 +208,7 @@ public class SubscriptionInfo {
     private ByteBuffer encodeVersionThree() {
         final byte[] endPointBytes = prepareUserEndPoint();
 
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
 
         buf.putInt(3); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
@@ -223,7 +223,7 @@ public class SubscriptionInfo {
     private ByteBuffer encodeVersionFour() {
         final byte[] endPointBytes = prepareUserEndPoint();
 
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
 
         buf.putInt(4); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
@@ -235,7 +235,7 @@ public class SubscriptionInfo {
         return buf;
     }
 
-    protected int getVersionThreeByteLength(final byte[] endPointBytes) {
+    protected int getVersionThreeAndFourByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID

@@ -260,18 +260,18 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
-            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.getCode()) {
-                log.debug("Received error code " + streamThread.assignmentErrorCode.get() +
-                    " - shutdown");
+            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+                log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
                 streamThread.shutdown();
                 streamThread.setStateListener(null);
+                return;
             }
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
-                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.getCode()) {
+                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.code()) {
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
@@ -307,8 +307,8 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.getCode()) {
-                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.getCode());
+                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
                     } else {
                         taskManager.suspendTasksAndState();
                     }
@@ -770,7 +770,7 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
-                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.getCode()) {
+                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
                     enforceRebalance();
                 }

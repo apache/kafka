@@ -62,26 +62,15 @@ public class AssignmentInfo {
     public AssignmentInfo(final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState);
+        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, 0);
     }
 
     public AssignmentInfo() {
         this(LATEST_SUPPORTED_VERSION,
             Collections.emptyList(),
             Collections.emptyMap(),
-            Collections.emptyMap());
-    }
-
-    public AssignmentInfo(final int version,
-                          final List<TaskId> activeTasks,
-                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, 0);
-
-        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
-            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
-                + "; was: " + version);
-        }
+            Collections.emptyMap(),
+            0);
     }
 
     public AssignmentInfo(final int version,
@@ -336,11 +325,13 @@ public class AssignmentInfo {
         decodeStandbyTasks(assignmentInfo, in);
         decodeGlobalAssignmentData(assignmentInfo, in);
     }
+
     private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
                                               final DataInputStream in) throws IOException {
         decodeVersionThreeData(assignmentInfo, in);
         assignmentInfo.errCode = in.readInt();
     }
+
     @Override
     public int hashCode() {
         return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHost.hashCode();

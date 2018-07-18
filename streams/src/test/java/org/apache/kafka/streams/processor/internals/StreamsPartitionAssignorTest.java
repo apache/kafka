@@ -993,19 +993,8 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
-        final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
-        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
-        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
         assertThat(mockInternalTopicManager.readyTopics.isEmpty(), equalTo(true));
 
-        final List<TopicPartition> expectedAssignment = Arrays.asList(
-            new TopicPartition("topic1", 0),
-            new TopicPartition("topic1", 1),
-            new TopicPartition("topic1", 2),
-            new TopicPartition(applicationId + "-count-repartition", 0),
-            new TopicPartition(applicationId + "-count-repartition", 1),
-            new TopicPartition(applicationId + "-count-repartition", 2)
-        );
         assertThat(assignment.get(client).partitions().isEmpty(), equalTo(true));
     }
 
@@ -1286,10 +1275,7 @@ public class StreamsPartitionAssignorTest {
             )));
         assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
 
-        AssignmentInfo futureInfo = AssignmentInfo.decode(assignment.get("future-consumer").userData());
-        assertThat(futureInfo.activeTasks().isEmpty(), equalTo(true));
-        assertThat(futureInfo.standbyTasks().isEmpty(), equalTo(true));
-        assertThat(futureInfo.partitionsByHost().isEmpty(), equalTo(true));
+        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));
     }
 

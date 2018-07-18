@@ -80,7 +80,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             this.code = code;
         }
 
-        public int getCode() {
+        public int code() {
             return code;
         }
 
@@ -213,7 +213,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
-    // error code for the streams app, replaces the original versionProbingFlag
     private AtomicInteger assignmentErrorCode;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
@@ -710,7 +709,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(
                     activePartitions,
-                    new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState).encode()));
+                    new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState, 0).encode()));
             }
         }
 
@@ -750,7 +749,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         minUserMetadataVersion,
                         activeTasks,
                         standbyTasks,
-                        partitionsByHostState)
+                        partitionsByHostState,
+                        0)
                         .encode()
                 ));
             }
@@ -924,9 +924,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     }
 
     private void processVersionFourAssignment(final AssignmentInfo info,
-                                               final List<TopicPartition> partitions,
-                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+                                              final List<TopicPartition> partitions,
+                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
@@ -1000,11 +1000,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         throw new IllegalStateException(str);
                     }
 
-                    final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
-                    Arrays.sort(topics);
                     if (numPartitions == UNKNOWN) {
                         numPartitions = partitions;
                     } else if (numPartitions != partitions) {
+                        final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                        Arrays.sort(topics);
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
                 }

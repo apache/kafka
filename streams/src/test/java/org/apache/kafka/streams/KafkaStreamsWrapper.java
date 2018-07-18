@@ -28,18 +28,19 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 public class KafkaStreamsWrapper extends KafkaStreams {
 
     public KafkaStreamsWrapper(final Topology topology,
-        final Properties props) {
+                               final Properties props) {
         super(topology, props);
     }
+
     /**
      * An app can set a single {@link StreamThread.StateListener} so that the app is notified when state changes.
      *
      * @param listener a new StreamThread state listener
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
-    public void setStreamThreadStateListener(StreamThread.StateListener listener) {
+    public void setStreamThreadStateListener(final StreamThread.StateListener listener) {
         if (state == State.CREATED) {
-            for (StreamThread thread : threads) {
+            for (final StreamThread thread : threads) {
                 thread.setStateListener(listener);
             }
         } else {

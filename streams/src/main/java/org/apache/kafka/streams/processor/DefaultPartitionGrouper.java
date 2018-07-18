@@ -85,8 +85,9 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             }
 
             int numPartitions = partitions.size();
-            if (numPartitions > maxNumPartitions)
+            if (numPartitions > maxNumPartitions) {
                 maxNumPartitions = numPartitions;
+            }
         }
         return maxNumPartitions;
     }
