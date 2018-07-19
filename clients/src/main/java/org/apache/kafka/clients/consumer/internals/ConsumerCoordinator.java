@@ -609,7 +609,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null)
                 break;
-            final OffsetCommitCompletion previous = completions.get(completions.size() - 1);
+            final OffsetCommitCompletion previous = completions.isEmpty() ?
+                    new OffsetCommitCompletion(null, null, null, 0, 0) :
+                    completions.get(completions.size() - 1);
             boolean containsMatch =
                     !completions.isEmpty() && previous.hashCode == completion.hashCode;
             if (completion.hashCode == 0) {

@@ -1634,12 +1634,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 rebalanceConsumer.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
-                rebalanceConsumer.sendRequest(null,
-                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
-                                              callback,
-                                      null);
                 rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata);
                 coordinator.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
+                rebalanceConsumer.sendRequest(null,
+                        RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
+                        callback,
+                        null);
                 coordinator.commitOffsetsAsync(parentConsumerMetadata, callback);
             } else {
                 coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
