@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Set;
@@ -92,12 +93,13 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             if (entry.getValue().equals(endOffsets.get(entry.getKey()))) {
                 continue;
             }
+            final OffsetInterval offsetInterval = new OffsetInterval(entry.getValue(), endOffsets.get(entry.getKey()));
             if (!offsetRanges.containsKey(entry.getKey())) {
                 assignedPartitions.add(entry.getKey());
                 newPartitions.add(entry.getKey());
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
             }
-            offsetRanges.get(entry.getKey()).add(new OffsetInterval(entry.getValue(), endOffsets.get(entry.getKey())));
+            offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
         super.assign(assignedPartitions);
         // go to assigned positions i.e. last committed offset
@@ -224,7 +226,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    private static class OffsetInterval {
+    public static class OffsetInterval implements Serializable {
         public final long startOffset;
         public final long endOffset;
 
@@ -258,7 +260,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    public static OffsetInclusion getRanges(final RebalanceKafkaConsumer consumer, final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
+    public static OffsetInclusion getRanges(final RebalanceKafkaConsumer consumer,
+                                            final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
         final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = new HashMap<>();
         final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsToCommit.entrySet()) {
@@ -279,5 +282,35 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             }
         }
         return new OffsetInclusion(parentConsumerMetadata, childConsumerMetadata);
+    }
+
+    public class OffsetRangeToken extends OffsetAndMetadata {
+        private final OffsetInterval range;
+
+        public OffsetRangeToken(final OffsetInterval range, OffsetAndMetadata metadata) {
+            super(metadata.offset(), metadata.metadata());
+            this.range = range;
+        }
+
+        public OffsetInterval getRange() {
+            return range;
+        }
+
+        @Override
+        public String toString() {
+            return "OffsetRangeToken{" +
+                    "range=(" + range.startOffset + ", " + range.endOffset + ")" +
+                    '}';
+        }
+
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return super.equals(o);
+        }
     }
 }

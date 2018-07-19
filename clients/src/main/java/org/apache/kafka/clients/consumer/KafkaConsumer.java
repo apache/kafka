@@ -556,9 +556,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     final Metrics metrics;
     final Map<String, Object> configs;
 
+    protected final ConsumerCoordinator coordinator;
+
     private final Logger log;
     private final String clientId;
-    private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
@@ -1177,15 +1178,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void checkRebalance() {
-        if (useParallelRebalance && rebalanceConsumer == null) {
-            rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
-            consumerThread = new Thread(rebalanceConsumer);
-        }
-        if (coordinator.isRebalancing(false) && useParallelRebalance) {
-            getStartAndEndOffsets();
-            rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
-            if (!consumerThread.isAlive()) {
-                consumerThread.start();
+        if (useParallelRebalance) {
+            if (rebalanceConsumer == null) {
+                rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
+                consumerThread = new Thread(rebalanceConsumer);
+            }
+            if (coordinator.isRebalancing(false)) {
+                getStartAndEndOffsets();
+                rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
+                if (!consumerThread.isAlive()) {
+                    consumerThread.start();
+                }
             }
         }
     }
