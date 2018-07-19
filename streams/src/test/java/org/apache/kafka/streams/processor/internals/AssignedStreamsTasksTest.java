@@ -335,8 +335,9 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
+    public void shouldCloseTaskOnProcessesIfTaskMigratedException() throws Exception {
         mockTaskInitialization();
+        EasyMock.expect(t1.isProcessable()).andReturn(true);
         t1.process();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);

@@ -59,6 +59,8 @@ public class PartitionGroup {
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
         streamTime = RecordQueue.NOT_KNOWN;
+
+        System.out.println("Created Partition Group: " + partitionQueues);
     }
 
     /**
@@ -126,6 +128,10 @@ public class PartitionGroup {
 
     public Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(partitionQueues.keySet());
+    }
+
+    public Map<TopicPartition, RecordQueue> partitionQueues() {
+        return partitionQueues;
     }
 
     /**
