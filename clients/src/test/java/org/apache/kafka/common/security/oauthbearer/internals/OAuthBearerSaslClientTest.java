@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;

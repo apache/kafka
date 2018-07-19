@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.common.security.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 
 
 /**

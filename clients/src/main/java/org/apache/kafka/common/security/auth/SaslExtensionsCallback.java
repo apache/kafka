@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security;
+package org.apache.kafka.common.security.auth;
 
 import javax.security.auth.callback.Callback;
 import java.util.Collections;

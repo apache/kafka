@@ -33,7 +33,7 @@ import javax.security.sasl.SaslClientFactory;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.security.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
