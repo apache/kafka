@@ -116,7 +116,7 @@ public class InternalTopicIntegrationTest {
         try (final AdminClient adminClient = createAdminClient()) {
             final ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, changelog);
             try {
-                final Config config =  adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
+                final Config config = adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
                 final Properties properties = new Properties();
                 for (final ConfigEntry configEntry : config.entries()) {
                     if (configEntry.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG) {
@@ -124,7 +124,7 @@ public class InternalTopicIntegrationTest {
                     }
                 }
                 return properties;
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (final InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
         }
