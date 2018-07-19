@@ -172,7 +172,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         extends Logging with KafkaMetricsGroup {
   /* a list of operation watching keys */
   private class WatcherList {
-    val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
+    val watchersByKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
 
     val watchersLock = new ReentrantLock()
 
@@ -181,7 +181,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
      * note that the returned watchers may be removed from the list by other threads
      */
     def allWatchers = {
-      inLock(watchersLock) { watchersForKey.values }
+      inLock(watchersLock) { watchersByKey.values }
     }
   }
 
@@ -287,7 +287,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    */
   def checkAndComplete(key: Any): Int = {
     val wl = watcherList(key)
-    val watchers = inLock(wl.watchersLock) { wl.watchersForKey.get(key) }
+    val watchers = inLock(wl.watchersLock) { wl.watchersByKey.get(key) }
     if(watchers == null)
       0
     else
@@ -314,7 +314,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   def cancelForKey(key: Any): List[T] = {
     val wl = watcherList(key)
     inLock(wl.watchersLock) {
-      val watchers = wl.watchersForKey.remove(key)
+      val watchers = wl.watchersByKey.remove(key)
       if (watchers != null)
         watchers.cancel()
       else
@@ -329,7 +329,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   private def watchForOperation(key: Any, operation: T) {
     val wl = watcherList(key)
     inLock(wl.watchersLock) {
-      val watcher = wl.watchersForKey.getAndMaybePut(key)
+      val watcher = wl.watchersByKey.getAndMaybePut(key)
       watcher.watch(operation)
     }
   }
@@ -341,11 +341,11 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     val wl = watcherList(key)
     inLock(wl.watchersLock) {
       // if the current key is no longer correlated to the watchers to remove, skip
-      if (wl.watchersForKey.get(key) != watchers)
+      if (wl.watchersByKey.get(key) != watchers)
         return
 
       if (watchers != null && watchers.isEmpty) {
-        wl.watchersForKey.remove(key)
+        wl.watchersByKey.remove(key)
       }
     }
   }
