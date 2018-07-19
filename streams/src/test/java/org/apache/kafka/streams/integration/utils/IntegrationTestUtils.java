@@ -37,6 +37,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import scala.Option;
@@ -60,6 +62,32 @@ public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
     public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
+
+    /*
+     * Records state transition for StreamThread
+     */
+    public static class StateListenerStub implements StreamThread.StateListener {
+        boolean runningToRevokedSeen = false;
+        boolean revokedToPendingShutdownSeen = false;
+        @Override
+        public void onChange(final Thread thread,
+                             final ThreadStateTransitionValidator newState,
+                             final ThreadStateTransitionValidator oldState) {
+            if (oldState == StreamThread.State.RUNNING && newState == StreamThread.State.PARTITIONS_REVOKED) {
+                runningToRevokedSeen = true;
+            } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
+                revokedToPendingShutdownSeen = true;
+            }
+        }
+
+        public boolean revokedToPendingShutdownSeen() {
+            return revokedToPendingShutdownSeen;
+        }
+
+        public boolean runningToRevokedSeen() {
+            return runningToRevokedSeen;
+        }
+    }
 
     /**
      * Removes local state stores.  Useful to reset state in-between integration test runs.

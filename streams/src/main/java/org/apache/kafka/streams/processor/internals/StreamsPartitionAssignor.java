@@ -51,7 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -59,16 +59,44 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
 
     private final static int UNKNOWN = -1;
-    public final static int NOT_AVAILABLE = -2;
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
+    private final static int VERSION_FOUR = 4;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
     private int minReceivedMetadataVersion = UNKNOWN;
     protected Set<Integer> supportedVersions = new HashSet<>();
 
     private Logger log;
     private String logPrefix;
+    public enum Error {
+        NONE(0),
+        INCOMPLETE_SOURCE_TOPIC_METADATA(1),
+        VERSION_PROBING(2);
+
+        private final int code;
+
+        Error(final int code) {
+            this.code = code;
+        }
+
+        public int code() {
+            return code;
+        }
+
+        public static Error fromCode(final int code) {
+            switch (code) {
+                case 0:
+                    return NONE;
+                case 1:
+                    return INCOMPLETE_SOURCE_TOPIC_METADATA;
+                case 2:
+                    return VERSION_PROBING;
+                default:
+                    throw new IllegalArgumentException("Unknown error code: " + code);
+            }
+        }
+    }
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -185,7 +213,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
-    private AtomicBoolean versionProbingFlag;
+    private AtomicInteger assignmentErrorCode;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
@@ -250,20 +278,20 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         taskManager = (TaskManager) o;
 
-        final Object o2 = configs.get(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG);
-        if (o2 == null) {
-            final KafkaException fatalException = new KafkaException("VersionProbingFlag is not specified");
+        final Object ai = configs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
+        if (ai == null) {
+            final KafkaException fatalException = new KafkaException("assignmentErrorCode is not specified");
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
 
-        if (!(o2 instanceof AtomicBoolean)) {
-            final KafkaException fatalException = new KafkaException(String.format("%s is not an instance of %s", o2.getClass().getName(), AtomicBoolean.class.getName()));
+        if (!(ai instanceof AtomicInteger)) {
+            final KafkaException fatalException = new KafkaException(String.format("%s is not an instance of %s",
+                ai.getClass().getName(), AtomicInteger.class.getName()));
             log.error(fatalException.getMessage(), fatalException);
             throw fatalException;
         }
-
-        versionProbingFlag = (AtomicBoolean) o2;
+        assignmentErrorCode = (AtomicInteger) ai;
 
         numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
@@ -319,6 +347,26 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
+    Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+                                            final String topic,
+                                            final int errorCode) {
+        log.error("{} is unknown yet during rebalance," +
+            " please make sure they have been pre-created before starting the Streams application.", topic);
+        final Map<String, Assignment> assignment = new HashMap<>();
+        for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+            for (final String consumerId : clientMetadata.consumers) {
+                assignment.put(consumerId, new Assignment(
+                    Collections.emptyList(),
+                    new AssignmentInfo(AssignmentInfo.LATEST_SUPPORTED_VERSION,
+                        Collections.emptyList(),
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        errorCode).encode()
+                ));
+            }
+        }
+        return assignment;
+    }
     /*
      * This assigns tasks to consumer clients in the following steps.
      *
@@ -409,6 +457,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
+            for (final String topic : topicsInfo.sourceTopics) {
+                if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
+                    !metadata.topics().contains(topic)) {
+                    return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
+                }
+            }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
                 repartitionTopicMetadata.put(topic.name(), new InternalTopicMetadata(topic));
             }
@@ -438,12 +492,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                         numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numPartitions;
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
-                                        if (numPartitionsCandidate == null) {
-                                            repartitionTopicMetadata.get(topicName).numPartitions = NOT_AVAILABLE;
-                                        }
                                     }
 
-                                    if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
+                                    if (numPartitionsCandidate > numPartitions) {
                                         numPartitions = numPartitionsCandidate;
                                     }
                                 }
@@ -582,7 +633,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minReceivedMetadataVersion == 2 || minReceivedMetadataVersion == 3) {
+        if (minReceivedMetadataVersion >= 2) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -658,7 +709,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(
                     activePartitions,
-                    new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState).encode()));
+                    new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState, 0).encode()));
             }
         }
 
@@ -698,7 +749,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         minUserMetadataVersion,
                         activeTasks,
                         standbyTasks,
-                        partitionsByHostState)
+                        partitionsByHostState,
+                        0)
                         .encode()
                 ));
             }
@@ -744,6 +796,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         Collections.sort(partitions, PARTITION_COMPARATOR);
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
+        if (info.errCode() != Error.NONE.code) {
+            // set flag to shutdown streams app
+            assignmentErrorCode.set(info.errCode());
+            return;
+        }
         final int receivedAssignmentMetadataVersion = info.version();
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
@@ -770,7 +827,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 usedSubscriptionMetadataVersion = leaderSupportedVersion;
             }
 
-            versionProbingFlag.set(true);
+            assignmentErrorCode.set(Error.VERSION_PROBING.code);
             return;
         }
 
@@ -799,6 +856,18 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     usedSubscriptionMetadataVersion = leaderSupportedVersion;
                 }
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                partitionsByHost = info.partitionsByHost();
+                break;
+            case VERSION_FOUR:
+                if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
+                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
+                        "Upgrading subscription metadata version to {} for next rebalance.",
+                        usedSubscriptionMetadataVersion,
+                        leaderSupportedVersion,
+                        leaderSupportedVersion);
+                    usedSubscriptionMetadataVersion = leaderSupportedVersion;
+                }
+                processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
             default:
@@ -854,6 +923,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
+    private void processVersionFourAssignment(final AssignmentInfo info,
+                                              final List<TopicPartition> partitions,
+                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+        processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+    }
+
     // for testing
     protected void processLatestVersionAssignment(final AssignmentInfo info,
                                                   final List<TopicPartition> partitions,
@@ -877,9 +953,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             final InternalTopicConfig topic = metadata.config;
             final int numPartitions = metadata.numPartitions;
 
-            if (numPartitions == NOT_AVAILABLE) {
-                continue;
-            }
             if (numPartitions < 0) {
                 throw new StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
@@ -905,9 +978,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
+        private Logger log;
 
         CopartitionedTopicsValidator(final String logPrefix) {
             this.logPrefix = logPrefix;
+            final LogContext logContext = new LogContext(logPrefix);
+            log = logContext.logger(getClass());
         }
 
         void validate(final Set<String> copartitionGroup,
@@ -918,9 +994,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             for (final String topic : copartitionGroup) {
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
                     final Integer partitions = metadata.partitionCountForTopic(topic);
-
                     if (partitions == null) {
-                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopic not found: %s", logPrefix, topic));
+                        String str = String.format("%sTopic not found: %s", logPrefix, topic);
+                        log.error(str);
+                        throw new IllegalStateException(str);
                     }
 
                     if (numPartitions == UNKNOWN) {
@@ -930,9 +1007,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         Arrays.sort(topics);
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
-                } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
-                    numPartitions = NOT_AVAILABLE;
-                    break;
                 }
             }
 
