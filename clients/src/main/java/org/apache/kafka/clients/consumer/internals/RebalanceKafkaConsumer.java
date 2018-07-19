@@ -95,21 +95,18 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 continue;
             }
             final OffsetInterval offsetInterval = new OffsetInterval(entry.getValue().offset(),
-                                                                     endOffsets.get(entry.getKey()));
+                    endOffsets.get(entry.getKey()));
             if (!offsetRanges.containsKey(entry.getKey())) {
                 assignedPartitions.add(entry.getKey());
                 newPartitions.add(entry.getKey());
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
-            } else {
-                rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
             }
+            rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
             offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
         super.assign(assignedPartitions);
         // go to assigned positions i.e. last committed offset
         for (TopicPartition partition : newPartitions) {
-            rangeTokens.put(partition, new OffsetRangeToken(offsetRanges.get(partition).get(0),
-                                                            startOffsets.get(partition)));
             super.seek(partition, offsetRanges.get(partition).get(0).startOffset);
         }
         super.commitAsync(rangeTokens, null, true);
