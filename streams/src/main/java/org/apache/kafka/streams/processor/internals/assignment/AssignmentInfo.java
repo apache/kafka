@@ -334,7 +334,8 @@ public class AssignmentInfo {
 
     @Override
     public int hashCode() {
-        return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHost.hashCode();
+        return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
+            ^ partitionsByHost.hashCode() ^ errCode;
     }
 
     @Override
@@ -343,6 +344,7 @@ public class AssignmentInfo {
             final AssignmentInfo other = (AssignmentInfo) o;
             return usedVersion == other.usedVersion &&
                     latestSupportedVersion == other.latestSupportedVersion &&
+                    errCode == other.errCode &&
                     activeTasks.equals(other.activeTasks) &&
                     standbyTasks.equals(other.standbyTasks) &&
                     partitionsByHost.equals(other.partitionsByHost);
