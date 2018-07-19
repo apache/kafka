@@ -23,6 +23,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -78,9 +79,8 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         streams.setStreamThreadStateListener(listener);
         streams.start();
 
-        while (!listener.revokedToPendingShutdownSeen()) {
-            Thread.sleep(3);
-        }
+        TestUtils.waitForCondition(listener::revokedToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
+
         streams.close();
         assertEquals(listener.runningToRevokedSeen(), true);
         assertEquals(listener.revokedToPendingShutdownSeen(), true);
