@@ -122,7 +122,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         super.assign(assignedPartitions);
         // go to assigned positions i.e. last committed offset
         for (TopicPartition partition : newPartitions) {
-            super.seek(partition, offsetRanges.get(partition).get(0).startOffset);
+            final long pos = offsetRanges.get(partition).get(0).startOffset;
+            super.seek(partition, pos <= -1 ? 0 : pos);
         }
         super.commitAsync(rangeTokens, null, true);
     }
