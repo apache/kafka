@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
@@ -117,8 +118,7 @@ object ConsumerGroupCommandTest {
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
     val props = new Properties
     configure(props)
-    if (customPropsOpt.isDefined)
-      props.putAll(customPropsOpt.get)
+    customPropsOpt.foreach(props.putAll(_))
     val consumer = new KafkaConsumer(props)
 
     def configure(props: Properties): Unit = {
@@ -134,7 +134,7 @@ object ConsumerGroupCommandTest {
       try {
         subscribe()
         while (true)
-          consumer.poll(Long.MaxValue)
+          consumer.poll(Duration.ofMillis(Long.MaxValue))
       } catch {
         case _: WakeupException => // OK
       } finally {

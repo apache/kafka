@@ -31,8 +31,10 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
-import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLKeyException;
 import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -255,17 +257,17 @@ public class SslTransportLayer implements TransportLayer {
 
             doHandshake();
         } catch (SSLException e) {
-            handshakeFailure(e, true);
+            maybeProcessHandshakeFailure(e, true, null);
         } catch (IOException e) {
             maybeThrowSslAuthenticationException();
 
             // this exception could be due to a write. If there is data available to unwrap,
-            // process the data so that any SSLExceptions are reported
+            // process the data so that any SSL handshake exceptions are reported
             if (handshakeStatus == HandshakeStatus.NEED_UNWRAP && netReadBuffer.position() > 0) {
                 try {
                     handshakeUnwrap(false);
                 } catch (SSLException e1) {
-                    handshakeFailure(e1, false);
+                    maybeProcessHandshakeFailure(e1, false, e);
                 }
             }
             // If we get here, this is not a handshake failure, throw the original IOException
@@ -822,6 +824,32 @@ public class SslTransportLayer implements TransportLayer {
         handshakeException = new SslAuthenticationException("SSL handshake failed", sslException);
         if (!flush || flush(netWriteBuffer))
             throw handshakeException;
+    }
+
+    // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
+    // SSLPeerUnverifiedException or SSLKeyException if the cause is known. These exceptions indicate
+    // authentication failures (e.g. configuration errors) which should not be retried. But the SSL engine
+    // may also throw exceptions using the base class SSLException in a few cases:
+    //   a) If there are no matching ciphers or TLS version or the private key is invalid, client will be
+    //      unable to process the server message and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
+    //   b) If server closes the connection gracefully during handshake, client may receive close_notify
+    //      and and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Received close_notify during handshake
+    // We want to handle a) as a non-retriable SslAuthenticationException and b) as a retriable IOException.
+    // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception
+    // when we are not sure, we will treat only the first exception string as a handshake exception.
+    private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
+        if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||
+                sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException ||
+                sslException.getMessage().contains("Unrecognized SSL message"))
+            handshakeFailure(sslException, flush);
+        else if (ioException == null)
+            throw sslException;
+        else {
+            log.debug("SSLException while unwrapping data after IOException, original IOException will be propagated", sslException);
+            throw ioException;
+        }
     }
 
     // If handshake has already failed, throw the authentication exception.

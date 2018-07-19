@@ -64,7 +64,8 @@ public class NioEchoServer extends Thread {
     private volatile WritableByteChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
-    private int numSent = 0;
+    private volatile int numSent = 0;
+    private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
@@ -155,6 +156,11 @@ public class NioEchoServer extends Thread {
                     }
                     newChannels.clear();
                 }
+                if (closeKafkaChannels) {
+                    for (KafkaChannel channel : selector.channels())
+                        selector.close(channel.id());
+                    closeKafkaChannels = false;
+                }
 
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
@@ -174,7 +180,6 @@ public class NioEchoServer extends Thread {
                     selector.unmute(send.destination());
                     numSent += 1;
                 }
-
             }
         } catch (IOException e) {
             // ignore
@@ -208,15 +213,26 @@ public class NioEchoServer extends Thread {
         return selector;
     }
 
-    public void closeConnections() throws IOException {
-        for (SocketChannel channel : socketChannels)
+    public void closeKafkaChannels() throws IOException {
+        closeKafkaChannels = true;
+        selector.wakeup();
+        try {
+            TestUtils.waitForCondition(() -> selector.channels().isEmpty(), "Channels not closed");
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void closeSocketChannels() throws IOException {
+        for (SocketChannel channel : socketChannels) {
             channel.close();
+        }
         socketChannels.clear();
     }
 
     public void close() throws IOException, InterruptedException {
         this.serverSocketChannel.close();
-        closeConnections();
+        closeSocketChannels();
         acceptorThread.interrupt();
         acceptorThread.join();
         interrupt();

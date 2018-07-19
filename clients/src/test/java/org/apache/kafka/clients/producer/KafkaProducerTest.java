@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -27,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -608,5 +612,46 @@ public class KafkaProducerTest {
         } finally {
             producer.close(0, TimeUnit.MILLISECONDS);
         }
+    }
+
+    @Test
+    public void testSendToInvalidTopic() throws Exception {
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster();
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        Producer<String, String> producer = new KafkaProducer<>(new ProducerConfig(
+            ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+            new StringSerializer(), new StringSerializer(), metadata, client);
+
+        String invalidTopicName = "topic abc";          // Invalid topic name due to space
+        ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
+
+        Set<String> invalidTopic = new HashSet<String>();
+        invalidTopic.add(invalidTopicName);
+        Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
+                                                            cluster.nodes(),
+                                                            new ArrayList<PartitionInfo>(0),
+                                                            Collections.<String>emptySet(),
+                                                            invalidTopic,
+                                                            cluster.internalTopics(),
+                                                            cluster.controller());
+        client.prepareMetadataUpdate(metaDataUpdateResponseCluster, Collections.<String>emptySet());
+
+        Future<RecordMetadata> future = producer.send(record);
+
+        assertEquals("Cluster has incorrect invalid topic list.", metaDataUpdateResponseCluster.invalidTopics(), metadata.fetch().invalidTopics());
+        TestUtils.assertFutureError(future, InvalidTopicException.class);
     }
 }
