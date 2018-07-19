@@ -58,7 +58,7 @@ public class PartitionGroup {
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
-        streamTime = -1;
+        streamTime = RecordQueue.NOT_KNOWN;
     }
 
     /**
