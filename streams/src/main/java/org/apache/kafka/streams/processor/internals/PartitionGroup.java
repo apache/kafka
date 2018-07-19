@@ -59,8 +59,6 @@ public class PartitionGroup {
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
         streamTime = RecordQueue.NOT_KNOWN;
-
-        System.out.println("Created Partition Group: " + partitionQueues);
     }
 
     /**

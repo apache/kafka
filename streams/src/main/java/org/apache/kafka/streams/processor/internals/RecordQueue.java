@@ -100,10 +100,6 @@ public class RecordQueue {
 
         maybeUpdateTimestamp();
 
-        if (!partition.equals(new TopicPartition("stream-concurrent-1", 0))) {
-            System.out.println("Finish AddRaw. Head: " + headRecord + ". Queue: " + fifoQueue);
-        }
-
         return size();
     }
 
