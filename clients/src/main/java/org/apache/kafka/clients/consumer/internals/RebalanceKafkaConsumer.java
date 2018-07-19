@@ -48,6 +48,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private RequestResult result;
     private volatile Duration waitTime;
     private volatile Object inputArgument;
+    private volatile Object optionalInputArgument;
     private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
 
@@ -64,6 +65,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.result = null;
         this.waitTime = null;
         this.inputArgument = null;
+        this.optionalInputArgument = null;
         this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
     }
@@ -84,6 +86,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.waitTime = waitTime;
         this.inputArgument = inputArgument;
         this.callback = callback;
+    }
+
+    public void setOptionalInputArgument(Object object) {
+        this.optionalInputArgument = object;
     }
 
     public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
@@ -116,16 +122,18 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         final HashSet<TopicPartition> stillUnfinished = new HashSet<>();
         final HashSet<TopicPartition> finishedPartitions = new HashSet<>();
         for (final Map.Entry<TopicPartition, ArrayList<OffsetInterval>> entry : offsetRanges.entrySet()) {
-            if (super.position(entry.getKey()) >= entry.getValue().get(0).endOffset) {
-                if (entry.getValue().size() > 1) {
-                    entry.getValue().remove(0);
-                    super.seek(entry.getKey(), entry.getValue().get(0).startOffset);
-                    stillUnfinished.add(entry.getKey());
-                } else {
-                    finishedPartitions.add(entry.getKey());
+            final long position = super.position(entry.getKey());
+            while (!entry.getValue().isEmpty() && position >= entry.getValue().get(0).endOffset) {
+                entry.getValue().remove(0);
+            }
+            if (!entry.getValue().isEmpty()) {
+                stillUnfinished.add(entry.getKey());
+                final long startPos = entry.getValue().get(0).startOffset;
+                if (position < startPos) {
+                    super.seek(entry.getKey(), startPos);
                 }
             } else {
-                stillUnfinished.add(entry.getKey());
+                finishedPartitions.add(entry.getKey());
             }
         }
         assignedPartitions.removeAll(finishedPartitions);
@@ -181,7 +189,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
-                    super.commitAsync(null, (OffsetCommitCallback) inputArgument, true);
+                    super.commitAsync((Map<TopicPartition, OffsetAndMetadata>) optionalInputArgument,
+                                      (OffsetCommitCallback) inputArgument,
+                                     true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
@@ -230,7 +240,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    public static class OffsetInterval implements Serializable {
+    private static class OffsetInterval implements Serializable {
         public final long startOffset;
         public final long endOffset;
 
@@ -288,7 +298,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         return new OffsetInclusion(parentConsumerMetadata, childConsumerMetadata);
     }
 
-    public class OffsetRangeToken extends OffsetAndMetadata {
+    private class OffsetRangeToken extends OffsetAndMetadata {
         private final OffsetInterval range;
 
         public OffsetRangeToken(final OffsetInterval range, OffsetAndMetadata metadata) {
@@ -303,7 +313,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         @Override
         public String toString() {
             return "OffsetRangeToken{" +
-                    "range=(" + range.startOffset + ", " + range.endOffset + ")" +
+                    "offset=" + offset() +
+                    ", metadata='" + metadata() +
+                    ", range=(" + range.startOffset + ", " + range.endOffset + ")" +
                     '}';
         }
 

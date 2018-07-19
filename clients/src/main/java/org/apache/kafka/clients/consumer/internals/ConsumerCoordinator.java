@@ -596,7 +596,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                   final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
         if (!coordinatorUnknown()) {
@@ -632,7 +633,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.pollNoWakeup();
     }
 
-    private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                      final OffsetCommitCallback callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
@@ -1007,7 +1009,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final Exception exception;
 
-        private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+        private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition,
+                                       OffsetAndMetadata> offsets,
+                                       Exception exception) {
             this.callback = callback;
             this.offsets = offsets;
             this.exception = exception;

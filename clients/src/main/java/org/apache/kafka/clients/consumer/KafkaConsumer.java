@@ -1169,7 +1169,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.ensureActiveGroup();
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
             OffsetAndMetadata offsetMetadata = committed(partition, Duration.ofMillis(requestTimeoutMs), true);
-            startOffsets.put(partition, offsetMetadata == null ? new OffsetAndMetadata(0L) : offsetMetadata);
+            startOffsets.put(partition, offsetMetadata == null ? new OffsetAndMetadata(-1L) : offsetMetadata);
         }
         seekToEnd(Collections.EMPTY_LIST);
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
@@ -1180,7 +1180,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void checkRebalance() {
         if (useParallelRebalance) {
             if (rebalanceConsumer == null) {
-                rebalanceConsumer = new RebalanceKafkaConsumer(configs, null, null, new HashMap<>(), new HashMap<>());
+                rebalanceConsumer = new RebalanceKafkaConsumer(configs,
+                                                               null,
+                                                               null,
+                                                               new HashMap<>(),
+                                                               new HashMap<>());
                 consumerThread = new Thread(rebalanceConsumer);
             }
             if (coordinator.isRebalancing(false)) {
@@ -1590,12 +1594,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        acquireAndEnsureOpen();
-        try {
-            commitAsync(subscriptions.allConsumed(), callback);
-        } finally {
-            release();
-        }
+        commitAsync(subscriptions.allConsumed(), callback);
     }
 
     /**
@@ -1635,8 +1634,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 rebalanceConsumer.sendRequest(null,
                                               RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
-                                              childConsumerMetadata,
+                                              callback,
                                       null);
+                rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata);
                 coordinator.commitOffsetsAsync(parentConsumerMetadata, callback);
             } else {
                 coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
