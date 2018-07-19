@@ -54,7 +54,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer,
-                                  final Map<TopicPartition, Long> startOffsets,
+                                  final Map<TopicPartition, OffsetAndMetadata> startOffsets,
                                   final Map<TopicPartition, Long> endOffsets) {
         super(configs, keyDeserializer, valueDeserializer);
         this.offsetRanges = new HashMap<>();
@@ -86,26 +86,34 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.callback = callback;
     }
 
-    public void addNewOffsets(Map<TopicPartition, Long> startOffsets,
+    public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
                               Map<TopicPartition, Long> endOffsets) {
         final Set<TopicPartition> newPartitions = new HashSet<>();
-        for (Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
-            if (entry.getValue().equals(endOffsets.get(entry.getKey()))) {
+        final HashMap<TopicPartition, OffsetRangeToken> rangeTokens = new HashMap<>();
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : startOffsets.entrySet()) {
+            if (entry.getValue().offset() == endOffsets.get(entry.getKey())) {
                 continue;
             }
-            final OffsetInterval offsetInterval = new OffsetInterval(entry.getValue(), endOffsets.get(entry.getKey()));
+            final OffsetInterval offsetInterval = new OffsetInterval(entry.getValue().offset(),
+                                                                     endOffsets.get(entry.getKey()));
             if (!offsetRanges.containsKey(entry.getKey())) {
                 assignedPartitions.add(entry.getKey());
                 newPartitions.add(entry.getKey());
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
+            } else {
+                rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
+                commitAsync(rangeTokens, null, true);
             }
             offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
         super.assign(assignedPartitions);
         // go to assigned positions i.e. last committed offset
         for (TopicPartition partition : newPartitions) {
+            rangeTokens.put(partition, new OffsetRangeToken(offsetRanges.get(partition).get(0),
+                                                            startOffsets.get(partition)));
             super.seek(partition, offsetRanges.get(partition).get(0).startOffset);
         }
+        super.commitAsync(rangeTokens, null, true);
     }
 
     private Set<TopicPartition> findUnfinished() {

@@ -576,7 +576,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private RebalanceKafkaConsumer rebalanceConsumer;
     private Thread consumerThread;
     private volatile RebalanceKafkaConsumer.RequestResult result;
-    private Map<TopicPartition, Long> startOffsets = new HashMap<>();
+    private Map<TopicPartition, OffsetAndMetadata> startOffsets = new HashMap<>();
     private Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private volatile boolean closed = false;
     private List<PartitionAssignor> assignors;
@@ -1169,7 +1169,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.ensureActiveGroup();
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
             OffsetAndMetadata offsetMetadata = committed(partition, Duration.ofMillis(requestTimeoutMs), true);
-            startOffsets.put(partition, offsetMetadata == null ? 0L : offsetMetadata.offset());
+            startOffsets.put(partition, offsetMetadata == null ? new OffsetAndMetadata(0L) : offsetMetadata);
         }
         seekToEnd(Collections.EMPTY_LIST);
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {

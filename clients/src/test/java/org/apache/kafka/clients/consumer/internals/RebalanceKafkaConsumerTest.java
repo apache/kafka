@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -130,10 +131,14 @@ public class RebalanceKafkaConsumerTest {
     private RebalanceKafkaConsumer<byte[], byte[]> newConsumer(Map<String, Object> props,
                                                                Map<TopicPartition, Long> beginningOffsets,
                                                                Map<TopicPartition, Long> finishingOffsets) {
+        final Map<TopicPartition, OffsetAndMetadata> beginningMetadata = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry : beginningOffsets.entrySet()) {
+            beginningMetadata.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
+        }
         return new RebalanceKafkaConsumer<>(props,
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
-                beginningOffsets,
+                beginningMetadata,
                 finishingOffsets);
     }
 
