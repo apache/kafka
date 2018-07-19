@@ -43,7 +43,7 @@ public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
-    private final class InternalAdminClientConfig extends AdminClientConfig {
+    private static final class InternalAdminClientConfig extends AdminClientConfig {
         private InternalAdminClientConfig(final Map<?, ?> props) {
             super(props, false);
         }

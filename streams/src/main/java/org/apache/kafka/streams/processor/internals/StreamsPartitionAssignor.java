@@ -64,7 +64,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
-    private int minReceivedMetadataVersion = UNKNOWN;
     protected Set<Integer> supportedVersions = new HashSet<>();
 
     private Logger log;
@@ -166,23 +165,19 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
-    private final class InternalStreamsConfig extends StreamsConfig {
+    private static final class InternalStreamsConfig extends StreamsConfig {
         private InternalStreamsConfig(final Map<?, ?> props) {
             super(props, false);
         }
     }
 
-    protected static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
-        @Override
-        public int compare(final TopicPartition p1,
-                           final TopicPartition p2) {
-            final int result = p1.topic().compareTo(p2.topic());
+    protected static final Comparator<TopicPartition> PARTITION_COMPARATOR = (p1, p2) -> {
+        final int result = p1.topic().compareTo(p2.topic());
 
-            if (result != 0) {
-                return result;
-            } else {
-                return Integer.compare(p1.partition(), p2.partition());
-            }
+        if (result != 0) {
+            return result;
+        } else {
+            return Integer.compare(p1.partition(), p2.partition());
         }
     };
 
@@ -352,7 +347,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
         final Set<String> futureConsumers = new HashSet<>();
 
-        minReceivedMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+        int minReceivedMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+
         supportedVersions.clear();
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
