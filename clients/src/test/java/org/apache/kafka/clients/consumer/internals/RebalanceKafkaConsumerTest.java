@@ -58,7 +58,7 @@ public class RebalanceKafkaConsumerTest {
     }
 
     @Test
-    public void testConsumerIfContainsSubsciption() {
+    public void testConsumerIfContainsSubscription() {
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(t1p, 1L);
         assertTrue(newConsumer(offsets, offsets).subscription().size() == 0);
