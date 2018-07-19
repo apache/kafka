@@ -473,28 +473,28 @@ task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 for ( sv in availableScalaVersions ) {
   String taskSuffix = sv.replaceAll("\\.", "_")
 
-  tasks.create(name: "jar_core_${taskSuffix}", type: GradleBuild) {
+  tasks.create(name: "jarScala_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:jar']
+    tasks = ['core:jar', 'streams:streams-scala:jar']
   }
 
-  tasks.create(name: "test_core_${taskSuffix}", type: GradleBuild) {
+  tasks.create(name: "testScala_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:test']
+    tasks = ['core:test', 'streams:streams-scala:test']
   }
 
   tasks.create(name: "srcJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:srcJar']
+    tasks = ['core:srcJar', 'streams:streams-scala:srcJar']
   }
 
   tasks.create(name: "docsJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:docsJar']
+    tasks = ['core:docsJar', 'streams:streams-scala:docsJar']
   }
 
   tasks.create(name: "install_${taskSuffix}", type: GradleBuild) {
@@ -509,10 +509,10 @@ for ( sv in availableScalaVersions ) {
     tasks = ['releaseTarGz']
   }
 
-  tasks.create(name: "uploadCoreArchives_${taskSuffix}", type: GradleBuild) {
+  tasks.create(name: "uploadScalaArchives_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
-    tasks = ['core:uploadArchives']
+    tasks = ['core:uploadArchives', 'streams:streams-scala:uploadArchives']
   }
 }
 
@@ -525,20 +525,20 @@ def withDefScalaVersions(taskName) {
 }
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jar_core') + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jarScala') + pkgs.collect { it + ":jar" }) { }
 
 tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
 
 tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: withDefScalaVersions('test_core') + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: withDefScalaVersions('testScala') + pkgs.collect { it + ":test" }) { }
 
 tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadCoreArchives') + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadScalaArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
