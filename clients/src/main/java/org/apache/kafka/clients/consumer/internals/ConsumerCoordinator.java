@@ -609,10 +609,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null)
                 break;
+            final OffsetCommitCompletion previous = completions.get(completions.size() - 1);
             boolean containsMatch =
-                    !completions.isEmpty() && completions.get(completions.size() - 1).hashCode == completion.hashCode;
-            if (completion.hashCode == 0 || containsMatch) {
+                    !completions.isEmpty() && previous.hashCode == completion.hashCode;
+            if (completion.hashCode == 0) {
                 completion.invoke();
+            } else if (containsMatch && previous.hashCodeEquals(completion)) {
+                completion.invoke(previous.offsets);
             } else {
                 completions.add(completion);
             }
@@ -674,6 +677,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                       null,
                                                                       hashCode,
                                                                       largerHashCode));
+                setHashCodes(0, 0);
             }
 
             @Override
@@ -688,6 +692,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                            commitException,
                                            hashCode,
                                            largerHashCode));
+                setHashCodes(0, 0);
             }
         });
     }
@@ -1062,12 +1067,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 callback.onComplete(offsets, exception);
         }
 
+        public void invoke(Map<TopicPartition, OffsetAndMetadata> otherPortionOfData) {
+            offsets.putAll(otherPortionOfData);
+            if (callback != null)
+                callback.onComplete(offsets, exception);
+        }
+
         public long getHashCode() {
             return hashCode;
         }
 
         public long getLargerHashCode() {
             return largerHashCode;
+        }
+
+        public boolean hashCodeEquals(OffsetCommitCompletion completion) {
+            return hashCode == completion.getHashCode() && largerHashCode == completion.getLargerHashCode();
         }
 
         @Override
