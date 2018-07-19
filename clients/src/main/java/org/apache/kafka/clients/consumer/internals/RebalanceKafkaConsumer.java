@@ -102,7 +102,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
             } else {
                 rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
-                commitAsync(rangeTokens, null, true);
             }
             offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
