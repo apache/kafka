@@ -53,7 +53,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
   }
 
   @After

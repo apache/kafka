@@ -410,7 +410,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeWithMultiPartitionTopicAndMultipleConsumers() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic2, 2, 1)
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -431,7 +431,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
@@ -453,7 +453,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
@@ -479,7 +479,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
@@ -499,7 +499,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic2, 2, 1)
     addSimpleGroupExecutor(Seq(new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)

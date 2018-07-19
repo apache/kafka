@@ -163,7 +163,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     @After
     public void cleanup() throws InterruptedException {
-        CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
+        CLUSTER.deleteAllTopicsAndWait(120000);
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {

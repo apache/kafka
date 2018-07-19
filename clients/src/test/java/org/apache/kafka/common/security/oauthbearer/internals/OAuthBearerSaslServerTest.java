@@ -75,39 +75,41 @@ public class OAuthBearerSaslServerTest {
     @Test
     public void noAuthorizationIdSpecified() throws Exception {
         byte[] nextChallenge = saslServer
-                .evaluateResponse(clientInitialResponseText(null).getBytes(StandardCharsets.UTF_8));
+                .evaluateResponse(clientInitialResponse(null));
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
     }
 
     @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer
-                .evaluateResponse(clientInitialResponseText(USER).getBytes(StandardCharsets.UTF_8));
+                .evaluateResponse(clientInitialResponse(USER));
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
     }
 
     @Test(expected = SaslAuthenticationException.class)
     public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(clientInitialResponseText(USER + "x").getBytes(StandardCharsets.UTF_8));
+        saslServer.evaluateResponse(clientInitialResponse(USER + "x"));
     }
 
     @Test
     public void illegalToken() throws Exception {
-        byte[] bytes = saslServer
-                .evaluateResponse((clientInitialResponseText(null) + "AB").getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = saslServer.evaluateResponse(clientInitialResponse(null, true));
         String challenge = new String(bytes, StandardCharsets.UTF_8);
         assertEquals("{\"status\":\"invalid_token\"}", challenge);
     }
 
-    private String clientInitialResponseText(String authorizationId)
+    private byte[] clientInitialResponse(String authorizationId)
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+        return clientInitialResponse(authorizationId, false);
+    }
+
+    private byte[] clientInitialResponse(String authorizationId, boolean illegalToken)
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         LOGIN_CALLBACK_HANDLER.handle(new Callback[] {callback});
         OAuthBearerToken token = callback.token();
         String compactSerialization = token.value();
-        String clientInitialResponseText = "n,"
-                + (authorizationId == null || authorizationId.isEmpty() ? "" : "a=" + authorizationId) + ",auth=Bearer "
-                + compactSerialization;
-        return clientInitialResponseText;
+        String tokenValue = compactSerialization + (illegalToken ? "AB" : "");
+        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, Collections.emptyMap()).toBytes();
     }
 }
