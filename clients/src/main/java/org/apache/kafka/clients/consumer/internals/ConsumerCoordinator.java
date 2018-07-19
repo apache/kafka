@@ -59,7 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -80,13 +80,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
-    private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
+    private PriorityBlockingQueue<OffsetCommitCompletion> completedOffsetCommits;
 
     private boolean isLeader = false;
     private Set<String> joinedSubscription;
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
+
+    private long hashCode = 0L;
+    private long largerHashCode = 0L;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -150,7 +153,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitEnabled = autoCommitEnabled;
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
-        this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
+        this.completedOffsetCommits = new PriorityBlockingQueue<>();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
@@ -166,6 +169,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // method will automatically set to false upon retrieving value
     public boolean isRebalancing(boolean value) {
         return rebalanceInProgress.getAndSet(value);
+    }
+
+    public void setHashCodes(long hashCode1, long hashCode2) {
+        this.hashCode = hashCode1 < hashCode2 ? hashCode1 : hashCode2;
+        this.largerHashCode = hashCode1 > hashCode2 ? hashCode1 : hashCode2;
+    }
+
+    public void setNewQueue(PriorityBlockingQueue<OffsetCommitCompletion> queue) {
+        this.completedOffsetCommits = queue;
+    }
+
+    public PriorityBlockingQueue<OffsetCommitCompletion> getQueue() {
+        return completedOffsetCommits;
     }
 
     @Override
@@ -588,11 +604,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     // visible for testing
     void invokeCompletedOffsetCommitCallbacks() {
+        final ArrayList<OffsetCommitCompletion> completions = new ArrayList<>();
         while (true) {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null)
                 break;
-            completion.invoke();
+            boolean containsMatch =
+                    !completions.isEmpty() && completions.get(completions.size() - 1).hashCode == completion.hashCode;
+            if (completion.hashCode == 0 || containsMatch) {
+                completion.invoke();
+            } else {
+                completions.add(completion);
+            }
+        }
+        for (OffsetCommitCompletion completion : completions) {
+            completedOffsetCommits.add(completion);
         }
     }
 
@@ -622,7 +648,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
                     completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
-                            new RetriableCommitFailedException(e)));
+                            new RetriableCommitFailedException(e), hashCode, largerHashCode));
                 }
             });
         }
@@ -643,7 +669,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
 
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
+                completedOffsetCommits.add(new OffsetCommitCompletion(cb,
+                                                                      offsets,
+                                                                      null,
+                                                                      hashCode,
+                                                                      largerHashCode));
             }
 
             @Override
@@ -653,7 +683,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (e instanceof RetriableException)
                     commitException = new RetriableCommitFailedException(e);
 
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                completedOffsetCommits.add(new OffsetCommitCompletion(cb,
+                                           offsets,
+                                           commitException,
+                                           hashCode,
+                                           largerHashCode));
             }
         });
     }
@@ -1004,22 +1038,41 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private static class OffsetCommitCompletion {
+    public static class OffsetCommitCompletion implements Comparable<OffsetCommitCompletion> {
+        private final long hashCode;
+        private final long largerHashCode;
         private final OffsetCommitCallback callback;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final Exception exception;
 
         private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition,
                                        OffsetAndMetadata> offsets,
-                                       Exception exception) {
+                                       Exception exception,
+                                       long hashCode,
+                                       long largerHashCode) {
             this.callback = callback;
             this.offsets = offsets;
             this.exception = exception;
+            this.hashCode = hashCode;
+            this.largerHashCode = largerHashCode;
         }
 
         public void invoke() {
             if (callback != null)
                 callback.onComplete(offsets, exception);
+        }
+
+        public long getHashCode() {
+            return hashCode;
+        }
+
+        public long getLargerHashCode() {
+            return largerHashCode;
+        }
+
+        @Override
+        public int compareTo(OffsetCommitCompletion o) {
+            return Long.compare(hashCode, o.getHashCode());
         }
     }
 

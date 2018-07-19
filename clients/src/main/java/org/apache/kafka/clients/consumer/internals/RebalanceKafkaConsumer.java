@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.io.Closeable;
@@ -68,6 +69,14 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.optionalInputArgument = null;
         this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
+    }
+
+    public void setHashCodes(long hashCode1, long hashCode2) {
+        coordinator.setHashCodes(hashCode1, hashCode2);
+    }
+
+    public void setNewQueue(PriorityBlockingQueue<ConsumerCoordinator.OffsetCommitCompletion> queue) {
+        coordinator.setNewQueue(queue);
     }
 
     public Map<TopicPartition, ArrayList<OffsetInterval>> getOffsetRanges() {

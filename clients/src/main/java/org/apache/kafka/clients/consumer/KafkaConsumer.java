@@ -103,7 +103,7 @@ import java.util.regex.Pattern;
  * out. It will be one larger than the highest offset the consumer has seen in that partition. It automatically advances
  * every time the consumer receives messages in a call to {@link #poll(Duration)}.
  * <p>
- * The {@link #commitSync() committed position} is the last offset that has been stored securely. Should the
+ * The {@link #() committed position} is the last offset that has been stored securely. Should the
  * process fail and restart, this is the offset that the consumer will recover to. The consumer can either automatically commit
  * offsets periodically; or it can choose to control this committed position manually by calling one of the commit APIs
  * (e.g. {@link #commitSync() commitSync} and {@link #commitAsync(OffsetCommitCallback) commitAsync}).
@@ -1190,6 +1190,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator.isRebalancing(false)) {
                 getStartAndEndOffsets();
                 rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
+                rebalanceConsumer.setNewQueue(coordinator.getQueue());
                 if (!consumerThread.isAlive()) {
                     consumerThread.start();
                 }
@@ -1637,6 +1638,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                                               callback,
                                       null);
                 rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata);
+                rebalanceConsumer.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
+                coordinator.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
                 coordinator.commitOffsetsAsync(parentConsumerMetadata, callback);
             } else {
                 coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
