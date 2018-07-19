@@ -28,6 +28,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -70,6 +71,8 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback)
                 handleCallback((OAuthBearerTokenCallback) callback);
+            else if (callback instanceof SaslExtensionsCallback)
+                tryAttachExtensions((SaslExtensionsCallback) callback, Subject.getSubject(AccessController.getContext()));
             else
                 throw new UnsupportedCallbackException(callback);
         }
@@ -92,5 +95,15 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
                     String.format("Unable to find OAuth Bearer token in Subject's private credentials (size=%d)",
                             privateCredentials.size()));
         callback.token(privateCredentials.iterator().next());
+    }
+
+    /**
+     * Attaches the first Map<String, String> found in the public credentials of the Subject as SASL extensions
+     */
+    private void tryAttachExtensions(SaslExtensionsCallback extensionsCallback, Subject subject) {
+        if (subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+            Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
+            extensionsCallback.extensions(extensions);
+        }
     }
 }

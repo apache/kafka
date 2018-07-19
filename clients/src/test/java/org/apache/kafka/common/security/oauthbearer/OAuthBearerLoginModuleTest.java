@@ -19,9 +19,13 @@ package org.apache.kafka.common.security.oauthbearer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +40,7 @@ import javax.security.auth.login.LoginException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
@@ -43,8 +48,14 @@ public class OAuthBearerLoginModuleTest {
     private static class TestTokenCallbackHandler implements AuthenticateCallbackHandler {
         private final OAuthBearerToken[] tokens;
         private int index = 0;
+        private boolean toHandleExtensionsCallback;
 
         public TestTokenCallbackHandler(OAuthBearerToken[] tokens) {
+            this.toHandleExtensionsCallback = true;
+            this.tokens = Objects.requireNonNull(tokens);
+        }
+        public TestTokenCallbackHandler(OAuthBearerToken[] tokens, boolean toHandleExtensionsCallback) {
+            this.toHandleExtensionsCallback = toHandleExtensionsCallback;
             this.tokens = Objects.requireNonNull(tokens);
         }
 
@@ -57,7 +68,14 @@ public class OAuthBearerLoginModuleTest {
                     } catch (KafkaException e) {
                         throw new IOException(e.getMessage(), e);
                     }
-                else
+                else if (callback instanceof SaslExtensionsCallback) {
+                    if (!toHandleExtensionsCallback)
+                        throw new UnsupportedCallbackException(callback);
+
+                    Map<String, String> extensions = new HashMap<>();
+                    extensions.put("test", "true");
+                    ((SaslExtensionsCallback) callback).extensions(extensions);
+                } else
                     throw new UnsupportedCallbackException(callback);
             }
         }
@@ -85,11 +103,6 @@ public class OAuthBearerLoginModuleTest {
 
     @Test
     public void login1Commit1Login2Commit2Logout1Login3Commit3Logout2() throws LoginException {
-        /*
-         * Invoke login()/commit() on loginModule1; invoke login/commit() on
-         * loginModule2; invoke logout() on loginModule1; invoke login()/commit() on
-         * loginModule3; invoke logout() on loginModule2
-         */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
 
@@ -304,5 +317,53 @@ public class OAuthBearerLoginModuleTest {
         // Now we should have just the third token
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
+    }
+
+    @Test
+    public void loginPopulatesExtensions() throws LoginException {
+        Subject subject = new Subject();
+
+        // Create callback handler
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
+                EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
+        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
+        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens, true);
+
+        // Create login modules
+        OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
+                Collections.<String, Object>emptyMap());
+
+        // Should populate public credentials with an empty map and not throw an exception
+        loginModule1.login();
+        Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
+        assertFalse(extensions.isEmpty());
+        assertEquals("true", extensions.get("test"));
+    }
+
+    /**
+     * 2.1.0 added customizable SASL extensions and a new callback type.
+     * Ensure that old, custom-written callbackHandlers that do not handle the callback work
+     */
+    @Test
+    public void loginDoesNotThrowOnUnsupportedExtensionsCallback() throws LoginException {
+        Subject subject = new Subject();
+
+        // Create callback handler
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
+                EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
+        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
+        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+
+        // Create login modules
+        OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
+                Collections.<String, Object>emptyMap());
+
+        // Should populate public credentials with an empty map and not throw an exception
+        loginModule1.login();
+        Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
+        assertNotNull(extensions);
+        assertTrue(extensions.isEmpty());
     }
 }

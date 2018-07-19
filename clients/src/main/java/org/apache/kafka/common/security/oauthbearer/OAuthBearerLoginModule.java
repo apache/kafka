@@ -31,6 +31,7 @@ import javax.security.auth.spi.LoginModule;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
 import org.slf4j.Logger;
@@ -256,22 +257,51 @@ public class OAuthBearerLoginModule implements LoginModule {
             throw new IllegalStateException(String.format(
                     "Already have a committed token with private credential token count=%d; must login on another login context or logout here first before reusing the same login context",
                     committedTokenCount()));
-        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+
+        attachToken();
+        attachExtensions();
+
+        log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
+                committedTokenCount());
+        return true;
+    }
+
+    private void attachToken() throws LoginException {
+        OAuthBearerTokenCallback tokenCallback = new OAuthBearerTokenCallback();
         try {
-            callbackHandler.handle(new Callback[] {callback});
+            callbackHandler.handle(new Callback[] {tokenCallback});
         } catch (IOException | UnsupportedCallbackException e) {
             log.error(e.getMessage(), e);
             throw new LoginException("An internal error occurred");
         }
-        tokenRequiringCommit = callback.token();
+
+        tokenRequiringCommit = tokenCallback.token();
         if (tokenRequiringCommit == null) {
-            log.info(String.format("Login failed: %s : %s (URI=%s)", callback.errorCode(), callback.errorDescription(),
-                    callback.errorUri()));
-            throw new LoginException(callback.errorDescription());
+            log.info(String.format("Login failed: %s : %s (URI=%s)", tokenCallback.errorCode(), tokenCallback.errorDescription(),
+                    tokenCallback.errorUri()));
+            throw new LoginException(tokenCallback.errorDescription());
         }
-        log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
-                committedTokenCount());
-        return true;
+    }
+
+    /*
+        Attaches SASL extensions to the Subject
+     */
+    private void attachExtensions() throws LoginException {
+        SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
+        try {
+            callbackHandler.handle(new Callback[] {extensionsCallback});
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
+            throw new LoginException("An internal error occurred");
+        } catch (UnsupportedCallbackException e) {
+            log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
+        }
+        Map<String, String> unsecuredExtensions = extensionsCallback.extensions();
+        if (unsecuredExtensions ==  null) {
+            log.error("SASL Extensions cannot be null. Check whether your callback is explicitly setting them as null.");
+            throw new LoginException("Extensions cannot be null.");
+        }
+        subject.getPublicCredentials().add(extensionsCallback.extensions());
     }
 
     @Override

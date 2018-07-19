@@ -34,6 +34,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.utils.Time;
@@ -144,6 +145,8 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
                 } catch (KafkaException e) {
                     throw new IOException(e.getMessage(), e);
                 }
+            else if (callback instanceof SaslExtensionsCallback)
+                continue; // empty extensions
             else
                 throw new UnsupportedCallbackException(callback);
         }
