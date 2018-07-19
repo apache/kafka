@@ -13,32 +13,29 @@
 package kafka.admin
 
 import java.io.IOException
-import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, Future, TimeUnit}
 
 import kafka.common.KafkaException
-import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
+import org.apache.kafka.common.errors.{AuthenticationException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
-import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
@@ -105,40 +102,7 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
-    val requestBuilder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
 
-    def sendRequest: Try[FindCoordinatorResponse] =
-      Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
-
-    val startTime = time.milliseconds
-    var response = sendRequest
-
-    while ((response.isFailure || response.get.error == Errors.COORDINATOR_NOT_AVAILABLE) &&
-      (time.milliseconds - startTime < timeoutMs)) {
-
-      Thread.sleep(retryBackoffMs)
-      response = sendRequest
-    }
-
-    def timeoutException(cause: Throwable) =
-      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", cause)
-
-    response match {
-      case Failure(exception) => throw timeoutException(exception)
-      case Success(response) =>
-        if (response.error == Errors.COORDINATOR_NOT_AVAILABLE)
-          throw timeoutException(response.error.exception)
-        response.error.maybeThrow()
-        response.node
-    }
-  }
-
-  def listGroups(node: Node): List[GroupOverview] = {
-    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
-    response.error.maybeThrow()
-    response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
-  }
 
   def getApiVersions(node: Node): List[ApiVersion] = {
     val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
@@ -165,50 +129,6 @@ class AdminClient(val time: Time,
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
     response.cluster.nodes.asScala.toList
-  }
-
-  def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers().map { broker =>
-      broker -> {
-        try {
-          listGroups(broker)
-        } catch {
-          case e: Exception =>
-            debug(s"Failed to find groups from broker $broker", e)
-            List[GroupOverview]()
-        }
-      }
-    }.toMap
-  }
-
-  def listAllConsumerGroups(): Map[Node, List[GroupOverview]] = {
-    listAllGroups().mapValues { groups =>
-      groups.filter(isConsumerGroup)
-    }
-  }
-
-  def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups().values.flatten.toList
-  }
-
-  def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened().filter(isConsumerGroup)
-  }
-
-  private def isConsumerGroup(group: GroupOverview): Boolean = {
-    // Consumer groups which are using group management use the "consumer" protocol type.
-    // Consumer groups which are only using offset storage will have an empty protocol type.
-    group.protocolType.isEmpty || group.protocolType == ConsumerProtocol.PROTOCOL_TYPE
-  }
-
-  def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
-    val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
-    val response = responseBody.asInstanceOf[OffsetFetchResponse]
-    if (response.hasError)
-      throw response.error.exception
-    response.maybeThrowFirstPartitionError()
-    response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
@@ -242,80 +162,6 @@ class AdminClient(val time: Time,
     metadata
   }
 
-  def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
-
-    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
-      metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
-
-    val startTime = time.milliseconds
-    val coordinator = findCoordinator(groupId, timeoutMs)
-    var metadata = describeConsumerGroupHandler(coordinator, groupId)
-
-    while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
-      debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
-      Thread.sleep(retryBackoffMs)
-      metadata = describeConsumerGroupHandler(coordinator, groupId)
-    }
-
-    if (!isValidConsumerGroupResponse(metadata))
-      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
-
-    val consumers = metadata.members.asScala.map { consumer =>
-      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
-        case "Stable" =>
-          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
-          assignment.partitions.asScala.toList
-        case _ =>
-          List()
-      })
-    }.toList
-
-    ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
-  }
-
-  def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
-
-    def coordinatorLookup(group: String): Either[Node, Errors] = {
-      try {
-        Left(findCoordinator(group))
-      } catch {
-        case e: Throwable =>
-          if (e.isInstanceOf[TimeoutException])
-            Right(Errors.COORDINATOR_NOT_AVAILABLE)
-          else
-            Right(Errors.forException(e))
-      }
-    }
-
-    var errors: Map[String, Errors] = Map()
-    var groupsPerCoordinator: Map[Node, List[String]] = Map()
-
-    groups.foreach { group =>
-      coordinatorLookup(group) match {
-        case Right(error) =>
-          errors += group -> error
-        case Left(coordinator) =>
-          groupsPerCoordinator.get(coordinator) match {
-            case Some(gList) =>
-              val gListNew = group :: gList
-              groupsPerCoordinator += coordinator -> gListNew
-            case None =>
-              groupsPerCoordinator += coordinator -> List(group)
-          }
-      }
-    }
-
-    groupsPerCoordinator.foreach { case (coordinator, groups) =>
-      val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))
-      val response = responseBody.asInstanceOf[DeleteGroupsResponse]
-      groups.foreach {
-        case group if response.hasError(group) => errors += group -> response.errors.get(group)
-        case group => errors += group -> Errors.NONE
-      }
-    }
-
-    errors
-  }
 
   def close() {
     running = false

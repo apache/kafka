@@ -84,17 +84,6 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testListGroups() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    val groups = client.listAllGroupsFlattened
-    assertFalse(groups.isEmpty)
-    val group = groups.head
-    assertEquals(groupId, group.groupId)
-    assertEquals("consumer", group.protocolType)
-  }
-
-  @Test
   def testListAllBrokerVersionInfo() {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
@@ -107,36 +96,6 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
       val brokerVersionInfo = tryBrokerVersionInfo.get
       assertEquals(2, brokerVersionInfo.latestUsableVersion(ApiKeys.API_VERSIONS))
     }
-  }
-
-  @Test
-  def testGetConsumerGroupSummary() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    val group = client.describeConsumerGroup(groupId)
-    assertEquals("range", group.assignmentStrategy)
-    assertEquals("Stable", group.state)
-    assertFalse(group.consumers.isEmpty)
-
-    val member = group.consumers.get.head
-    assertEquals(clientId, member.clientId)
-    assertFalse(member.host.isEmpty)
-    assertFalse(member.consumerId.isEmpty)
-  }
-
-  @Test
-  def testDescribeConsumerGroup() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    val consumerGroupSummary = client.describeConsumerGroup(groupId)
-    assertEquals(1, consumerGroupSummary.consumers.get.size)
-    assertEquals(List(tp, tp2), consumerGroupSummary.consumers.get.flatMap(_.assignment))
-  }
-
-  @Test
-  def testDescribeConsumerGroupForNonExistentGroup() {
-    val nonExistentGroup = "non" + groupId
-    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
