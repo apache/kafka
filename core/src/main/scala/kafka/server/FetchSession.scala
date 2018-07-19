@@ -759,14 +759,13 @@ class FetchManager(private val time: Time,
       cache.synchronized {
         cache.get(reqMetadata.sessionId()) match {
           case None => {
-            debug(s"Created a new error FetchContext for session id ${reqMetadata.sessionId()}: " +
-              "no such session ID found.")
+            debug(s"Session error for ${reqMetadata.sessionId()}: no such session ID found.")
             new SessionErrorContext(Errors.FETCH_SESSION_ID_NOT_FOUND, reqMetadata)
           }
           case Some(session) => session.synchronized {
             if (session.epoch != reqMetadata.epoch()) {
-              debug(s"Created a new error FetchContext for session id ${session.id}: expected " +
-                s"epoch ${session.epoch}, but got epoch ${reqMetadata.epoch()}.")
+              debug(s"Session error for ${reqMetadata.sessionId()}: expected epoch " +
+                s"${session.epoch}, but got ${reqMetadata.epoch()} instead.");
               new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH, reqMetadata)
             } else {
               val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata)
