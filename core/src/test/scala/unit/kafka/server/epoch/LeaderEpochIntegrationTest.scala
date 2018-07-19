@@ -96,13 +96,12 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
     brokers = (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic1, Map(
-      0 -> Seq(100),
-      1 -> Seq(101)
-    ))
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic2, Map(
-      0 -> Seq(100)
-    ))
+
+    val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
+    TestUtils.createTopic(zkClient, topic1, assignment1, brokers)
+
+    val assignment2 = Map(0 -> Seq(100))
+    TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
 
     //Send messages equally to the two partitions, then half as many to a third
     producer = createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1)
@@ -144,7 +143,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     //Setup: we are only interested in the single partition on broker 101
     brokers = Seq(100, 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
     def leo() = brokers(1).replicaManager.getReplica(tp).get.logEndOffset.messageOffset
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(tp.topic, Map(tp.partition -> Seq(101)))
+    TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
     producer = createProducer(getBrokerListStrFromServers(brokers), retries = 10, acks = -1)
 
     //1. Given a single message

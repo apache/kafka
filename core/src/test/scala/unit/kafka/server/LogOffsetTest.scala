@@ -65,7 +65,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
@@ -97,7 +97,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
@@ -157,7 +157,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
 
-    adminZkClient.createTopic(topic, 3, 1)
+    createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
@@ -186,7 +186,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
 
-    adminZkClient.createTopic(topic, 3, 1)
+    createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topicPartition, logManager.initialDefaultConfig)
