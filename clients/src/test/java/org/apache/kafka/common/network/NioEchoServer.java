@@ -159,7 +159,6 @@ public class NioEchoServer extends Thread {
                 if (closeKafkaChannels) {
                     for (KafkaChannel channel : selector.channels())
                         selector.close(channel.id());
-                    closeKafkaChannels = false;
                 }
 
                 List<NetworkReceive> completedReceives = selector.completedReceives();
@@ -220,6 +219,8 @@ public class NioEchoServer extends Thread {
             TestUtils.waitForCondition(() -> selector.channels().isEmpty(), "Channels not closed");
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        } finally {
+            closeKafkaChannels = false;
         }
     }
 
