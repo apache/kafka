@@ -247,14 +247,19 @@ apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache us
 
 jdk7_java_home = get_pref(prefs, 'jdk7', lambda: raw_input("Enter the path for JAVA_HOME for a JDK7 compiler (blank to use default JAVA_HOME): "))
 jdk7_env = dict(os.environ) if jdk7_java_home.strip() else None
-if jdk7_env is not None: jdk7_env['PATH'] = "%s/bin:%s" % (jdk7_java_home, jdk7_env['PATH'])
+if jdk7_env is not None:
+    jdk7_env['JAVA_HOME'] = jdk7_java_home
+    jdk7_env['PATH'] = "%s/bin:%s" % (jdk7_java_home, jdk7_env['PATH'])
 
 if "1.7.0" not in cmd_output("java -version", env=jdk7_env):
     fail("You must be able to build artifacts with JDK7 for Scala 2.10 and 2.11 artifacts")
 
 jdk8_java_home = get_pref(prefs, 'jdk8', lambda: raw_input("Enter the path for JAVA_HOME for a JDK8 compiler (blank to use default JAVA_HOME): "))
 jdk8_env = dict(os.environ) if jdk8_java_home.strip() else None
-if jdk8_env is not None: jdk8_env['PATH'] = "%s/bin:%s" % (jdk8_java_home, jdk8_env['PATH'])
+if jdk8_env is not None:
+    jdk8_env['JAVA_HOME'] = jdk8_java_home
+    jdk8_env['PATH'] = "%s/bin:%s" % (jdk8_java_home, jdk8_env['PATH'])
+
 if "1.8.0" not in cmd_output("java -version", env=jdk8_env):
     fail("You must be able to build artifacts with JDK8 for Scala 2.12 artifacts")
 
