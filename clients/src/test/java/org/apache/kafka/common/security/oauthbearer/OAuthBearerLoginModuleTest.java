@@ -74,7 +74,7 @@ public class OAuthBearerLoginModuleTest {
 
                     Map<String, String> extensions = new HashMap<>();
                     extensions.put("test", "true");
-                    ((SaslExtensionsCallback) callback).extensions(extensions);
+                    ((SaslExtensionsCallback) callback).extensions(Collections.unmodifiableMap(extensions));
                 } else
                     throw new UnsupportedCallbackException(callback);
             }

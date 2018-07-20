@@ -103,7 +103,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
     private void tryAttachExtensions(SaslExtensionsCallback extensionsCallback, Subject subject) {
         if (subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
             Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
-            extensionsCallback.extensions(extensions);
+            extensionsCallback.extensions(Collections.unmodifiableMap(extensions));
         }
     }
 }

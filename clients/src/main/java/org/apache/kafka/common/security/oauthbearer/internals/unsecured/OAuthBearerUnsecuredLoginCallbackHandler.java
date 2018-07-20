@@ -221,7 +221,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
 
             extensions.put(extensionName, configEntry.getValue());
         }
-        callback.extensions(extensions);
+        callback.extensions(Collections.unmodifiableMap(extensions));
     }
 
     private String commaPrependedStringNumberAndListClaimsJsonText() throws OAuthBearerConfigException {

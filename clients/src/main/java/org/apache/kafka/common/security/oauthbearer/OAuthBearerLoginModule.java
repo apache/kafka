@@ -32,6 +32,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.internals.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
 import org.slf4j.Logger;
@@ -93,8 +94,8 @@ import org.slf4j.LoggerFactory;
  * </table>
  * <p>
  * <p>
- * You can also add custom unsecured SASL extensions using
- * {@code unsecuredLoginExtension_<extensionname>}
+ * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
+ * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}
  * <p>
  * Production use cases will require writing an implementation of
  * {@link AuthenticateCallbackHandler} that can handle an instance of
@@ -236,6 +237,8 @@ public class OAuthBearerLoginModule implements LoginModule {
     private AuthenticateCallbackHandler callbackHandler = null;
     private OAuthBearerToken tokenRequiringCommit = null;
     private OAuthBearerToken myCommittedToken = null;
+    private Map<String, String> extensionsRequiringCommit = null;
+    private Map<String, String> myCommittedExtensions = null;
 
     static {
         OAuthBearerSaslClientProvider.initialize(); // not part of public API
@@ -300,12 +303,11 @@ public class OAuthBearerLoginModule implements LoginModule {
         } catch (UnsupportedCallbackException e) {
             log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
         }
-        Map<String, String> unsecuredExtensions = extensionsCallback.extensions();
-        if (unsecuredExtensions ==  null) {
+        extensionsRequiringCommit = extensionsCallback.extensions();
+        if (extensionsRequiringCommit ==  null) {
             log.error("SASL Extensions cannot be null. Check whether your callback is explicitly setting them as null.");
             throw new LoginException("Extensions cannot be null.");
         }
-        subject.getPublicCredentials().add(extensionsCallback.extensions());
     }
 
     @Override
@@ -328,6 +330,18 @@ public class OAuthBearerLoginModule implements LoginModule {
             }
         }
         log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
+
+        log.info("Logging out my extensions");
+        for (Iterator<Map> iterator = subject.getPublicCredentials(Map.class).iterator(); iterator.hasNext();) {
+            Map extensions = iterator.next();
+            if (extensions == myCommittedExtensions) {
+                iterator.remove();
+                myCommittedExtensions = null;
+                break;
+            }
+        }
+        log.info("Done logging out my extensions");
+
         return true;
     }
 
@@ -338,11 +352,22 @@ public class OAuthBearerLoginModule implements LoginModule {
                 log.debug("Nothing here to commit");
             return false;
         }
+        if (extensionsRequiringCommit ==  null) {
+            if (log.isDebugEnabled())
+                log.debug("SASL Extensions cannot be null when committing. Check whether your callback is explicitly setting them as null.");
+            return false;
+        }
+
         log.info("Committing my token; current committed token count = {}", committedTokenCount());
         subject.getPrivateCredentials().add(tokenRequiringCommit);
         myCommittedToken = tokenRequiringCommit;
         tokenRequiringCommit = null;
         log.info("Done committing my token; committed token count is now {}", committedTokenCount());
+
+        subject.getPublicCredentials().add(extensionsRequiringCommit);
+        myCommittedExtensions = extensionsRequiringCommit;
+        extensionsRequiringCommit = null;
+
         return true;
     }
 
@@ -351,6 +376,7 @@ public class OAuthBearerLoginModule implements LoginModule {
         if (tokenRequiringCommit != null) {
             log.info("Login aborted");
             tokenRequiringCommit = null;
+            extensionsRequiringCommit = null;
             return true;
         }
         if (log.isDebugEnabled())

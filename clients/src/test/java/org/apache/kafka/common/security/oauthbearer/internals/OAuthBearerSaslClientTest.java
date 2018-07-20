@@ -29,6 +29,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,7 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
                     if (toThrow)
                         throw new ConfigException(errorMessage);
                     else
-                        ((SaslExtensionsCallback) callback).extensions(testExtensions);
+                        ((SaslExtensionsCallback) callback).extensions(Collections.unmodifiableMap(testExtensions));
                 } else
                     throw new UnsupportedCallbackException(callback);
             }

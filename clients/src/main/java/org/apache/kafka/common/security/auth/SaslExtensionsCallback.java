@@ -29,16 +29,16 @@ public class SaslExtensionsCallback implements Callback {
     private Map<String, String> extensions = Collections.emptyMap();
 
     /**
-     * Returns the extension names and values that are sent by the client to
+     * Returns map of the extension names and values that are sent by the client to
      * the server in the initial client SASL authentication message.
-     * Default is an empty map.
+     * Default is an empty unmodifiable map.
      */
     public Map<String, String> extensions() {
         return extensions;
     }
 
     /**
-     * Sets the SASL extensions on this callback.
+     * Sets the SASL extensions on this callback. Maps passed in should be unmodifiable
      */
     public void extensions(Map<String, String> extensions) {
         this.extensions = extensions;
