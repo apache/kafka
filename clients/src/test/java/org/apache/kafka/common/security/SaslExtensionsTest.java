@@ -35,7 +35,7 @@ public class SaslExtensionsTest {
         extensionsMap.put("who", "me");
         String expectedRepresentation = "what=42,who=me";
 
-        SaslExtensions extensions = new SaslExtensions(extensionsMap);
+        SaslExtensions extensions = new SaslExtensions(extensionsMap, ",");
         String stringRepresentation = extensions.toString();
 
         assertEquals(expectedRepresentation, stringRepresentation);
@@ -45,7 +45,7 @@ public class SaslExtensionsTest {
     public void testExtensionNamesReturnsAllNames() {
         Set<String> expectedNames = new HashSet<>(Arrays.asList("what", "who"));
 
-        SaslExtensions extensions = new SaslExtensions("what=42,who=me");
+        SaslExtensions extensions = new SaslExtensions("what=42,who=me", ",");
         Set<String> receivedNames = extensions.extensionNames();
 
         assertEquals(receivedNames, expectedNames);
@@ -53,7 +53,7 @@ public class SaslExtensionsTest {
 
     @Test
     public void testReturnsExtensionValueByName() {
-        SaslExtensions extensions = new SaslExtensions("what=42,who=me");
+        SaslExtensions extensions = new SaslExtensions("what=42,who=me", ",");
 
 
         assertEquals("42", extensions.extensionValue("what"));

@@ -86,7 +86,8 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
     @Test
     public void testAttachesExtensionsToFirstClientMessage() throws Exception {
-        String expectedToken = "n,,auth=Bearer null,One=1,Two=2,Three=3";
+        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, testExtensions).toBytes(), StandardCharsets.UTF_8);
+
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(false));
 
         String message = new String(client.evaluateChallenge("".getBytes()), StandardCharsets.UTF_8);
@@ -97,7 +98,7 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
     @Test
     public void testNoExtensionsDoesNotAttachAnythingToFirstClientMessage() throws Exception {
         testExtensions.clear();
-        String expectedToken = "n,,auth=Bearer null";
+        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, testExtensions).toBytes(), StandardCharsets.UTF_8);
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(false));
 
         String message = new String(client.evaluateChallenge("".getBytes()), StandardCharsets.UTF_8);

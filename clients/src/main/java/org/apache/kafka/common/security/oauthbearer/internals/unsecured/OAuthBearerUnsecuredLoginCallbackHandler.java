@@ -39,7 +39,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServer;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,9 +214,9 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             String extensionName = key.substring(EXTENSION_PREFIX.length());
             String extensionValue = configEntry.getValue();
 
-            if (!OAuthBearerSaslServer.EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
+            if (!OAuthBearerClientInitialResponse.EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
                 throw new ConfigException("Extension name " + extensionName + " is invalid");
-            if (!OAuthBearerSaslServer.EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
+            if (!OAuthBearerClientInitialResponse.EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
                 throw new ConfigException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
 
             extensions.put(extensionName, configEntry.getValue());

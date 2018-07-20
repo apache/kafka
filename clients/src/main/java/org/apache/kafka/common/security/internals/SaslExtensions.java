@@ -16,25 +16,28 @@
  */
 package org.apache.kafka.common.security.internals;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 public class SaslExtensions {
     protected Map<String, String> extensionMap;
+    protected String separator;
 
-    public SaslExtensions() {
-        this(Collections.<String, String>emptyMap());
+    protected SaslExtensions() {
+        separator = ",";
+        extensionMap = new HashMap<>();
     }
 
-    public SaslExtensions(String extensions) {
-        this(stringToMap(extensions));
+    public SaslExtensions(String extensions, String separator) {
+        this(Utils.parseMap(extensions, "=", ","), separator);
     }
 
-    public SaslExtensions(Map<String, String> extensionMap) {
+    public SaslExtensions(Map<String, String> extensionMap, String separator) {
         this.extensionMap = extensionMap;
+        this.separator = separator;
     }
 
     public String extensionValue(String name) {
@@ -50,35 +53,11 @@ public class SaslExtensions {
         return mapToString(extensionMap);
     }
 
-    /*
-        Converts an extensions string into a Map<String, String>.
-        stringToMap("key=hey,keyTwo=hi,keyThree=hello") => { key: "hey", keyTwo: "hi", keyThree: "hello" }
-     */
-    protected static Map<String, String> stringToMap(String extensions) {
-        Map<String, String> extensionMap = new HashMap<>();
-
-        if (!extensions.isEmpty()) {
-            String[] attrvals = extensions.split(",");
-            for (String attrval : attrvals) {
-                String[] array = attrval.split("=", 2);
-                extensionMap.put(array[0], array[1]);
-            }
-        }
-        return extensionMap;
+    protected Map<String, String> stringToMap(String extensions) {
+        return Utils.parseMap(extensions, "=", ",");
     }
 
-    /*
-        Converts a Map class into an extensions string, concatenating keys and values
-        Example:
-            mapToString({ key: "hello", keyTwo: "hi" }) => "key=hello,keyTwo=hi"
-     */
-    protected static String mapToString(Map<String, String> extensionMap) {
-        ArrayList<String> keyValuePairs = new ArrayList<>();
-
-        for (Map.Entry<String, String> entry : extensionMap.entrySet()) {
-            keyValuePairs.add(entry.getKey() + '=' + entry.getValue());
-        }
-
-        return String.join(",", keyValuePairs);
+    protected String mapToString(Map<String, String> extensionMap) {
+        return Utils.mkString(extensionMap, "", "", "=", separator);
     }
 }

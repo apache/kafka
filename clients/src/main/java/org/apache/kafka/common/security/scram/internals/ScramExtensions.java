@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.scram.internals;
 
 import org.apache.kafka.common.security.internals.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,7 +30,7 @@ public class ScramExtensions extends SaslExtensions {
     }
 
     public ScramExtensions(String extensions) {
-        this(stringToMap(extensions));
+        this(Utils.parseMap(extensions, "=", ","));
     }
 
     public ScramExtensions(Map<String, String> extensionMap) {
@@ -38,5 +39,10 @@ public class ScramExtensions extends SaslExtensions {
 
     public boolean tokenAuthenticated() {
         return Boolean.parseBoolean(extensionMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
+    }
+
+    @Override
+    public String toString() {
+        return Utils.mkString(extensionMap, "", "", "=", separator);
     }
 }

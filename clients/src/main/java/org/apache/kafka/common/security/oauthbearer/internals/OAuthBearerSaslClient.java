@@ -30,7 +30,6 @@ import javax.security.sasl.SaslClientFactory;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.security.internals.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
@@ -93,13 +92,7 @@ public class OAuthBearerSaslClient implements SaslClient {
 
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
 
-                    String message = String.format("n,,auth=Bearer %s", callback.token().value());
-                    if (extensionsCallback.extensions().size() > 0) {
-                        String extensions = new SaslExtensions(extensionsCallback.extensions()).toString();
-                        message += ',' + extensions;
-                    }
-
-                    return message.getBytes(StandardCharsets.UTF_8);
+                    return new OAuthBearerClientInitialResponse(callback.token().value(), extensionsCallback.extensions()).toBytes();
                 case RECEIVE_SERVER_FIRST_MESSAGE:
                     if (challenge != null && challenge.length != 0) {
                         String jsonErrorResponse = new String(challenge, StandardCharsets.UTF_8);

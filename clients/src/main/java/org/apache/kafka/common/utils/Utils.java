@@ -498,6 +498,12 @@ public final class Utils {
         return sb.toString();
     }
 
+    /**
+     *  Converts a Map class into a string, concatenating keys and values
+     *  Example:
+     *      mkString({ key: "hello", keyTwo: "hi" }, "|START|", "|END|", "=", ",")
+     *          => "|START|key=hello,keyTwo=hi|END|"
+     */
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
                                          String keyValueSeparator, String elementSeparator) {
         StringBuilder bld = new StringBuilder();
@@ -510,6 +516,26 @@ public final class Utils {
         }
         bld.append(end);
         return bld.toString();
+    }
+
+    /**
+     *  Converts an extensions string into a Map<String, String>.
+     *
+     *  Example:
+     *      parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }
+     *
+     */
+    public static Map<String, String> parseMap(String mapStr, String keyValueSeparator, String elementSeparator) {
+        Map<String, String> map = new HashMap<>();
+
+        if (!mapStr.isEmpty()) {
+            String[] attrvals = mapStr.split(elementSeparator);
+            for (String attrval : attrvals) {
+                String[] array = attrval.split(keyValueSeparator, 2);
+                map.put(array[0], array[1]);
+            }
+        }
+        return map;
     }
 
     /**
