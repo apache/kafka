@@ -1258,9 +1258,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             client.pollNoWakeup();
         }
 
-        if (consumerThread != null && consumerThread.isAlive() && result == null) {
+        if (consumerThread != null && consumerThread.isAlive()) {
             ConsumerRecords<K, V> offsetLagRecords =
-                    (ConsumerRecords<K, V>) pollForResults(timeoutMs, checkRebalanceStart).value;
+                    result == null ? (ConsumerRecords<K, V>) pollForResults(timeoutMs, checkRebalanceStart).value
+                            : (ConsumerRecords<K, V>) result.value;
             if (offsetLagRecords == null) {
                 return this.interceptors.onConsume(new ConsumerRecords<>(records));
             } else {
