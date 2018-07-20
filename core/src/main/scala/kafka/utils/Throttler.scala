@@ -73,7 +73,7 @@ class Throttler(desiredRatePerSec: Double,
             time.sleep(sleepTime)
           }
         }
-        periodStartNs = now
+        periodStartNs = time.nanoseconds()
         observedSoFar = 0
       }
     }
