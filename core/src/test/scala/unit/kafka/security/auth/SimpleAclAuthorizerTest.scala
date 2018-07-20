@@ -99,6 +99,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Group, "", LITERAL)))
   }
 
+  // Authorizing the empty resource is not supported because we create a znode with the resource name.
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEmptyAclThrowsException(): Unit = {
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Group, "", LITERAL))
+  }
+
   @Test
   def testTopicAcl() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
