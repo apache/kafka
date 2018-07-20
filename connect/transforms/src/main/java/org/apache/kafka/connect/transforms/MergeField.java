@@ -49,9 +49,9 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_ROOT_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,  ConfigDef.Importance.MEDIUM,
-                    "The root fields")
+                    "The root field")
             .define(FIELD_LIST_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-                    "The root fields");
+                    "The list of fields to merge");
 
     private static final String PURPOSE = "merging";
 
@@ -59,7 +59,6 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
     private List<MergeSpec> fieldList;
 
     private Cache<Object, Schema> schemaUpdateCache;
-
 
     public static final class MergeSpec {
         final String name;
