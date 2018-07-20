@@ -565,7 +565,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Fetcher<K, V> fetcher;
     private final ConsumerInterceptors<K, V> interceptors;
 
-    private final Time time;
+    protected final Time time;
     private final ConsumerNetworkClient client;
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
@@ -1270,7 +1270,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return this.interceptors.onConsume(new ConsumerRecords<>(records));
     }
 
-    private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout, final boolean checkRebalance) {
+    protected ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout, final boolean checkRebalance) {
         acquireAndEnsureOpen();
         try {
             if (timeoutMs < 0) throw new IllegalArgumentException("Timeout must not be negative");
@@ -1387,7 +1387,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return fetcher.fetchedRecords();
     }
 
-    private long remainingTimeAtLeastZero(final long timeoutMs, final long elapsedTime) {
+    protected long remainingTimeAtLeastZero(final long timeoutMs, final long elapsedTime) {
         return Math.max(0, timeoutMs - elapsedTime);
     }
 
@@ -1633,17 +1633,33 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer, offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
-                rebalanceConsumer.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
-                rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata);
-                coordinator.setHashCodes(parentConsumerMetadata.hashCode(), childConsumerMetadata.hashCode());
+                final long hashCode1 = parentConsumerMetadata.hashCode();
+                final long hashCode2 = childConsumerMetadata.hashCode();
+
+                rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata, hashCode1, hashCode2);
                 rebalanceConsumer.sendRequest(null,
                         RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
                         callback,
                         null);
-                coordinator.commitOffsetsAsync(parentConsumerMetadata, callback);
+                coordinator.commitOffsetsAsync(parentConsumerMetadata,
+                                               callback,
+                                               hashCode1,
+                                               hashCode2);
             } else {
                 coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
             }
+        } finally {
+            release();
+        }
+    }
+
+    protected void commitAsyncWithHashCodes(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                            OffsetCommitCallback callback,
+                                            final long hashCode1,
+                                            final long hashCode2) {
+        acquireAndEnsureOpen();
+        try {
+            coordinator.commitOffsetsAsync(offsets, callback, hashCode1, hashCode2);
         } finally {
             release();
         }

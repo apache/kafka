@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -49,7 +49,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private RequestResult result;
     private volatile Duration waitTime;
     private volatile Object inputArgument;
-    private volatile Object optionalInputArgument;
+    private volatile Map<TopicPartition, OffsetAndMetadata> offsets;
+    private volatile long hashCode1;
+    private volatile long hashCode2;
     private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
 
@@ -66,13 +68,11 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.result = null;
         this.waitTime = null;
         this.inputArgument = null;
-        this.optionalInputArgument = null;
+        this.offsets = null;
+        this.hashCode1 = 0;
+        this.hashCode2 = 0;
         this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
-    }
-
-    public void setHashCodes(long hashCode1, long hashCode2) {
-        coordinator.setHashCodes(hashCode1, hashCode2);
     }
 
     public void setNewQueue(PriorityBlockingQueue<ConsumerCoordinator.OffsetCommitCompletion> queue) {
@@ -97,8 +97,12 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.callback = callback;
     }
 
-    public void setOptionalInputArgument(Object object) {
-        this.optionalInputArgument = object;
+    public void setOptionalInputArgument(Map<TopicPartition, OffsetAndMetadata> metadata,
+                                         final long hashCode1,
+                                         final long hashCode2) {
+        this.offsets = metadata;
+        this.hashCode1 = hashCode1;
+        this.hashCode2 = hashCode2;
     }
 
     public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
@@ -161,7 +165,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
         if (!terminated()) {
-            return super.poll(timeout.toMillis(), true);
+            return super.poll(timeout.toMillis(), true, false);
         }
         return null;
     }
@@ -199,9 +203,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
-                    super.commitAsync((Map<TopicPartition, OffsetAndMetadata>) optionalInputArgument,
-                                      (OffsetCommitCallback) inputArgument,
-                                     true);
+                    super.commitAsyncWithHashCodes(offsets,
+                                                   (OffsetCommitCallback) inputArgument,
+                                                   hashCode1,
+                                                   hashCode2);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:

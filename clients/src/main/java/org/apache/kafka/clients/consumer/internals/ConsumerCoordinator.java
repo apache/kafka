@@ -88,8 +88,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
 
-    private long hashCode = 0L;
-    private long largerHashCode = 0L;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -169,11 +167,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // method will automatically set to false upon retrieving value
     public boolean isRebalancing(boolean value) {
         return rebalanceInProgress.getAndSet(value);
-    }
-
-    public void setHashCodes(long hashCode1, long hashCode2) {
-        this.hashCode = hashCode1 < hashCode2 ? hashCode1 : hashCode2;
-        this.largerHashCode = hashCode1 > hashCode2 ? hashCode1 : hashCode2;
     }
 
     public void setNewQueue(PriorityBlockingQueue<OffsetCommitCompletion> queue) {
@@ -629,10 +622,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                    final OffsetCommitCallback callback) {
+        commitOffsetsAsync(offsets, callback, 0, 0);
+    }
+
+    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                   final OffsetCommitCallback callback,
+                                   long hashCode1,
+                                   long hashCode2) {
         invokeCompletedOffsetCommitCallbacks();
 
+        if (hashCode1 > hashCode2) {
+            long temp = hashCode1;
+            hashCode1 = hashCode2;
+            hashCode2 = temp;
+        }
+        final long smallerHashCode = hashCode1;
+        final long largerHashCode = hashCode2;
         if (!coordinatorUnknown()) {
-            doCommitOffsetsAsync(offsets, callback);
+            doCommitOffsetsAsync(offsets, callback, smallerHashCode, largerHashCode);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
             // or fail (we don't want recursive retries which can cause offset commits to arrive
@@ -645,7 +652,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
-                    doCommitOffsetsAsync(offsets, callback);
+                    doCommitOffsetsAsync(offsets, callback, smallerHashCode, largerHashCode);
                     client.pollNoWakeup();
                 }
 
@@ -653,7 +660,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
                     completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
-                            new RetriableCommitFailedException(e), hashCode, largerHashCode));
+                            new RetriableCommitFailedException(e), smallerHashCode, largerHashCode));
                 }
             });
         }
@@ -665,7 +672,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                      final OffsetCommitCallback callback) {
+                                      final OffsetCommitCallback callback,
+                                      final long smallerHashCode,
+                                      final long largerHashCode) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
@@ -677,9 +686,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb,
                                                                       offsets,
                                                                       null,
-                                                                      hashCode,
+                                                                      smallerHashCode,
                                                                       largerHashCode));
-                setHashCodes(0, 0);
             }
 
             @Override
@@ -692,9 +700,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb,
                                            offsets,
                                            commitException,
-                                           hashCode,
+                                           smallerHashCode,
                                            largerHashCode));
-                setHashCodes(0, 0);
             }
         });
     }
