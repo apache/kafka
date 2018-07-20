@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals;
 
-import org.apache.kafka.common.security.internals.SaslExtensions;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class OAuthBearerClientInitialResponse {
-    static final String SEPARATOR = "\u0001";
+    public static final String SEPARATOR = "\u0001";
 
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
     private static final String KEY = "[A-Za-z]+";
@@ -41,7 +40,6 @@ public class OAuthBearerClientInitialResponse {
 
     private final String tokenValue;
     private final String authorizationId;
-    private final Map<String, String> properties;
     private SaslExtensions saslExtensions;
 
     public static final Pattern EXTENSION_KEY_PATTERN = Pattern.compile(KEY);
@@ -55,8 +53,8 @@ public class OAuthBearerClientInitialResponse {
         String authzid = matcher.group("authzid");
         this.authorizationId = authzid == null ? "" : authzid;
         String kvPairs = matcher.group("kvpairs");
-        this.properties = Utils.parseMap(kvPairs, "=", SEPARATOR);
-        this.saslExtensions = new SaslExtensions(this.properties, SEPARATOR);
+        Map<String, String> properties = Utils.parseMap(kvPairs, "=", SEPARATOR);
+        this.saslExtensions = new SaslExtensions(properties, SEPARATOR);
         String auth = properties.get(AUTH_KEY);
         if (auth == null)
             throw new SaslException("Invalid OAUTHBEARER client first message: 'auth' not specified");
@@ -72,14 +70,14 @@ public class OAuthBearerClientInitialResponse {
         this.tokenValue = authMatcher.group("token");
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue, Map<String, String> properties) {
+    public OAuthBearerClientInitialResponse(String tokenValue, SaslExtensions properties) {
         this(tokenValue, "", properties);
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, Map<String, String> props) {
+    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions props) {
         this.tokenValue = tokenValue;
         this.authorizationId = authorizationId == null ? "" : authorizationId;
-        this.properties = new HashMap<>(props);
+        this.saslExtensions = props;
     }
 
     public SaslExtensions extensions() {
@@ -88,9 +86,9 @@ public class OAuthBearerClientInitialResponse {
 
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
-        String extensions = "";
-        if (properties.size() > 0)
-            extensions = SEPARATOR + new SaslExtensions(properties, SEPARATOR).toString();
+        String extensions = saslExtensions.toString();
+        if (extensions.length() > 0)
+            extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,
                 SEPARATOR, tokenValue, extensions, SEPARATOR, SEPARATOR);
@@ -107,6 +105,8 @@ public class OAuthBearerClientInitialResponse {
     }
 
     public String propertyValue(String name) {
-        return properties.get(name);
+        if (AUTH_KEY.equals(name))
+            return tokenValue;
+        return saslExtensions.extensionValue(name);
     }
 }

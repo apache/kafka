@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 import org.easymock.EasyMockSupport;
@@ -29,7 +30,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,13 +39,14 @@ import static org.junit.Assert.fail;
 
 public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
-    private Map<String, String> testExtensions = new LinkedHashMap<String, String>() {
+    private Map<String, String> testProperties = new LinkedHashMap<String, String>() {
         {
             put("One", "1");
             put("Two", "2");
             put("Three", "3");
         }
     };
+    private SaslExtensions testExtensions = new SaslExtensions(testProperties, OAuthBearerClientInitialResponse.SEPARATOR);
     private final String errorMessage = "Error as expected!";
 
     public class ExtensionsCallbackHandler implements AuthenticateCallbackHandler {
@@ -74,7 +75,7 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
                     if (toThrow)
                         throw new ConfigException(errorMessage);
                     else
-                        ((SaslExtensionsCallback) callback).extensions(Collections.unmodifiableMap(testExtensions));
+                        ((SaslExtensionsCallback) callback).extensions(testExtensions);
                 } else
                     throw new UnsupportedCallbackException(callback);
             }
@@ -98,8 +99,8 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
     @Test
     public void testNoExtensionsDoesNotAttachAnythingToFirstClientMessage() throws Exception {
-        testExtensions.clear();
-        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, testExtensions).toBytes(), StandardCharsets.UTF_8);
+        testProperties.clear();
+        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, new SaslExtensions(testProperties, OAuthBearerClientInitialResponse.SEPARATOR)).toBytes(), StandardCharsets.UTF_8);
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(false));
 
         String message = new String(client.evaluateChallenge("".getBytes()), StandardCharsets.UTF_8);

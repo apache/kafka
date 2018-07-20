@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.internals;
+package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.utils.Utils;
 
@@ -22,6 +22,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * A simple value object class holding customizable SASL extensions
+ */
 public class SaslExtensions {
     protected Map<String, String> extensionMap;
     protected String separator;
@@ -32,7 +35,7 @@ public class SaslExtensions {
     }
 
     public SaslExtensions(String extensions, String separator) {
-        this(Utils.parseMap(extensions, "=", ","), separator);
+        this(Utils.parseMap(extensions, "=", separator), separator);
     }
 
     public SaslExtensions(Map<String, String> extensionMap, String separator) {
@@ -48,9 +51,25 @@ public class SaslExtensions {
         return extensionMap.keySet();
     }
 
+    public boolean isEmpty() {
+        return extensionMap.isEmpty();
+    }
+
     @Override
     public String toString() {
         return mapToString(extensionMap);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        return extensionMap.equals(((SaslExtensions) o).extensionMap);
+    }
+
+    @Override
+    public int hashCode() {
+        return extensionMap.hashCode();
     }
 
     protected Map<String, String> stringToMap(String extensions) {

@@ -37,6 +37,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
@@ -221,7 +222,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
 
             extensions.put(extensionName, configEntry.getValue());
         }
-        callback.extensions(Collections.unmodifiableMap(extensions));
+        callback.extensions(new SaslExtensions(extensions, OAuthBearerClientInitialResponse.SEPARATOR));
     }
 
     private String commaPrependedStringNumberAndListClaimsJsonText() throws OAuthBearerConfigException {

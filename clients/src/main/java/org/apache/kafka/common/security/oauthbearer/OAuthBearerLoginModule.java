@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -32,7 +33,8 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-import org.apache.kafka.common.security.internals.SaslExtensions;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
 import org.slf4j.Logger;
@@ -237,8 +239,8 @@ public class OAuthBearerLoginModule implements LoginModule {
     private AuthenticateCallbackHandler callbackHandler = null;
     private OAuthBearerToken tokenRequiringCommit = null;
     private OAuthBearerToken myCommittedToken = null;
-    private Map<String, String> extensionsRequiringCommit = null;
-    private Map<String, String> myCommittedExtensions = null;
+    private SaslExtensions extensionsRequiringCommit = null;
+    private SaslExtensions myCommittedExtensions = null;
 
     static {
         OAuthBearerSaslClientProvider.initialize(); // not part of public API
@@ -297,13 +299,14 @@ public class OAuthBearerLoginModule implements LoginModule {
         SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
         try {
             callbackHandler.handle(new Callback[] {extensionsCallback});
+            extensionsRequiringCommit = extensionsCallback.extensions();
         } catch (IOException e) {
             log.error(e.getMessage(), e);
             throw new LoginException("An internal error occurred");
         } catch (UnsupportedCallbackException e) {
+            extensionsRequiringCommit = new SaslExtensions(Collections.emptyMap(), OAuthBearerClientInitialResponse.SEPARATOR);
             log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
         }
-        extensionsRequiringCommit = extensionsCallback.extensions();
         if (extensionsRequiringCommit ==  null) {
             log.error("SASL Extensions cannot be null. Check whether your callback is explicitly setting them as null.");
             throw new LoginException("Extensions cannot be null.");
@@ -332,9 +335,9 @@ public class OAuthBearerLoginModule implements LoginModule {
         log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
 
         log.info("Logging out my extensions");
-        for (Iterator<Map> iterator = subject.getPublicCredentials(Map.class).iterator(); iterator.hasNext();) {
-            Map extensions = iterator.next();
-            if (extensions == myCommittedExtensions) {
+        for (Iterator<SaslExtensions> iterator = subject.getPublicCredentials(SaslExtensions.class).iterator(); iterator.hasNext();) {
+            SaslExtensions extensions = iterator.next();
+            if (myCommittedExtensions.equals(extensions)) {
                 iterator.remove();
                 myCommittedExtensions = null;
                 break;

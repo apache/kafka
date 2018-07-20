@@ -32,6 +32,8 @@ import javax.security.sasl.RealmCallback;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
 
 /**
  * Default callback handler for Sasl clients. The callbacks required for the SASL mechanism
@@ -79,14 +81,23 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
+            } else if (callback instanceof ScramExtensionsCallback) {
+                boolean isGSSAPI = SaslConfigs.GSSAPI_MECHANISM.equals(mechanism);
+                if (isGSSAPI)
+                    return; // extensions are not supported for GSSAPI
+
+                ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
+                if (subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
+                }
             } else if (callback instanceof SaslExtensionsCallback) {
                 boolean isGSSAPI = SaslConfigs.GSSAPI_MECHANISM.equals(mechanism);
                 if (isGSSAPI)
                     return; // extensions are not supported for GSSAPI
 
                 SaslExtensionsCallback sc = (SaslExtensionsCallback) callback;
-                if (subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
-                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
+                if (subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
+                    sc.extensions(subject.getPublicCredentials(SaslExtensions.class).iterator().next());
                 }
             }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");

@@ -18,9 +18,31 @@ package org.apache.kafka.common.security.scram;
 
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 
+import javax.security.auth.callback.Callback;
+import java.util.Collections;
+import java.util.Map;
+
 
 /**
  * @deprecated As of 2.1.0, use {@link SaslExtensionsCallback} instead. This will be removed in a future major release.
  */
 @Deprecated
-public class ScramExtensionsCallback extends SaslExtensionsCallback { }
+public class ScramExtensionsCallback implements Callback {
+    private Map<String, String> extensions = Collections.emptyMap();
+
+    /**
+     * Returns map of the extension names and values that are sent by the client to
+     * the server in the initial client SCRAM authentication message.
+     * Default is an empty unmodifiable map.
+     */
+    public Map<String, String> extensions() {
+        return extensions;
+    }
+
+    /**
+     * Sets the SCRAM extensions on this callback. Maps passed in should be unmodifiable
+     */
+    public void extensions(Map<String, String> extensions) {
+        this.extensions = extensions;
+    }
+}

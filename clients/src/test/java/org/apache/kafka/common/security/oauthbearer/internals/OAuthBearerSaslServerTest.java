@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -143,6 +144,6 @@ public class OAuthBearerSaslServerTest {
         String compactSerialization = token.value();
 
         String tokenValue = compactSerialization + (illegalToken ? "AB" : "");
-        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, customExtensions).toBytes();
+        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, new SaslExtensions(customExtensions, OAuthBearerClientInitialResponse.SEPARATOR)).toBytes();
     }
 }

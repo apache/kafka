@@ -18,29 +18,27 @@
 package org.apache.kafka.common.security.auth;
 
 import javax.security.auth.callback.Callback;
-import java.util.Collections;
-import java.util.Map;
 
 /**
  * Optional callback used for SASL mechanisms if any extensions need to be set
  * in the SASL exchange.
  */
 public class SaslExtensionsCallback implements Callback {
-    private Map<String, String> extensions = Collections.emptyMap();
+    private SaslExtensions extensions;
 
     /**
      * Returns map of the extension names and values that are sent by the client to
      * the server in the initial client SASL authentication message.
      * Default is an empty unmodifiable map.
      */
-    public Map<String, String> extensions() {
+    public SaslExtensions extensions() {
         return extensions;
     }
 
     /**
      * Sets the SASL extensions on this callback. Maps passed in should be unmodifiable
      */
-    public void extensions(Map<String, String> extensions) {
+    public void extensions(SaslExtensions extensions) {
         this.extensions = extensions;
     }
 }

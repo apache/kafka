@@ -30,6 +30,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -72,7 +73,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
             if (callback instanceof OAuthBearerTokenCallback)
                 handleCallback((OAuthBearerTokenCallback) callback);
             else if (callback instanceof SaslExtensionsCallback)
-                tryAttachExtensions((SaslExtensionsCallback) callback, Subject.getSubject(AccessController.getContext()));
+                handleCallback((SaslExtensionsCallback) callback, Subject.getSubject(AccessController.getContext()));
             else
                 throw new UnsupportedCallbackException(callback);
         }
@@ -100,10 +101,10 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
     /**
      * Attaches the first Map<String, String> found in the public credentials of the Subject as SASL extensions
      */
-    private void tryAttachExtensions(SaslExtensionsCallback extensionsCallback, Subject subject) {
-        if (subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
-            Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
-            extensionsCallback.extensions(Collections.unmodifiableMap(extensions));
+    private void handleCallback(SaslExtensionsCallback extensionsCallback, Subject subject) {
+        if (subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
+            SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
+            extensionsCallback.extensions(extensions);
         }
     }
 }

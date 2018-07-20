@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security;
 
-import org.apache.kafka.common.security.internals.SaslExtensions;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.junit.Test;
 
 import java.util.Arrays;
