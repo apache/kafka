@@ -283,24 +283,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * An active task is processable if its buffer contains data for all of its input source topic partitions
      */
     public boolean isProcessable() {
-        final Map<TopicPartition, RecordQueue> partitionQueues = partitionGroup.partitionQueues();
-
-        for (RecordQueue queue : partitionQueues.values()) {
-            // if one of the input partition queue is empty, it is not processable;
-            // however, if its other partition queue is non-empty (numBuffered > 0),
-            // then we will only make it as not-processable for at most WAIT_ON_PARTIAL_INPUT tries.
-            if (queue.isEmpty()) {
-                if (partitionGroup.numBuffered() > 0 && --waits < 0) {
-                    taskMetrics.taskEnforcedProcessSensor.record();
-                    waits = WAIT_ON_PARTIAL_INPUT;
-                    return true;
-                }
-
-                return false;
-            }
+        if (partitionGroup.allPartitionsBuffered()) {
+            return true;
+        } else if (partitionGroup.numBuffered() > 0 && --waits < 0) {
+            taskMetrics.taskEnforcedProcessSensor.record();
+            waits = WAIT_ON_PARTIAL_INPUT;
+            return true;
+        } else {
+            return false;
         }
-
-        return true;
     }
 
     /**

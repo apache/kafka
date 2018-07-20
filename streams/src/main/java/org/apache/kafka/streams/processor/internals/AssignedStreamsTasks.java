@@ -94,7 +94,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 .filter(entry -> entry.getValue().isProcessable())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        for (StreamTask task : processable.values()) {
+        for (final StreamTask task : processable.values()) {
             try {
                 if (task.process()) {
                     processed++;
@@ -113,6 +113,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 throw e;
             }
         }
+
         return processed;
     }
 

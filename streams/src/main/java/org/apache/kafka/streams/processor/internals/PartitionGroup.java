@@ -36,6 +36,7 @@ public class PartitionGroup {
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
     private long streamTime;
     private int totalBuffered;
+    private boolean allBuffered;
 
     public static class RecordInfo {
         RecordQueue queue;
@@ -53,11 +54,11 @@ public class PartitionGroup {
         }
     }
 
-
     PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues) {
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
+        allBuffered = false;
         streamTime = RecordQueue.NOT_KNOWN;
     }
 
@@ -81,6 +82,9 @@ public class PartitionGroup {
 
                 if (!queue.isEmpty()) {
                     nonEmptyQueuesByTime.offer(queue);
+                } else {
+                    // if a certain queue has been drained, reset the flag
+                    allBuffered = false;
                 }
 
                 // Since this was previously a queue with min timestamp,
@@ -112,6 +116,11 @@ public class PartitionGroup {
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
             nonEmptyQueuesByTime.offer(recordQueue);
+
+            // if all partitions now are non-empty, set the flag
+            if (nonEmptyQueuesByTime.size() == partitionQueues.keySet().size()) {
+                allBuffered = true;
+            }
         }
 
         // Adding to this queue could only advance streamTime if it was previously the queue with min timestamp (= streamTime)
@@ -167,6 +176,10 @@ public class PartitionGroup {
 
     int numBuffered() {
         return totalBuffered;
+    }
+
+    boolean allPartitionsBuffered() {
+        return allBuffered;
     }
 
     public void close() {
