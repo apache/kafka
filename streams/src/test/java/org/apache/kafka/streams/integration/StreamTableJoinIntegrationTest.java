@@ -65,9 +65,9 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     public void testShouldAutoShutdownOnIncompleteMetadata() throws InterruptedException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-incomplete");
 
-        KStream<Long, String> notExistStream = builder.stream(INPUT_TOPIC_LEFT + "-not-existed");
+        final KStream<Long, String> notExistStream = builder.stream(INPUT_TOPIC_LEFT + "-not-existed");
 
-        KTable<Long, String> aggregatedTable = notExistStream.leftJoin(rightTable, valueJoiner)
+        final KTable<Long, String> aggregatedTable = notExistStream.leftJoin(rightTable, valueJoiner)
                 .groupBy((key, value) -> key)
                 .reduce((value1, value2) -> value1 + value2);
 
