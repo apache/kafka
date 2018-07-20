@@ -25,9 +25,13 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class MergeFieldTest {
     private final MergeField<SourceRecord> xformKey = new MergeField.Key<>();
@@ -48,6 +52,17 @@ public class MergeFieldTest {
         xformValue.configure(props);
 
         xformValue.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
+    }
+
+
+    @Test(expected = DataException.class)
+    public void topLevelMapRequired() {
+        final Map<String, String> props = new HashMap<>();
+        props.put(MergeField.FIELD_ROOT_CONFIG, "root");
+        props.put(MergeField.FIELD_LIST_CONFIG, "field");
+
+        xformKey.configure(props);
+        xformKey.apply(new SourceRecord(null, null, "topic", 0, null, 42));
     }
 
     @Test
@@ -212,49 +227,30 @@ public class MergeFieldTest {
 
     @Test
     public void testKey() {
+        String rootField = "root";
         final Map<String, String> props = new HashMap<>();
-        props.put(MergeField.FIELD_ROOT_CONFIG, "root");
+        props.put(MergeField.FIELD_ROOT_CONFIG, rootField);
         props.put(MergeField.FIELD_LIST_CONFIG, "*field1, field2");
 
         xformKey.configure(props);
 
-        SchemaBuilder builder = SchemaBuilder.struct();
-        builder.field("field", Schema.INT8_SCHEMA);
-        builder.field("field1", Schema.INT16_SCHEMA);
-        builder.field("field2", Schema.INT32_SCHEMA);
-        Schema keySchema = builder.build();
-
-        Struct record = new Struct(keySchema);
+        final Map<String, Object> record = new HashMap<>();
         record.put("field", (byte) 8);
         record.put("field1", (short) 16);
         record.put("field2", 32);
 
-        SourceRecord transformed =  xformKey.apply(new SourceRecord(null, null, "topic", keySchema, record, null, null));
+        SourceRecord transformed =  xformKey.apply(new SourceRecord(null, null, "topic", null, record, null, null));
 
-
-        builder = SchemaBuilder.struct();
-        builder.field("field1", Schema.INT16_SCHEMA);
-        builder.field("field2", Schema.INT32_SCHEMA);
-        Schema expectedNestedSchema = builder.build();
-
-        builder = SchemaBuilder.struct();
-        builder.field("field", Schema.INT8_SCHEMA);
-        builder.field("field1", Schema.INT16_SCHEMA);
-        builder.field("root", expectedNestedSchema);
-        Schema expectedSchema = builder.build();
-
-
-        Struct expectedNestedRecord = new Struct(expectedNestedSchema);
+        final Map<String, Object> expectedNestedRecord = new HashMap<>();
         expectedNestedRecord.put("field1", (short) 16);
         expectedNestedRecord.put("field2", 32);
 
-
-        Struct expectedRecord = new Struct(expectedSchema);
+        final Map<String, Object> expectedRecord = new HashMap<>();
         expectedRecord.put("field", (byte) 8);
         expectedRecord.put("field1", (short) 16);
-        expectedRecord.put("root", expectedNestedRecord);
+        expectedRecord.put(rootField, expectedNestedRecord);
 
-
+        assertNull(transformed.keySchema());
         assertEquals(transformed.key(), expectedRecord);
     }
 

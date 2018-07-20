@@ -28,11 +28,13 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
 public abstract class MergeField<R extends ConnectRecord<R>> implements Transformation<R> {
@@ -96,7 +98,20 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
 
     @Override
     public R apply(R record) {
+        if (operatingSchema(record) == null)
+            return applySchemaless(record);
+        else
+            return applyWithSchema(record);
+    }
 
+    private R applySchemaless(R record) {
+        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+        final Map<String, Object> newValue = buildNewSchemalessValue(value);
+
+        return newRecord(record, null, newValue);
+    }
+
+    private R applyWithSchema(R record) {
         Schema newSchema = makeUpdatedSchema(operatingSchema(record), fieldRoot, fieldList);
         Schema structSchema = buildNewStructSchema(operatingSchema(record), fieldList);
         Struct newValue = buildNewValue(record, newSchema, structSchema);
@@ -105,7 +120,27 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
     }
 
 
-    public Struct buildNewValue(R record, Schema newSchema, Schema rootSchema) {
+    private Map<String, Object> buildNewSchemalessValue(Map<String, Object> value) {
+
+
+        Map<String, Object> newValue = value;
+        Map<String, Object> nestedValue = new LinkedHashMap<>();
+
+        fieldList.stream().forEach(field -> {
+            nestedValue.put(field.name, value.get(field.name));
+
+            if (!field.keepIt)
+                newValue.remove(field.name);
+        });
+
+        newValue.put(fieldRoot, nestedValue);
+
+        return newValue;
+
+    }
+
+
+    private Struct buildNewValue(R record, Schema newSchema, Schema rootSchema) {
 
         final Struct value = requireStruct(operatingValue(record), PURPOSE);
         final Struct updatedValue = new Struct(newSchema);
@@ -149,7 +184,7 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
 
     public Schema makeUpdatedSchema(Schema schema, String fieldRoot, List<MergeSpec> fieldList) {
 
-        return Optional.ofNullable(schemaUpdateCache.get(schema)).orElseGet( () -> {
+        return Optional.ofNullable(schemaUpdateCache.get(schema)).orElseGet(() -> {
 
             final SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema);
 
