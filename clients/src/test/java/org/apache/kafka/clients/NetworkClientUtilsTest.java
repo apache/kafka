@@ -19,7 +19,10 @@ package org.apache.kafka.clients;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -34,31 +37,33 @@ public class NetworkClientUtilsTest {
         final NetworkClient client = EasyMock.mock(NetworkClient.class);
         EasyMock.expect(client.isReady(EasyMock.anyObject(Node.class), EasyMock.anyLong())).andReturn(false).anyTimes();
         EasyMock.expect(client.ready(EasyMock.anyObject(Node.class), EasyMock.anyLong())).andReturn(false).anyTimes();
-        EasyMock.expect(client.connectionFailed(EasyMock.anyObject(Node.class))).andReturn(false).anyTimes();
+        EasyMock.expect(client.connectionFailed(EasyMock.anyObject(Node.class))).andReturn(false);
+        EasyMock.expect(client.connectionFailed(EasyMock.anyObject(Node.class))).andReturn(true);
         EasyMock.expect(client.authenticationException(EasyMock.anyObject(Node.class))).andReturn(null).anyTimes();
         EasyMock.expect(client.poll(EasyMock.anyLong(), EasyMock.anyLong())).andReturn(null).anyTimes();
         EasyMock.replay(client);
 
-        final AtomicBoolean canRun = new AtomicBoolean(false);
+        final AtomicBoolean throwInterruptException = new AtomicBoolean(false);
         Thread networkClientThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    while (!canRun.get()) { }
-                    NetworkClientUtils.awaitReady(client, node, time, Integer.MAX_VALUE);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    return;
-                } catch (Exception ignored) {
-                    ignored.printStackTrace();
-                }
-                Assert.fail();
+                    TestUtils.waitForCondition(new TestCondition() {
+                        @Override
+                        public boolean conditionMet() {
+                            return Thread.currentThread().isInterrupted();
+                        }
+                    }, "Wait until the thread is interrupted");
+                    NetworkClientUtils.awaitReady(client, node, time, 1000);
+                } 
+                catch (InterruptException ignored) { throwInterruptException.set(true); } 
+                catch (Exception ignored) { }
             }
         });
         networkClientThread.start();
         networkClientThread.interrupt();
-        canRun.set(true);
         networkClientThread.join();
+        Assert.assertTrue(throwInterruptException.get());
     }
 
     @Test
@@ -69,27 +74,28 @@ public class NetworkClientUtilsTest {
         EasyMock.expect(client.poll(EasyMock.anyLong(), EasyMock.anyLong())).andReturn(null).anyTimes();
         EasyMock.replay(client);
 
-        final AtomicBoolean canRun = new AtomicBoolean(false);
+        final AtomicBoolean throwInterruptException = new AtomicBoolean(false);
         Thread networkClientThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    while (!canRun.get()) { }
+                    TestUtils.waitForCondition(new TestCondition() {
+                        @Override
+                        public boolean conditionMet() {
+                            return Thread.currentThread().isInterrupted();
+                        }
+                    }, "Wait until the thread is interrupted");
                     NetworkClientUtils.sendAndReceive(client,
                             new ClientRequest(node.idString(), null, 0, "mock",
                                     time.milliseconds(), false, null), time);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    return;
-                } catch (Exception ignored) {
-                    ignored.printStackTrace();
                 }
-                Assert.fail();
+                catch (InterruptException ignored) { throwInterruptException.set(true); }
+                catch (Exception ignored) { }
             }
         });
         networkClientThread.start();
         networkClientThread.interrupt();
-        canRun.set(true);
         networkClientThread.join();
+        Assert.assertTrue(throwInterruptException.get());
     }
 }

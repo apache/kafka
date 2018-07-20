@@ -18,6 +18,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.Time;
 
 import java.io.IOException;
@@ -55,7 +56,7 @@ public final class NetworkClientUtils {
      * care.
      */
     public static boolean awaitReady(KafkaClient client, Node node, Time time, long timeoutMs)
-        throws IOException, InterruptedException {
+        throws IOException, InterruptException {
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout needs to be greater than 0");
         }
@@ -74,9 +75,7 @@ public final class NetworkClientUtils {
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
-            if (Thread.interrupted()) {
-                throw new InterruptedException(String.format("%s gets interrupted", Thread.currentThread().getName()));
-            }
+            maybeThrowInterruptException();
             attemptStartTime = time.milliseconds();
         }
         return client.isReady(node, attemptStartTime);
@@ -92,13 +91,11 @@ public final class NetworkClientUtils {
      * care.
      */
     public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time)
-        throws IOException, InterruptedException {
+        throws IOException, InterruptException {
         client.send(request, time.milliseconds());
         while (true) {
             List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
-            if (Thread.interrupted()) {
-                throw new InterruptedException(String.format("%s gets interrupted", Thread.currentThread().getName()));
-            }
+            maybeThrowInterruptException();
             for (ClientResponse response : responses) {
                 if (response.requestHeader().correlationId() == request.correlationId()) {
                     if (response.wasDisconnected()) {
@@ -110,6 +107,12 @@ public final class NetworkClientUtils {
                     return response;
                 }
             }
+        }
+    }
+
+    private static void maybeThrowInterruptException() {
+        if (Thread.interrupted()) {
+            throw new InterruptException(new InterruptedException());
         }
     }
 }
