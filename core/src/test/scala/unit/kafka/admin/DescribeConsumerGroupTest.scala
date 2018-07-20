@@ -16,9 +16,11 @@
  */
 package kafka.admin
 
+import java.util.Properties
+
 import joptsimple.OptionException
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.RoundRobinAssignor
+import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{TimeoutException}
 import org.junit.Assert._
@@ -603,6 +605,30 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--describe", "--group", group)
     getConsumerGroupService(cgcArgs)
     fail("Expected an error due to presence of unrecognized --new-consumer option")
+  }
+
+  @Test
+  def testDescribeNonOffsetCommitGroup() {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    val customProps = new Properties
+    // create a consumer group that never commits offsets
+    customProps.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    // run one consumer in the group consuming from a single-partition topic
+    addConsumerGroupExecutor(numConsumers = 1, customPropsOpt = Some(customProps))
+
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val service = getConsumerGroupService(cgcArgs)
+
+    TestUtils.waitUntilTrue(() => {
+      val (state, assignments) = service.collectGroupOffsets()
+      state.contains("Stable") &&
+        assignments.isDefined &&
+        assignments.get.count(_.group == group) == 1 &&
+        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
+    }, s"Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for non-offset-committing group $group.")
   }
 
 }
