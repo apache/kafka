@@ -103,9 +103,9 @@ class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamTo
   }
 
   def produceNConsume(userClicksTopic: String,
-                              userRegionsTopic: String,
-                              outputTopic: String,
-                              waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
+                      userRegionsTopic: String,
+                      outputTopic: String,
+                      waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
 
     import collection.JavaConverters._
 
@@ -129,7 +129,9 @@ class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamTo
       // consume and verify result
       val consumerConfig = getConsumerConfig()
 
-          IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedClicksPerRegion.size)
+      IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
+                                                               outputTopic,
+                                                               expectedClicksPerRegion.size)
     } else {
       java.util.Collections.emptyList()
     }
