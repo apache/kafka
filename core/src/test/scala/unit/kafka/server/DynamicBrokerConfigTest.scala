@@ -182,6 +182,9 @@ class DynamicBrokerConfigTest extends JUnitSuite {
       expectFailure = false)
     verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpOverridesProp, "hostName1:100,hostName2:0", perBrokerConfig = false,
       expectFailure = false)
+    //test invalid address
+    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpOverridesProp, "hostName#:100", perBrokerConfig = true,
+      expectFailure = true)
   }
 
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean) {
