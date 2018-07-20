@@ -947,6 +947,10 @@ public class ConfigDef {
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
+
+        public String toString() {
+            return "non-null string";
+        }
     }
 
     public static class CompositeValidator implements Validator {
