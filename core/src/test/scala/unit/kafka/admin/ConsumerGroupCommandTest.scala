@@ -118,7 +118,7 @@ object ConsumerGroupCommandTest {
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
     val props = new Properties
     configure(props)
-    customPropsOpt.foreach(props.putAll(_))
+    customPropsOpt.foreach(props.asScala ++= _.asScala)
     val consumer = new KafkaConsumer(props)
 
     def configure(props: Properties): Unit = {
