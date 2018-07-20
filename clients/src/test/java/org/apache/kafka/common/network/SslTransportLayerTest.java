@@ -699,7 +699,8 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeRead() throws Exception {
-        testIOExceptionsDuringHandshake(true, false);
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.THROW_IO_EXCEPTION, FailureAction.NO_OP);
     }
 
     /**
@@ -707,20 +708,60 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testIOExceptionsDuringHandshakeWrite() throws Exception {
-        testIOExceptionsDuringHandshake(false, true);
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, FailureAction.THROW_IO_EXCEPTION);
     }
 
-    private void testIOExceptionsDuringHandshake(boolean failRead, boolean failWrite) throws Exception {
+    /**
+     * Tests that if the remote end closes connection ungracefully  during SSL handshake while reading data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testUngracefulRemoteCloseDuringHandshakeRead() throws Exception {
         server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(server::closeSocketChannels, FailureAction.NO_OP);
+    }
+
+    /**
+     * Tests that if the remote end closes connection ungracefully during SSL handshake while writing data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testUngracefulRemoteCloseDuringHandshakeWrite() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeSocketChannels);
+    }
+
+    /**
+     * Tests that if the remote end closes the connection during SSL handshake while reading data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testGracefulRemoteCloseDuringHandshakeRead() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeKafkaChannels);
+    }
+
+    /**
+     * Tests that if the remote end closes the connection during SSL handshake while writing data,
+     * the disconnection is not treated as an authentication failure.
+     */
+    @Test
+    public void testGracefulRemoteCloseDuringHandshakeWrite() throws Exception {
+        server = createEchoServer(SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(server::closeKafkaChannels, FailureAction.NO_OP);
+    }
+
+    private void testIOExceptionsDuringHandshake(FailureAction readFailureAction,
+                                                 FailureAction flushFailureAction) throws Exception {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
-            int readFailureIndex = failRead ? i : Integer.MAX_VALUE;
-            int flushFailureIndex = failWrite ? i : Integer.MAX_VALUE;
             String node = String.valueOf(i);
 
-            channelBuilder.readFailureIndex = readFailureIndex;
-            channelBuilder.flushFailureIndex = flushFailureIndex;
+            channelBuilder.readFailureAction = readFailureAction;
+            channelBuilder.flushFailureAction = flushFailureAction;
+            channelBuilder.failureIndex = i;
             channelBuilder.configure(sslClientConfigs);
             this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
 
@@ -734,7 +775,9 @@ public class SslTransportLayerTest {
                     break;
                 }
                 if (selector.disconnected().containsKey(node)) {
-                    assertEquals(ChannelState.State.AUTHENTICATE, selector.disconnected().get(node).state());
+                    ChannelState.State state = selector.disconnected().get(node).state();
+                    assertTrue("Unexpected channel state " + state,
+                            state == ChannelState.State.AUTHENTICATE || state == ChannelState.State.READY);
                     break;
                 }
             }
@@ -973,13 +1016,23 @@ public class SslTransportLayerTest {
         return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
     }
 
+    @FunctionalInterface
+    private interface FailureAction {
+        FailureAction NO_OP = () -> { };
+        FailureAction THROW_IO_EXCEPTION = () -> {
+            throw new IOException("Test IO exception");
+        };
+        void run() throws IOException;
+    }
+
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
         private Integer appBufSizeOverride;
-        long readFailureIndex = Long.MAX_VALUE;
-        long flushFailureIndex = Long.MAX_VALUE;
+        private long failureIndex = Long.MAX_VALUE;
+        FailureAction readFailureAction = FailureAction.NO_OP;
+        FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(Mode mode) {
@@ -1029,8 +1082,8 @@ public class SslTransportLayerTest {
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);
-                numReadsRemaining = new AtomicLong(readFailureIndex);
-                numFlushesRemaining = new AtomicLong(flushFailureIndex);
+                numReadsRemaining = new AtomicLong(failureIndex);
+                numFlushesRemaining = new AtomicLong(failureIndex);
                 numDelayedFlushesRemaining = new AtomicInteger(flushDelayCount);
             }
 
@@ -1058,14 +1111,14 @@ public class SslTransportLayerTest {
             @Override
             protected int readFromSocketChannel() throws IOException {
                 if (numReadsRemaining.decrementAndGet() == 0 && !ready())
-                    throw new IOException("Test exception during read");
+                    readFailureAction.run();
                 return super.readFromSocketChannel();
             }
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
                 if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
-                    throw new IOException("Test exception during write");
+                    flushFailureAction.run();
                 else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
                     return false;
                 resetDelayedFlush();

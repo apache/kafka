@@ -93,7 +93,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -197,19 +196,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
-            throws InterruptedException {
-        try {
-            future.get();
-            fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
-        } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            assertEquals("Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                            cause.getClass().getSimpleName(),
-                    exceptionClass, cause.getClass());
-        }
-    }
-
     /**
      * Test that the client properly times out when we don't receive any metadata.
      */
@@ -228,7 +214,7 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(1000)).all();
-            assertFutureError(future, TimeoutException.class);
+            TestUtils.assertFutureError(future, TimeoutException.class);
         }
     }
 
@@ -306,7 +292,7 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> future = env.adminClient().createTopics(
                 Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                 new CreateTopicsOptions().timeoutMs(1000)).all();
-            assertFutureError(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureError(future, SaslAuthenticationException.class);
         }
     }
 
@@ -401,14 +387,14 @@ public class KafkaAdminClientTest {
             List<String> sillyTopicNames = asList("", null);
             Map<String, KafkaFuture<Void>> deleteFutures = env.adminClient().deleteTopics(sillyTopicNames).values();
             for (String sillyTopicName : sillyTopicNames) {
-                assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
 
             Map<String, KafkaFuture<TopicDescription>> describeFutures =
                     env.adminClient().describeTopics(sillyTopicNames).values();
             for (String sillyTopicName : sillyTopicNames) {
-                assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
 
@@ -419,7 +405,7 @@ public class KafkaAdminClientTest {
 
             Map<String, KafkaFuture<Void>> createFutures = env.adminClient().createTopics(newTopics).values();
             for (String sillyTopicName : sillyTopicNames) {
-                assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
+                TestUtils.assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
         }
@@ -564,7 +550,7 @@ public class KafkaAdminClientTest {
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
                 new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.<AclBinding>emptySet()));
-            assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
+            TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
         }
     }
 
@@ -590,9 +576,9 @@ public class KafkaAdminClientTest {
             ));
             results = env.adminClient().createAcls(asList(ACL1, ACL2));
             assertCollectionIs(results.values().keySet(), ACL1, ACL2);
-            assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);
+            TestUtils.assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);
             results.values().get(ACL2).get();
-            assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
         }
     }
 
@@ -614,8 +600,8 @@ public class KafkaAdminClientTest {
             assertEquals(ACL1, filter1Results.values().get(0).binding());
             assertEquals(null, filter1Results.values().get(1).exception());
             assertEquals(ACL2, filter1Results.values().get(1).binding());
-            assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
-            assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
+            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where one deletion result has an error.
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
@@ -624,7 +610,7 @@ public class KafkaAdminClientTest {
                     new AclFilterResponse(Collections.<AclDeletionResult>emptySet()))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
-            assertFutureError(results.all(), SecurityDisabledException.class);
+            TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
@@ -673,7 +659,7 @@ public class KafkaAdminClientTest {
                     return result.listings().isDone();
                 }
             }, "Timed out waiting for listTopics to complete");
-            assertFutureError(result.listings(), TimeoutException.class);
+            TestUtils.assertFutureError(result.listings(), TimeoutException.class);
             log.info("Verified the error result of AdminClient#listTopics");
 
             // The next request should succeed.
@@ -904,7 +890,7 @@ public class KafkaAdminClientTest {
                     node2);
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            assertFutureError(result.all(), CoordinatorNotAvailableException.class);
+            TestUtils.assertFutureError(result.all(), CoordinatorNotAvailableException.class);
             Collection<ConsumerGroupListing> listings = result.valid().get();
             assertEquals(2, listings.size());
             for (ConsumerGroupListing listing : listings) {
@@ -947,7 +933,7 @@ public class KafkaAdminClientTest {
                             Collections.emptyList()));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            assertFutureError(result.all(), KafkaException.class);
+            TestUtils.assertFutureError(result.all(), KafkaException.class);
         }
     }
 
@@ -1091,7 +1077,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
 
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
-            assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
+            TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
         }
     }

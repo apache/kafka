@@ -82,6 +82,10 @@ public class OAuthBearerClientInitialResponse {
         this.properties = new HashMap<>(props);
     }
 
+    public SaslExtensions extensions() {
+        return saslExtensions;
+    }
+
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
         String extensions = "";
@@ -92,10 +96,6 @@ public class OAuthBearerClientInitialResponse {
                 SEPARATOR, tokenValue, extensions, SEPARATOR, SEPARATOR);
 
         return message.getBytes(StandardCharsets.UTF_8);
-    }
-
-    public SaslExtensions extensions() {
-        return saslExtensions;
     }
 
     public String tokenValue() {

@@ -63,7 +63,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
@@ -261,12 +260,18 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
+            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+                log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
+                streamThread.shutdown();
+                streamThread.setStateListener(null);
+                return;
+            }
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
-                if (!streamThread.versionProbingFlag.get()) {
+                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.code()) {
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
@@ -302,8 +307,8 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    if (streamThread.versionProbingFlag.get()) {
-                        streamThread.versionProbingFlag.set(false);
+                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
                     } else {
                         taskManager.suspendTasksAndState();
                     }
@@ -563,7 +568,7 @@ public class StreamThread extends Thread {
     private final String logPrefix;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
-    private final AtomicBoolean versionProbingFlag;
+    private final AtomicInteger assignmentErrorCode;
 
     private long lastCommitMs;
     private long timerStartedMs;
@@ -657,8 +662,8 @@ public class StreamThread extends Thread {
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, threadClientId);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        final AtomicBoolean versionProbingFlag = new AtomicBoolean();
-        consumerConfigs.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, versionProbingFlag);
+        final AtomicInteger assignmentErrorCode = new AtomicInteger();
+        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -679,7 +684,7 @@ public class StreamThread extends Thread {
             builder,
             threadClientId,
             logContext,
-            versionProbingFlag);
+            assignmentErrorCode);
     }
 
     public StreamThread(final Time time,
@@ -693,7 +698,7 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
                         final LogContext logContext,
-                        final AtomicBoolean versionProbingFlag) {
+                        final AtomicInteger assignmentErrorCode) {
         super(threadClientId);
 
         this.stateLock = new Object();
@@ -710,7 +715,7 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
-        this.versionProbingFlag = versionProbingFlag;
+        this.assignmentErrorCode = assignmentErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -765,7 +770,7 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
-                if (versionProbingFlag.get()) {
+                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
                     enforceRebalance();
                 }

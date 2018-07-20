@@ -43,6 +43,7 @@ import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetA
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.RetriableException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -304,11 +305,26 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: KafkaZkClient, topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+  def createTopic(zkClient: KafkaZkClient,
+                  topic: String,
+                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
                   servers: Seq[KafkaServer]): scala.collection.immutable.Map[Int, Int] = {
+    createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
+  }
+
+  /**
+   * Create a topic in ZooKeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(zkClient: KafkaZkClient,
+                  topic: String,
+                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+                  servers: Seq[KafkaServer],
+                  topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment)
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { case i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -772,17 +788,33 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wait until the given condition is true or throw an exception if the given wait time elapses.
-   */
+    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    *
+    * @param condition condition to check
+    * @param msg error message
+    * @param waitTime maximum time to wait and retest the condition before failing the test
+    * @param pause delay between condition checks
+    * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
+    */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
+                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
     val startTime = System.currentTimeMillis()
+    var retry = 0
     while (true) {
-      if (condition())
-        return
-      if (System.currentTimeMillis() > startTime + waitTime)
-        fail(msg)
-      Thread.sleep(waitTime.min(pause))
+      try {
+        if (condition())
+          return
+        if (System.currentTimeMillis() > startTime + waitTime)
+          fail(msg)
+        Thread.sleep(waitTime.min(pause))
+      }
+      catch {
+        case e: RetriableException if retry < maxRetries => {
+          debug("Retrying after error", e)
+          retry += 1
+        }
+        case e : Throwable => throw e
+      }
     }
     // should never hit here
     throw new RuntimeException("unexpected error")

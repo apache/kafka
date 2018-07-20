@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
@@ -52,7 +53,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
   }
 
   @After
@@ -131,7 +132,7 @@ object ConsumerGroupCommandTest {
       try {
         subscribe()
         while (true)
-          consumer.poll(Long.MaxValue)
+          consumer.poll(Duration.ofMillis(Long.MaxValue))
       } catch {
         case _: WakeupException => // OK
       } finally {
