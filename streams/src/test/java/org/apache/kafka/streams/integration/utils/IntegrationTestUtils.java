@@ -52,7 +52,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
