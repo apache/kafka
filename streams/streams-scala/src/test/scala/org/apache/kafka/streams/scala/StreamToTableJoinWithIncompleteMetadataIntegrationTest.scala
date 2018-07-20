@@ -52,7 +52,7 @@ class StreamToTableJoinWithIncompleteMetadataIntegrationTest extends StreamToTab
 
     val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
 
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic+"1")
+    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic + "1")
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTable[String, Long] =
