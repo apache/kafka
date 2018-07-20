@@ -727,7 +727,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static class InternalConfig {
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
-        public static final String VERSION_PROBING_FLAG = "__version.probing.flag__";
+        public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
     }
 
     /**
