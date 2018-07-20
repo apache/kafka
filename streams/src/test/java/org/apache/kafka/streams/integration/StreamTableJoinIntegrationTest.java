@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.streams.KafkaStreamsWrapper;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -30,6 +33,8 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 
 
 /**
@@ -54,6 +59,31 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         builder = new StreamsBuilder();
         rightTable = builder.table(INPUT_TOPIC_RIGHT);
         leftStream = builder.stream(INPUT_TOPIC_LEFT);
+    }
+
+    @Test
+    public void testShouldAutoShutdownOnIncompleteMetadata() throws InterruptedException {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-incomplete");
+
+        final KStream<Long, String> notExistStream = builder.stream(INPUT_TOPIC_LEFT + "-not-existed");
+
+        final KTable<Long, String> aggregatedTable = notExistStream.leftJoin(rightTable, valueJoiner)
+                .groupBy((key, value) -> key)
+                .reduce((value1, value2) -> value1 + value2);
+
+        // Write the (continuously updating) results to the output topic.
+        aggregatedTable.toStream().to(OUTPUT_TOPIC);
+
+        final KafkaStreamsWrapper streams = new KafkaStreamsWrapper(builder.build(), STREAMS_CONFIG);
+        final IntegrationTestUtils.StateListenerStub listener = new IntegrationTestUtils.StateListenerStub();
+        streams.setStreamThreadStateListener(listener);
+        streams.start();
+
+        TestUtils.waitForCondition(listener::revokedToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
+
+        streams.close();
+        assertEquals(listener.runningToRevokedSeen(), true);
+        assertEquals(listener.revokedToPendingShutdownSeen(), true);
     }
 
     @Test
