@@ -1020,6 +1020,10 @@ public class ConfigDef {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
             }
         }
+
+        public String toString() {
+            return "non-empty string without ISO control characters";
+        }
     }
 
     public static class ConfigKey {
