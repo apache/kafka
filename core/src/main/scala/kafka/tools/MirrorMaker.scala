@@ -30,7 +30,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
 import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
@@ -493,7 +493,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] class MirrorMakerProducer(val sync: Boolean, val producerProps: Properties) {
 
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
+    val producer = if (producerProps.contains("producer.class")) {
+      val producerClazz = producerProps.getProperty("producer.class")
+      Class.forName(producerClazz).getConstructor(classOf[Properties])
+        .newInstance(producerProps).asInstanceOf[Producer[Array[Byte], Array[Byte]]]
+    } else {
+      new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
+    }
 
     def send(record: ProducerRecord[Array[Byte], Array[Byte]]) {
       if (sync) {
