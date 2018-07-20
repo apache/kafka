@@ -49,15 +49,15 @@ import org.slf4j.LoggerFactory;
  * for example).
  */
 public class OAuthBearerSaslServer implements SaslServer {
+    public static final Pattern EXTENSION_KEY_PATTERN = Pattern.compile("[A-Za-z]+");
+    public static final Pattern EXTENSION_VALUE_PATTERN = Pattern.compile("[\\x01-\\x7F]+");
+
     private static final String INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE = "Invalid OAUTHBEARER client first message";
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerSaslServer.class);
     private static final String NEGOTIATED_PROPERTY_KEY_TOKEN = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token";
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
-    private static final String KEY = "[A-Za-z]+";
-    private static final String VALUE = "[\\x01-\\x7F]+";
-    private static final String EXTENSIONS = String.format("(,%s=%s)*", KEY, VALUE);
-
+    private static final String EXTENSIONS = String.format("(,%s=%s)*", EXTENSION_KEY_PATTERN, EXTENSION_VALUE_PATTERN);
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format(
                     "n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)(?<extensions>%s)",

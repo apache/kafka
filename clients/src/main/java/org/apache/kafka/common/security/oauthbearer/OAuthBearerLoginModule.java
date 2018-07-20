@@ -92,6 +92,10 @@ import org.slf4j.LoggerFactory;
  * </tr>
  * </table>
  * <p>
+ * <p>
+ * You can also add custom unsecured SASL extensions using
+ * {@code unsecuredLoginExtension_<extensionname>}
+ * <p>
  * Production use cases will require writing an implementation of
  * {@link AuthenticateCallbackHandler} that can handle an instance of
  * {@link OAuthBearerTokenCallback} and declaring it via either the

@@ -45,16 +45,16 @@ import org.easymock.EasyMock;
 import org.junit.Test;
 
 public class OAuthBearerLoginModuleTest {
-    private static class TestTokenCallbackHandler implements AuthenticateCallbackHandler {
+    private static class TestCallbackHandler implements AuthenticateCallbackHandler {
         private final OAuthBearerToken[] tokens;
         private int index = 0;
         private boolean toHandleExtensionsCallback;
 
-        public TestTokenCallbackHandler(OAuthBearerToken[] tokens) {
+        public TestCallbackHandler(OAuthBearerToken[] tokens) {
             this.toHandleExtensionsCallback = true;
             this.tokens = Objects.requireNonNull(tokens);
         }
-        public TestTokenCallbackHandler(OAuthBearerToken[] tokens, boolean toHandleExtensionsCallback) {
+        public TestCallbackHandler(OAuthBearerToken[] tokens, boolean toHandleExtensionsCallback) {
             this.toHandleExtensionsCallback = toHandleExtensionsCallback;
             this.tokens = Objects.requireNonNull(tokens);
         }
@@ -110,7 +110,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -181,7 +181,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -228,7 +228,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens);
 
         // Create login module
         OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
@@ -269,7 +269,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -327,7 +327,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
                 EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens, true);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -353,7 +353,7 @@ public class OAuthBearerLoginModuleTest {
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
                 EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, false);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
