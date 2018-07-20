@@ -68,7 +68,7 @@ public class FileStreamSinkTask extends SinkTask {
                     false,
                     StandardCharsets.UTF_8.name());
             } catch (IOException e) {
-                throw new ConnectException("Couldn't find or create file for FileStreamSinkTask", e);
+                throw new ConnectException("Couldn't find or create file '" + filename + "' for FileStreamSinkTask", e);
             }
         }
     }
