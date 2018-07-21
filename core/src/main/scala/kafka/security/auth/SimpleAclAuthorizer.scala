@@ -28,7 +28,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclChangeStore, ZkAclStore}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.resource.ResourceNameType
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -100,48 +100,63 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
 
-    loadCache()
-
+    // Start change listeners first and then populate the cache so that there is no timing window
+    // between loading cache and processing change notifications.
     startZkChangeListeners()
+    loadCache()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    if (resource.nameType != ResourceNameType.LITERAL) {
-      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.nameType)
+    if (resource.patternType != PatternType.LITERAL) {
+      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    val principal = session.principal
+    // ensure we compare identical classes
+    val sessionPrincipal = session.principal
+    val principal = if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
+      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
+    else
+      sessionPrincipal
+
     val host = session.clientAddress.getHostAddress
-    val acls = getMatchingAcls(resource.resourceType, resource.name)
 
-    // Check if there is any Deny acl match that would disallow this operation.
-    val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
-
-    // Check if there are any Allow ACLs which would allow this operation.
-    // Allowing read, write, delete, or alter implies allowing describe.
-    // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
-    val allowOps = operation match {
-      case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
-      case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
-      case _ => Set[Operation](operation)
+    def isEmptyAclAndAuthorized(acls: Set[Acl]): Boolean = {
+      if (acls.isEmpty) {
+        // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
+        authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
+        shouldAllowEveryoneIfNoAclIsFound
+      } else false
     }
-    val allowMatch = allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
 
-    //we allow an operation if a user is a super user or if no acls are found and user has configured to allow all users
-    //when no acls are found or if no deny acls are found and at least one allow acls matches.
-    val authorized = isSuperUser(operation, resource, principal, host) ||
-      isEmptyAclAndAuthorized(operation, resource, principal, host, acls) ||
-      (!denyMatch && allowMatch)
+    def denyAclExists(acls: Set[Acl]): Boolean = {
+      // Check if there are any Deny ACLs which would forbid this operation.
+      aclMatch(operation, resource, principal, host, Deny, acls)
+    }
+
+    def allowAclExists(acls: Set[Acl]): Boolean = {
+      // Check if there are any Allow ACLs which would allow this operation.
+      // Allowing read, write, delete, or alter implies allowing describe.
+      // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
+      val allowOps = operation match {
+        case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
+        case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
+        case _ => Set[Operation](operation)
+      }
+      allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
+    }
+
+    def aclsAllowAccess = {
+      //we allow an operation if no acls are found and user has configured to allow all users
+      //when no acls are found or if no deny acls are found and at least one allow acls matches.
+      val acls = getMatchingAcls(resource.resourceType, resource.name)
+      isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
+    }
+
+    // Evaluate if operation is allowed
+    val authorized = isSuperUser(operation, resource, principal, host) || aclsAllowAccess
 
     logAuditMessage(principal, authorized, operation, resource, host)
     authorized
-  }
-
-  def isEmptyAclAndAuthorized(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, acls: Set[Acl]): Boolean = {
-    if (acls.isEmpty) {
-      authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
-      shouldAllowEveryoneIfNoAclIsFound
-    } else false
   }
 
   def isSuperUser(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String): Boolean = {
@@ -165,7 +180,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
-      if (!extendedAclSupport && resource.nameType == ResourceNameType.PREFIXED) {
+      if (!extendedAclSupport && resource.patternType == PatternType.PREFIXED) {
         throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
           s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
       }
@@ -213,17 +228,17 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def getMatchingAcls(resourceType: ResourceType, resourceName: String): Set[Acl] = {
     inReadLock(lock) {
-      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, ResourceNameType.LITERAL))
+      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, PatternType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
-      val literal = aclCache.get(Resource(resourceType, resourceName, ResourceNameType.LITERAL))
+      val literal = aclCache.get(Resource(resourceType, resourceName, PatternType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
       val prefixed = aclCache.range(
-        Resource(resourceType, resourceName, ResourceNameType.PREFIXED),
-        Resource(resourceType, resourceName.substring(0, 1), ResourceNameType.PREFIXED)
+        Resource(resourceType, resourceName, PatternType.PREFIXED),
+        Resource(resourceType, resourceName.take(1), PatternType.PREFIXED)
       )
         .filterKeys(resource => resourceName.startsWith(resource.name))
         .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
@@ -261,7 +276,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def startZkChangeListeners(): Unit = {
+  private[auth] def startZkChangeListeners(): Unit = {
     aclChangeListeners = ZkAclChangeStore.stores
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }
@@ -364,7 +379,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  // Orders by resource type, then resource name type and finally reverse ordering by name.
+  // Orders by resource type, then resource pattern type and finally reverse ordering by name.
   private object ResourceOrdering extends Ordering[Resource] {
 
     def compare(a: Resource, b: Resource): Int = {
@@ -372,7 +387,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       if (rt != 0)
         rt
       else {
-        val rnt = a.nameType compareTo b.nameType
+        val rnt = a.patternType compareTo b.patternType
         if (rnt != 0)
           rnt
         else

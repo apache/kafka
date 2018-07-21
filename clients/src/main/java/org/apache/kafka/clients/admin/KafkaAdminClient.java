@@ -35,6 +35,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -163,6 +165,11 @@ public class KafkaAdminClient extends AdminClient {
      * An invalid shutdown time which indicates that a shutdown has not yet been performed.
      */
     private static final long INVALID_SHUTDOWN_TIME = -1;
+
+    /**
+     * Thread name prefix for admin client network thread
+     */
+    static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
 
     private final Logger log;
 
@@ -407,7 +414,7 @@ public class KafkaAdminClient extends AdminClient {
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
-        String threadName = "kafka-admin-client-thread | " + clientId;
+        String threadName = NETWORK_THREAD_PREFIX + " | " + clientId;
         this.thread = new KafkaThread(threadName, runnable, true);
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
@@ -2390,16 +2397,9 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
-                    Errors error = fcResponse.error();
-                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                        // Retry COORDINATOR_NOT_AVAILABLE, in case the error is temporary.
-                        throw error.exception();
-                    } else if (error != Errors.NONE) {
-                        // All other errors are immediate failures.
-                        KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                        future.completeExceptionally(error.exception());
+
+                    if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
                         return;
-                    }
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
                     final int nodeId = fcResponse.node().id();
@@ -2469,6 +2469,17 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
+    }
+
+    private boolean handleFindCoordinatorError(FindCoordinatorResponse response, KafkaFutureImpl<?> future) {
+        Errors error = response.error();
+        if (error.exception() instanceof RetriableException) {
+            throw error.exception();
+        } else if (response.hasError()) {
+            future.completeExceptionally(error.exception());
+            return true;
+        }
+        return false;
     }
 
     private final static class ListConsumerGroupsResults {
@@ -2605,6 +2616,9 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
+                if (handleFindCoordinatorError(response, groupOffsetListingFuture))
+                    return;
+
                 final long nowListConsumerGroupOffsets = time.milliseconds();
 
                 final int nodeId = response.node().id();
@@ -2691,6 +2705,9 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
+                    if (handleFindCoordinatorError(response, futures.get(groupId)))
+                        return;
+
                     final long nowDeleteConsumerGroups = time.milliseconds();
 
                     final int nodeId = response.node().id();
@@ -2733,5 +2750,10 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 }

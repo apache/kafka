@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -118,7 +119,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                String groupId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
-                               int heartbeatIntervalMs,
+                               Heartbeat heartbeat,
                                List<PartitionAssignor> assignors,
                                Metadata metadata,
                                SubscriptionState subscriptions,
@@ -136,7 +137,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               groupId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
-              heartbeatIntervalMs,
+              heartbeat,
               metrics,
               metricGrpPrefix,
               time,
@@ -202,6 +203,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // if we encounter any unauthorized topics, raise an exception to the user
                 if (!cluster.unauthorizedTopics().isEmpty())
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+
+                // if we encounter any invalid topics, raise an exception to the user
+                if (!cluster.invalidTopics().isEmpty())
+                    throw new InvalidTopicException(cluster.invalidTopics());
 
                 if (subscriptions.hasPatternSubscription())
                     updatePatternSubscription(cluster);
@@ -306,13 +311,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
+            // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
+            // group proactively due to application inactivity even if (say) the coordinator cannot be found.
+            pollHeartbeat(currentTime);
+
             if (coordinatorUnknown()) {
                 if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                     return false;
                 }
                 currentTime = time.milliseconds();
                 elapsed = currentTime - startTime;
-
             }
 
             if (rejoinNeededOrPending()) {
@@ -333,8 +341,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 currentTime = time.milliseconds();
             }
-
-            pollHeartbeat(currentTime);
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
@@ -798,8 +804,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
                 setGenerationId(generation.generationId).
-                setMemberId(generation.memberId).
-                setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
+                setMemberId(generation.memberId);
 
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 

@@ -18,13 +18,15 @@ package org.apache.kafka.streams.integration;
 
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
-import kafka.zk.AdminZkClient;
-import kafka.zk.KafkaZkClient;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -46,14 +48,14 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
@@ -70,8 +72,6 @@ public class InternalTopicIntegrationTest {
 
     private static final String APP_ID = "internal-topics-integration-test";
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
-    private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
-    private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
 
     private final MockTime mockTime = CLUSTER.time;
 
@@ -113,21 +113,27 @@ public class InternalTopicIntegrationTest {
     }
 
     private Properties getTopicProperties(final String changelog) {
-        try (KafkaZkClient kafkaZkClient = KafkaZkClient.apply(CLUSTER.zKConnectString(), false,
-                DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE,
-                Time.SYSTEM, "testMetricGroup", "testMetricType")) {
-            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            final Map<String, Properties> topicConfigs =
-                JavaConverters.mapAsJavaMapConverter(adminZkClient.getAllTopicConfigs()).asJava();
-
-            for (Map.Entry<String, Properties> topicConfig : topicConfigs.entrySet()) {
-                if (topicConfig.getKey().equals(changelog)) {
-                    return topicConfig.getValue();
+        try (final AdminClient adminClient = createAdminClient()) {
+            final ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, changelog);
+            try {
+                final Config config = adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
+                final Properties properties = new Properties();
+                for (final ConfigEntry configEntry : config.entries()) {
+                    if (configEntry.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG) {
+                        properties.put(configEntry.name(), configEntry.value());
+                    }
                 }
+                return properties;
+            } catch (final InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
             }
-
-            return new Properties();
         }
+    }
+
+    private AdminClient createAdminClient() {
+        final Properties adminClientConfig = new Properties();
+        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        return AdminClient.create(adminClientConfig);
     }
 
     @Test

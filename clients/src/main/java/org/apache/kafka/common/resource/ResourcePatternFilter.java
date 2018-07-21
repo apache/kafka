@@ -33,11 +33,11 @@ public class ResourcePatternFilter {
     /**
      * Matches any resource pattern.
      */
-    public static final ResourcePatternFilter ANY = new ResourcePatternFilter(ResourceType.ANY, null, ResourceNameType.ANY);
+    public static final ResourcePatternFilter ANY = new ResourcePatternFilter(ResourceType.ANY, null, PatternType.ANY);
 
     private final ResourceType resourceType;
     private final String name;
-    private final ResourceNameType nameType;
+    private final PatternType patternType;
 
     /**
      * Create a filter using the supplied parameters.
@@ -48,22 +48,23 @@ public class ResourcePatternFilter {
      * @param name         resource name or {@code null}.
      *                     If {@code null}, the filter will ignore the name of resources.
      *                     If {@link ResourcePattern#WILDCARD_RESOURCE}, will match only wildcard patterns.
-     * @param nameType     non-null resource name type.
-     *                     If {@link ResourceNameType#ANY}, the filter will match patterns that would match any
-     *                     {@code ResourceNameType}, and also any wildcards patterns.
-     *                     If any other resource name type, the filter will match only patterns with the same type.
+     * @param patternType  non-null resource pattern type.
+     *                     If {@link PatternType#ANY}, the filter will match patterns regardless of pattern type.
+     *                     If {@link PatternType#MATCH}, the filter will match patterns that would match the supplied
+     *                     {@code name}, including a matching prefixed and wildcards patterns.
+     *                     If any other resource pattern type, the filter will match only patterns with the same type.
      */
-    public ResourcePatternFilter(ResourceType resourceType, String name, ResourceNameType nameType) {
+    public ResourcePatternFilter(ResourceType resourceType, String name, PatternType patternType) {
         this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
         this.name = name;
-        this.nameType = Objects.requireNonNull(nameType, "nameType");
+        this.patternType = Objects.requireNonNull(patternType, "patternType");
     }
 
     /**
      * @return {@code true} if this filter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown() || nameType.isUnknown();
+        return resourceType.isUnknown() || patternType.isUnknown();
     }
 
     /**
@@ -81,10 +82,10 @@ public class ResourcePatternFilter {
     }
 
     /**
-     * @return the resource name type.
+     * @return the resource pattern type.
      */
-    public ResourceNameType nameType() {
-        return nameType;
+    public PatternType patternType() {
+        return patternType;
     }
 
     /**
@@ -95,7 +96,7 @@ public class ResourcePatternFilter {
             return false;
         }
 
-        if (!nameType.equals(ResourceNameType.ANY) && !nameType.equals(pattern.nameType())) {
+        if (!patternType.equals(PatternType.ANY) && !patternType.equals(PatternType.MATCH) && !patternType.equals(pattern.patternType())) {
             return false;
         }
 
@@ -103,11 +104,11 @@ public class ResourcePatternFilter {
             return true;
         }
 
-        if (nameType.equals(pattern.nameType())) {
+        if (patternType.equals(PatternType.ANY) || patternType.equals(pattern.patternType())) {
             return name.equals(pattern.name());
         }
 
-        switch (pattern.nameType()) {
+        switch (pattern.patternType()) {
             case LITERAL:
                 return name.equals(pattern.name()) || pattern.name().equals(WILDCARD_RESOURCE);
 
@@ -115,7 +116,7 @@ public class ResourcePatternFilter {
                 return name.startsWith(pattern.name());
 
             default:
-                throw new IllegalArgumentException("Unsupported ResourceNameType: " + pattern.nameType());
+                throw new IllegalArgumentException("Unsupported PatternType: " + pattern.patternType());
         }
     }
 
@@ -137,16 +138,16 @@ public class ResourcePatternFilter {
             return "Resource type is UNKNOWN.";
         if (name == null)
             return "Resource name is NULL.";
-        if (nameType == ResourceNameType.ANY)
-            return "Resource name type is ANY.";
-        if (nameType == ResourceNameType.UNKNOWN)
-            return "Resource name type is UNKNOWN.";
+        if (patternType == PatternType.MATCH)
+            return "Resource pattern type is ANY.";
+        if (patternType == PatternType.UNKNOWN)
+            return "Resource pattern type is UNKNOWN.";
         return null;
     }
 
     @Override
     public String toString() {
-        return "ResourcePattern(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
+        return "ResourcePattern(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", patternType=" + patternType + ")";
     }
 
     @Override
@@ -159,11 +160,11 @@ public class ResourcePatternFilter {
         final ResourcePatternFilter resource = (ResourcePatternFilter) o;
         return resourceType == resource.resourceType &&
             Objects.equals(name, resource.name) &&
-            nameType == resource.nameType;
+            patternType == resource.patternType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name, nameType);
+        return Objects.hash(resourceType, name, patternType);
     }
 }

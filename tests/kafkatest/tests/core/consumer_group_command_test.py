@@ -57,15 +57,14 @@ class ConsumerGroupCommandTest(Test):
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 
-    def start_consumer(self, security_protocol):
-        enable_new_consumer = security_protocol == SecurityConfig.SSL
+    def start_consumer(self):
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
-                                        consumer_timeout_ms=None, new_consumer=enable_new_consumer)
+                                        consumer_timeout_ms=None)
         self.consumer.start()
 
     def setup_and_verify(self, security_protocol, group=None):
         self.start_kafka(security_protocol, security_protocol)
-        self.start_consumer(security_protocol)
+        self.start_consumer()
         consumer_node = self.consumer.nodes[0]
         wait_until(lambda: self.consumer.alive(consumer_node),
                    timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
@@ -77,16 +76,13 @@ class ConsumerGroupCommandTest(Test):
             kafka_node.account.create_file(self.COMMAND_CONFIG_FILE, prop_file)
 
         # Verify ConsumerGroupCommand lists expected consumer groups
-        enable_new_consumer = security_protocol != SecurityConfig.PLAINTEXT
-        command_config_file = None
-        if enable_new_consumer:
-            command_config_file = self.COMMAND_CONFIG_FILE
+        command_config_file = self.COMMAND_CONFIG_FILE
 
         if group:
-            wait_until(lambda: re.search("topic-consumer-group-command",self.kafka.describe_consumer_group(group=group, node=kafka_node, new_consumer=enable_new_consumer, command_config=command_config_file)), timeout_sec=10,
+            wait_until(lambda: re.search("topic-consumer-group-command",self.kafka.describe_consumer_group(group=group, node=kafka_node, command_config=command_config_file)), timeout_sec=10,
                        err_msg="Timed out waiting to list expected consumer groups.")
         else:
-            wait_until(lambda: "test-consumer-group" in self.kafka.list_consumer_groups(node=kafka_node, new_consumer=enable_new_consumer, command_config=command_config_file), timeout_sec=10,
+            wait_until(lambda: "test-consumer-group" in self.kafka.list_consumer_groups(node=kafka_node, command_config=command_config_file), timeout_sec=10,
                        err_msg="Timed out waiting to list expected consumer groups.")
 
         self.consumer.stop()

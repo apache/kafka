@@ -65,7 +65,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
     consumer2Config.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
 
-    val consumer2 = TestUtils.createNewConsumer(brokerList,
+    val consumer2 = TestUtils.createConsumer(brokerList,
                                                 securityProtocol = securityProtocol,
                                                 trustStoreFile = trustStoreFile,
                                                 saslProperties = clientSaslProperties,

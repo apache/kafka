@@ -29,18 +29,19 @@ import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
+import kafka.utils.TestUtils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{ConsumerGroupState, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -123,18 +124,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
           expectedMissing.forall(topicName => !topics.contains(topicName))
       }, "timed out waiting for topics")
-  }
-
-  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit = {
-    try {
-      future.get()
-      fail("Expected CompletableFuture.get to return an exception")
-    } catch {
-      case e: ExecutionException =>
-        val cause = e.getCause()
-        assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass().getName, clazz.isInstance(cause))
-    }
   }
 
   @Test
@@ -353,7 +342,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val numMessages = new AtomicInteger
     import scala.concurrent.ExecutionContext.Implicits._
     val producerFuture = Future {
-      val producer = TestUtils.createNewProducer(
+      val producer = TestUtils.createProducer(
         TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
         securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile,
@@ -1011,7 +1000,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
-  val ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
+  val ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
 
   /**
@@ -1089,7 +1078,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val config = createConfig()
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
-    val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
+    client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
         new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
@@ -1105,7 +1094,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testConsumerGroups(): Unit = {
     val config = createConfig()
-    val client = AdminClient.create(config)
+    client = AdminClient.create(config)
     try {
       // Verify that initially there are no consumer groups to list.
       val list1 = client.listConsumerGroups()
@@ -1118,7 +1107,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
       waitForTopics(client, List(testTopicName), List())
 
-      val producer = createNewProducer
+      val producer = createProducer
       try {
         producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
       } finally {
@@ -1130,7 +1119,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      val consumer = TestUtils.createNewConsumer(brokerList,
+      val consumer = TestUtils.createConsumer(brokerList,
         securityProtocol = this.securityProtocol,
         trustStoreFile = this.trustStoreFile,
         saslProperties = this.clientSaslProperties,

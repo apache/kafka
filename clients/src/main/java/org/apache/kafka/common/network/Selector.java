@@ -265,6 +265,7 @@ public class Selector implements Selectable, AutoCloseable {
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        this.sensors.connectionCreated.record();
     }
 
     private void ensureNotRegistered(String id) {
@@ -498,7 +499,9 @@ public class Selector implements Selectable, AutoCloseable {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
                     //(possibly because no memory). it may be the case that the underlying socket will
                     //not come up in the next poll() and so we need to remember this channel for the
-                    //next poll call otherwise data may be stuck in said buffers forever.
+                    //next poll call otherwise data may be stuck in said buffers forever. If we attempt
+                    //to process buffered data and no progress is made, the channel buffered status is
+                    //cleared to avoid the overhead of checking every time.
                     keysWithBufferedRead.add(key);
                 }
 

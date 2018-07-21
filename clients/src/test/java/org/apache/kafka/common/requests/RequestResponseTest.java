@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
-import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -141,9 +141,6 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 4);
         checkErrorResponse(createMetadataRequest(4, singletonList("topic1")), new UnknownServerException());
-        checkRequest(createOffsetCommitRequest(2));
-        checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
-        checkResponse(createOffsetCommitResponse(), 0);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"));
         checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"));
         checkRequest(createOffsetFetchRequest(0));
@@ -210,6 +207,16 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(1));
         checkErrorResponse(createOffsetCommitRequest(1), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(2));
+        checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(3));
+        checkErrorResponse(createOffsetCommitRequest(3), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(4));
+        checkErrorResponse(createOffsetCommitRequest(4), new UnknownServerException());
+        checkResponse(createOffsetCommitResponse(), 4);
+        checkRequest(createOffsetCommitRequest(5));
+        checkErrorResponse(createOffsetCommitRequest(5), new UnknownServerException());
+        checkResponse(createOffsetCommitResponse(), 5);
         checkRequest(createJoinGroupRequest(0));
         checkRequest(createUpdateMetadataRequest(0, null));
         checkErrorResponse(createUpdateMetadataRequest(0, null), new UnknownServerException());
@@ -817,7 +824,6 @@ public class RequestResponseTest {
         return new OffsetCommitRequest.Builder("group1", commitData)
                 .setGenerationId(100)
                 .setMemberId("consumer1")
-                .setRetentionTime(1000000)
                 .build((short) version);
     }
 
@@ -1088,23 +1094,23 @@ public class RequestResponseTest {
 
     private DescribeAclsRequest createListAclsRequest() {
         return new DescribeAclsRequest.Builder(new AclBindingFilter(
-                new ResourcePatternFilter(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
+                new ResourcePatternFilter(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
                 new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
     }
 
     private DescribeAclsResponse createDescribeAclsResponse() {
         return new DescribeAclsResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
+            new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
     }
 
     private CreateAclsRequest createCreateAclsRequest() {
         List<AclCreation> creations = new ArrayList<>();
         creations.add(new AclCreation(new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
+            new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
         creations.add(new AclCreation(new AclBinding(
-            new ResourcePattern(ResourceType.GROUP, "mygroup", ResourceNameType.LITERAL),
+            new ResourcePattern(ResourceType.GROUP, "mygroup", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
         return new CreateAclsRequest.Builder(creations).build();
     }
@@ -1117,10 +1123,10 @@ public class RequestResponseTest {
     private DeleteAclsRequest createDeleteAclsRequest() {
         List<AclBindingFilter> filters = new ArrayList<>();
         filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, ResourceNameType.LITERAL),
+            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
             new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY)));
         filters.add(new AclBindingFilter(
-            new ResourcePatternFilter(ResourceType.ANY, null, ResourceNameType.LITERAL),
+            new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
             new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY)));
         return new DeleteAclsRequest.Builder(filters).build();
     }
@@ -1129,10 +1135,10 @@ public class RequestResponseTest {
         List<AclFilterResponse> responses = new ArrayList<>();
         responses.add(new AclFilterResponse(Utils.mkSet(
                 new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
+                        new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
                         new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))),
                 new AclDeletionResult(new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "mytopic4", ResourceNameType.LITERAL),
+                        new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
                         new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
         responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
             Collections.<AclDeletionResult>emptySet()));

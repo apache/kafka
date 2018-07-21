@@ -288,7 +288,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
-        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Kafka node failed to stop")
+
+        try:
+            wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Kafka node failed to stop")
+        except Exception:
+            self.thread_dump(node)
+            raise
+
+    def thread_dump(self, node):
+        for pid in self.pids(node):
+            try:
+                node.account.signal(pid, signal.SIGQUIT, allow_fail=True)
+            except:
+                self.logger.warn("Could not dump threads on node")
 
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
@@ -571,7 +583,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster)
             raise
 
-    def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
+    def list_consumer_groups(self, node=None, command_config=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -583,17 +595,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        if new_consumer:
-            new_consumer_opt = ""
-            if node.version <= LATEST_0_10_0:
-                new_consumer_opt = "--new-consumer"
-            cmd = "%s %s --bootstrap-server %s %s --list" % \
-                  (consumer_group_script,
-                   new_consumer_opt,
-                   self.bootstrap_servers(self.security_protocol),
-                   command_config)
-        else:
-            cmd = "%s --zookeeper %s %s --list" % (consumer_group_script, self.zk_connect_setting(), command_config)
+        cmd = "%s --bootstrap-server %s %s --list" % \
+              (consumer_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config)
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
@@ -602,7 +607,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def describe_consumer_group(self, group, node=None, new_consumer=True, command_config=None):
+    def describe_consumer_group(self, group, node=None, command_config=None):
         """ Describe a consumer group.
         """
         if node is None:
@@ -614,18 +619,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             command_config = "--command-config " + command_config
 
-        if new_consumer:
-            new_consumer_opt = ""
-            if node.version <= LATEST_0_10_0:
-                new_consumer_opt = "--new-consumer"
-            cmd = "%s %s --bootstrap-server %s %s --group %s --describe" % \
-                  (consumer_group_script,
-                   new_consumer_opt,
-                   self.bootstrap_servers(self.security_protocol),
-                   command_config, group)
-        else:
-            cmd = "%s --zookeeper %s %s --group %s --describe" % \
-                  (consumer_group_script, self.zk_connect_setting(), command_config, group)
+        cmd = "%s --bootstrap-server %s %s --group %s --describe" % \
+              (consumer_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):

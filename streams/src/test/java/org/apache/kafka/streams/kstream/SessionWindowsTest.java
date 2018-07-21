@@ -50,7 +50,7 @@ public class SessionWindowsTest {
 
     @Test
     public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
-        final long windowGap = 2 * Windows.DEFAULT_MAINTAIN_DURATION_MS;
+        final long windowGap = 2 * SessionWindows.with(1).maintainMs();
         assertEquals(windowGap, SessionWindows.with(windowGap).maintainMs());
     }
 

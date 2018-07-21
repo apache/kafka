@@ -24,7 +24,7 @@ import java.lang.{Long => JLong}
 
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Test}
@@ -145,18 +145,6 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
       consumer.poll(0)
       !consumer.assignment.isEmpty
     }, "Expected non-empty assignment")
-  }
-
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                          numRecords: Int,
-                          tp: TopicPartition) {
-    val futures = (0 until numRecords).map { i =>
-      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
-      debug(s"Sending this record: $record")
-      producer.send(record)
-    }
-
-    futures.foreach(_.get)
   }
 
 }

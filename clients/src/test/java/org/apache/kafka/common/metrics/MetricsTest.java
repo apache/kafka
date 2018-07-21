@@ -26,13 +26,16 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.Metric;
@@ -54,9 +57,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("deprecation")
 public class MetricsTest {
+    private static final Logger log = LoggerFactory.getLogger(MetricsTest.class);
 
     private static final double EPS = 0.000001;
     private MockTime time = new MockTime();
@@ -604,8 +610,12 @@ public class MetricsTest {
         }
     }
 
+    /**
+     * Verifies that concurrent sensor add, remove, updates and read don't result
+     * in errors or deadlock.
+     */
     @Test
-    public void testConcurrentAccess() throws Exception {
+    public void testConcurrentReadUpdate() throws Exception {
         final Random random = new Random();
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         metrics = new Metrics(new MockTime(10));
@@ -613,16 +623,8 @@ public class MetricsTest {
 
         final AtomicBoolean alive = new AtomicBoolean(true);
         executorService = Executors.newSingleThreadExecutor();
-        executorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                while (alive.get()) {
-                    for (Sensor sensor : sensors) {
-                        sensor.record(random.nextInt(10000));
-                    }
-                }
-            }
-        });
+        executorService.submit(new ConcurrentMetricOperation(alive, "record",
+            () -> sensors.forEach(sensor -> sensor.record(random.nextInt(10000)))));
 
         for (int i = 0; i < 10000; i++) {
             if (sensors.size() > 5) {
@@ -638,6 +640,97 @@ public class MetricsTest {
             }
         }
         alive.set(false);
+    }
+
+    /**
+     * Verifies that concurrent sensor add, remove, updates and read with a metrics reporter
+     * that synchronizes on every reporter method doesn't result in errors or deadlock.
+     */
+    @Test
+    public void testConcurrentReadUpdateReport() throws Exception {
+
+        class LockingReporter implements MetricsReporter {
+            Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();
+            @Override
+            public synchronized void init(List<KafkaMetric> metrics) {
+            }
+
+            @Override
+            public synchronized void metricChange(KafkaMetric metric) {
+                activeMetrics.put(metric.metricName(), metric);
+            }
+
+            @Override
+            public synchronized void metricRemoval(KafkaMetric metric) {
+                activeMetrics.remove(metric.metricName(), metric);
+            }
+
+            @Override
+            public synchronized void close() {
+            }
+
+            @Override
+            public void configure(Map<String, ?> configs) {
+            }
+
+            synchronized void processMetrics() {
+                for (KafkaMetric metric : activeMetrics.values()) {
+                    assertNotNull("Invalid metric value", metric.metricValue());
+                }
+            }
+        }
+
+        final LockingReporter reporter = new LockingReporter();
+        this.metrics.close();
+        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) reporter), new MockTime(10), true);
+        final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
+        SensorCreator sensorCreator = new SensorCreator(metrics);
+
+        final Random random = new Random();
+        final AtomicBoolean alive = new AtomicBoolean(true);
+        executorService = Executors.newFixedThreadPool(3);
+
+        Future<?> writeFuture = executorService.submit(new ConcurrentMetricOperation(alive, "record",
+            () -> sensors.forEach(sensor -> sensor.record(random.nextInt(10000)))));
+        Future<?> readFuture = executorService.submit(new ConcurrentMetricOperation(alive, "read",
+            () -> sensors.forEach(sensor -> sensor.metrics().forEach(metric ->
+                assertNotNull("Invalid metric value", metric.metricValue())))));
+        Future<?> reportFuture = executorService.submit(new ConcurrentMetricOperation(alive, "report",
+            () -> reporter.processMetrics()));
+
+        for (int i = 0; i < 10000; i++) {
+            if (sensors.size() > 10) {
+                Sensor sensor = random.nextBoolean() ? sensors.removeFirst() : sensors.removeLast();
+                metrics.removeSensor(sensor.name());
+            }
+            StatType statType = StatType.forId(random.nextInt(StatType.values().length));
+            sensors.add(sensorCreator.createSensor(statType, i));
+        }
+        assertFalse("Read failed", readFuture.isDone());
+        assertFalse("Write failed", writeFuture.isDone());
+        assertFalse("Report failed", reportFuture.isDone());
+
+        alive.set(false);
+    }
+
+    private class ConcurrentMetricOperation implements Runnable {
+        private final AtomicBoolean alive;
+        private final String opName;
+        private final Runnable op;
+        ConcurrentMetricOperation(AtomicBoolean alive, String opName, Runnable op) {
+            this.alive = alive;
+            this.opName = opName;
+            this.op = op;
+        }
+        public void run() {
+            try {
+                while (alive.get()) {
+                    op.run();
+                }
+            } catch (Throwable t) {
+                log.error("Metric {} failed with exception", opName, t);
+            }
+        }
     }
 
     enum StatType {
@@ -676,7 +769,7 @@ public class MetricsTest {
         }
 
         private Sensor createSensor(StatType statType, int index) {
-            Sensor sensor = metrics.sensor("kafka.requests");
+            Sensor sensor = metrics.sensor("kafka.requests." + index);
             Map<String, String> tags = Collections.singletonMap("tag", "tag" + index);
             switch (statType) {
                 case AVG:

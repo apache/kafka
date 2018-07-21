@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -27,7 +28,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceNameType;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
@@ -61,14 +61,14 @@ public class DescribeAclsResponse extends AbstractResponse {
                     PERMISSION_TYPE))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` that describes how the resource name is interpreted.
+     * V1 sees a new `RESOURCE_PATTERN_TYPE` that defines the type of the resource pattern.
      *
-     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     * For more info, see {@link PatternType}.
      */
     private static final Schema DESCRIBE_ACLS_RESOURCE_V1 = new Schema(
             RESOURCE_TYPE,
             RESOURCE_NAME,
-            RESOURCE_NAME_TYPE,
+            RESOURCE_PATTERN_TYPE,
             new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
                     PRINCIPAL,
                     HOST,
@@ -82,10 +82,10 @@ public class DescribeAclsResponse extends AbstractResponse {
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V0), "The resources and their associated ACLs."));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted
+     * V1 sees a new `RESOURCE_PATTERN_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted
      * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
      *
-     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     * For more info, see {@link PatternType}.
      */
     private static final Schema DESCRIBE_ACLS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
@@ -186,10 +186,10 @@ public class DescribeAclsResponse extends AbstractResponse {
         if (version == 0) {
             final boolean unsupported = acls.stream()
                 .map(AclBinding::pattern)
-                .map(ResourcePattern::nameType)
-                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+                .map(ResourcePattern::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL);
             if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 

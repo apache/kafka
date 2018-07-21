@@ -618,7 +618,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producerProps = new Properties()
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
-    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+    val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
         saslProperties = clientSaslProperties, retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
     (0 until numRecords).foreach { i =>
       producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
@@ -1771,9 +1771,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                    subscriptions: Set[TopicPartition]): Unit = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
     for (_ <- 0 until numOfConsumersToAdd) {
-      val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
-      consumerGroup += newConsumer
-      consumerPollers += subscribeConsumerAndStartPolling(newConsumer, topicsToSubscribe)
+      val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
+      consumerGroup += consumer
+      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
     }
 
     // wait until topics get re-assigned and validate assignment

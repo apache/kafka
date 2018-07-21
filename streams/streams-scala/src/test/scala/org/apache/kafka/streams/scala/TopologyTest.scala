@@ -35,7 +35,7 @@ import collection.JavaConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
- */ 
+ */
 class TopologyTest extends JUnitSuite {
 
   val inputTopic = "input-topic"
@@ -50,22 +50,22 @@ class TopologyTest extends JUnitSuite {
     def getTopologyScala(): TopologyDescription = {
 
       import Serdes._
-  
+
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
+
       val _: KStream[String, String] =
         textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-  
+
       streamBuilder.build().describe()
     }
-  
+
     // build the Java topology
     def getTopologyJava(): TopologyDescription = {
 
       val streamBuilder = new StreamsBuilderJ
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
+
       val _: KStreamJ[String, String] = textLines.flatMapValues {
         new ValueMapper[String, java.lang.Iterable[String]] {
           def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
@@ -84,15 +84,16 @@ class TopologyTest extends JUnitSuite {
     def getTopologyScala(): TopologyDescription = {
 
       import Serdes._
-  
+
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
+
       val _: KTable[String, Long] =
-        textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+        textLines
+          .flatMapValues(v => pattern.split(v.toLowerCase))
           .groupBy((k, v) => v)
           .count()
-  
+
       streamBuilder.build().describe()
     }
 
@@ -101,21 +102,21 @@ class TopologyTest extends JUnitSuite {
 
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
-  
+
       val splits: KStreamJ[String, String] = textLines.flatMapValues {
         new ValueMapper[String, java.lang.Iterable[String]] {
           def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
         }
       }
-  
+
       val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
         new KeyValueMapper[String, String, String] {
           def apply(k: String, v: String): String = v
         }
       }
-  
+
       val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
-  
+
       streamBuilder.build().describe()
     }
 
@@ -128,13 +129,13 @@ class TopologyTest extends JUnitSuite {
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
       import Serdes._
-  
+
       val builder = new StreamsBuilder()
-  
+
       val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
-  
+
       val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
-  
+
       val clicksPerRegion: KTable[String, Long] =
         userClicksStream
           .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
@@ -149,32 +150,35 @@ class TopologyTest extends JUnitSuite {
     def getTopologyJava(): TopologyDescription = {
 
       import java.lang.{Long => JLong}
-  
+
       val builder: StreamsBuilderJ = new StreamsBuilderJ()
-  
-      val userClicksStream: KStreamJ[String, JLong] = 
+
+      val userClicksStream: KStreamJ[String, JLong] =
         builder.stream[String, JLong](userClicksTopic, Consumed.`with`(Serdes.String, Serdes.JavaLong))
-  
-      val userRegionsTable: KTableJ[String, String] = 
+
+      val userRegionsTable: KTableJ[String, String] =
         builder.table[String, String](userRegionsTopic, Consumed.`with`(Serdes.String, Serdes.String))
-  
+
       // Join the stream against the table.
       val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
-        .leftJoin(userRegionsTable, 
+        .leftJoin(
+          userRegionsTable,
           new ValueJoiner[JLong, String, (String, JLong)] {
-            def apply(clicks: JLong, region: String): (String, JLong) = 
+            def apply(clicks: JLong, region: String): (String, JLong) =
               (if (region == null) "UNKNOWN" else region, clicks)
-          }, 
-          Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String))
-  
+          },
+          Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String)
+        )
+
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-      val clicksByRegion : KStreamJ[String, JLong] = userClicksJoinRegion
-        .map { 
+      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
+        .map {
           new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
-            def apply(k: String, regionWithClicks: (String, JLong)) = new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
+            def apply(k: String, regionWithClicks: (String, JLong)) =
+              new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
           }
         }
-          
+
       // Compute the total per region by summing the individual click counts per region.
       val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
         .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
