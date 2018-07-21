@@ -84,8 +84,8 @@ object LogDirsCommand {
     }
 
     private def createAdminClient(opts: LogDirsCommandOptions): JAdminClient = {
-        val props = if (opts.options.has(opts.commandConfigOpt))
-            Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+        val props = if (opts.options.has(opts.configFileOpt))
+            Utils.loadProps(opts.options.valueOf(opts.configFileOpt))
         else
             new Properties()
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
@@ -99,9 +99,9 @@ object LogDirsCommand {
           .withRequiredArg
           .describedAs("The server(s) to use for bootstrapping")
           .ofType(classOf[String])
-        val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
+        val configFileOpt = parser.accepts("config-file", "Property file containing configs to be passed to Admin Client.")
           .withRequiredArg
-          .describedAs("command config property file")
+          .describedAs("Admin client property file")
           .ofType(classOf[String])
         val describeOpt = parser.accepts("describe", "Describe the specified log directories on the specified brokers.")
         val topicListOpt = parser.accepts("topic-list", "The list of topics to be queried in the form \"topic1,topic2,topic3\". " +
