@@ -49,7 +49,7 @@ class FetchSessionTest {
       assertTrue("Missing session " + i + " out of " + sessionIds.size + "(" + sessionId + ")",
         cache.get(sessionId).isDefined)
     }
-    assertEquals(sessionIds.size, cache.size())
+    assertEquals(sessionIds.size, cache.size)
   }
 
   private def dummyCreate(size: Int)() = {
@@ -63,7 +63,7 @@ class FetchSessionTest {
   @Test
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
-    assertEquals(0, cache.size())
+    assertEquals(0, cache.size)
     val id1 = cache.maybeCreateSession(0, false, 10, dummyCreate(10))
     val id2 = cache.maybeCreateSession(10, false, 20, dummyCreate(20))
     val id3 = cache.maybeCreateSession(20, false, 30, dummyCreate(30))
@@ -86,44 +86,44 @@ class FetchSessionTest {
   @Test
   def testResizeCachedSessions(): Unit = {
     val cache = new FetchSessionCache(2, 100)
-    assertEquals(0, cache.totalPartitions())
-    assertEquals(0, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
+    assertEquals(0, cache.totalPartitions)
+    assertEquals(0, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
     val id1 = cache.maybeCreateSession(0, false, 2, dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
-    assertEquals(2, session1.size())
-    assertEquals(2, cache.totalPartitions())
-    assertEquals(1, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
+    assertEquals(2, session1.size)
+    assertEquals(2, cache.totalPartitions)
+    assertEquals(1, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
     val id2 = cache.maybeCreateSession(0, false, 4, dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
-    assertEquals(6, cache.totalPartitions())
-    assertEquals(2, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
+    assertEquals(6, cache.totalPartitions)
+    assertEquals(2, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
     val id3 = cache.maybeCreateSession(200, false, 5, dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
-    assertEquals(9, cache.totalPartitions())
-    assertEquals(2, cache.size())
-    assertEquals(1, cache.evictionsMeter.count())
+    assertEquals(9, cache.totalPartitions)
+    assertEquals(2, cache.size)
+    assertEquals(1, cache.evictionsMeter.count)
     cache.remove(id3)
     assertCacheContains(cache, id2)
-    assertEquals(1, cache.size())
-    assertEquals(1, cache.evictionsMeter.count())
-    assertEquals(4, cache.totalPartitions())
-    val iter = session2.partitionMap.iterator()
+    assertEquals(1, cache.size)
+    assertEquals(1, cache.evictionsMeter.count)
+    assertEquals(4, cache.totalPartitions)
+    val iter = session2.partitionMap.iterator
     iter.next()
     iter.remove()
-    assertEquals(3, session2.size())
+    assertEquals(3, session2.size)
     assertEquals(4, session2.cachedSize)
     cache.touch(session2, session2.lastUsedMs)
-    assertEquals(3, cache.totalPartitions())
+    assertEquals(3, cache.totalPartitions)
   }
 
   val EMPTY_PART_LIST = Collections.unmodifiableList(new util.ArrayList[TopicPartition]())
@@ -220,15 +220,15 @@ class FetchSessionTest {
       val context8 = fetchManager.newContext(
         new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
       assertEquals(classOf[SessionlessFetchContext], context8.getClass)
-      assertEquals(0, cache.size())
+      assertEquals(0, cache.size)
       val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
       respData8.put(new TopicPartition("bar", 0),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       respData8.put(new TopicPartition("bar", 1),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       val resp8 = context8.updateAndGenerateResponseData(respData8)
-      assertEquals(Errors.NONE, resp8.error())
-      nextSessionId = resp8.sessionId()
+      assertEquals(Errors.NONE, resp8.error)
+      nextSessionId = resp8.sessionId
     } while (nextSessionId == prevSessionId)
   }
 
@@ -277,9 +277,9 @@ class FetchSessionTest {
     respData2.put(new TopicPartition("bar", 0), new FetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(Errors.NONE, resp2.error())
-    assertEquals(1, resp2.responseData().size())
-    assertTrue(resp2.sessionId() > 0)
+    assertEquals(Errors.NONE, resp2.error)
+    assertEquals(1, resp2.responseData.size)
+    assertTrue(resp2.sessionId > 0)
   }
 
   @Test
@@ -300,9 +300,9 @@ class FetchSessionTest {
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
+    assertEquals(Errors.NONE, resp1.error)
     assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    assertEquals(2, resp1.responseData().size())
+    assertEquals(2, resp1.responseData.size)
 
     // Create an incremental fetch request that removes foo-0 and foo-1
     // Verify that the previous fetch session was closed.
@@ -311,12 +311,12 @@ class FetchSessionTest {
     removed2.add(new TopicPartition("foo", 0))
     removed2.add(new TopicPartition("foo", 1))
     val context2 = fetchManager.newContext(
-      new JFetchMetadata(resp1.sessionId(), 1), reqData2, removed2, false)
+      new JFetchMetadata(resp1.sessionId, 1), reqData2, removed2, false)
     assertEquals(classOf[SessionlessFetchContext], context2.getClass)
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
     val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(INVALID_SESSION_ID, resp2.sessionId())
+    assertEquals(INVALID_SESSION_ID, resp2.sessionId)
     assertTrue(resp2.responseData().isEmpty)
-    assertEquals(0, cache.size())
+    assertEquals(0, cache.size)
   }
 }
