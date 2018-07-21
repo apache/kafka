@@ -92,7 +92,13 @@ class ZooKeeperClient(connectString: String,
   metricNames += "SessionState"
 
   expiryScheduler.startup()
-  waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  try {
+    waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  } catch {
+    case e: ZooKeeperClientTimeoutException =>
+      zooKeeper.close()
+      throw e
+  }
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
@@ -222,7 +228,6 @@ class ZooKeeperClient(connectString: String,
       var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
-          zooKeeper.close()
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
