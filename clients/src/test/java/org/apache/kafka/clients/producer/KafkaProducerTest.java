@@ -609,4 +609,52 @@ public class KafkaProducerTest {
             producer.close(0, TimeUnit.MILLISECONDS);
         }
     }
+
+    @Test
+    public void testCloseWhenWaitingForMetadataUpdate() throws InterruptedException {
+        Properties props = new Properties();
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        // Simulate a case where metadata for a particular topic is not available. This will cause KafkaProducer#send to
+        // block in Metadata#awaitUpdate for the configured max.block.ms. When close() is invoked, KafkaProducer#send should
+        // return with a KafkaException.
+        String topicName = "test";
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster();
+        Node node = cluster.nodes().get(0);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, false);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        Producer<String, String> producer = new KafkaProducer<>(
+                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+                new StringSerializer(), new StringSerializer(), metadata, client);
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        final AtomicReference<Exception> sendException = new AtomicReference<>();
+
+        try {
+            executor.submit(() -> {
+                try {
+                    // Metadata for topic "test" will not be available which will cause us to block indefinitely until
+                    // KafkaProducer#close is invoked.
+                    producer.send(new ProducerRecord<>(topicName, "key", "value"));
+                    fail();
+                } catch (Exception e) {
+                    sendException.set(e);
+                }
+            });
+
+            // Wait until metadata update for the topic has been requested
+            TestUtils.waitForCondition(() -> metadata.containsTopic(topicName), "Timeout when waiting for topic to be added to metadata");
+            producer.close(0, TimeUnit.MILLISECONDS);
+            TestUtils.waitForCondition(() -> sendException.get() != null, "No producer exception within timeout");
+            assertEquals(KafkaException.class, sendException.get().getClass());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
 }

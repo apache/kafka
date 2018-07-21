@@ -581,6 +581,7 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close() {
         this.selector.close();
+        this.metadataUpdater.close();
     }
 
     /**
@@ -979,6 +980,11 @@ public class NetworkClient implements KafkaClient {
         @Override
         public void requestUpdate() {
             this.metadata.requestUpdate();
+        }
+
+        @Override
+        public void close() {
+            this.metadata.close();
         }
 
         /**

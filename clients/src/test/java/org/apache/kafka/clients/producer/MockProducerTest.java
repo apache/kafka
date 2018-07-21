@@ -637,16 +637,6 @@ public class MockProducerTest {
     }
 
     @Test
-    public void shouldThrowOnCloseIfProducerIsClosed() {
-        buildMockProducer(true);
-        producer.close();
-        try {
-            producer.close();
-            fail("Should have thrown as producer is already closed");
-        } catch (IllegalStateException e) { }
-    }
-
-    @Test
     public void shouldThrowOnFenceProducerIfProducerIsClosed() {
         buildMockProducer(true);
         producer.close();
