@@ -95,7 +95,7 @@ class ZooKeeperClient(connectString: String,
   try {
     waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
   } catch {
-    case e: ZooKeeperClientTimeoutException =>
+    case e: ZooKeeperClientException =>
       close()
       throw e
   }
