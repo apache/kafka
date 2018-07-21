@@ -222,6 +222,7 @@ class ZooKeeperClient(connectString: String,
       var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
+          zooKeeper.close()
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
