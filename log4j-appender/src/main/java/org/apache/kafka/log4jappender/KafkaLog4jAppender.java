@@ -68,6 +68,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private int retries = Integer.MAX_VALUE;
     private int requiredNumAcks = 1;
     private int deliveryTimeoutMs = 120000;
+    private boolean ignoreExceptions = true;
     private boolean syncSend;
     private Producer<byte[], byte[]> producer;
     
@@ -121,6 +122,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
 
     public void setTopic(String topic) {
         this.topic = topic;
+    }
+
+    public boolean getIgnoreExceptions() {
+        return ignoreExceptions;
+    }
+
+    public void setIgnoreExceptions(boolean ignoreExceptions) {
+        this.ignoreExceptions = ignoreExceptions;
     }
 
     public boolean getSyncSend() {
@@ -259,14 +268,20 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
         Future<RecordMetadata> response = producer.send(
-            new ProducerRecord<byte[], byte[]>(topic, message.getBytes(StandardCharsets.UTF_8)));
+                new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
         if (syncSend) {
             try {
-                response.get();
+                getResponse(response);
             } catch (InterruptedException | ExecutionException ex) {
-                throw new RuntimeException(ex);
+                LogLog.debug("Exception while getting response", ex);
+                if (!ignoreExceptions)
+                    throw new RuntimeException(ex);
             }
         }
+    }
+
+    void getResponse(Future<RecordMetadata> response) throws InterruptedException, ExecutionException {
+        response.get();
     }
 
     private String subAppend(LoggingEvent event) {

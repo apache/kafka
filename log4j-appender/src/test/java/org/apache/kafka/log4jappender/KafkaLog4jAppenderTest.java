@@ -22,12 +22,12 @@ import org.apache.log4j.PropertyConfigurator;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 public class KafkaLog4jAppenderTest {
 
-    Logger logger = Logger.getLogger(KafkaLog4jAppenderTest.class);
+    private Logger logger = Logger.getLogger(KafkaLog4jAppenderTest.class);
 
     @Test
     public void testKafkaLog4jConfigs() {
@@ -66,22 +66,47 @@ public class KafkaLog4jAppenderTest {
 
 
     @Test
-    public void testLog4jAppends() throws UnsupportedEncodingException {
-        PropertyConfigurator.configure(getLog4jConfig());
+    public void testLog4jAppends() {
+        PropertyConfigurator.configure(getLog4jConfig(false));
 
         for (int i = 1; i <= 5; ++i) {
             logger.error(getMessage(i));
         }
 
         Assert.assertEquals(
-                5, ((MockKafkaLog4jAppender) (logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
+                5, ((MockKafkaLog4jAppender) (Logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
     }
 
-    private byte[] getMessage(int i) throws UnsupportedEncodingException {
-        return ("test_" + i).getBytes("UTF-8");
+    @Test(expected = RuntimeException.class)
+    public void testLog4jAppendsWithSyncSendAndSimulateProducerFailShouldThrowException() {
+        Properties props = getLog4jConfig(true);
+        props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
+        // property for mock appender
+        props.put("log4j.appender.KAFKA.FailSync", "true");
+        PropertyConfigurator.configure(props);
+
+        logger.error(getMessage(0));
+
+        Assert.fail();
     }
 
-    private Properties getLog4jConfig() {
+    @Test
+    public void testLog4jAppendsWithSyncSendShouldNotThrowException() {
+        Properties props = getLog4jConfig(true);
+        props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
+        PropertyConfigurator.configure(props);
+
+        logger.error(getMessage(0));
+
+        Assert.assertEquals(
+                1, ((MockKafkaLog4jAppender) (Logger.getRootLogger().getAppender("KAFKA"))).getHistory().size());
+    }
+
+    private byte[] getMessage(int i) {
+        return ("test_" + i).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private Properties getLog4jConfig(boolean syncSend) {
         Properties props = new Properties();
         props.put("log4j.rootLogger", "INFO, KAFKA");
         props.put("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.MockKafkaLog4jAppender");
@@ -90,7 +115,7 @@ public class KafkaLog4jAppenderTest {
         props.put("log4j.appender.KAFKA.BrokerList", "127.0.0.1:9093");
         props.put("log4j.appender.KAFKA.Topic", "test-topic");
         props.put("log4j.appender.KAFKA.RequiredNumAcks", "1");
-        props.put("log4j.appender.KAFKA.SyncSend", "false");
+        props.put("log4j.appender.KAFKA.SyncSend", syncSend ? "true" : "false");
         props.put("log4j.logger.kafka.log4j", "INFO, KAFKA");
         return props;
     }
