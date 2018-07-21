@@ -23,6 +23,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDow
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -57,11 +58,23 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
   }
 
-  @Test(expected = classOf[ZooKeeperClientTimeoutException])
+  @Test
   def testUnresolvableConnectString(): Unit = {
-    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", zkSessionTimeout, connectionTimeoutMs = 10,
-      Int.MaxValue, time, "testMetricGroup", "testMetricType").close()
+    val hostAddress = "some.invalid.hostname.foo.bar.local"
+    try {
+      new ZooKeeperClient(hostAddress, zkSessionTimeout, connectionTimeoutMs = 10,
+        Int.MaxValue, time, "testMetricGroup", "testMetricType")
+    } catch {
+      case e: ZooKeeperClientTimeoutException => TestUtils.waitUntilTrue(() => unexpectedZKThreadCount(hostAddress) == 0,
+        "ZooKeeper client threads are not closed")
+    }
   }
+
+  def unexpectedZKThreadCount(hostAddress: String): Int = Thread.getAllStackTraces.keySet.toArray
+    .map(_.asInstanceOf[Thread])
+    .filter(_.isAlive)
+    .map(_.getName)
+    .count(t => t.contains("SendThread()") || t.contains(hostAddress)) // Verify threadName pattern for unresolvable host zk send threads
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
