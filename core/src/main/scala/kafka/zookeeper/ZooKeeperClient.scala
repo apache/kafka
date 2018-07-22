@@ -92,9 +92,8 @@ class ZooKeeperClient(connectString: String,
   metricNames += "SessionState"
 
   expiryScheduler.startup()
-  try {
-    waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
-  } catch {
+  try waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  catch {
     case e: Throwable =>
       close()
       throw e
