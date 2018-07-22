@@ -64,14 +64,14 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         Int.MaxValue, time, "testMetricGroup", "testMetricType")
     } catch {
       case e: ZooKeeperClientTimeoutException =>
-        assertEquals("ZooKeeper client threads still running", Set.empty,  runningZkSendThreads())
+        assertEquals("ZooKeeper client threads still running", Set.empty,  runningZkSendThreads)
     }
   }
 
-  private def runningZkSendThreads(): collection.Set[String] = Thread.getAllStackTraces.keySet.asScala
+  private def runningZkSendThreads: collection.Set[String] = Thread.getAllStackTraces.keySet.asScala
     .filter(_.isAlive)
     .map(_.getName)
-    .filter(t => t.contains("SendThread()")) //Verify threadName pattern for unresolvable host zk send threads
+    .filter(t => t.contains("SendThread()"))
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
