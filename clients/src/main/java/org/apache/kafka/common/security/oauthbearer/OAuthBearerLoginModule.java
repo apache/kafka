@@ -34,7 +34,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
 import org.slf4j.Logger;
@@ -304,7 +303,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             log.error(e.getMessage(), e);
             throw new LoginException("An internal error occurred");
         } catch (UnsupportedCallbackException e) {
-            extensionsRequiringCommit = new SaslExtensions(Collections.emptyMap(), OAuthBearerClientInitialResponse.SEPARATOR);
+            extensionsRequiringCommit = new SaslExtensions(Collections.emptyMap());
             log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
         }
         if (extensionsRequiringCommit ==  null) {

@@ -144,6 +144,6 @@ public class OAuthBearerSaslServerTest {
         String compactSerialization = token.value();
 
         String tokenValue = compactSerialization + (illegalToken ? "AB" : "");
-        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, new SaslExtensions(customExtensions, OAuthBearerClientInitialResponse.SEPARATOR)).toBytes();
+        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, new SaslExtensions(customExtensions)).toBytes();
     }
 }

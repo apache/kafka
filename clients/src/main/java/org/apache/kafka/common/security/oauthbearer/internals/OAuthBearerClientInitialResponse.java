@@ -54,7 +54,7 @@ public class OAuthBearerClientInitialResponse {
         this.authorizationId = authzid == null ? "" : authzid;
         String kvPairs = matcher.group("kvpairs");
         Map<String, String> properties = Utils.parseMap(kvPairs, "=", SEPARATOR);
-        this.saslExtensions = new SaslExtensions(properties, SEPARATOR);
+        this.saslExtensions = new SaslExtensions(properties);
         String auth = properties.get(AUTH_KEY);
         if (auth == null)
             throw new SaslException("Invalid OAUTHBEARER client first message: 'auth' not specified");
@@ -86,7 +86,7 @@ public class OAuthBearerClientInitialResponse {
 
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
-        String extensions = saslExtensions.toString();
+        String extensions = extensionsMessage();
         if (extensions.length() > 0)
             extensions = SEPARATOR + extensions;
 
@@ -108,5 +108,12 @@ public class OAuthBearerClientInitialResponse {
         if (AUTH_KEY.equals(name))
             return tokenValue;
         return saslExtensions.extensionValue(name);
+    }
+
+    /*
+        Converts the SASLExtensions to an OAuth protocol-friendly string
+     */
+    private String extensionsMessage() {
+        return Utils.mkString(saslExtensions.map(), "", "", "=", SEPARATOR);
     }
 }

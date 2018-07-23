@@ -222,7 +222,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
 
             extensions.put(extensionName, configEntry.getValue());
         }
-        callback.extensions(new SaslExtensions(extensions, OAuthBearerClientInitialResponse.SEPARATOR));
+        callback.extensions(new SaslExtensions(extensions));
     }
 
     private String commaPrependedStringNumberAndListClaimsJsonText() throws OAuthBearerConfigException {

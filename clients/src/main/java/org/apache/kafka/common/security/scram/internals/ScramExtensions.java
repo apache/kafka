@@ -34,15 +34,10 @@ public class ScramExtensions extends SaslExtensions {
     }
 
     public ScramExtensions(Map<String, String> extensionMap) {
-        this.extensionMap = extensionMap;
+        this.extensionsMap = extensionMap;
     }
 
     public boolean tokenAuthenticated() {
-        return Boolean.parseBoolean(extensionMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
-    }
-
-    @Override
-    public String toString() {
-        return Utils.mkString(extensionMap, "", "", "=", separator);
+        return Boolean.parseBoolean(extensionsMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
     }
 }

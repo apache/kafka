@@ -17,46 +17,37 @@
 package org.apache.kafka.common.security;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class SaslExtensionsTest {
-    @Test
-    public void testToStringConvertsMapCorrectly() {
-        Map<String, String> extensionsMap = new LinkedHashMap<>();
-        extensionsMap.put("what", "42");
-        extensionsMap.put("who", "me");
-        String expectedRepresentation = "what=42,who=me";
+    Map<String, String> map;
 
-        SaslExtensions extensions = new SaslExtensions(extensionsMap, ",");
-        String stringRepresentation = extensions.toString();
+    @Before
+    public void setUp() {
+        this.map = new HashMap<>();
+        this.map.put("what", "42");
+        this.map.put("who", "me");
+    }
 
-        assertEquals(expectedRepresentation, stringRepresentation);
+    @Test(expected = UnsupportedOperationException.class)
+    public void testReturnedMapIsImmutable() {
+        SaslExtensions extensions = new SaslExtensions(this.map);
+        extensions.map().put("hello", "test");
     }
 
     @Test
-    public void testExtensionNamesReturnsAllNames() {
-        Set<String> expectedNames = new HashSet<>(Arrays.asList("what", "who"));
+    public void testCannotAddValueToMapReferenceAndGetFromExtensions() {
+        SaslExtensions extensions = new SaslExtensions(this.map);
 
-        SaslExtensions extensions = new SaslExtensions("what=42,who=me", ",");
-        Set<String> receivedNames = extensions.extensionNames();
-
-        assertEquals(receivedNames, expectedNames);
-    }
-
-    @Test
-    public void testReturnsExtensionValueByName() {
-        SaslExtensions extensions = new SaslExtensions("what=42,who=me", ",");
-
-
-        assertEquals("42", extensions.extensionValue("what"));
-        assertEquals("me", extensions.extensionValue("who"));
+        assertNull(extensions.extensionValue("hello"));
+        this.map.put("hello", "42");
+        assertNull(extensions.extensionValue("hello"));
+        assertNull(extensions.map().get("hello"));
     }
 }

@@ -16,67 +16,54 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.utils.Utils;
-
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * A simple value object class holding customizable SASL extensions
+ * A simple immutable value object class holding customizable SASL extensions
  */
 public class SaslExtensions {
-    protected Map<String, String> extensionMap;
-    protected String separator;
+    protected Map<String, String> extensionsMap;
 
     protected SaslExtensions() {
-        separator = ",";
-        extensionMap = new HashMap<>();
+        extensionsMap = new HashMap<>();
     }
 
-    public SaslExtensions(String extensions, String separator) {
-        this(Utils.parseMap(extensions, "=", separator), separator);
+    public SaslExtensions(Map<String, String> extensionsMap) {
+        this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
     }
 
-    public SaslExtensions(Map<String, String> extensionMap, String separator) {
-        this.extensionMap = extensionMap;
-        this.separator = separator;
+    /*
+        Returns an immutable map of the extension names and their values
+     */
+    public Map<String, String> map() {
+        return extensionsMap;
     }
 
     public String extensionValue(String name) {
-        return extensionMap.get(name);
+        return extensionsMap.get(name);
     }
 
     public Set<String> extensionNames() {
-        return extensionMap.keySet();
+        return extensionsMap.keySet();
     }
 
     public boolean isEmpty() {
-        return extensionMap.isEmpty();
-    }
-
-    @Override
-    public String toString() {
-        return mapToString(extensionMap);
+        return extensionsMap.isEmpty();
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        return extensionMap.equals(((SaslExtensions) o).extensionMap);
+        return extensionsMap.equals(((SaslExtensions) o).extensionsMap);
     }
 
     @Override
     public int hashCode() {
-        return extensionMap.hashCode();
+        return extensionsMap.hashCode();
     }
 
-    protected Map<String, String> stringToMap(String extensions) {
-        return Utils.parseMap(extensions, "=", ",");
-    }
-
-    protected String mapToString(Map<String, String> extensionMap) {
-        return Utils.mkString(extensionMap, "", "", "=", separator);
-    }
 }

@@ -42,7 +42,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
@@ -76,7 +75,7 @@ public class OAuthBearerLoginModuleTest {
 
                     Map<String, String> extensions = new HashMap<>();
                     extensions.put("test", "true");
-                    ((SaslExtensionsCallback) callback).extensions(new SaslExtensions(extensions, OAuthBearerClientInitialResponse.SEPARATOR));
+                    ((SaslExtensionsCallback) callback).extensions(new SaslExtensions(extensions));
                 } else
                     throw new UnsupportedCallbackException(callback);
             }
