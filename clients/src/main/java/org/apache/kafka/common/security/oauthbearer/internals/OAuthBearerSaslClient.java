@@ -90,7 +90,7 @@ public class OAuthBearerSaslClient implements SaslClient {
                     if (challenge != null && challenge.length != 0)
                         throw new SaslException("Expected empty challenge");
                     callbackHandler().handle(new Callback[] {callback});
-                    SaslExtensions extensions = parseCustomExtensions();
+                    SaslExtensions extensions = retrieveCustomExtensions();
 
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
 
@@ -156,7 +156,7 @@ public class OAuthBearerSaslClient implements SaslClient {
         this.state = state;
     }
 
-    private SaslExtensions parseCustomExtensions() throws SaslException {
+    private SaslExtensions retrieveCustomExtensions() throws SaslException {
         SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
         try {
             callbackHandler().handle(new Callback[] {extensionsCallback});

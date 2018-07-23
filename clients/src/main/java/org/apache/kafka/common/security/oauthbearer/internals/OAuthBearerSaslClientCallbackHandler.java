@@ -101,9 +101,9 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
     }
 
     /**
-     * Attaches the first Map<String, String> found in the public credentials of the Subject as SASL extensions
+     * Attaches the first {@link SaslExtensions} found in the public credentials of the Subject
      */
-    private void handleCallback(SaslExtensionsCallback extensionsCallback, Subject subject) {
+    private static void handleCallback(SaslExtensionsCallback extensionsCallback, Subject subject) {
         if (subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
             SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
             extensionsCallback.extensions(extensions);

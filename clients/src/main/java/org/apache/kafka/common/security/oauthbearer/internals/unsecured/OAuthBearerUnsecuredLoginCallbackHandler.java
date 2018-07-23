@@ -203,8 +203,9 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         }
     }
 
-    /*
-        Add and validate all the configured extensions
+    /**
+     *  Add and validate all the configured extensions.
+     *  Token keys, apart from passing regex validation, must not be equal to the reserved key {@code OAuthBearerClientInitialResponse.AUTH_KEY}
      */
     private void handleExtensionsCallback(SaslExtensionsCallback callback) {
         Map<String, String> extensions = new HashMap<>();
@@ -215,7 +216,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             String extensionName = key.substring(EXTENSION_PREFIX.length());
             String extensionValue = configEntry.getValue();
 
-            if (!OAuthBearerClientInitialResponse.EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
+            if (!OAuthBearerClientInitialResponse.EXTENSION_KEY_PATTERN.matcher(extensionName).matches() || key.equals(OAuthBearerClientInitialResponse.AUTH_KEY))
                 throw new ConfigException("Extension name " + extensionName + " is invalid");
             if (!OAuthBearerClientInitialResponse.EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
                 throw new ConfigException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");

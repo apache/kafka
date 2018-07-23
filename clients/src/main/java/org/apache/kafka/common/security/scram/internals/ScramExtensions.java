@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 public class ScramExtensions extends SaslExtensions {
 
@@ -34,7 +35,11 @@ public class ScramExtensions extends SaslExtensions {
     }
 
     public ScramExtensions(Map<String, String> extensionMap) {
-        this.extensionsMap = extensionMap;
+        super(extensionMap);
+    }
+
+    public Set<String> extensionNames() {
+        return extensionsMap.keySet();
     }
 
     public boolean tokenAuthenticated() {

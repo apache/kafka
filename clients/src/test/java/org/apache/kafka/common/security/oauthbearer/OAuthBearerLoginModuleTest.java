@@ -339,7 +339,7 @@ public class OAuthBearerLoginModuleTest {
         // Should populate public credentials with an empty map and not throw an exception
         loginModule1.commit();
         SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
-        assertFalse(extensions.isEmpty());
+        assertFalse(extensions.map().isEmpty());
         assertEquals("true", extensions.extensionValue("test"));
     }
 
@@ -367,6 +367,6 @@ public class OAuthBearerLoginModuleTest {
         loginModule1.commit();
         SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
         assertNotNull(extensions);
-        assertTrue(extensions.isEmpty());
+        assertTrue(extensions.map().isEmpty());
     }
 }

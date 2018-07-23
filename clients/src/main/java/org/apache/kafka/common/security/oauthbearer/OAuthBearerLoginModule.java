@@ -96,7 +96,12 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <p>
  * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
- * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}
+ * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}. Note that there
+ * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at {@code OAuthBearerClientInitialResponse.AUTH_KEY}.
+ * The {@code OAuthBearerLoginModule} instance also asks its configured {@link AuthenticateCallbackHandler}
+ * implementation to handle an instance of {@link SaslExtensionsCallback} and return an instance of {@link SaslExtensions}.
+ * The configured callback handler does not need to handle this callback, though -- any {@code UnsupportedCallbackException}
+ * that is thrown is ignored, and no SASL extensions will be associated with the login.
  * <p>
  * Production use cases will require writing an implementation of
  * {@link AuthenticateCallbackHandler} that can handle an instance of
@@ -266,15 +271,15 @@ public class OAuthBearerLoginModule implements LoginModule {
                     "Already have a committed token with private credential token count=%d; must login on another login context or logout here first before reusing the same login context",
                     committedTokenCount()));
 
-        attachToken();
-        attachExtensions();
+        identifyToken();
+        identifyExtensions();
 
         log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
                 committedTokenCount());
         return true;
     }
 
-    private void attachToken() throws LoginException {
+    private void identifyToken() throws LoginException {
         OAuthBearerTokenCallback tokenCallback = new OAuthBearerTokenCallback();
         try {
             callbackHandler.handle(new Callback[] {tokenCallback});
@@ -294,7 +299,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     /**
      * Attaches SASL extensions to the Subject
      */
-    private void attachExtensions() throws LoginException {
+    private void identifyExtensions() throws LoginException {
         SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
         try {
             callbackHandler.handle(new Callback[] {extensionsCallback});
@@ -307,7 +312,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
         }
         if (extensionsRequiringCommit ==  null) {
-            log.error("SASL Extensions cannot be null. Check whether your callback is explicitly setting them as null.");
+            log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
             throw new LoginException("Extensions cannot be null.");
         }
     }
@@ -352,11 +357,6 @@ public class OAuthBearerLoginModule implements LoginModule {
         if (tokenRequiringCommit == null) {
             if (log.isDebugEnabled())
                 log.debug("Nothing here to commit");
-            return false;
-        }
-        if (extensionsRequiringCommit ==  null) {
-            if (log.isDebugEnabled())
-                log.debug("SASL Extensions cannot be null when committing. Check whether your callback is explicitly setting them as null.");
             return false;
         }
 

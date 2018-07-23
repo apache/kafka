@@ -77,16 +77,6 @@ public class OAuthBearerClientInitialResponseTest {
         assertEquals("myuser", response.authorizationId());
     }
 
-    @Test
-    public void testProperties() throws Exception {
-        String message = "n,,\u0001propA=valueA1, valueA2\u0001auth=Bearer 567\u0001propB=valueB\u0001\u0001";
-        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
-        assertEquals("567", response.tokenValue());
-        assertEquals("", response.authorizationId());
-        assertEquals("valueA1, valueA2", response.propertyValue("propA"));
-        assertEquals("valueB", response.propertyValue("propB"));
-    }
-
     // The example in the RFC uses `vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg==` as the token
     // But since we use Base64Url encoding, padding is omitted. Hence this test verifies without '='.
     @Test
@@ -96,7 +86,5 @@ public class OAuthBearerClientInitialResponseTest {
         OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
         assertEquals("vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg", response.tokenValue());
         assertEquals("user@example.com", response.authorizationId());
-        assertEquals("server.example.com", response.propertyValue("host"));
-        assertEquals("143", response.propertyValue("port"));
     }
 }

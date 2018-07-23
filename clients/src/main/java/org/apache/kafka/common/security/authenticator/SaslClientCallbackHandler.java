@@ -82,8 +82,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
             } else if (callback instanceof ScramExtensionsCallback) {
-                boolean isGSSAPI = SaslConfigs.GSSAPI_MECHANISM.equals(mechanism);
-                if (isGSSAPI)
+                if (SaslConfigs.GSSAPI_MECHANISM.equals(mechanism))
                     return; // extensions are not supported for GSSAPI
 
                 ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
@@ -91,8 +90,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                     sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
                 }
             } else if (callback instanceof SaslExtensionsCallback) {
-                boolean isGSSAPI = SaslConfigs.GSSAPI_MECHANISM.equals(mechanism);
-                if (isGSSAPI)
+                if (SaslConfigs.GSSAPI_MECHANISM.equals(mechanism))
                     return; // extensions are not supported for GSSAPI
 
                 SaslExtensionsCallback sc = (SaslExtensionsCallback) callback;

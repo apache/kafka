@@ -19,17 +19,12 @@ package org.apache.kafka.common.security.auth;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A simple immutable value object class holding customizable SASL extensions
  */
 public class SaslExtensions {
     protected Map<String, String> extensionsMap;
-
-    protected SaslExtensions() {
-        extensionsMap = Collections.unmodifiableMap(new HashMap<>());
-    }
 
     public SaslExtensions(Map<String, String> extensionsMap) {
         this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
@@ -44,14 +39,6 @@ public class SaslExtensions {
 
     public String extensionValue(String name) {
         return extensionsMap.get(name);
-    }
-
-    public Set<String> extensionNames() {
-        return extensionsMap.keySet();
-    }
-
-    public boolean isEmpty() {
-        return extensionsMap.isEmpty();
     }
 
     @Override
