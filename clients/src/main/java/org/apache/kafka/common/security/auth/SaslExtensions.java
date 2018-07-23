@@ -28,15 +28,15 @@ public class SaslExtensions {
     protected Map<String, String> extensionsMap;
 
     protected SaslExtensions() {
-        extensionsMap = new HashMap<>();
+        extensionsMap = Collections.unmodifiableMap(new HashMap<>());
     }
 
     public SaslExtensions(Map<String, String> extensionsMap) {
         this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
     }
 
-    /*
-        Returns an immutable map of the extension names and their values
+    /**
+     * Returns an <strong>immutable</strong> map of the extension names and their values
      */
     public Map<String, String> map() {
         return extensionsMap;

@@ -18,11 +18,48 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
 
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.junit.Test;
 
+import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class OAuthBearerClientInitialResponseTest {
+
+    /*
+        Test how a client would build a response
+     */
+    @Test
+    public void testBuildClientResponseToBytes() throws Exception {
+        String expectedMesssage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
+
+        Map<String, String> extensions = new HashMap<>();
+        extensions.put("nineteen", "42");
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions));
+
+        String message = new String(response.toBytes(), StandardCharsets.UTF_8);
+
+        assertEquals(expectedMesssage, message);
+    }
+
+    @Test
+    public void testBuildServerResponseToBytes() throws Exception {
+        String serverMessage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(serverMessage.getBytes(StandardCharsets.UTF_8));
+
+        String message = new String(response.toBytes(), StandardCharsets.UTF_8);
+
+        assertEquals(serverMessage, message);
+    }
+
+    @Test(expected = SaslException.class)
+    public void testThrowsSaslExceptionOnInvalidExtensionKey() throws Exception {
+        Map<String, String> extensions = new HashMap<>();
+        extensions.put("19", "42"); // keys can only be a-z
+        new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions));
+    }
 
     @Test
     public void testToken() throws Exception {

@@ -27,16 +27,15 @@ public class SaslExtensionsCallback implements Callback {
     private SaslExtensions extensions;
 
     /**
-     * Returns map of the extension names and values that are sent by the client to
+     * Returns a {@link SaslExtensions} consisting of the extension names and values that are sent by the client to
      * the server in the initial client SASL authentication message.
-     * Default is an empty unmodifiable map.
      */
     public SaslExtensions extensions() {
         return extensions;
     }
 
     /**
-     * Sets the SASL extensions on this callback. Maps passed in should be unmodifiable
+     * Sets the SASL extensions on this callback.
      */
     public void extensions(SaslExtensions extensions) {
         this.extensions = extensions;
