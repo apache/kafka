@@ -269,10 +269,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.joinedSubscription = newJoinedSubscription;
         }
 
-        // update the metadata and enforce a refresh to make sure the fetcher can start
-        // fetching data in the next iteration
+        // Update the metadata to include the full group subscription. The leader will trigger a rebalance
+        // if there are any metadata changes affecting any of the consumed partitions (whether or not this
+        // instance is subscribed to the topics).
         this.metadata.setTopics(subscriptions.groupSubscription());
-        if (!client.ensureFreshMetadata(Long.MAX_VALUE)) throw new TimeoutException();
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
