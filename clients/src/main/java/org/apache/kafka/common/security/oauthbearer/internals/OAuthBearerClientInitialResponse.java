@@ -26,7 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class OAuthBearerClientInitialResponse {
-    public static final String SEPARATOR = "\u0001";
+    static final String SEPARATOR = "\u0001";
 
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
     private static final String KEY = "[A-Za-z]+";
@@ -71,32 +71,14 @@ public class OAuthBearerClientInitialResponse {
         this.tokenValue = authMatcher.group("token");
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue, SaslExtensions properties) throws SaslException {
-        this(tokenValue, "", properties);
+    public OAuthBearerClientInitialResponse(String tokenValue, SaslExtensions extensions) throws SaslException {
+        this(tokenValue, "", extensions);
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions props) throws SaslException {
+    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         this.tokenValue = tokenValue;
         this.authorizationId = authorizationId == null ? "" : authorizationId;
-        extensions(props);
-    }
-
-    /**
-     * Validates that the given extensions conform to the standard
-     *
-     * @see <a href="https://tools.ietf.org/html/rfc7628#section-3.1">RFC 7628,
-     *  Section 3.1</a>
-     */
-    private void validateExtensions(SaslExtensions extensions) throws SaslException {
-        for (Map.Entry<String, String> entry : extensions.map().entrySet()) {
-            String extensionName = entry.getKey();
-            String extensionValue = entry.getValue();
-
-            if (!EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
-                throw new SaslException("Extension name " + extensionName + " is invalid");
-            if (!EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
-                throw new SaslException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
-        }
+        extensions(extensions);
     }
 
     public SaslExtensions extensions() {
@@ -135,6 +117,24 @@ public class OAuthBearerClientInitialResponse {
     private void extensions(SaslExtensions extensions) throws SaslException {
         validateExtensions(extensions);
         saslExtensions = extensions;
+    }
+
+    /**
+     * Validates that the given extensions conform to the standard
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7628#section-3.1">RFC 7628,
+     *  Section 3.1</a>
+     */
+    private void validateExtensions(SaslExtensions extensions) throws SaslException {
+        for (Map.Entry<String, String> entry : extensions.map().entrySet()) {
+            String extensionName = entry.getKey();
+            String extensionValue = entry.getValue();
+
+            if (!EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
+                throw new SaslException("Extension name " + extensionName + " is invalid");
+            if (!EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
+                throw new SaslException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
+        }
     }
 
     /**

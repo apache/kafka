@@ -95,9 +95,8 @@ public class OAuthBearerSaslServer implements SaslServer {
             log.debug(e.getMessage());
             throw e;
         }
-        extensions = clientResponse.extensions();
 
-        return process(clientResponse.tokenValue(), clientResponse.authorizationId());
+        return process(clientResponse.tokenValue(), clientResponse.authorizationId(), clientResponse.extensions());
     }
 
     @Override
@@ -147,7 +146,7 @@ public class OAuthBearerSaslServer implements SaslServer {
         tokenForNegotiatedProperty = null;
     }
 
-    private byte[] process(String tokenValue, String authorizationId) throws SaslException {
+    private byte[] process(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(tokenValue);
         try {
             callbackHandler.handle(new Callback[] {callback});
@@ -174,6 +173,7 @@ public class OAuthBearerSaslServer implements SaslServer {
                     "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
                     authorizationId, token.principalName()));
         tokenForNegotiatedProperty = token;
+        this.extensions = extensions;
         complete = true;
         if (log.isDebugEnabled())
             log.debug("Successfully authenticate User={}", token.principalName());

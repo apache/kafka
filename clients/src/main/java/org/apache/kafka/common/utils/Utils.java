@@ -499,10 +499,10 @@ public final class Utils {
     }
 
     /**
-     *  Converts a Map class into a string, concatenating keys and values
+     *  Converts a {@code Map} class into a string, concatenating keys and values
      *  Example:
-     *      mkString({ key: "hello", keyTwo: "hi" }, "|START|", "|END|", "=", ",")
-     *          => "|START|key=hello,keyTwo=hi|END|"
+     *      {@code mkString({ key: "hello", keyTwo: "hi" }, "|START|", "|END|", "=", ",")
+     *          => "|START|key=hello,keyTwo=hi|END|"}
      */
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
                                          String keyValueSeparator, String elementSeparator) {
@@ -519,10 +519,10 @@ public final class Utils {
     }
 
     /**
-     *  Converts an extensions string into a Map<String, String>.
+     *  Converts an extensions string into a {@code Map<String, String>}.
      *
      *  Example:
-     *      parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }
+     *      {@code parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }}
      *
      */
     public static Map<String, String> parseMap(String mapStr, String keyValueSeparator, String elementSeparator) {

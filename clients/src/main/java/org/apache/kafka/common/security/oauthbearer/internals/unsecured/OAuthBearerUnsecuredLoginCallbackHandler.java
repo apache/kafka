@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A {@code CallbackHandler} that recognizes {@link OAuthBearerTokenCallback}
- * and returns an unsecured OAuth 2 bearer token.
+ * to return an unsecured OAuth 2 bearer token and {@link SaslExtensionsCallback} to return SASL extensions
  * <p>
  * Claims and their values on the returned token can be specified using
  * {@code unsecuredLoginStringClaim_<claimname>},
@@ -204,7 +204,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     }
 
     /*
-        Add all the configured extensions
+        Add and validate all the configured extensions
      */
     private void handleExtensionsCallback(SaslExtensionsCallback callback) {
         Map<String, String> extensions = new HashMap<>();

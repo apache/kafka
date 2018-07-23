@@ -40,7 +40,9 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
  * {@link OAuthBearerTokenCallback} and retrieves OAuth 2 Bearer Token that was
  * created when the {@code OAuthBearerLoginModule} logged in by looking for an
  * instance of {@link OAuthBearerToken} in the {@code Subject}'s private
- * credentials.
+ * credentials. This class also recognizes {@link SaslExtensionsCallback} and retrieves any SASL extensions that were
+ * created when the {@code OAuthBearerLoginModule} logged in by looking for an instance of {@link SaslExtensions}
+ * in the {@code Subject}'s public credentials
  * <p>
  * Use of this class is configured automatically and does not need to be
  * explicitly set via the {@code sasl.client.callback.handler.class}

@@ -291,8 +291,8 @@ public class OAuthBearerLoginModule implements LoginModule {
         }
     }
 
-    /*
-        Attaches SASL extensions to the Subject
+    /**
+     * Attaches SASL extensions to the Subject
      */
     private void attachExtensions() throws LoginException {
         SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
