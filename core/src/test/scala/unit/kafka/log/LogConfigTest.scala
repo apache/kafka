@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -28,11 +27,11 @@ import org.scalatest.Assertions._
 
 class LogConfigTest {
 
-  /** 
-   * This test verifies that KafkaConfig object initialization does not depend on 
-   * LogConfig initialization. Bad things happen due to static initialization 
-   * order dependencies. For example, LogConfig.configDef ends up adding null 
-   * values in serverDefaultConfigNames. This test ensures that the mapping of 
+  /**
+   * This test verifies that KafkaConfig object initialization does not depend on
+   * LogConfig initialization. Bad things happen due to static initialization
+   * order dependencies. For example, LogConfig.configDef ends up adding null
+   * values in serverDefaultConfigNames. This test ensures that the mapping of
    * keys from LogConfig to KafkaConfig are not missing values.
    */
   @Test
@@ -69,16 +68,19 @@ class LogConfigTest {
 
   @Test
   def testFromPropsInvalid() {
-    LogConfig.configNames.foreach(name => name match {
-      case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
-      case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
-      case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar")
-      case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
-      case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
-      case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case _ => assertPropertyInvalid(name, "not_a_number", "-1")
-    })
+    LogConfig.configNames.foreach(
+      name =>
+        name match {
+          case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
+          case LogConfig.RetentionBytesProp              => assertPropertyInvalid(name, "not_a_number")
+          case LogConfig.RetentionMsProp                 => assertPropertyInvalid(name, "not_a_number")
+          case LogConfig.CleanupPolicyProp               => assertPropertyInvalid(name, "true", "foobar")
+          case LogConfig.MinCleanableDirtyRatioProp      => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
+          case LogConfig.MinInSyncReplicasProp           => assertPropertyInvalid(name, "not_a_number", "0", "-1")
+          case LogConfig.MessageFormatVersionProp        => assertPropertyInvalid(name, "")
+          case _                                         => assertPropertyInvalid(name, "not_a_number", "-1")
+      }
+    )
   }
 
   @Test
@@ -103,14 +105,13 @@ class LogConfigTest {
     assertFalse(isValid("100:0,10 :   "))
   }
 
-  private def isValid(configValue: String): Boolean = {
+  private def isValid(configValue: String): Boolean =
     try {
       ThrottledReplicaListValidator.ensureValidString("", configValue)
       true
     } catch {
       case _: ConfigException => false
     }
-  }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {

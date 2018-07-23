@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util.concurrent.atomic.AtomicReference
@@ -32,12 +32,10 @@ object KafkaMetricReporterClusterIdTest {
 
   class MockKafkaMetricsReporter extends KafkaMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit =
       MockKafkaMetricsReporter.CLUSTER_META.set(clusterMetadata)
-    }
 
-    override def init(props: VerifiableProperties): Unit = {
-    }
+    override def init(props: VerifiableProperties): Unit = {}
   }
 
   object MockKafkaMetricsReporter {
@@ -66,8 +64,7 @@ object KafkaMetricReporterClusterIdTest {
         setupError.compareAndSet("", "No value was set for the broker id.")
       else if (!brokerId.isInstanceOf[String])
         setupError.compareAndSet("", "The value set for the broker id was not a string.")
-      try
-        Integer.parseInt(brokerId.asInstanceOf[String])
+      try Integer.parseInt(brokerId.asInstanceOf[String])
       catch {
         case e: Exception => setupError.compareAndSet("", "Error parsing broker id " + e.toString)
       }
@@ -83,8 +80,10 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
-    props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
-    props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    props.setProperty("kafka.metrics.reporters",
+                      "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
+    props.setProperty(KafkaConfig.MetricReporterClassesProp,
+                      "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
@@ -102,8 +101,10 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     assertNotNull(KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META)
     isValidClusterId(KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
 
-    assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
-      KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+    assertEquals(
+      KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
+      KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId()
+    )
   }
 
   @After

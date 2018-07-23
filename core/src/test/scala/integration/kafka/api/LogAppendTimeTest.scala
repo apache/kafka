@@ -31,9 +31,9 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
-  * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
-  * level configs, see the *ProducerSendTest classes.
-  */
+ * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
+ * level configs, see the *ProducerSendTest classes.
+ */
 class LogAppendTimeTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
@@ -56,8 +56,8 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     val producer = producers.head
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
-    val producerRecords = (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes,
-      s"value$i".getBytes))
+    val producerRecords =
+      (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes, s"value$i".getBytes))
     val recordMetadatas = producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
     recordMetadatas.foreach { recordMetadata =>
       assertTrue(recordMetadata.timestamp >= now)
@@ -67,19 +67,23 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     val consumer = consumers.head
     consumer.subscribe(Collections.singleton(topic))
     val consumerRecords = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
-    TestUtils.waitUntilTrue(() => {
-      consumerRecords ++= consumer.poll(50).asScala
-      consumerRecords.size == producerRecords.size
-    }, s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records")
+    TestUtils.waitUntilTrue(
+      () => {
+        consumerRecords ++= consumer.poll(50).asScala
+        consumerRecords.size == producerRecords.size
+      },
+      s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records"
+    )
 
-    consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
-      val producerRecord = producerRecords(index)
-      val recordMetadata = recordMetadatas(index)
-      assertEquals(new String(producerRecord.key), new String(consumerRecord.key))
-      assertEquals(new String(producerRecord.value), new String(consumerRecord.value))
-      assertNotEquals(producerRecord.timestamp, consumerRecord.timestamp)
-      assertEquals(recordMetadata.timestamp, consumerRecord.timestamp)
-      assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType)
+    consumerRecords.zipWithIndex.foreach {
+      case (consumerRecord, index) =>
+        val producerRecord = producerRecords(index)
+        val recordMetadata = recordMetadatas(index)
+        assertEquals(new String(producerRecord.key), new String(consumerRecord.key))
+        assertEquals(new String(producerRecord.value), new String(consumerRecord.value))
+        assertNotEquals(producerRecord.timestamp, consumerRecord.timestamp)
+        assertEquals(recordMetadata.timestamp, consumerRecord.timestamp)
+        assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType)
     }
   }
 

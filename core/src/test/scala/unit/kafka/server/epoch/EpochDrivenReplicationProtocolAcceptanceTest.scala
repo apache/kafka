@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
@@ -41,13 +40,13 @@ import scala.collection.mutable.{ListBuffer => Buffer}
 import scala.collection.Seq
 
 /**
-  * These tests were written to assert the addition of leader epochs to the replication protocol fix the problems
-  * described in KIP-101. There is a boolean KIP_101_ENABLED which can be toggled to demonstrate the tests failing in the pre-KIP-101 case
-  *
-  * https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation
-  *
-  * A test which validates the end to end workflow is also included.
-  */
+ * These tests were written to assert the addition of leader epochs to the replication protocol fix the problems
+ * described in KIP-101. There is a boolean KIP_101_ENABLED which can be toggled to demonstrate the tests failing in the pre-KIP-101 case
+ *
+ * https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation
+ *
+ * A test which validates the end to end workflow is also included.
+ */
 class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness with Logging {
 
   val topic = "topic1"
@@ -136,7 +135,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   def shouldNotAllowDivergentLogs(): Unit = {
 
     //Given two brokers
-    brokers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    brokers = (100 to 101).map { id =>
+      createServer(fromProps(createBrokerConfig(id, zkConnect)))
+    }
 
     //A single partition topic with 2 replicas
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
@@ -149,7 +150,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     }
 
     //Stop the brokers
-    brokers.foreach { b => b.shutdown() }
+    brokers.foreach { b =>
+      b.shutdown()
+    }
 
     //Delete the clean shutdown file to simulate crash
     new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
@@ -176,7 +179,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Wait for replication to resync
     waitForLogsToMatch(brokers(0), brokers(1))
 
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals("Log files should match Broker0 vs Broker 1",
+                 getLogFile(brokers(0), 0).length,
+                 getLogFile(brokers(1), 0).length)
   }
 
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = KAFKA_0_11_0_IV1
@@ -197,7 +202,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     }
 
     //Stop the brokers
-    brokers.foreach { b => b.shutdown() }
+    brokers.foreach { b =>
+      b.shutdown()
+    }
 
     //Delete the clean shutdown file to simulate crash
     new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
@@ -247,13 +254,15 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     }
 
     //Are the files identical?
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals("Log files should match Broker0 vs Broker 1",
+                 getLogFile(brokers(0), 0).length,
+                 getLogFile(brokers(1), 0).length)
   }
 
   /**
-    * Unlike the tests above, this test doesn't fail prior to the Leader Epoch Change. I was unable to find a deterministic
-    * method for recreating the fast leader change bug.
-    */
+   * Unlike the tests above, this test doesn't fail prior to the Leader Epoch Change. I was unable to find a deterministic
+   * method for recreating the fast leader change bug.
+   */
   @Test
   def shouldSurviveFastLeaderChange(): Unit = {
     val tp = new TopicPartition(topic, 0)
@@ -291,7 +300,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
       awaitISR(tp)
 
       //Ensure no data was lost
-      assertTrue(brokers.forall { broker => getLog(broker, 0).logEndOffset == messagesWritten })
+      assertTrue(brokers.forall { broker =>
+        getLog(broker, 0).logEndOffset == messagesWritten
+      })
     }
   }
 
@@ -302,15 +313,19 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers = (100 to 101).map(createBroker(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
-      CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
+    TestUtils.createTopic(zkClient,
+                          topic,
+                          Map(0 -> Seq(100, 101)),
+                          brokers,
+                          CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
 
     producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
 
     // Write one message while both brokers are up
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
-      producer.flush()}
+      producer.flush()
+    }
 
     // Since we use producer with acks = 1, make sure that logs match for the first epoch
     waitForLogsToMatch(brokers(0), brokers(1))
@@ -321,7 +336,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Write 1 message
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
-      producer.flush()}
+      producer.flush()
+    }
 
     brokers(1).shutdown()
     brokers(0).startup()
@@ -333,7 +349,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Write 3 messages
     (0 until 3).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msgBigger))
-      producer.flush()}
+      producer.flush()
+    }
 
     brokers(0).shutdown()
     brokers(1).startup()
@@ -345,7 +362,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Write 1 message
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
-      producer.flush()}
+      producer.flush()
+    }
 
     brokers(1).shutdown()
     brokers(0).startup()
@@ -357,7 +375,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Write 2 messages
     (0 until 2).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msgBigger))
-      producer.flush()}
+      producer.flush()
+    }
 
     printSegments()
 
@@ -367,23 +386,29 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     printSegments()
 
     def crcSeq(broker: KafkaServer, partition: Int = 0): Seq[Long] = {
-      val batches = getLog(broker, partition).activeSegment.read(0, None, Integer.MAX_VALUE)
-        .records.batches().asScala.toSeq
+      val batches =
+        getLog(broker, partition).activeSegment.read(0, None, Integer.MAX_VALUE).records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
-    assertTrue(s"Logs on Broker 100 and Broker 101 should match",
-               crcSeq(brokers(0)) == crcSeq(brokers(1)))
+    assertTrue(s"Logs on Broker 100 and Broker 101 should match", crcSeq(brokers(0)) == crcSeq(brokers(1)))
   }
 
   private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
     info(s"Bounce complete for follower ${follower.config.brokerId}")
-    info(s"Leader: leo${leader.config.brokerId}: " + getLog(leader, 0).logEndOffset + " cache: " + epochCache(leader).epochEntries())
-    info(s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(follower).epochEntries())
+    info(
+      s"Leader: leo${leader.config.brokerId}: " + getLog(leader, 0).logEndOffset + " cache: " + epochCache(leader)
+        .epochEntries()
+    )
+    info(
+      s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(
+        follower
+      ).epochEntries()
+    )
   }
 
-  private def waitForLogsToMatch(b1: KafkaServer, b2: KafkaServer, partition: Int = 0): Unit = {
-    TestUtils.waitUntilTrue(() => {getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset}, "Logs didn't match.")
-  }
+  private def waitForLogsToMatch(b1: KafkaServer, b2: KafkaServer, partition: Int = 0): Unit =
+    TestUtils.waitUntilTrue(() => { getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset },
+                            "Logs didn't match.")
 
   private def printSegments(): Unit = {
     info("Broker0:")
@@ -396,7 +421,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     val consumerConfig = new Properties()
     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
     consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
-    consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
+    consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG,
+                       String.valueOf(getLogFile(brokers(1), 0).length() * 2))
     consumer = new KafkaConsumer(consumerConfig, new StubDeserializer, new StubDeserializer)
     consumer.assign(List(new TopicPartition(topic, 0)).asJava)
     consumer.seek(new TopicPartition(topic, 0), 0)
@@ -410,13 +436,19 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     writable.close()
   }
 
-  private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1, lingerMs = 10000,
-      props = Option(CoreUtils.propsWith(
-        (ProducerConfig.BATCH_SIZE_CONFIG, String.valueOf(msg.length * 1000))
-        , (ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy")
-      )))
-  }
+  private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] =
+    TestUtils.createProducer(
+      getBrokerListStrFromServers(brokers),
+      retries = 5,
+      acks = -1,
+      lingerMs = 10000,
+      props = Option(
+        CoreUtils.propsWith(
+          (ProducerConfig.BATCH_SIZE_CONFIG, String.valueOf(msg.length * 1000)),
+          (ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+        )
+      )
+    )
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
     val log: Log = getLog(broker, partition)
@@ -424,9 +456,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): Log = {
+  private def getLog(broker: KafkaServer, partition: Int): Log =
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
-  }
 
   private def bounce(follower: KafkaServer): Unit = {
     follower.shutdown()
@@ -435,24 +466,19 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer = createProducer //TODO not sure why we need to recreate the producer, but it doesn't reconnect if we don't
   }
 
-  private def epochCache(broker: KafkaServer): LeaderEpochFileCache = {
+  private def epochCache(broker: KafkaServer): LeaderEpochFileCache =
     getLog(broker, 0).leaderEpochCache.asInstanceOf[LeaderEpochFileCache]
-  }
 
-  private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
-    getLog(leader, partition).activeSegment.read(0, None, Integer.MAX_VALUE)
-      .records.batches().asScala.toSeq.last
-  }
+  private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch =
+    getLog(leader, partition).activeSegment.read(0, None, Integer.MAX_VALUE).records.batches().asScala.toSeq.last
 
-  private def awaitISR(tp: TopicPartition): Unit = {
+  private def awaitISR(tp: TopicPartition): Unit =
     TestUtils.waitUntilTrue(() => {
       leader.replicaManager.getPartition(tp).get.inSyncReplicas.map(_.brokerId).size == 2
     }, "Timed out waiting for replicas to join ISR")
-  }
 
-  private def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+  private def createProducer: KafkaProducer[Array[Byte], Array[Byte]] =
     TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1)
-  }
 
   private def leader(): KafkaServer = {
     assertEquals(2, brokers.size)
@@ -468,7 +494,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
-    if(!KIP_101_ENABLED) {
+    if (!KIP_101_ENABLED) {
       config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_0_11_0_IV1.version)
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, KAFKA_0_11_0_IV1.version)
     }
@@ -479,7 +505,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   private class StubDeserializer extends Deserializer[Array[Byte]] {
     override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {}
 
-    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = { data }
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
 
     override def close(): Unit = {}
   }

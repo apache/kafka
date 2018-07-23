@@ -16,11 +16,10 @@ package kafka.metrics
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 import org.junit.Assert._
-import com.yammer.metrics.core.{MetricsRegistry, Clock}
+import com.yammer.metrics.core.{Clock, MetricsRegistry}
 
 class KafkaTimerTest {
 
@@ -44,13 +43,11 @@ class KafkaTimerTest {
 
     private var ticksInNanos = 0L
 
-    override def tick() = {
+    override def tick() =
       ticksInNanos
-    }
 
-    override def time() = {
+    override def time() =
       TimeUnit.NANOSECONDS.toMillis(ticksInNanos)
-    }
 
     def addMillis(millis: Long) {
       ticksInNanos += TimeUnit.MILLISECONDS.toNanos(millis)

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util.{Arrays, Base64, UUID}
@@ -54,17 +53,19 @@ class CoreUtilsTest extends JUnitSuite with Logging {
     def recordingFunction(v: Either[TestException, String]): Unit = {
       val key = v match {
         case Right(key) => key
-        case Left(e) => e.key
+        case Left(e)    => e.key
       }
       recorded(key) = v
     }
 
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Left(new TestException("exception-1"))),
-      () => recordingFunction(Right("valid-2")),
-      () => recordingFunction(Left(new TestException("exception-3")))
-    ))
+    CoreUtils.tryAll(
+      Seq(
+        () => recordingFunction(Right("valid-0")),
+        () => recordingFunction(Left(new TestException("exception-1"))),
+        () => recordingFunction(Right("valid-2")),
+        () => recordingFunction(Left(new TestException("exception-3")))
+      )
+    )
     var expected = Map(
       "valid-0" -> Right("valid-0"),
       "exception-1" -> Left(TestException("exception-1")),
@@ -74,10 +75,12 @@ class CoreUtilsTest extends JUnitSuite with Logging {
     assertEquals(expected, recorded)
 
     recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Right("valid-1"))
-    ))
+    CoreUtils.tryAll(
+      Seq(
+        () => recordingFunction(Right("valid-0")),
+        () => recordingFunction(Right("valid-1"))
+      )
+    )
     expected = Map(
       "valid-0" -> Right("valid-0"),
       "valid-1" -> Right("valid-1")
@@ -85,10 +88,12 @@ class CoreUtilsTest extends JUnitSuite with Logging {
     assertEquals(expected, recorded)
 
     recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Left(new TestException("exception-0"))),
-      () => recordingFunction(Left(new TestException("exception-1")))
-    ))
+    CoreUtils.tryAll(
+      Seq(
+        () => recordingFunction(Left(new TestException("exception-0"))),
+        () => recordingFunction(Left(new TestException("exception-1")))
+      )
+    )
     expected = Map(
       "exception-0" -> Left(TestException("exception-0")),
       "exception-1" -> Left(TestException("exception-1"))
@@ -117,7 +122,7 @@ class CoreUtilsTest extends JUnitSuite with Logging {
 
   @Test
   def testReadBytes() {
-    for(testCase <- List("", "a", "abcd")) {
+    for (testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
       assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
     }
@@ -142,23 +147,33 @@ class CoreUtilsTest extends JUnitSuite with Logging {
 
   @Test
   def testReadInt() {
-    val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
+    val values = Array(0,
+                       1,
+                       -1,
+                       Byte.MaxValue,
+                       Short.MaxValue,
+                       2 * Short.MaxValue,
+                       Int.MaxValue / 2,
+                       Int.MinValue / 2,
+                       Int.MaxValue,
+                       Int.MinValue,
+                       Int.MaxValue)
     val buffer = ByteBuffer.allocate(4 * values.size)
-    for(i <- 0 until values.length) {
-      buffer.putInt(i*4, values(i))
-      assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i*4))
+    for (i <- 0 until values.length) {
+      buffer.putInt(i * 4, values(i))
+      assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i * 4))
     }
   }
 
   @Test
   def testCsvList() {
-    val emptyString:String = ""
-    val nullString:String = null
+    val emptyString: String = ""
+    val nullString: String = null
     val emptyList = CoreUtils.parseCsvList(emptyString)
     val emptyListFromNullString = CoreUtils.parseCsvList(nullString)
     val emptyStringList = Seq.empty[String]
-    assertTrue(emptyList!=null)
-    assertTrue(emptyListFromNullString!=null)
+    assertTrue(emptyList != null)
+    assertTrue(emptyListFromNullString != null)
     assertTrue(emptyStringList.equals(emptyListFromNullString))
     assertTrue(emptyStringList.equals(emptyList))
   }
@@ -178,7 +193,7 @@ class CoreUtilsTest extends JUnitSuite with Logging {
       assertTrue(m._2.equals("v"))
     }
 
-    val singleEntry:String = "key:value"
+    val singleEntry: String = "key:value"
     val singleMap = CoreUtils.parseCsvMap(singleEntry)
     val value = singleMap.getOrElse("key", 0)
     assertTrue(value.equals("value"))
@@ -213,15 +228,15 @@ class CoreUtilsTest extends JUnitSuite with Logging {
   def testUrlSafeBase64EncodeUUID() {
 
     // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
-    val clusterId1 = Base64.getUrlEncoder.withoutPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
-      "a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
+    val clusterId1 = Base64.getUrlEncoder.withoutPadding
+      .encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString("a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
     assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
     assertEquals(clusterId1.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId1).matches())
 
     // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
-    val clusterId2 = Base64.getUrlEncoder.withoutPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
-      "d418ec02-277e-4853-81e6-afe30259daec")))
+    val clusterId2 = Base64.getUrlEncoder.withoutPadding
+      .encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString("d418ec02-277e-4853-81e6-afe30259daec")))
     assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
     assertEquals(clusterId2.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId2).matches())
@@ -242,14 +257,19 @@ class CoreUtilsTest extends JUnitSuite with Logging {
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
     implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
-      Await.result(Future.traverse(1 to count) { i =>
-        Future {
-          CoreUtils.atomicGetOrUpdate(map, 0, {
-            createdCount.incrementAndGet
-            new AtomicInteger
-          }).incrementAndGet()
-        }
-      }, Duration(1, TimeUnit.MINUTES))
+      Await.result(
+        Future.traverse(1 to count) { i =>
+          Future {
+            CoreUtils
+              .atomicGetOrUpdate(map, 0, {
+                createdCount.incrementAndGet
+                new AtomicInteger
+              })
+              .incrementAndGet()
+          }
+        },
+        Duration(1, TimeUnit.MINUTES)
+      )
       assertEquals(count, map(0).get)
       val created = createdCount.get
       assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)

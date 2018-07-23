@@ -195,7 +195,7 @@ class BrokerEndPointTest {
     endpoint = EndPoint.createEndPoint(connectionString, None)
     assertNull(endpoint.host)
     assertEquals(9092, endpoint.port)
-    assertEquals( "PLAINTEXT://:9092", endpoint.connectionString)
+    assertEquals("PLAINTEXT://:9092", endpoint.connectionString)
     // also test for ipv6
     connectionString = "PLAINTEXT://[::1]:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)

@@ -17,10 +17,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.metrics
 
-import kafka.utils.{VerifiableProperties, CoreUtils}
+import kafka.utils.{CoreUtils, VerifiableProperties}
 
 class KafkaMetricsConfig(props: VerifiableProperties) {
 

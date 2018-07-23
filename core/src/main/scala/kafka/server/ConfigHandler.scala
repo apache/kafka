@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.util.Properties
@@ -35,17 +34,19 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.JavaConverters._
 
 /**
-  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
-  */
+ * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
+ */
 trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties)
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes in ZK.
-  * The callback provides the topic name and the full properties set read from ZK
-  */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
+ * The TopicConfigHandler will process topic config changes in ZK.
+ * The callback provides the topic name and the full properties set read from ZK
+ */
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers)
+    extends ConfigHandler
+    with Logging {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the configurations.
@@ -55,14 +56,15 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      topicConfig.asScala.foreach { case (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
+      topicConfig.asScala.foreach {
+        case (key, value) =>
+          if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
       logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
     }
 
-    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
+    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) =
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
@@ -71,7 +73,6 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         quotaManager.removeThrottle(topic)
         debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
-    }
     updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
     updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
   }
@@ -80,29 +81,31 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     val configValue = topicConfig.get(prop).toString.trim
     ThrottledReplicaListValidator.ensureValidString(prop, configValue)
     configValue match {
-      case "" => Seq()
+      case ""  => Seq()
       case "*" => AllReplicas
-      case _ => configValue.trim
-        .split(",")
-        .map(_.split(":"))
-        .filter(_ (1).toInt == brokerId) //Filter this replica
-        .map(_ (0).toInt).toSeq //convert to list of partition ids
+      case _ =>
+        configValue.trim
+          .split(",")
+          .map(_.split(":"))
+          .filter(_(1).toInt == brokerId) //Filter this replica
+          .map(_(0).toInt)
+          .toSeq //convert to list of partition ids
     }
   }
 
-  def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+  def excludedConfigs(topic: String, topicConfig: Properties): Set[String] =
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
       if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+        warn(
+          s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+            s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`"
+        )
         Some(LogConfig.MessageFormatVersionProp)
       } else
         None
     }.toSet
-  }
 }
-
 
 /**
  * Handles <client-id>, <user> or <user, client-id> quota config updates in ZK.
@@ -137,7 +140,9 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
  * The ClientIdConfigHandler will process clientId config changes in ZK.
  * The callback provides the clientId and the full properties set read from ZK.
  */
-class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+class ClientIdConfigHandler(private val quotaManagers: QuotaManagers)
+    extends QuotaConfigHandler(quotaManagers)
+    with ConfigHandler {
 
   def processConfigChanges(sanitizedClientId: String, clientConfig: Properties) {
     updateQuotaConfig(None, Some(sanitizedClientId), clientConfig)
@@ -149,7 +154,9 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Qu
  * The callback provides the node name containing sanitized user principal, sanitized client-id if this is
  * a <user, client-id> update and the full properties set read from ZK.
  */
-class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider)
+    extends QuotaConfigHandler(quotaManagers)
+    with ConfigHandler {
 
   def processConfigChanges(quotaEntityPath: String, config: Properties) {
     // Entity path is <user> or <user>/clients/<client>
@@ -165,20 +172,20 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
 }
 
 /**
-  * The BrokerConfigHandler will process individual broker config changes in ZK.
-  * The callback provides the brokerId and the full properties set read from ZK.
-  * This implementation reports the overrides to the respective ReplicationQuotaManager objects
-  */
-class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
-                          private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+ * The BrokerConfigHandler will process individual broker config changes in ZK.
+ * The callback provides the brokerId and the full properties set read from ZK.
+ * This implementation reports the overrides to the respective ReplicationQuotaManager objects
+ */
+class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers)
+    extends ConfigHandler
+    with Logging {
 
   def processConfigChanges(brokerId: String, properties: Properties) {
-    def getOrDefault(prop: String): Long = {
+    def getOrDefault(prop: String): Long =
       if (properties.containsKey(prop))
         properties.getProperty(prop).toLong
       else
         DefaultReplicationThrottledRate
-    }
     if (brokerId == ConfigEntityName.Default)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
@@ -195,16 +202,18 @@ object ThrottledReplicaListValidator extends Validator {
     ensureValid(name, value.split(",").map(_.trim).toSeq)
 
   override def ensureValid(name: String, value: Any): Unit = {
-    def check(proposed: Seq[Any]): Unit = {
+    def check(proposed: Seq[Any]): Unit =
       if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
-        || proposed.headOption.exists(_.toString.trim.equals("*"))))
-        throw new ConfigException(name, value,
-          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId],[brokerId]:[partitionId],[brokerId]:...")
-    }
+            || proposed.headOption.exists(_.toString.trim.equals("*"))))
+        throw new ConfigException(
+          name,
+          value,
+          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId],[brokerId]:[partitionId],[brokerId]:..."
+        )
     value match {
-      case scalaSeq: Seq[_] => check(scalaSeq)
+      case scalaSeq: Seq[_]            => check(scalaSeq)
       case javaList: java.util.List[_] => check(javaList.asScala)
-      case _ => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
+      case _                           => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
     }
   }
 

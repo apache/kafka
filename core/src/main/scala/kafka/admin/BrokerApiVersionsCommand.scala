@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.admin
 
 import java.io.PrintStream
@@ -32,29 +31,30 @@ import scala.util.{Failure, Success}
  */
 object BrokerApiVersionsCommand {
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
     execute(args, System.out)
-  }
 
   def execute(args: Array[String], out: PrintStream): Unit = {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
     val brokerMap = adminClient.listAllBrokerVersionInfo()
-    brokerMap.foreach { case (broker, versionInfoOrError) =>
-      versionInfoOrError match {
-        case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
-        case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
-      }
+    brokerMap.foreach {
+      case (broker, versionInfoOrError) =>
+        versionInfoOrError match {
+          case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
+          case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
+        }
     }
     adminClient.close()
   }
 
   private def createAdminClient(opts: BrokerVersionCommandOptions): AdminClient = {
-    val props = if (opts.options.has(opts.commandConfigOpt))
-      Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
-    else
-      new Properties()
+    val props =
+      if (opts.options.has(opts.commandConfigOpt))
+        Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+      else
+        new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     AdminClient.create(props)
   }
@@ -64,15 +64,17 @@ object BrokerApiVersionsCommand {
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val parser = new OptionParser(false)
-    val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
-                                 .withRequiredArg
-                                 .describedAs("command config property file")
-                                 .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
-                                   .withRequiredArg
-                                   .describedAs("server(s) to use for bootstrapping")
-                                   .ofType(classOf[String])
-    val options = parser.parse(args : _*)
+    val commandConfigOpt = parser
+      .accepts("command-config", CommandConfigDoc)
+      .withRequiredArg
+      .describedAs("command config property file")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser
+      .accepts("bootstrap-server", BootstrapServerDoc)
+      .withRequiredArg
+      .describedAs("server(s) to use for bootstrapping")
+      .ofType(classOf[String])
+    val options = parser.parse(args: _*)
     checkArgs()
 
     def checkArgs() {

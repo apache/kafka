@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import kafka.utils.TestUtils
@@ -115,7 +114,8 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       }
     }
 
-    class MockKafkaServer(override val config: KafkaConfig, override val brokerState: BrokerState = mockBrokerState) extends KafkaServer(config) {}
+    class MockKafkaServer(override val config: KafkaConfig, override val brokerState: BrokerState = mockBrokerState)
+        extends KafkaServer(config) {}
 
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = new MockKafkaServer(KafkaConfig.fromProps(props))

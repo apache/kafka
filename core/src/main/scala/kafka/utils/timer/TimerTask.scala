@@ -22,14 +22,13 @@ trait TimerTask extends Runnable {
 
   private[this] var timerTaskEntry: TimerTaskEntry = null
 
-  def cancel(): Unit = {
+  def cancel(): Unit =
     synchronized {
       if (timerTaskEntry != null) timerTaskEntry.remove()
       timerTaskEntry = null
     }
-  }
 
-  private[timer] def setTimerTaskEntry(entry: TimerTaskEntry): Unit = {
+  private[timer] def setTimerTaskEntry(entry: TimerTaskEntry): Unit =
     synchronized {
       // if this timerTask is already held by an existing timer task entry,
       // we will remove such an entry first.
@@ -38,10 +37,8 @@ trait TimerTask extends Runnable {
 
       timerTaskEntry = entry
     }
-  }
 
-  private[timer] def getTimerTaskEntry(): TimerTaskEntry = {
+  private[timer] def getTimerTaskEntry(): TimerTaskEntry =
     timerTaskEntry
-  }
 
 }

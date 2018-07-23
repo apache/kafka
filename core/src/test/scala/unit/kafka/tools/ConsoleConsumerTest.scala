@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.tools
 
 import java.io.PrintStream
@@ -36,9 +35,8 @@ import scala.collection.JavaConverters._
 class ConsoleConsumerTest {
 
   @Before
-  def setup(): Unit = {
+  def setup(): Unit =
     ConsoleConsumer.messageCount = 0
-  }
 
   @Test
   def shouldResetUnConsumedOffsetsBeforeExit() {
@@ -58,7 +56,9 @@ class ConsoleConsumerTest {
 
     0 until totalMessages foreach { i =>
       // add all records, each partition should have half of `totalMessages`
-      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
+      mockConsumer.addRecord(
+        new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes)
+      )
     }
 
     // Mocks
@@ -129,10 +129,7 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidConsumerValidConfig() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--from-beginning")
+    val args: Array[String] = Array("--bootstrap-server", "localhost:9092", "--topic", "test", "--from-beginning")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -146,11 +143,8 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidSimpleConsumerValidConfigWithNumericOffset(): Unit = {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--partition", "0",
-      "--offset", "3")
+    val args: Array[String] =
+      Array("--bootstrap-server", "localhost:9092", "--topic", "test", "--partition", "0", "--offset", "3")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -169,11 +163,8 @@ class ConsoleConsumerTest {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
-    val args: Array[String] = Array(
-      "--new-consumer",
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--from-beginning")
+    val args: Array[String] =
+      Array("--new-consumer", "--bootstrap-server", "localhost:9092", "--topic", "test", "--from-beginning")
 
     //When
     try {
@@ -186,12 +177,16 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidSimpleConsumerValidConfigWithStringOffset() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--partition", "0",
-      "--offset", "LatEst",
-      "--property", "print.value=false")
+    val args: Array[String] = Array("--bootstrap-server",
+                                    "localhost:9092",
+                                    "--topic",
+                                    "test",
+                                    "--partition",
+                                    "0",
+                                    "--offset",
+                                    "LatEst",
+                                    "--property",
+                                    "print.value=false")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -208,10 +203,12 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidConsumerConfigWithAutoOffsetResetLatest() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=latest")
+    val args: Array[String] = Array("--bootstrap-server",
+                                    "localhost:9092",
+                                    "--topic",
+                                    "test",
+                                    "--consumer-property",
+                                    "auto.offset.reset=latest")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -227,10 +224,12 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidConsumerConfigWithAutoOffsetResetEarliest() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=earliest")
+    val args: Array[String] = Array("--bootstrap-server",
+                                    "localhost:9092",
+                                    "--topic",
+                                    "test",
+                                    "--consumer-property",
+                                    "auto.offset.reset=earliest")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -246,11 +245,13 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=earliest",
-      "--from-beginning")
+    val args: Array[String] = Array("--bootstrap-server",
+                                    "localhost:9092",
+                                    "--topic",
+                                    "test",
+                                    "--consumer-property",
+                                    "auto.offset.reset=earliest",
+                                    "--from-beginning")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -266,9 +267,7 @@ class ConsoleConsumerTest {
   @Test
   def shouldParseValidConsumerConfigWithNoOffsetReset() {
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test")
+    val args: Array[String] = Array("--bootstrap-server", "localhost:9092", "--topic", "test")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -286,11 +285,13 @@ class ConsoleConsumerTest {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=latest",
-      "--from-beginning")
+    val args: Array[String] = Array("--bootstrap-server",
+                                    "localhost:9092",
+                                    "--topic",
+                                    "test",
+                                    "--consumer-property",
+                                    "auto.offset.reset=latest",
+                                    "--from-beginning")
 
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -308,9 +309,12 @@ class ConsoleConsumerTest {
     propsStream.write("group.id=group1".getBytes())
     propsStream.close()
     val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer.config", propsFile.getAbsolutePath
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--consumer.config",
+      propsFile.getAbsolutePath
     )
 
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -329,11 +333,16 @@ class ConsoleConsumerTest {
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     var args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--group", "group-from-arguments",
-      "--consumer-property", "group.id=group-from-properties",
-      "--consumer.config", propsFile.getAbsolutePath
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--group",
+      "group-from-arguments",
+      "--consumer-property",
+      "group.id=group-from-properties",
+      "--consumer.config",
+      propsFile.getAbsolutePath
     )
 
     try {
@@ -349,11 +358,16 @@ class ConsoleConsumerTest {
     propsStream.write("group.id=test-group".getBytes())
     propsStream.close()
     args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--group", "test-group",
-      "--consumer-property", "group.id=test-group",
-      "--consumer.config", propsFile.getAbsolutePath
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--group",
+      "test-group",
+      "--consumer-property",
+      "group.id=test-group",
+      "--consumer.config",
+      propsFile.getAbsolutePath
     )
 
     var config = new ConsoleConsumer.ConsumerConfig(args)
@@ -366,10 +380,14 @@ class ConsoleConsumerTest {
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--consumer-property", "group.id=group-from-properties",
-      "--consumer.config", propsFile.getAbsolutePath
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--consumer-property",
+      "group.id=group-from-properties",
+      "--consumer.config",
+      propsFile.getAbsolutePath
     )
 
     try {
@@ -381,10 +399,14 @@ class ConsoleConsumerTest {
 
     // different via --consumer-property and --group
     args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--group", "group-from-arguments",
-      "--consumer-property", "group.id=group-from-properties"
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--group",
+      "group-from-arguments",
+      "--consumer-property",
+      "group.id=group-from-properties"
     )
 
     try {
@@ -400,10 +422,14 @@ class ConsoleConsumerTest {
     propsStream.write("group.id=group-from-file".getBytes())
     propsStream.close()
     args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--group", "group-from-arguments",
-      "--consumer.config", propsFile.getAbsolutePath
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--group",
+      "group-from-arguments",
+      "--consumer.config",
+      propsFile.getAbsolutePath
     )
 
     try {
@@ -415,9 +441,12 @@ class ConsoleConsumerTest {
 
     // via --group only
     args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--group", "group-from-arguments"
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--group",
+      "group-from-arguments"
     )
 
     config = new ConsoleConsumer.ConsumerConfig(args)
@@ -430,11 +459,16 @@ class ConsoleConsumerTest {
   @Test
   def testCustomPropertyShouldBePassedToConfigureMethod(): Unit = {
     val args = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--property", "print.key=true",
-      "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-      "--property", "key.deserializer.my-props=abc"
+      "--bootstrap-server",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--property",
+      "print.key=true",
+      "--property",
+      "key.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--property",
+      "key.deserializer.my-props=abc"
     )
     val config = new ConsoleConsumer.ConsumerConfig(args)
     assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])

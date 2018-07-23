@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io.{Closeable, File, IOException, RandomAccessFile}
@@ -38,8 +37,12 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable with Logging {
+abstract class AbstractIndex[K, V](@volatile var file: File,
+                                   val baseOffset: Long,
+                                   val maxIndexSize: Int = -1,
+                                   val writable: Boolean)
+    extends Closeable
+    with Logging {
 
   // Length of the index file
   @volatile
@@ -55,8 +58,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
       /* pre-allocate the file if necessary */
-      if(newlyCreated) {
-        if(maxIndexSize < entrySize)
+      if (newlyCreated) {
+        if (maxIndexSize < entrySize)
           throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
         raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
       }
@@ -70,7 +73,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
           raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, _length)
       }
       /* set the position in the index for the next entry */
-      if(newlyCreated)
+      if (newlyCreated)
         idx.position(0)
       else
         // if this is a pre-existing index, assume it is valid and set position to last entry
@@ -111,7 +114,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @param newSize new size of the index file
    * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
    */
-  def resize(newSize: Int): Boolean = {
+  def resize(newSize: Int): Boolean =
     inLock(lock) {
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
 
@@ -136,7 +139,6 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         }
       }
     }
-  }
 
   /**
    * Rename the file that backs this offset index
@@ -195,11 +197,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     trimToValidSize()
   }
 
-  def closeHandler(): Unit = {
+  def closeHandler(): Unit =
     inLock(lock) {
       safeForceUnmap()
     }
-  }
 
   /**
    * Do a basic sanity check on this index to detect obvious problems
@@ -243,16 +244,14 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @param offset The offset to check
    * @return true if this offset is valid to be appended to this index; false otherwise
    */
-  def canAppendOffset(offset: Long): Boolean = {
+  def canAppendOffset(offset: Long): Boolean =
     toRelative(offset).isDefined
-  }
 
-  protected def safeForceUnmap(): Unit = {
+  protected def safeForceUnmap(): Unit =
     try forceUnmap()
     catch {
       case t: Throwable => error(s"Error unmapping index $file", t)
     }
-  }
 
   /**
    * Forcefully free the buffer's mmap.
@@ -308,23 +307,23 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
     // check if the index is empty
-    if(_entries == 0)
+    if (_entries == 0)
       return (-1, -1)
 
     // check if the target offset is smaller than the least offset
-    if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
+    if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
       return (-1, 0)
 
     // binary search for the entry
     var lo = 0
     var hi = _entries - 1
-    while(lo < hi) {
-      val mid = ceil(hi/2.0 + lo/2.0).toInt
+    while (lo < hi) {
+      val mid = ceil(hi / 2.0 + lo / 2.0).toInt
       val found = parseEntry(idx, mid)
       val compareResult = compareIndexEntry(found, target, searchEntity)
-      if(compareResult > 0)
+      if (compareResult > 0)
         hi = mid - 1
-      else if(compareResult < 0)
+      else if (compareResult < 0)
         lo = mid
       else
         return (mid, mid)
@@ -333,12 +332,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     (lo, if (lo == _entries - 1) -1 else lo + 1)
   }
 
-  private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {
+  private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int =
     searchEntity match {
-      case IndexSearchType.KEY => indexEntry.indexKey.compareTo(target)
+      case IndexSearchType.KEY   => indexEntry.indexKey.compareTo(target)
       case IndexSearchType.VALUE => indexEntry.indexValue.compareTo(target)
     }
-  }
 
   /**
    * Round a number to the greatest exact multiple of the given factor less than the given number.

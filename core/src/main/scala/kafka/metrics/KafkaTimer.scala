@@ -32,4 +32,3 @@ class KafkaTimer(metric: Timer) {
     finally ctx.stop()
   }
 }
-

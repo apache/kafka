@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator
 
 import java.util.{Collections, Random}
@@ -68,16 +67,16 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   }
 
   /**
-    * Verify that concurrent operations run in the normal sequence produce the expected results.
-    */
+   * Verify that concurrent operations run in the normal sequence produce the expected results.
+   */
   def verifyConcurrentOperations(createMembers: String => Set[M], operations: Seq[Operation]) {
     OrderedOperationSequence(createMembers("verifyConcurrentOperations"), operations).run()
   }
 
   /**
-    * Verify that arbitrary operations run in some random sequence don't leave the coordinator
-    * in a bad state. Operations in the normal sequence should continue to work as expected.
-    */
+   * Verify that arbitrary operations run in some random sequence don't leave the coordinator
+   * in a bad state. Operations in the normal sequence should continue to work as expected.
+   */
   def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]) {
     EasyMock.reset(replicaManager)
     for (i <- 0 to 10) {
@@ -103,48 +102,43 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
 
   abstract class OperationSequence(members: Set[M], operations: Seq[Operation]) {
     def actionSequence: Seq[Set[Action]]
-    def run(): Unit = {
+    def run(): Unit =
       actionSequence.foreach(verifyConcurrentActions)
-    }
   }
 
   case class OrderedOperationSequence(members: Set[M], operations: Seq[Operation])
-    extends OperationSequence(members, operations) {
-    override def actionSequence: Seq[Set[Action]] = {
+      extends OperationSequence(members, operations) {
+    override def actionSequence: Seq[Set[Action]] =
       operations.map { op =>
         members.map(op.actionWithVerify)
       }
-    }
   }
 
   case class RandomOperationSequence(members: Set[M], operations: Seq[Operation])
-    extends OperationSequence(members, operations) {
+      extends OperationSequence(members, operations) {
     val opCount = operations.length
-    def actionSequence: Seq[Set[Action]] = {
+    def actionSequence: Seq[Set[Action]] =
       (0 to opCount).map { _ =>
         members.map { member =>
           val op = operations(random.nextInt(opCount))
           op.actionNoVerify(member) // Don't wait or verify since these operations may block
         }
       }
-    }
   }
 
   abstract class Operation {
     def run(member: M): Unit
     def awaitAndVerify(member: M): Unit
-    def actionWithVerify(member: M): Action = {
+    def actionWithVerify(member: M): Action =
       new Action() {
         def run(): Unit = Operation.this.run(member)
         def await(): Unit = awaitAndVerify(member)
       }
-    }
-    def actionNoVerify(member: M): Action = {
+    def actionNoVerify(member: M): Action =
       new Action() {
         def run(): Unit = Operation.this.run(member)
         def await(): Unit = timer.advanceClock(100) // Don't wait since operation may block
       }
-    }
   }
 }
 
@@ -154,21 +148,20 @@ object AbstractCoordinatorConcurrencyTest {
     def await(): Unit
   }
 
-  trait CoordinatorMember {
-  }
+  trait CoordinatorMember {}
 
-  class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, None) {
+  class TestReplicaManager
+      extends ReplicaManager(null, null, null, null, null, null, null, null, null, null, null, null, null, null, None) {
 
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
     def createDelayedProducePurgatory(timer: MockTimer): Unit = {
       producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
-      watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
+      watchKeys =
+        Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
-    def tryCompleteDelayedRequests(): Unit = {
+    def tryCompleteDelayedRequests(): Unit =
       watchKeys.map(producePurgatory.checkAndComplete)
-    }
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
@@ -188,12 +181,11 @@ object AbstractCoordinatorConcurrencyTest {
       val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
-        override def tryComplete(): Boolean = {
+        override def tryComplete(): Boolean =
           if (completeAttempts.incrementAndGet() >= 3)
             forceComplete()
           else
             false
-        }
         override def onComplete() {
           responseCallback(entriesPerPartition.map {
             case (tp, _) =>
@@ -206,18 +198,16 @@ object AbstractCoordinatorConcurrencyTest {
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
       tryCompleteDelayedRequests()
     }
-    override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
+    override def getMagic(topicPartition: TopicPartition): Option[Byte] =
       Some(RecordBatch.MAGIC_VALUE_V2)
-    }
     @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
     def getOrCreateLogs(): mutable.Map[TopicPartition, (Log, Long)] = {
       if (logs == null)
         logs = mutable.Map[TopicPartition, (Log, Long)]()
       logs
     }
-    def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit = {
+    def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit =
       getOrCreateLogs().put(topicPartition, (log, endOffset))
-    }
     override def getLog(topicPartition: TopicPartition): Option[Log] =
       getOrCreateLogs().get(topicPartition).map(l => l._1)
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =

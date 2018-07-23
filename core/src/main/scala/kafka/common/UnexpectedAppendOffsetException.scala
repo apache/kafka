@@ -14,16 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 /**
  * Indicates the follower or the future replica received records from the leader (or current
- * replica) with first offset less than expected next offset. 
+ * replica) with first offset less than expected next offset.
  * @param firstOffset The first offset of the records to append
  * @param lastOffset  The last offset of the records to append
  */
-class UnexpectedAppendOffsetException(val message: String,
-                                      val firstOffset: Long,
-                                      val lastOffset: Long) extends RuntimeException(message) {
-}
+class UnexpectedAppendOffsetException(val message: String, val firstOffset: Long, val lastOffset: Long)
+    extends RuntimeException(message) {}

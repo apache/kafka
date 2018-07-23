@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerConfig
@@ -50,15 +49,23 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   protected def interBrokerListenerName: ListenerName = listenerName
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
+    val cfgs = TestUtils.createBrokerConfigs(
+      serverCount,
+      zkConnect,
+      interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties,
+      logDirCount = logDirCount
+    )
     cfgs.foreach { config =>
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
       config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
 
       val listenerNames = Set(listenerName, interBrokerListenerName)
-      val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")
-      val listenerSecurityMap = listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
+      val listeners =
+        listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")
+      val listenerSecurityMap =
+        listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
 
       config.setProperty(KafkaConfig.ListenersProp, listeners)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
@@ -72,11 +79,15 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val producerSecurityProps = clientSecurityProps("producer")
     val consumerSecurityProps = clientSecurityProps("consumer")
     super.setUp()
-    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
+    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                       classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
+    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                       classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig ++= producerSecurityProps
-    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
+    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                       classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
+    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                       classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig ++= consumerSecurityProps
     for (_ <- 0 until producerCount)
       producers += createProducer
@@ -87,26 +98,31 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
-  def clientSecurityProps(certAlias: String): Properties = {
-    TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
-      clientSaslProperties)
-  }
+  def clientSecurityProps(certAlias: String): Properties =
+    TestUtils.securityConfigs(Mode.CLIENT,
+                              securityProtocol,
+                              trustStoreFile,
+                              certAlias,
+                              TestUtils.SslCertificateCn,
+                              clientSaslProperties)
 
-  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-      TestUtils.createProducer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.clientSaslProperties,
-                                  props = Some(producerConfig))
-  }
+  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] =
+    TestUtils.createProducer(
+      brokerList,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(producerConfig)
+    )
 
-  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
-      TestUtils.createConsumer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.clientSaslProperties,
-                                  props = Some(consumerConfig))
-  }
+  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] =
+    TestUtils.createConsumer(
+      brokerList,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(consumerConfig)
+    )
 
   @After
   override def tearDown() {

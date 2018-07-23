@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.security.auth
 
 import org.apache.kafka.common.acl.AclOperation
@@ -23,12 +22,13 @@ import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
 class OperationTest extends JUnitSuite {
+
   /**
-    * Test round trip conversions between org.apache.kafka.common.acl.AclOperation and
-    * kafka.security.auth.Operation.
-    */
+   * Test round trip conversions between org.apache.kafka.common.acl.AclOperation and
+   * kafka.security.auth.Operation.
+   */
   @Test
-  def testJavaConversions(): Unit = {
+  def testJavaConversions(): Unit =
     AclOperation.values.foreach {
       case AclOperation.UNKNOWN | AclOperation.ANY =>
       case aclOp =>
@@ -36,5 +36,4 @@ class OperationTest extends JUnitSuite {
         val aclOp2 = op.toJava
         assertEquals(aclOp, aclOp2)
     }
-  }
 }

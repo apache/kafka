@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.nio.charset.StandardCharsets
@@ -40,7 +40,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
-      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
+               this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -60,7 +60,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String) {
-    assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
+    assertTrue("Should contain a ConfigHandler for " + rootEntityType,
                this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
@@ -69,7 +69,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val quotaManagers = servers.head.apis.quotas
     rootEntityType match {
       case ConfigType.Client => adminZkClient.changeClientIdConfig(configEntityName, props)
-      case _ => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, props)
+      case _                 => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, props)
     }
 
     TestUtils.retry(10000) {
@@ -77,9 +77,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val overrideConsumerQuota = quotaManagers.fetch.quota(user, clientId)
 
       assertEquals(s"User $user clientId $clientId must have overridden producer quota of 1000",
-        Quota.upperBound(1000), overrideProducerQuota)
+                   Quota.upperBound(1000),
+                   overrideProducerQuota)
       assertEquals(s"User $user clientId $clientId must have overridden consumer quota of 2000",
-        Quota.upperBound(2000), overrideConsumerQuota)
+                   Quota.upperBound(2000),
+                   overrideConsumerQuota)
     }
 
     val defaultProducerQuota = Long.MaxValue.asInstanceOf[Double]
@@ -88,16 +90,18 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val emptyProps = new Properties()
     rootEntityType match {
       case ConfigType.Client => adminZkClient.changeClientIdConfig(configEntityName, emptyProps)
-      case _ => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, emptyProps)
+      case _                 => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, emptyProps)
     }
     TestUtils.retry(10000) {
       val producerQuota = quotaManagers.produce.quota(user, clientId)
       val consumerQuota = quotaManagers.fetch.quota(user, clientId)
 
       assertEquals(s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota,
-        Quota.upperBound(defaultProducerQuota), producerQuota)
+                   Quota.upperBound(defaultProducerQuota),
+                   producerQuota)
       assertEquals(s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
-        Quota.upperBound(defaultConsumerQuota), consumerQuota)
+                   Quota.upperBound(defaultConsumerQuota),
+                   consumerQuota)
     }
   }
 
@@ -150,16 +154,18 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     adminZkClient.changeUserOrUserClientIdConfig("ANONYMOUS/clients/overriddenUserClientId", userClientIdProps)
 
     // Remove config change znodes to force quota initialization only through loading of user/client quotas
-    zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p => zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p) }
+    zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p =>
+      zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p)
+    }
     server.startup()
     val quotaManagers = server.apis.quotas
 
-    assertEquals(Quota.upperBound(1000),  quotaManagers.produce.quota("someuser", "overriddenClientId"))
-    assertEquals(Quota.upperBound(2000),  quotaManagers.fetch.quota("someuser", "overriddenClientId"))
-    assertEquals(Quota.upperBound(10000),  quotaManagers.produce.quota("overriddenUser", "someclientId"))
-    assertEquals(Quota.upperBound(20000),  quotaManagers.fetch.quota("overriddenUser", "someclientId"))
-    assertEquals(Quota.upperBound(100000),  quotaManagers.produce.quota("ANONYMOUS", "overriddenUserClientId"))
-    assertEquals(Quota.upperBound(200000),  quotaManagers.fetch.quota("ANONYMOUS", "overriddenUserClientId"))
+    assertEquals(Quota.upperBound(1000), quotaManagers.produce.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(2000), quotaManagers.fetch.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(10000), quotaManagers.produce.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(20000), quotaManagers.fetch.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(100000), quotaManagers.produce.quota("ANONYMOUS", "overriddenUserClientId"))
+    assertEquals(Quota.upperBound(200000), quotaManagers.fetch.quota("ANONYMOUS", "overriddenUserClientId"))
   }
 
   @Test
@@ -186,7 +192,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val handler = EasyMock.createNiceMock(classOf[ConfigHandler])
     handler.processConfigChanges(
       EasyMock.and(EasyMock.capture(entityArgument), EasyMock.isA(classOf[String])),
-      EasyMock.and(EasyMock.capture(propertiesArgument), EasyMock.isA(classOf[Properties])))
+      EasyMock.and(EasyMock.capture(propertiesArgument), EasyMock.isA(classOf[Properties]))
+    )
     EasyMock.expectLastCall().once()
     EasyMock.replay(handler)
 
@@ -199,8 +206,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val jsonMap = Map("v" -> 1, "x" -> 2)
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
+    } catch {
       case _: Throwable =>
     }
     // Version is provided. EntityType is incorrect
@@ -208,8 +214,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
+    } catch {
       case _: Throwable =>
     }
 
@@ -218,8 +223,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
+    } catch {
       case _: Throwable =>
     }
 
@@ -240,7 +244,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put(LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(0, 1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
     assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderReplicationThrottledReplicasProp))
   }
 
@@ -284,7 +288,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(Seq(6), parse(configHandler, " 6:102"))
   }
 
-  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
-    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
-  }
+  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] =
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value),
+                                           102,
+                                           LeaderReplicationThrottledReplicasProp)
 }

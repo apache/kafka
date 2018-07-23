@@ -98,14 +98,13 @@ object ApiVersion {
   /**
    * Return the minimum `ApiVersion` that supports `RecordVersion`.
    */
-  def minSupportedFor(recordVersion: RecordVersion): ApiVersion = {
+  def minSupportedFor(recordVersion: RecordVersion): ApiVersion =
     recordVersion match {
       case RecordVersion.V0 => KAFKA_0_8_0
       case RecordVersion.V1 => KAFKA_0_10_0_IV0
       case RecordVersion.V2 => KAFKA_0_11_0_IV0
-      case _ => throw new IllegalArgumentException(s"Invalid message format version $recordVersion")
+      case _                => throw new IllegalArgumentException(s"Invalid message format version $recordVersion")
     }
-  }
 }
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {

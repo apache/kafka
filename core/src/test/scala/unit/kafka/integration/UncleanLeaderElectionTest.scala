@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
@@ -170,12 +169,12 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   def verifyUncleanLeaderElectionEnabled(): Unit = {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
+    debug("Leader for " + topic + " is elected to be: %s".format(leaderId))
     assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
-    debug("Follower for " + topic  + " is: %s".format(followerId))
+    debug("Follower for " + topic + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
@@ -208,12 +207,12 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   def verifyUncleanLeaderElectionDisabled(): Unit = {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
+    debug("Leader for " + topic + " is elected to be: %s".format(leaderId))
     assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
-    debug("Follower for " + topic  + " is: %s".format(followerId))
+    debug("Follower for " + topic + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
@@ -272,8 +271,11 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val props = new Properties
     // Don't rely on coordinator as it may be down when this method is called
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val consumer = TestUtils.createConsumer(brokerList, "group" + random.nextLong,
-      securityProtocol = SecurityProtocol.PLAINTEXT, valueDeserializer = new StringDeserializer, props = Some(props))
+    val consumer = TestUtils.createConsumer(brokerList,
+                                            "group" + random.nextLong,
+                                            securityProtocol = SecurityProtocol.PLAINTEXT,
+                                            valueDeserializer = new StringDeserializer,
+                                            props = Some(props))
     try {
       val tp = new TopicPartition(topic, partitionId)
       consumer.assign(Seq(tp).asJava)

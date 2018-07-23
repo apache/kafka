@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.nio.charset.StandardCharsets
@@ -22,7 +21,12 @@ import java.nio.charset.StandardCharsets
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.{Json, Logging}
 import kafka.utils.json.JsonObject
-import kafka.zk.{AdminZkClient, ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient}
+import kafka.zk.{
+  AdminZkClient,
+  ConfigEntityChangeNotificationSequenceZNode,
+  ConfigEntityChangeNotificationZNode,
+  KafkaZkClient
+}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.Time
@@ -85,39 +89,48 @@ object ConfigEntityName {
  */
 class DynamicConfigManager(private val zkClient: KafkaZkClient,
                            private val configHandlers: Map[String, ConfigHandler],
-                           private val changeExpirationMs: Long = 15*60*1000,
-                           private val time: Time = Time.SYSTEM) extends Logging {
+                           private val changeExpirationMs: Long = 15 * 60 * 1000,
+                           private val time: Time = Time.SYSTEM)
+    extends Logging {
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
-    override def processNotification(jsonBytes: Array[Byte]) = {
+    override def processNotification(jsonBytes: Array[Byte]) =
       // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
       Json.parseBytes(jsonBytes).foreach { js =>
         val jsObject = js.asJsonObjectOption.getOrElse {
-          throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
-            """{"version" : 1, "entity_type":"topics/clients", "entity_name" : "topic_name/client_id"} or """ +
-            """{"version" : 2, "entity_path":"entity_type/entity_name"}. """ +
-            s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+          throw new IllegalArgumentException(
+            "Config change notification has an unexpected value. The format is:" +
+              """{"version" : 1, "entity_type":"topics/clients", "entity_name" : "topic_name/client_id"} or """ +
+              """{"version" : 2, "entity_path":"entity_type/entity_name"}. """ +
+              s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}"
+          )
         }
         jsObject("version").to[Int] match {
           case 1 => processEntityConfigChangeVersion1(jsonBytes, jsObject)
           case 2 => processEntityConfigChangeVersion2(jsonBytes, jsObject)
-          case version => throw new IllegalArgumentException("Config change notification has unsupported version " +
-            s"'$version', supported versions are 1 and 2.")
+          case version =>
+            throw new IllegalArgumentException(
+              "Config change notification has unsupported version " +
+                s"'$version', supported versions are 1 and 2."
+            )
         }
       }
-    }
 
     private def processEntityConfigChangeVersion1(jsonBytes: Array[Byte], js: JsonObject) {
       val validConfigTypes = Set(ConfigType.Topic, ConfigType.Client)
       val entityType = js.get("entity_type").flatMap(_.to[Option[String]]).filter(validConfigTypes).getOrElse {
-        throw new IllegalArgumentException("Version 1 config change notification must have 'entity_type' set to " +
-          s"'clients' or 'topics'. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+        throw new IllegalArgumentException(
+          "Version 1 config change notification must have 'entity_type' set to " +
+            s"'clients' or 'topics'. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}"
+        )
       }
 
       val entity = js.get("entity_name").flatMap(_.to[Option[String]]).getOrElse {
-        throw new IllegalArgumentException("Version 1 config change notification does not specify 'entity_name'. " +
-          s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+        throw new IllegalArgumentException(
+          "Version 1 config change notification does not specify 'entity_name'. " +
+            s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}"
+        )
       }
 
       val entityConfig = adminZkClient.fetchEntityConfig(entityType, entity)
@@ -129,16 +142,20 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
     private def processEntityConfigChangeVersion2(jsonBytes: Array[Byte], js: JsonObject) {
 
       val entityPath = js.get("entity_path").flatMap(_.to[Option[String]]).getOrElse {
-        throw new IllegalArgumentException(s"Version 2 config change notification must specify 'entity_path'. " +
-          s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+        throw new IllegalArgumentException(
+          s"Version 2 config change notification must specify 'entity_path'. " +
+            s"Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}"
+        )
       }
 
       val index = entityPath.indexOf('/')
       val rootEntityType = entityPath.substring(0, index)
       if (index < 0 || !configHandlers.contains(rootEntityType)) {
         val entityTypes = configHandlers.keys.map(entityType => s"'$entityType'/").mkString(", ")
-        throw new IllegalArgumentException("Version 2 config change notification must have 'entity_path' starting with " +
-          s"one of $entityTypes. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
+        throw new IllegalArgumentException(
+          "Version 2 config change notification must have 'entity_path' starting with " +
+            s"one of $entityTypes. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}"
+        )
       }
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 
@@ -152,8 +169,12 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkClient, ConfigEntityChangeNotificationZNode.path,
-    ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix, ConfigChangedNotificationHandler)
+  private val configChangeListener = new ZkNodeChangeNotificationListener(
+    zkClient,
+    ConfigEntityChangeNotificationZNode.path,
+    ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix,
+    ConfigChangedNotificationHandler
+  )
 
   /**
    * Begin watching for config changes
@@ -177,7 +198,6 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
     }
   }
 
-  def shutdown(): Unit = {
+  def shutdown(): Unit =
     configChangeListener.close()
-  }
 }

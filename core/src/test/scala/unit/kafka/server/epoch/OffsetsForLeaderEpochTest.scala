@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server.epoch
 
 import java.io.File
@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import org.easymock.EasyMock._
 import org.junit.Assert._
 import org.junit.Test
-
 
 class OffsetsForLeaderEpochTest {
   private val config = TestUtils.createBrokerConfigs(1, TestUtils.MockZkConnect).map(KafkaConfig.fromProps).head
@@ -55,9 +54,19 @@ class OffsetsForLeaderEpochTest {
     replay(mockCache, mockLog, logManager)
 
     // create a replica manager with 1 partition that has 1 replica
-    val replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
-      QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
+    val replicaManager = new ReplicaManager(
+      config,
+      metrics,
+      time,
+      null,
+      null,
+      logManager,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(config, metrics, time, ""),
+      new BrokerTopicStats,
+      new MetadataCache(config.brokerId),
+      new LogDirFailureChannel(config.logDirs.size)
+    )
     val partition = replicaManager.getOrCreatePartition(tp)
     val leaderReplica = new Replica(config.brokerId, partition.topicPartition, time, 0, Some(mockLog))
     partition.addReplicaIfNotExists(leaderReplica)
@@ -77,9 +86,19 @@ class OffsetsForLeaderEpochTest {
     replay(logManager)
 
     //create a replica manager with 1 partition that has 0 replica
-    val replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
-      QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
+    val replicaManager = new ReplicaManager(
+      config,
+      metrics,
+      time,
+      null,
+      null,
+      logManager,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(config, metrics, time, ""),
+      new BrokerTopicStats,
+      new MetadataCache(config.brokerId),
+      new LogDirFailureChannel(config.logDirs.size)
+    )
     replicaManager.getOrCreatePartition(tp)
 
     //Given
@@ -90,7 +109,8 @@ class OffsetsForLeaderEpochTest {
     val response = replicaManager.lastOffsetForLeaderEpoch(request)
 
     //Then
-    assertEquals(new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), response(tp))
+    assertEquals(new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+                 response(tp))
   }
 
   @Test
@@ -100,9 +120,19 @@ class OffsetsForLeaderEpochTest {
     replay(logManager)
 
     //create a replica manager with 0 partition
-    val replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
-      QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
+    val replicaManager = new ReplicaManager(
+      config,
+      metrics,
+      time,
+      null,
+      null,
+      logManager,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(config, metrics, time, ""),
+      new BrokerTopicStats,
+      new MetadataCache(config.brokerId),
+      new LogDirFailureChannel(config.logDirs.size)
+    )
 
     //Given
     val epochRequested: Integer = 5
@@ -112,6 +142,7 @@ class OffsetsForLeaderEpochTest {
     val response = replicaManager.lastOffsetForLeaderEpoch(request)
 
     //Then
-    assertEquals(new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), response(tp))
+    assertEquals(new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+                 response(tp))
   }
 }

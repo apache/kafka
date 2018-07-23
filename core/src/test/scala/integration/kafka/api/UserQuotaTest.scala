@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-
 package kafka.api
 
 import java.io.File
@@ -29,7 +28,9 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   private val kafkaServerSaslMechanisms = Seq("GSSAPI")
   private val kafkaClientSaslMechanism = "GSSAPI"
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @Before
@@ -49,12 +50,12 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     closeSasl()
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients =
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producers.head, consumers.head) {
-      override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
-      override def quotaMetricTags(clientId: String): Map[String, String] = {
+      override val userPrincipal =
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
+      override def quotaMetricTags(clientId: String): Map[String, String] =
         Map("user" -> userPrincipal.getName, "client-id" -> "")
-      }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
         val props = quotaProperties(producerQuota, consumerQuota, requestQuota)
@@ -71,5 +72,4 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName), properties)
       }
     }
-  }
 }

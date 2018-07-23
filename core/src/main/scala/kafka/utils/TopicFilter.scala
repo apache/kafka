@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util.regex.{Pattern, PatternSyntaxException}
@@ -23,17 +22,15 @@ import org.apache.kafka.common.internals.Topic
 
 sealed abstract class TopicFilter(rawRegex: String) extends Logging {
 
-  val regex = rawRegex
-          .trim
-          .replace(',', '|')
-          .replace(" ", "")
-          .replaceAll("""^["']+""","")
-          .replaceAll("""["']+$""","") // property files may bring quotes
+  val regex = rawRegex.trim
+    .replace(',', '|')
+    .replace(" ", "")
+    .replaceAll("""^["']+""", "")
+    .replaceAll("""["']+$""", "") // property files may bring quotes
 
   try {
     Pattern.compile(regex)
-  }
-  catch {
+  } catch {
     case _: PatternSyntaxException =>
       throw new RuntimeException(regex + " is an invalid regex.")
   }
@@ -47,8 +44,7 @@ case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
   override def isTopicAllowed(topic: String, excludeInternalTopics: Boolean) = {
     val allowed = topic.matches(regex) && !(Topic.isInternal(topic) && excludeInternalTopics)
 
-    debug("%s %s".format(
-      topic, if (allowed) "allowed" else "filtered"))
+    debug("%s %s".format(topic, if (allowed) "allowed" else "filtered"))
 
     allowed
   }

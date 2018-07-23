@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 /**
  * Configuration parameters for the log cleaner
- * 
+ *
  * @param numThreads The number of cleaner threads to run
  * @param dedupeBufferSize The total memory used for log deduplication
  * @param dedupeBufferLoadFactor The maximum percent full for the deduplication buffer
@@ -30,12 +29,11 @@ package kafka.log
  * @param hashAlgorithm The hash algorithm to use in key comparison.
  */
 case class CleanerConfig(numThreads: Int = 1,
-                         dedupeBufferSize: Long = 4*1024*1024L,
+                         dedupeBufferSize: Long = 4 * 1024 * 1024L,
                          dedupeBufferLoadFactor: Double = 0.9d,
-                         ioBufferSize: Int = 1024*1024,
-                         maxMessageSize: Int = 32*1024*1024,
+                         ioBufferSize: Int = 1024 * 1024,
+                         maxMessageSize: Int = 32 * 1024 * 1024,
                          maxIoBytesPerSecond: Double = Double.MaxValue,
                          backOffMs: Long = 15 * 1000,
                          enableCleaner: Boolean = true,
-                         hashAlgorithm: String = "MD5") {
-}
+                         hashAlgorithm: String = "MD5") {}

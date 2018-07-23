@@ -44,11 +44,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()
 
   // configure the servers and clients
-  override def generateConfigs = {
+  override def generateConfigs =
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { props =>
       KafkaConfig.fromProps(props)
     }
-  }
 
   @Before
   override def setUp() {
@@ -69,14 +68,18 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     props.put("group.id", group)
     val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
     try {
-      consumer.partitionsFor(topic).asScala.flatMap { partitionInfo =>
-        val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
-        val committed = consumer.committed(tp)
-        if (committed == null)
-          None
-        else
-          Some(tp -> committed.offset)
-      }.toMap
+      consumer
+        .partitionsFor(topic)
+        .asScala
+        .flatMap { partitionInfo =>
+          val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
+          val committed = consumer.committed(tp)
+          if (committed == null)
+            None
+          else
+            Some(tp -> committed.offset)
+        }
+        .toMap
     } finally {
       consumer.close()
     }
@@ -115,7 +118,8 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
 object ConsumerGroupCommandTest {
 
-  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
+  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None)
+      extends Runnable {
     val props = new Properties
     configure(props)
     customPropsOpt.foreach(props.asScala ++= _.asScala)
@@ -133,8 +137,7 @@ object ConsumerGroupCommandTest {
     def run() {
       try {
         subscribe()
-        while (true)
-          consumer.poll(Duration.ofMillis(Long.MaxValue))
+        while (true) consumer.poll(Duration.ofMillis(Long.MaxValue))
       } catch {
         case _: WakeupException => // OK
       } finally {
@@ -147,25 +150,27 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String, customPropsOpt: Option[Properties] = None)
-    extends AbstractConsumerRunnable(broker, groupId, customPropsOpt) {
+  class ConsumerRunnable(broker: String,
+                         groupId: String,
+                         topic: String,
+                         strategy: String,
+                         customPropsOpt: Option[Properties] = None)
+      extends AbstractConsumerRunnable(broker, groupId, customPropsOpt) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
       props.put("partition.assignment.strategy", strategy)
     }
 
-    override def subscribe(): Unit = {
+    override def subscribe(): Unit =
       consumer.subscribe(Collections.singleton(topic))
-    }
   }
 
   class SimpleConsumerRunnable(broker: String, groupId: String, partitions: Iterable[TopicPartition])
-    extends AbstractConsumerRunnable(broker, groupId) {
+      extends AbstractConsumerRunnable(broker, groupId) {
 
-    override def subscribe(): Unit = {
+    override def subscribe(): Unit =
       consumer.assign(partitions.toList.asJava)
-    }
   }
 
   class AbstractConsumerGroupExecutor(numThreads: Int) {
@@ -184,9 +189,13 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String,
+  class ConsumerGroupExecutor(broker: String,
+                              numConsumers: Int,
+                              groupId: String,
+                              topic: String,
+                              strategy: String,
                               customPropsOpt: Option[Properties] = None)
-    extends AbstractConsumerGroupExecutor(numConsumers) {
+      extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
       submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt))
@@ -195,10 +204,9 @@ object ConsumerGroupCommandTest {
   }
 
   class SimpleConsumerGroupExecutor(broker: String, groupId: String, partitions: Iterable[TopicPartition])
-    extends AbstractConsumerGroupExecutor(1) {
+      extends AbstractConsumerGroupExecutor(1) {
 
     submit(new SimpleConsumerRunnable(broker, groupId, partitions))
   }
 
 }
-

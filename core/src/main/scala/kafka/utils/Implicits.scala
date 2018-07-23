@@ -23,10 +23,10 @@ import java.util.Properties
 import scala.collection.JavaConverters._
 
 /**
-  * In order to have these implicits in scope, add the following import:
-  *
-  * `import kafka.utils.Implicits._`
-  */
+ * In order to have these implicits in scope, add the following import:
+ *
+ * `import kafka.utils.Implicits._`
+ */
 object Implicits {
 
   /**

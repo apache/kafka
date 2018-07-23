@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 import java.io.File
@@ -56,7 +55,7 @@ trait SaslSetup {
     LoginManager.closeAll()
     val hasKerberos = jaasSections.exists(_.modules.exists {
       case _: Krb5LoginModule => true
-      case _ => false
+      case _                  => false
     })
     if (hasKerberos) {
       initializeKerberos()
@@ -64,7 +63,7 @@ trait SaslSetup {
     writeJaasConfigurationToFile(jaasSections)
     val hasZk = jaasSections.exists(_.modules.exists {
       case _: ZkDigestModule => true
-      case _ => false
+      case _                 => false
     })
     if (hasZk)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
@@ -76,7 +75,8 @@ trait SaslSetup {
     kdc.start()
     kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
     kdc.createPrincipal(clientKeytabFile,
-      JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
+                        JaasTestUtils.KafkaClientPrincipalUnqualifiedName,
+                        JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */
@@ -99,10 +99,15 @@ trait SaslSetup {
     mode match {
       case ZkSasl => JaasTestUtils.zkSections
       case KafkaSasl =>
-        Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
-          JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile))
-      case Both => Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
-        JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile)) ++ JaasTestUtils.zkSections
+        Seq(
+          JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+          JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile)
+        )
+      case Both =>
+        Seq(
+          JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+          JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile)
+        ) ++ JaasTestUtils.zkSections
     }
   }
 
@@ -143,10 +148,15 @@ trait SaslSetup {
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")
-    val args = Array("--zookeeper", zkConnect,
-      "--alter", "--add-config", credentials.mkString(","),
-      "--entity-type", "users",
-      "--entity-name", userName)
+    val args = Array("--zookeeper",
+                     zkConnect,
+                     "--alter",
+                     "--add-config",
+                     credentials.mkString(","),
+                     "--entity-type",
+                     "users",
+                     "--entity-name",
+                     userName)
     ConfigCommand.main(args)
   }
 

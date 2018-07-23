@@ -16,9 +16,8 @@
  */
 package kafka.coordinator.transaction
 
-
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -32,10 +31,10 @@ class TransactionLogTest extends JUnitSuite {
   val transactionTimeoutMs: Int = 1000
 
   val topicPartitions: Set[TopicPartition] = Set[TopicPartition](new TopicPartition("topic1", 0),
-    new TopicPartition("topic1", 1),
-    new TopicPartition("topic2", 0),
-    new TopicPartition("topic2", 1),
-    new TopicPartition("topic2", 2))
+                                                                 new TopicPartition("topic1", 1),
+                                                                 new TopicPartition("topic2", 0),
+                                                                 new TopicPartition("topic2", 1),
+                                                                 new TopicPartition("topic2", 2))
 
   @Test
   def shouldThrowExceptionWriteInvalidTxn() {
@@ -52,32 +51,33 @@ class TransactionLogTest extends JUnitSuite {
 
   @Test
   def shouldReadWriteMessages() {
-    val pidMappings = Map[String, Long]("zero" -> 0L,
-      "one" -> 1L,
-      "two" -> 2L,
-      "three" -> 3L,
-      "four" -> 4L,
-      "five" -> 5L)
+    val pidMappings =
+      Map[String, Long]("zero" -> 0L, "one" -> 1L, "two" -> 2L, "three" -> 3L, "four" -> 4L, "five" -> 5L)
 
     val transactionStates = Map[Long, TransactionState](0L -> Empty,
-      1L -> Ongoing,
-      2L -> PrepareCommit,
-      3L -> CompleteCommit,
-      4L -> PrepareAbort,
-      5L -> CompleteAbort)
+                                                        1L -> Ongoing,
+                                                        2L -> PrepareCommit,
+                                                        3L -> CompleteCommit,
+                                                        4L -> PrepareAbort,
+                                                        5L -> CompleteAbort)
 
     // generate transaction log messages
-    val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-      val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs,
-        transactionStates(producerId), 0)
+    val txnRecords = pidMappings.map {
+      case (transactionalId, producerId) =>
+        val txnMetadata = TransactionMetadata(transactionalId,
+                                              producerId,
+                                              producerEpoch,
+                                              transactionTimeoutMs,
+                                              transactionStates(producerId),
+                                              0)
 
-      if (!txnMetadata.state.equals(Empty))
-        txnMetadata.addPartitions(topicPartitions)
+        if (!txnMetadata.state.equals(Empty))
+          txnMetadata.addPartitions(topicPartitions)
 
-      val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
+        val keyBytes = TransactionLog.keyToBytes(transactionalId)
+        val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
 
-      new SimpleRecord(keyBytes, valueBytes)
+        new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
 
     val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)

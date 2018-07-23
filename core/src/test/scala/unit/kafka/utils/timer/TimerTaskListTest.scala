@@ -23,7 +23,7 @@ import org.junit.Test
 class TimerTaskListTest {
 
   private class TestTask(val delayMs: Long) extends TimerTask {
-    def run(): Unit = { }
+    def run(): Unit = {}
   }
 
   private def size(list: TimerTaskList): Int = {

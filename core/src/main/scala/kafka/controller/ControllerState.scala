@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.controller
 
 import scala.collection.Seq
@@ -94,7 +93,20 @@ object ControllerState {
     def value = 13
   }
 
-  val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
-    PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange, LeaderAndIsrResponseReceived,
-    LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable)
+  val values: Seq[ControllerState] = Seq(
+    Idle,
+    ControllerChange,
+    BrokerChange,
+    TopicChange,
+    TopicDeletion,
+    PartitionReassignment,
+    AutoLeaderBalance,
+    ManualLeaderBalance,
+    ControlledShutdown,
+    IsrChange,
+    LeaderAndIsrResponseReceived,
+    LogDirChange,
+    ControllerShutdown,
+    UncleanLeaderElectionEnable
+  )
 }

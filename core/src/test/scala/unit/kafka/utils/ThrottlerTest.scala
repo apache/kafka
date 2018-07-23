@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package unit.kafka.utils
 
 import kafka.utils.Throttler
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Test
-import org.junit.Assert.{assertTrue, assertEquals}
-
+import org.junit.Assert.{assertEquals, assertTrue}
 
 class ThrottlerTest {
   @Test
@@ -31,9 +29,8 @@ class ThrottlerTest {
     val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0
 
     val mockTime = new MockTime()
-    val throttler = new Throttler(desiredRatePerSec = desiredCountPerSec,
-                                  checkIntervalMs = throttleCheckIntervalMs,
-                                  time = mockTime)
+    val throttler =
+      new Throttler(desiredRatePerSec = desiredCountPerSec, checkIntervalMs = throttleCheckIntervalMs, time = mockTime)
 
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()

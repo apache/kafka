@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io.File
@@ -51,7 +50,8 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) with Logging {
+    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable)
+    with Logging {
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
 
@@ -69,32 +69,31 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   /**
    * Read the last entry from the index file. This operation involves disk access.
    */
-  private def lastEntryFromIndexFile: TimestampOffset = {
+  private def lastEntryFromIndexFile: TimestampOffset =
     inLock(lock) {
       _entries match {
         case 0 => TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
         case s => parseEntry(mmap, s - 1).asInstanceOf[TimestampOffset]
       }
     }
-  }
 
   /**
    * Get the nth timestamp mapping from the time index
    * @param n The entry number in the time index
    * @return The timestamp/offset pair at that entry
    */
-  def entry(n: Int): TimestampOffset = {
+  def entry(n: Int): TimestampOffset =
     maybeLock(lock) {
-      if(n >= _entries)
-        throw new IllegalArgumentException("Attempt to fetch the %dth entry from a time index of size %d.".format(n, _entries))
+      if (n >= _entries)
+        throw new IllegalArgumentException(
+          "Attempt to fetch the %dth entry from a time index of size %d.".format(n, _entries)
+        )
       val idx = mmap.duplicate
       TimestampOffset(timestamp(idx, n), relativeOffset(idx, n))
     }
-  }
 
-  override def parseEntry(buffer: ByteBuffer, n: Int): IndexEntry = {
+  override def parseEntry(buffer: ByteBuffer, n: Int): IndexEntry =
     TimestampOffset(timestamp(buffer, n), baseOffset + relativeOffset(buffer, n))
-  }
 
   /**
    * Attempt to append a time index entry to the time index.
@@ -117,11 +116,15 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       // 1. A log segment is closed.
       // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
       if (_entries != 0 && offset < lastEntry.offset)
-        throw new InvalidOffsetException("Attempt to append an offset (%d) to slot %d no larger than the last offset appended (%d) to %s."
-          .format(offset, _entries, lastEntry.offset, file.getAbsolutePath))
+        throw new InvalidOffsetException(
+          "Attempt to append an offset (%d) to slot %d no larger than the last offset appended (%d) to %s."
+            .format(offset, _entries, lastEntry.offset, file.getAbsolutePath)
+        )
       if (_entries != 0 && timestamp < lastEntry.timestamp)
-        throw new IllegalStateException("Attempt to append a timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
-            .format(timestamp, _entries, lastEntry.timestamp, file.getAbsolutePath))
+        throw new IllegalStateException(
+          "Attempt to append a timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
+            .format(timestamp, _entries, lastEntry.timestamp, file.getAbsolutePath)
+        )
       // We only append to the time index when the timestamp is greater than the last inserted timestamp.
       // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
       // index will be empty.
@@ -131,7 +134,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
         mmap.putInt(relativeOffset(offset))
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
-        require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")
+        require(_entries * entrySize == mmap.position(),
+                _entries + " entries but file position in index is " + mmap.position() + ".")
       }
     }
   }
@@ -144,7 +148,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
    * @param targetTimestamp The timestamp to look up.
    * @return The time index entry found.
    */
-  def lookup(targetTimestamp: Long): TimestampOffset = {
+  def lookup(targetTimestamp: Long): TimestampOffset =
     maybeLock(lock) {
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
@@ -155,7 +159,6 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
         TimestampOffset(entry.timestamp, entry.offset)
       }
     }
-  }
 
   override def truncate() = truncateToEntries(0)
 
@@ -174,9 +177,9 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
        * 3) if there is no entry for this offset, delete everything larger than the next smallest
        */
       val newEntries =
-        if(slot < 0)
+        if (slot < 0)
           0
-        else if(relativeOffset(idx, slot) == offset - baseOffset)
+        else if (relativeOffset(idx, slot) == offset - baseOffset)
           slot
         else
           slot + 1
@@ -184,7 +187,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def resize(newSize: Int): Boolean = {
+  override def resize(newSize: Int): Boolean =
     inLock(lock) {
       if (super.resize(newSize)) {
         _lastEntry = lastEntryFromIndexFile
@@ -192,7 +195,6 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       } else
         false
     }
-  }
 
   /**
    * Truncates index to a known number of entries.
@@ -209,14 +211,20 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     val lastTimestamp = lastEntry.timestamp
     val lastOffset = lastEntry.offset
     if (_entries != 0 && lastTimestamp < timestamp(mmap, 0))
-      throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
-        s"non-zero size but the last timestamp is $lastTimestamp which is less than the first timestamp " +
-        s"${timestamp(mmap, 0)}")
+      throw new CorruptIndexException(
+        s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
+          s"non-zero size but the last timestamp is $lastTimestamp which is less than the first timestamp " +
+          s"${timestamp(mmap, 0)}"
+      )
     if (_entries != 0 && lastOffset < baseOffset)
-      throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
-        s"non-zero size but the last offset is $lastOffset which is less than the first offset $baseOffset")
+      throw new CorruptIndexException(
+        s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
+          s"non-zero size but the last offset is $lastOffset which is less than the first offset $baseOffset"
+      )
     if (length % entrySize != 0)
-      throw new CorruptIndexException(s"Time index file ${file.getAbsolutePath} is corrupt, found $length bytes " +
-        s"which is neither positive nor a multiple of $entrySize.")
+      throw new CorruptIndexException(
+        s"Time index file ${file.getAbsolutePath} is corrupt, found $length bytes " +
+          s"which is neither positive nor a multiple of $entrySize."
+      )
   }
 }

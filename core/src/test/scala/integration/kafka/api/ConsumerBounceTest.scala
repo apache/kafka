@@ -10,7 +10,6 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-
 package kafka.api
 
 import java.util.concurrent._
@@ -29,7 +28,6 @@ import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
@@ -72,10 +70,10 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     properties
   }
 
-  override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
+  override def generateConfigs =
+    FixedPortTestUtils
+      .createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, serverConfig))
-  }
 
   @Before
   override def setUp() {
@@ -91,17 +89,15 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     createTopic(topic, 1, numBrokers)
   }
 
-  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] =
     TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-        securityProtocol = SecurityProtocol.PLAINTEXT,
-        props = Some(producerConfig))
-  }
+                             securityProtocol = SecurityProtocol.PLAINTEXT,
+                             props = Some(producerConfig))
 
-  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] =
     TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-        securityProtocol = SecurityProtocol.PLAINTEXT,
-        props = Some(consumerConfig))
-  }
+                             securityProtocol = SecurityProtocol.PLAINTEXT,
+                             props = Some(consumerConfig))
 
   @After
   override def tearDown() {
@@ -172,14 +168,16 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.replicaManager.getReplica(tp).get.highWatermark.messageOffset == numRecords
-    ), "Failed to update high watermark for followers after timeout")
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.forall(server => server.replicaManager.getReplica(tp).get.highWatermark.messageOffset == numRecords),
+      "Failed to update high watermark for followers after timeout"
+    )
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while(scheduler.isRunning) {
+    while (scheduler.isRunning) {
       val coin = TestUtils.random.nextInt(3)
       if (coin == 0) {
         info("Seeking to end of log")
@@ -206,8 +204,8 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val consumer = this.consumers.head
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
-      }, 2, TimeUnit.SECONDS)
+      def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
+    }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
     def sendRecords(numRecords: Int, topic: String) {
@@ -242,8 +240,6 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     sendRecords(numRecords, newtopic)
     future.get
   }
-
-
   @Test
   def testClose() {
     val numRecords = 10
@@ -289,13 +285,12 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     checkClosedState(manualGroup, numRecords)
   }
 
-  private def findCoordinator(group: String) : Int = {
+  private def findCoordinator(group: String): Int = {
     val request = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
     val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
     val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion())
     response.node().id()
   }
-
 
   /**
    * Consumer is closed while all brokers are unavailable. Cannot rebalance or commit offsets since
@@ -334,25 +329,36 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     checkCloseDuringRebalance("group1", topic, executor, true)
   }
 
-  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean) {
+  private def checkCloseDuringRebalance(groupId: String,
+                                        topic: String,
+                                        executor: ExecutorService,
+                                        brokersAvailableDuringClose: Boolean) {
 
-    def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
-      executor.submit(CoreUtils.runnable {
-          consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
-            def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+    def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                         revokeSemaphore: Option[Semaphore] = None): Future[Any] =
+      executor.submit(
+        CoreUtils.runnable {
+          consumer.subscribe(
+            Collections.singletonList(topic),
+            new ConsumerRebalanceListener {
+              def onPartitionsAssigned(partitions: Collection[TopicPartition]) {}
+              def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+                revokeSemaphore.foreach(s => s.release())
+              }
             }
-            def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
-              revokeSemaphore.foreach(s => s.release())
-            }
-          })
+          )
           consumer.poll(0)
-        }, 0)
-    }
+        },
+        0
+      )
 
-    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+    def waitForRebalance(timeoutMs: Long,
+                         future: Future[Any],
+                         otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
       val startMs = System.currentTimeMillis
-      while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
-          otherConsumers.foreach(consumer => consumer.poll(100))
+      while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone) otherConsumers.foreach(
+        consumer => consumer.poll(100)
+      )
       assertTrue("Rebalance did not complete in time", future.isDone)
     }
 
@@ -392,14 +398,16 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     closeFuture2.get(2000, TimeUnit.MILLISECONDS)
   }
 
-  private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def createConsumer(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     val consumer = createConsumer
     consumers += consumer
     consumer
   }
 
-  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int) : KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def createConsumerAndReceive(groupId: String,
+                                       manualAssign: Boolean,
+                                       numRecords: Int): KafkaConsumer[Array[Byte], Array[Byte]] = {
     val consumer = createConsumer(groupId)
     if (manualAssign)
       consumer.assign(Collections.singleton(tp))
@@ -409,43 +417,52 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     consumer
   }
 
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000) {
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                             numRecords: Int,
+                             topic: String = this.topic,
+                             timeoutMs: Long = 60000) {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
-    while (received < numRecords && System.currentTimeMillis < endTimeMs)
-      received += consumer.poll(1000).count()
+    while (received < numRecords && System.currentTimeMillis < endTimeMs) received += consumer.poll(1000).count()
     assertEquals(numRecords, received)
   }
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
-      closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
-    executor.submit(CoreUtils.runnable {
-      val closeGraceTimeMs = 2000
-      val startNanos = System.nanoTime
-      info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
-      consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
-      val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
-      maxCloseTimeMs.foreach { ms =>
-        assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
-      }
-      minCloseTimeMs.foreach { ms =>
-        assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
-      }
-      info("consumer.close() completed in " + timeTakenMs + " ms.")
-    }, 0)
-  }
+                                     closeTimeoutMs: Long,
+                                     minCloseTimeMs: Option[Long],
+                                     maxCloseTimeMs: Option[Long]): Future[Any] =
+    executor.submit(
+      CoreUtils.runnable {
+        val closeGraceTimeMs = 2000
+        val startNanos = System.nanoTime
+        info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
+        consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
+        val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
+        maxCloseTimeMs.foreach { ms =>
+          assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
+        }
+        minCloseTimeMs.foreach { ms =>
+          assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
+        }
+        info("consumer.close() completed in " + timeTakenMs + " ms.")
+      },
+      0
+    )
 
   private def checkClosedState(groupId: String, committedRecords: Int) {
     // Check that close was graceful with offsets committed and leave group sent.
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
     val consumer = createConsumer(groupId)
-    consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
-        assignSemaphore.release()
+    consumer.subscribe(
+      Collections.singletonList(topic),
+      new ConsumerRebalanceListener {
+        def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+          assignSemaphore.release()
+        }
+        def onPartitionsRevoked(partitions: Collection[TopicPartition]) {}
       }
-      def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
-      }})
+    )
     consumer.poll(3000)
     assertTrue("Assigment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
@@ -453,8 +470,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     consumer.close()
   }
 
-  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false)
-  {
+  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false) {
     var iter: Int = 0
 
     override def doWork(): Unit = {
@@ -476,6 +492,5 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     }
     futures.map(_.get)
   }
-
 
 }

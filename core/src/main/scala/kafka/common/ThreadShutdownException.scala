@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 /**
  * An exception that indicates a thread is being shut down normally.
  */
-class ThreadShutdownException() extends RuntimeException {
-}
+class ThreadShutdownException() extends RuntimeException {}

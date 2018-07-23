@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import org.junit.Assert._
@@ -89,5 +88,5 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
     assertEquals(SecurityProtocol.PLAINTEXT, endpoint.securityProtocol)
     assertEquals("INTERNAL", endpoint2.listenerName)
   }
-  
+
 }

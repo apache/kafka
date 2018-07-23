@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.consumer
 
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
 import org.apache.kafka.common.record.{RecordBatch, TimestampType}
 
-@deprecated("This class has been deprecated and will be removed in a future release. " +
-  "Please use org.apache.kafka.clients.consumer.ConsumerRecord instead.", "0.11.0.0")
+@deprecated(
+  "This class has been deprecated and will be removed in a future release. " + "Please use org.apache.kafka.clients.consumer.ConsumerRecord instead.",
+  "0.11.0.0"
+)
 case class BaseConsumerRecord(topic: String,
                               partition: Int,
                               offset: Long,

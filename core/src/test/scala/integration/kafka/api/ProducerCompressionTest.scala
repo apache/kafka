@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api.test
 
 import java.util.{Collection, Collections, Properties}
@@ -109,12 +108,11 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
 object ProducerCompressionTest {
 
   @Parameters(name = "{index} compressionType = {0}")
-  def parameters: Collection[Array[String]] = {
+  def parameters: Collection[Array[String]] =
     Seq(
       Array("none"),
       Array("gzip"),
       Array("snappy"),
       Array("lz4")
     ).asJava
-  }
 }

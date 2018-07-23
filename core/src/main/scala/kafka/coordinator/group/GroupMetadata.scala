@@ -20,13 +20,13 @@ import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
-import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import kafka.utils.{nonthreadsafe, CoreUtils, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Seq, immutable, mutable}
+import scala.collection.{immutable, mutable, Seq}
 
-private[group] sealed trait GroupState
+sealed private[group] trait GroupState
 
 /**
  * Group is preparing to rebalance
@@ -88,30 +88,31 @@ private[group] case object Stable extends GroupState
 private[group] case object Dead extends GroupState
 
 /**
-  * Group has no more members, but lingers until all offsets have expired. This state
-  * also represents groups which use Kafka only for offset commits and have no members.
-  *
-  * action: respond normally to join group from new members
-  *         respond to sync group with UNKNOWN_MEMBER_ID
-  *         respond to heartbeat with UNKNOWN_MEMBER_ID
-  *         respond to leave group with UNKNOWN_MEMBER_ID
-  *         respond to offset commit with UNKNOWN_MEMBER_ID
-  *         allow offset fetch requests
-  * transition: last offsets removed in periodic expiration task => Dead
-  *             join group from a new member => PreparingRebalance
-  *             group is removed by partition emigration => Dead
-  *             group is removed by expiration => Dead
-  */
+ * Group has no more members, but lingers until all offsets have expired. This state
+ * also represents groups which use Kafka only for offset commits and have no members.
+ *
+ * action: respond normally to join group from new members
+ *         respond to sync group with UNKNOWN_MEMBER_ID
+ *         respond to heartbeat with UNKNOWN_MEMBER_ID
+ *         respond to leave group with UNKNOWN_MEMBER_ID
+ *         respond to offset commit with UNKNOWN_MEMBER_ID
+ *         allow offset fetch requests
+ * transition: last offsets removed in periodic expiration task => Dead
+ *             join group from a new member => PreparingRebalance
+ *             group is removed by partition emigration => Dead
+ *             group is removed by expiration => Dead
+ */
 private[group] case object Empty extends GroupState
-
 
 private object GroupMetadata {
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead),
+    Map(
+      Dead -> Set(Stable, PreparingRebalance, CompletingRebalance, Empty, Dead),
       CompletingRebalance -> Set(PreparingRebalance),
       Stable -> Set(CompletingRebalance),
       PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
-      Empty -> Set(PreparingRebalance))
+      Empty -> Set(PreparingRebalance)
+    )
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
@@ -136,25 +137,21 @@ private object GroupMetadata {
 /**
  * Case class used to represent group metadata for the ListGroups API
  */
-case class GroupOverview(groupId: String,
-                         protocolType: String)
+case class GroupOverview(groupId: String, protocolType: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
  */
-case class GroupSummary(state: String,
-                        protocolType: String,
-                        protocol: String,
-                        members: List[MemberSummary])
+case class GroupSummary(state: String, protocolType: String, protocol: String, members: List[MemberSummary])
 
 /**
-  * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
-  * commit is always materialized when we have a mix of transactional and regular offset commits. Without preserving
-  * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
-  * being materialized.
-  */
+ * We cache offset commits along with their commit record offset. This enables us to ensure that the latest offset
+ * commit is always materialized when we have a mix of transactional and regular offset commits. Without preserving
+ * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
+ * being materialized.
+ */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
-  def olderThan(that: CommitRecordMetadataAndOffset) : Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
+  def olderThan(that: CommitRecordMetadataAndOffset): Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 
 /**
@@ -184,7 +181,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
-  private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
+  private val pendingTransactionalOffsetCommits =
+    new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false
 
@@ -266,16 +264,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     votes.maxBy(_._2)._1
   }
 
-  private def candidateProtocols = {
+  private def candidateProtocols =
     // get the set of protocols that are commonly supported by all members
     allMemberMetadata
       .map(_.protocols)
       .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
-  }
 
-  def supportsProtocols(memberProtocols: Set[String]) = {
+  def supportsProtocols(memberProtocols: Set[String]) =
     members.isEmpty || (memberProtocols & candidateProtocols).nonEmpty
-  }
 
   def initNextGeneration() = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
@@ -295,26 +291,28 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def currentMemberMetadata: Map[String, Array[Byte]] = {
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
-    members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol.get))}.toMap
+    members.map { case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol.get)) }.toMap
   }
 
-  def summary: GroupSummary = {
+  def summary: GroupSummary =
     if (is(Stable)) {
       val protocol = protocolOrNull
       if (protocol == null)
         throw new IllegalStateException("Invalid null group protocol for stable group")
 
-      val members = this.members.values.map { member => member.summary(protocol) }
+      val members = this.members.values.map { member =>
+        member.summary(protocol)
+      }
       GroupSummary(state.toString, protocolType.getOrElse(""), protocol, members.toList)
     } else {
-      val members = this.members.values.map{ member => member.summaryNoMetadata() }
+      val members = this.members.values.map { member =>
+        member.summaryNoMetadata()
+      }
       GroupSummary(state.toString, protocolType.getOrElse(""), GroupCoordinator.NoProtocol, members.toList)
     }
-  }
 
-  def overview: GroupOverview = {
+  def overview: GroupOverview =
     GroupOverview(groupId, protocolType.getOrElse(""))
-  }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
                         pendingTxnOffsets: Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]) {
@@ -322,11 +320,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     this.pendingTransactionalOffsetCommits ++= pendingTxnOffsets
   }
 
-  def onOffsetCommitAppend(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
+  def onOffsetCommitAppend(topicPartition: TopicPartition,
+                           offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
     if (pendingOffsetCommits.contains(topicPartition)) {
       if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
-        throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record " +
-          "in the log.")
+        throw new IllegalStateException(
+          "Cannot complete offset commit write without providing the metadata of the record " +
+            "in the log."
+        )
       if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(offsetWithCommitRecordMetadata))
         offsets.put(topicPartition, offsetWithCommitRecordMetadata)
     }
@@ -335,17 +336,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       case Some(stagedOffset) if offsetWithCommitRecordMetadata.offsetAndMetadata == stagedOffset =>
         pendingOffsetCommits.remove(topicPartition)
       case _ =>
-        // The pendingOffsetCommits for this partition could be empty if the topic was deleted, in which case
-        // its entries would be removed from the cache by the `removeOffsets` method.
+      // The pendingOffsetCommits for this partition could be empty if the topic was deleted, in which case
+      // its entries would be removed from the cache by the `removeOffsets` method.
     }
   }
 
-  def failPendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata): Unit = {
+  def failPendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata): Unit =
     pendingOffsetCommits.get(topicPartition) match {
       case Some(pendingOffset) if offset == pendingOffset => pendingOffsetCommits.remove(topicPartition)
-      case _ =>
+      case _                                              =>
     }
-  }
 
   def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]) {
     receivedConsumerOffsetCommits = true
@@ -355,43 +355,47 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicPartition, OffsetAndMetadata]) {
     trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $offsets is pending")
     receivedTransactionalOffsetCommits = true
-    val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
-      mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
+    val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(
+      producerId,
+      mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset]
+    )
 
-    offsets.foreach { case (topicPartition, offsetAndMetadata) =>
-      producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
+    offsets.foreach {
+      case (topicPartition, offsetAndMetadata) =>
+        producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
 
-  def hasReceivedConsistentOffsetCommits : Boolean = {
+  def hasReceivedConsistentOffsetCommits: Boolean =
     !receivedConsumerOffsetCommits || !receivedTransactionalOffsetCommits
-  }
 
   /* Remove a pending transactional offset commit if the actual offset commit record was not written to the log.
    * We will return an error and the client will retry the request, potentially to a different coordinator.
    */
-  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition): Unit = {
+  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition): Unit =
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffsets) =>
         val pendingOffsetCommit = pendingOffsets.remove(topicPartition)
-        trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $pendingOffsetCommit failed " +
-          s"to be appended to the log")
+        trace(
+          s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $pendingOffsetCommit failed " +
+            s"to be appended to the log"
+        )
         if (pendingOffsets.isEmpty)
           pendingTransactionalOffsetCommits.remove(producerId)
       case _ =>
-        // We may hit this case if the partition in question has emigrated already.
+      // We may hit this case if the partition in question has emigrated already.
     }
-  }
 
-  def onTxnOffsetCommitAppend(producerId: Long, topicPartition: TopicPartition,
+  def onTxnOffsetCommitAppend(producerId: Long,
+                              topicPartition: TopicPartition,
                               commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffset) =>
         if (pendingOffset.contains(topicPartition)
-          && pendingOffset(topicPartition).offsetAndMetadata == commitRecordMetadataAndOffset.offsetAndMetadata)
+            && pendingOffset(topicPartition).offsetAndMetadata == commitRecordMetadataAndOffset.offsetAndMetadata)
           pendingOffset.update(topicPartition, commitRecordMetadataAndOffset)
       case _ =>
-        // We may hit this case if the partition in question has emigrated.
+      // We may hit this case if the partition in question has emigrated.
     }
   }
 
@@ -402,20 +406,27 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
-        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
-          if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
-            throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
-              s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log.")
+        pendingOffsets.foreach {
+          case (topicPartition, commitRecordMetadataAndOffset) =>
+            if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
+              throw new IllegalStateException(
+                s"Trying to complete a transactional offset commit for producerId $producerId " +
+                  s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log."
+              )
 
-          val currentOffsetOpt = offsets.get(topicPartition)
-          if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
-            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
-              "committed and loaded into the cache.")
-            offsets.put(topicPartition, commitRecordMetadataAndOffset)
-          } else {
-            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
-              s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt.")
-          }
+            val currentOffsetOpt = offsets.get(topicPartition)
+            if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
+              trace(
+                s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+                  "committed and loaded into the cache."
+              )
+              offsets.put(topicPartition, commitRecordMetadataAndOffset)
+            } else {
+              trace(
+                s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+                  s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt."
+              )
+            }
         }
       }
     } else {
@@ -430,37 +441,41 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 
-  def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
+  def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] =
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
-        pendingOffsets.remove(topicPartition)
+      pendingTransactionalOffsetCommits.foreach {
+        case (_, pendingOffsets) =>
+          pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)
       removedOffset.map(topicPartition -> _.offsetAndMetadata)
     }.toMap
-  }
 
-  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
+  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long): Map[TopicPartition, OffsetAndMetadata] = {
 
-    def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long): Map[TopicPartition, OffsetAndMetadata] = {
-      offsets.filter {
-        case (topicPartition, commitRecordMetadataAndOffset) =>
-          !pendingOffsetCommits.contains(topicPartition) && {
-            commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
-              case None =>
-                // current version with no per partition retention
-                currentTimestamp - baseTimestamp(commitRecordMetadataAndOffset) >= offsetRetentionMs
-              case Some(expireTimestamp) =>
-                // older versions with explicit expire_timestamp field => old expiration semantics is used
-                currentTimestamp >= expireTimestamp
+    def getExpiredOffsets(
+      baseTimestamp: CommitRecordMetadataAndOffset => Long
+    ): Map[TopicPartition, OffsetAndMetadata] =
+      offsets
+        .filter {
+          case (topicPartition, commitRecordMetadataAndOffset) =>
+            !pendingOffsetCommits.contains(topicPartition) && {
+              commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
+                case None =>
+                  // current version with no per partition retention
+                  currentTimestamp - baseTimestamp(commitRecordMetadataAndOffset) >= offsetRetentionMs
+                case Some(expireTimestamp) =>
+                  // older versions with explicit expire_timestamp field => old expiration semantics is used
+                  currentTimestamp >= expireTimestamp
+              }
             }
-          }
-      }.map {
-        case (topicPartition, commitRecordOffsetAndMetadata) =>
-          (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
-      }.toMap
-    }
+        }
+        .map {
+          case (topicPartition, commitRecordOffsetAndMetadata) =>
+            (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
+        }
+        .toMap
 
     val expiredOffsets: Map[TopicPartition, OffsetAndMetadata] = protocolType match {
       case Some(_) if is(Empty) =>
@@ -469,8 +484,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         //   expire all offsets with no pending offset commit;
         // - if there is no current state timestamp (old group metadata schema) and retention period has passed
         //   since the last commit timestamp, expire the offset
-        getExpiredOffsets(commitRecordMetadataAndOffset =>
-          currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp))
+        getExpiredOffsets(
+          commitRecordMetadataAndOffset =>
+            currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp)
+        )
 
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
@@ -488,14 +505,18 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     expiredOffsets
   }
 
-  def allOffsets = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
-    (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
-  }.toMap
+  def allOffsets =
+    offsets.map {
+      case (topicPartition, commitRecordMetadataAndOffset) =>
+        (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
+    }.toMap
 
-  def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
+  def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] =
+    offsets.get(topicPartition).map(_.offsetAndMetadata)
 
   // visible for testing
-  private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
+  private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] =
+    offsets.get(topicPartition)
 
   def numOffsets = offsets.size
 
@@ -503,18 +524,18 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   private def assertValidTransition(targetState: GroupState) {
     if (!GroupMetadata.validPreviousStates(targetState).contains(state))
-      throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
-        .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
+      throw new IllegalStateException(
+        "Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
+          .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state)
+      )
   }
 
-  override def toString: String = {
+  override def toString: String =
     "GroupMetadata(" +
       s"groupId=$groupId, " +
       s"generation=$generationId, " +
       s"protocolType=$protocolType, " +
       s"currentState=$currentState, " +
       s"members=$members)"
-  }
 
 }
-

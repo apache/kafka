@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util.Properties
@@ -29,9 +28,9 @@ import org.apache.kafka.common.config.ConfigDef.Type._
 import scala.collection.JavaConverters._
 
 /**
-  * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
-  * and can only be set dynamically.
-  */
+ * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
+ * and can only be set dynamically.
+ */
 object DynamicConfig {
 
   object Broker {
@@ -55,10 +54,25 @@ object DynamicConfig {
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
-      //round minimum value down, to make it easier for users.
-      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
-      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
-      .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
+    //round minimum value down, to make it easier for users.
+      .define(LeaderReplicationThrottledRateProp,
+              LONG,
+              DefaultReplicationThrottledRate,
+              atLeast(0),
+              MEDIUM,
+              LeaderReplicationThrottledRateDoc)
+      .define(FollowerReplicationThrottledRateProp,
+              LONG,
+              DefaultReplicationThrottledRate,
+              atLeast(0),
+              MEDIUM,
+              FollowerReplicationThrottledRateDoc)
+      .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp,
+              LONG,
+              DefaultReplicationThrottledRate,
+              atLeast(0),
+              MEDIUM,
+              ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
 
@@ -98,9 +112,21 @@ object DynamicConfig {
 
     //Definitions
     private val userConfigs = CredentialProvider.userCredentialConfigs
-      .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
-      .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
-      .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
+      .define(Client.ProducerByteRateOverrideProp,
+              LONG,
+              Client.DefaultProducerOverride,
+              MEDIUM,
+              Client.ProducerOverrideDoc)
+      .define(Client.ConsumerByteRateOverrideProp,
+              LONG,
+              Client.DefaultConsumerOverride,
+              MEDIUM,
+              Client.ConsumerOverrideDoc)
+      .define(Client.RequestPercentageOverrideProp,
+              DOUBLE,
+              Client.DefaultRequestOverride,
+              MEDIUM,
+              Client.RequestOverrideDoc)
 
     def names = userConfigs.names
 

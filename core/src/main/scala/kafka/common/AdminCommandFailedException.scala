@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 class AdminCommandFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause) {

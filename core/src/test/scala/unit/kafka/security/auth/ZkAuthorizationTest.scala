@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.security.auth
 
 import kafka.admin.ZkSecurityMigrator
@@ -41,13 +40,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+    zkUtils =
+      ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
   override def tearDown() {
     if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close(), this)
+      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
@@ -123,7 +123,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   @Test
   def testZkMigration() {
-    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false) 
+    val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     try {
       testMigration(zkConnect, unsecureZkUtils, zkUtils)
     } finally {
@@ -156,7 +156,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   }
 
   /**
-   * Tests that znodes cannot be deleted when the 
+   * Tests that znodes cannot be deleted when the
    * persistent paths have children.
    */
   @Test
@@ -170,7 +170,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     zkUtils.zkConnection.setAcl("/", zkUtils.defaultAcls("/"), -1)
     deleteAllUnsecure()
   }
-  
+
   /**
    * Tests the migration tool when chroot is being used.
    */
@@ -254,7 +254,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
         TestUtils.isAclUnsecure
     )
   }
-  
+
   /**
    * Sets up and starts the recursive execution of deletes.
    * This is used in the testDelete and testDeleteRecursive
@@ -269,14 +269,14 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     // Clean up before leaving the test case
     unsecureZkUtils.close()
     System.clearProperty(JaasUtils.ZK_SASL_CLIENT)
-    
+
     // Fail the test if able to delete
     result match {
       case Success(_) => // All done
       case Failure(e) => fail(e.getMessage)
     }
   }
-  
+
   /**
    * Tries to delete znodes recursively
    */
@@ -285,7 +285,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     var result: Try[Boolean] = Success(true)
     for (child <- zkUtils.getChildren(path))
       result = (path match {
-        case "/" => deleteRecursive(zkUtils, s"/$child")
+        case "/"  => deleteRecursive(zkUtils, s"/$child")
         case path => deleteRecursive(zkUtils, s"$path/$child")
       }) match {
         case Success(_) => result

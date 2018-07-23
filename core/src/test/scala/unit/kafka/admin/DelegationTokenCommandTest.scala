@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.admin
 
 import java.util
@@ -35,28 +35,41 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("PLAIN")
-  protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   var adminClient: org.apache.kafka.clients.admin.AdminClient = null
 
   override def numBrokers = 1
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    startSasl(
+      jaasSections(kafkaServerSaslMechanisms,
+                   Some(kafkaClientSaslMechanism),
+                   KafkaSasl,
+                   JaasTestUtils.KafkaServerContextName)
+    )
     super.setUp()
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
-      enableControlledShutdown = false, enableDeleteTopic = true,
+    val props = TestUtils.createBrokerConfigs(
+      numBrokers,
+      zkConnect,
+      enableControlledShutdown = false,
+      enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties,
+      enableToken = true
+    )
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 
-  private def createAdminConfig():util.Map[String, Object] = {
+  private def createAdminConfig(): util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
@@ -104,15 +117,22 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     assertTrue(tokens.size == 0)
 
     //create token with invalid renewer principal type
-    intercept[ExecutionException](DelegationTokenCommand.createToken(adminClient, getCreateOpts(List("Group:Renewer3"))))
+    intercept[ExecutionException](
+      DelegationTokenCommand.createToken(adminClient, getCreateOpts(List("Group:Renewer3")))
+    )
 
     // try describing tokens for unknown owner
     assertTrue(DelegationTokenCommand.describeToken(adminClient, getDescribeOpts(List("User:Unknown"))).isEmpty)
   }
 
   private def getCreateOpts(renewers: List[String]): DelegationTokenCommandOptions = {
-    val opts = ListBuffer("--bootstrap-server", brokerList, "--max-life-time-period", "-1",
-      "--command-config", "testfile", "--create")
+    val opts = ListBuffer("--bootstrap-server",
+                          brokerList,
+                          "--max-life-time-period",
+                          "-1",
+                          "--command-config",
+                          "testfile",
+                          "--create")
     renewers.foreach(renewer => opts ++= ListBuffer("--renewer-principal", renewer))
     new DelegationTokenCommandOptions(opts.toArray)
   }
@@ -124,16 +144,28 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   }
 
   private def getRenewOpts(hmac: String): DelegationTokenCommandOptions = {
-    val opts = Array("--bootstrap-server", brokerList, "--command-config", "testfile", "--renew",
-      "--renew-time-period", "-1",
-      "--hmac", hmac)
+    val opts = Array("--bootstrap-server",
+                     brokerList,
+                     "--command-config",
+                     "testfile",
+                     "--renew",
+                     "--renew-time-period",
+                     "-1",
+                     "--hmac",
+                     hmac)
     new DelegationTokenCommandOptions(opts)
   }
 
   private def getExpireOpts(hmac: String): DelegationTokenCommandOptions = {
-    val opts = Array("--bootstrap-server", brokerList, "--command-config", "testfile", "--expire",
-      "--expiry-time-period", "-1",
-      "--hmac", hmac)
+    val opts = Array("--bootstrap-server",
+                     brokerList,
+                     "--command-config",
+                     "testfile",
+                     "--expire",
+                     "--expiry-time-period",
+                     "-1",
+                     "--hmac",
+                     hmac)
     new DelegationTokenCommandOptions(opts)
   }
 

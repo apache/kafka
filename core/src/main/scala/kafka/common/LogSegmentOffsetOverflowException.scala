@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 import kafka.log.LogSegment
@@ -26,5 +25,4 @@ import kafka.log.LogSegment
  * do not have any segments with offset overflow.
  */
 class LogSegmentOffsetOverflowException(val segment: LogSegment, val offset: Long)
-  extends org.apache.kafka.common.KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {
-}
+    extends org.apache.kafka.common.KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {}

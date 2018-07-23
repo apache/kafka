@@ -10,7 +10,6 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-
 package kafka.api
 
 import java.io.IOException
@@ -27,7 +26,7 @@ import kafka.utils.TestUtils
  * certainly doing something wrong unless you can prove that your test **cannot function** properly without it.
  */
 object FixedPortTestUtils {
-  def choosePorts(count: Int): Seq[Int] = {
+  def choosePorts(count: Int): Seq[Int] =
     try {
       val sockets = (0 until count).map(_ => new ServerSocket(0))
       val ports = sockets.map(_.getLocalPort())
@@ -36,12 +35,11 @@ object FixedPortTestUtils {
     } catch {
       case e: IOException => throw new RuntimeException(e)
     }
-  }
 
   def createBrokerConfigs(numConfigs: Int,
-    zkConnect: String,
-    enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false): Seq[Properties] = {
+                          zkConnect: String,
+                          enableControlledShutdown: Boolean = true,
+                          enableDeleteTopic: Boolean = false): Seq[Properties] = {
     val ports = FixedPortTestUtils.choosePorts(numConfigs)
     (0 until numConfigs).map { node =>
       TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, ports(node))

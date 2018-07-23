@@ -30,17 +30,21 @@ import org.junit.{Before, Test}
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val principal: KafkaPrincipal = KafkaPrincipal.fromString("User:test2")
-  private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
+  private val Users = Set(
+    KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
     principal,
-    KafkaPrincipal.fromString("""User:CN=\#User with special chars in CN : (\, \+ \" \\ \< \> \; ')"""))
+    KafkaPrincipal.fromString("""User:CN=\#User with special chars in CN : (\, \+ \" \\ \< \> \; ')""")
+  )
   private val Hosts = Set("host1", "host2")
   private val AllowHostCommand = Array("--allow-host", "host1", "--allow-host", "host2")
   private val DenyHostCommand = Array("--deny-host", "host1", "--deny-host", "host2")
 
   private val TopicResources = Set(Resource(Topic, "test-1", LITERAL), Resource(Topic, "test-2", LITERAL))
   private val GroupResources = Set(Resource(Group, "testGroup-1", LITERAL), Resource(Group, "testGroup-2", LITERAL))
-  private val TransactionalIdResources = Set(Resource(TransactionalId, "t0", LITERAL), Resource(TransactionalId, "t1", LITERAL))
-  private val TokenResources = Set(Resource(DelegationToken, "token1", LITERAL), Resource(DelegationToken, "token2", LITERAL))
+  private val TransactionalIdResources =
+    Set(Resource(TransactionalId, "t0", LITERAL), Resource(TransactionalId, "t1", LITERAL))
+  private val TokenResources =
+    Set(Resource(DelegationToken, "token1", LITERAL), Resource(DelegationToken, "token2", LITERAL))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
@@ -52,11 +56,33 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
     TopicResources -> (Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs),
-      Array("--operation", "Read" , "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
-        "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
+    Array(
+      "--operation",
+      "Read",
+      "--operation",
+      "Write",
+      "--operation",
+      "Create",
+      "--operation",
+      "Describe",
+      "--operation",
+      "Delete",
+      "--operation",
+      "DescribeConfigs",
+      "--operation",
+      "AlterConfigs"
+    )),
     Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite),
-      Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
-        "--operation", "AlterConfigs", "--operation", "IdempotentWrite")),
+    Array("--operation",
+          "Create",
+          "--operation",
+          "ClusterAction",
+          "--operation",
+          "DescribeConfigs",
+          "--operation",
+          "AlterConfigs",
+          "--operation",
+          "IdempotentWrite")),
     GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
     TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write")),
     TokenResources -> (Set(Describe), Array("--operation", "Describe"))
@@ -65,8 +91,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[Resource], Set[Acl]](
     TopicResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe, Create), Hosts),
     TransactionalIdResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
-    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow,
-      Set(if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
+    Set(Resource.ClusterResource) -> AclCommand
+      .getAcls(Users, Allow, Set(if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
   )
 
   private val ConsumerResourceToAcls = Map[Set[Resource], Set[Acl]](
@@ -78,10 +104,16 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Array[String]("--producer") -> ProducerResourceToAcls(),
     Array[String]("--producer", "--idempotent") -> ProducerResourceToAcls(enableIdempotence = true),
     Array[String]("--consumer") -> ConsumerResourceToAcls,
-    Array[String]("--producer", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
-      ProducerResourceToAcls().getOrElse(k, Set.empty[Acl])) },
-    Array[String]("--producer", "--idempotent", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
-      ProducerResourceToAcls(enableIdempotence = true).getOrElse(k, Set.empty[Acl])) }
+    Array[String]("--producer", "--consumer") -> ConsumerResourceToAcls.map {
+      case (k, v) =>
+        k -> (v ++
+          ProducerResourceToAcls().getOrElse(k, Set.empty[Acl]))
+    },
+    Array[String]("--producer", "--idempotent", "--consumer") -> ConsumerResourceToAcls.map {
+      case (k, v) =>
+        k -> (v ++
+          ProducerResourceToAcls(enableIdempotence = true).getOrElse(k, Set.empty[Acl]))
+    }
   )
 
   private var brokerProps: Properties = _
@@ -103,14 +135,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       for (permissionType <- PermissionType.values) {
         val operationToCmd = ResourceToOperations(resources)
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
-          AclCommand.main(zkArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
-          for (resource <- resources) {
-            withAuthorizer() { authorizer =>
-              TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
-            }
+        AclCommand.main(zkArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
+        for (resource <- resources) {
+          withAuthorizer() { authorizer =>
+            TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
           }
+        }
 
-          testRemove(resources, resourceCmd, brokerProps)
+        testRemove(resources, resourceCmd, brokerProps)
       }
     }
   }
@@ -133,7 +165,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testAclsOnPrefixedResources(): Unit = {
-    val cmd = Array("--allow-principal", principal.toString, "--producer", "--topic", "Test-", "--resource-pattern-type", "Prefixed")
+    val cmd = Array("--allow-principal",
+                    principal.toString,
+                    "--producer",
+                    "--topic",
+                    "Test-",
+                    "--resource-pattern-type",
+                    "Prefixed")
 
     AclCommand.main(zkArgs ++ cmd :+ "--add")
 
@@ -167,15 +205,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     }
   }
 
-  private def getAclToCommand(permissionType: PermissionType, operations: Set[Operation]): (Set[Acl], Array[String]) = {
+  private def getAclToCommand(permissionType: PermissionType, operations: Set[Operation]): (Set[Acl], Array[String]) =
     (AclCommand.getAcls(Users, permissionType, operations, Hosts), getCmd(permissionType))
-  }
 
   private def getCmd(permissionType: PermissionType): Array[String] = {
     val principalCmd = if (permissionType == Allow) "--allow-principal" else "--deny-principal"
     val cmd = if (permissionType == Allow) AllowHostCommand else DenyHostCommand
 
-    Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
+    Users.foldLeft(cmd)((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
   def withAuthorizer()(f: Authorizer => Unit) {

@@ -38,11 +38,11 @@ class PermissionTypeTest extends JUnitSuite {
   }
 
   /**
-    * Test round trip conversions between org.apache.kafka.common.acl.AclPermissionType and
-    * kafka.security.auth.PermissionType.
-    */
+   * Test round trip conversions between org.apache.kafka.common.acl.AclPermissionType and
+   * kafka.security.auth.PermissionType.
+   */
   @Test
-  def testJavaConversions(): Unit = {
+  def testJavaConversions(): Unit =
     AclPermissionType.values().foreach {
       case AclPermissionType.UNKNOWN | AclPermissionType.ANY =>
       case aclPerm =>
@@ -50,5 +50,4 @@ class PermissionTypeTest extends JUnitSuite {
         val aclPerm2 = perm.toJava
         assertEquals(aclPerm, aclPerm2)
     }
-  }
 }

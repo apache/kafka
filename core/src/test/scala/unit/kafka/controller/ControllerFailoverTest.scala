@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.controller
 
 import java.util.Properties
@@ -39,8 +38,10 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val metrics = new Metrics()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
-    .map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs =
+    TestUtils
+      .createBrokerConfigs(numNodes, zkConnect)
+      .map(KafkaConfig.fromProps(_, overridingProps))
 
   @After
   override def tearDown() {
@@ -61,20 +62,23 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     // Create topic with one partition
     createTopic(topic, 1, 1)
     val topicPartition = new TopicPartition("topic1", 0)
-    TestUtils.waitUntilTrue(() =>
-      initialController.partitionStateMachine.partitionsInState(OnlinePartition).contains(topicPartition),
-      s"Partition $topicPartition did not transition to online state")
+    TestUtils.waitUntilTrue(
+      () => initialController.partitionStateMachine.partitionsInState(OnlinePartition).contains(topicPartition),
+      s"Partition $topicPartition did not transition to online state"
+    )
 
     // Wait until we have verified that we have resigned
     val latch = new CountDownLatch(1)
     @volatile var exceptionThrown: Option[Throwable] = None
-    val illegalStateEvent = ControllerTestUtils.createMockControllerEvent(ControllerState.BrokerChange, { () =>
-      try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
-      catch {
-        case t: Throwable => exceptionThrown = Some(t)
+    val illegalStateEvent = ControllerTestUtils.createMockControllerEvent(
+      ControllerState.BrokerChange, { () =>
+        try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
+        catch {
+          case t: Throwable => exceptionThrown = Some(t)
+        }
+        latch.await()
       }
-      latch.await()
-    })
+    )
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
@@ -82,7 +86,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     latch.countDown()
     TestUtils.waitUntilTrue(() => exceptionThrown.isDefined, "handleIllegalState did not throw an exception")
     assertTrue(s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown",
-      exceptionThrown.get.isInstanceOf[IllegalStateException])
+               exceptionThrown.get.isInstanceOf[IllegalStateException])
 
     TestUtils.waitUntilTrue(() => {
       servers.exists { server =>

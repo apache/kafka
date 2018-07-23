@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.util.Arrays
@@ -43,23 +42,23 @@ trait OffsetMap {
 @nonthreadsafe
 class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extends OffsetMap {
   private val bytes = ByteBuffer.allocate(memory)
-  
+
   /* the hash algorithm instance to use, default is MD5 */
   private val digest = MessageDigest.getInstance(hashAlgorithm)
-  
+
   /* the number of bytes for this hash algorithm */
   private val hashSize = digest.getDigestLength
-  
+
   /* create some hash buffers to avoid reallocating each time */
   private val hash1 = new Array[Byte](hashSize)
   private val hash2 = new Array[Byte](hashSize)
-  
+
   /* number of entries put into the map */
   private var entries = 0
-  
+
   /* number of lookups on the map */
   private var lookups = 0L
-  
+
   /* the number of probes for all lookups */
   private var probes = 0L
 
@@ -70,12 +69,12 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * The number of bytes of space each entry uses (the number of bytes in the hash plus an 8 byte offset)
    */
   val bytesPerEntry = hashSize + 8
-  
+
   /**
    * The maximum number of entries this map can contain
    */
   val slots: Int = memory / bytesPerEntry
-  
+
   /**
    * Associate this offset to the given key.
    * @param key The key
@@ -87,11 +86,11 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     hashInto(key, hash1)
     // probe until we find the first empty slot
     var attempt = 0
-    var pos = positionOf(hash1, attempt)  
-    while(!isEmpty(pos)) {
+    var pos = positionOf(hash1, attempt)
+    while (!isEmpty(pos)) {
       bytes.position(pos)
       bytes.get(hash2)
-      if(Arrays.equals(hash1, hash2)) {
+      if (Arrays.equals(hash1, hash2)) {
         // we found an existing entry, overwrite it and return (size does not change)
         bytes.putLong(offset)
         lastOffset = offset
@@ -107,11 +106,11 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     lastOffset = offset
     entries += 1
   }
-  
+
   /**
    * Check that there is no entry at the given position
    */
-  private def isEmpty(position: Int): Boolean = 
+  private def isEmpty(position: Int): Boolean =
     bytes.getLong(position) == 0 && bytes.getLong(position + 8) == 0 && bytes.getLong(position + 16) == 0
 
   /**
@@ -129,18 +128,18 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     //limit attempt to number of slots once positionOf(..) enters linear search mode
     val maxAttempts = slots + hashSize - 4
     do {
-     if(attempt >= maxAttempts)
+      if (attempt >= maxAttempts)
         return -1L
       pos = positionOf(hash1, attempt)
       bytes.position(pos)
-      if(isEmpty(pos))
+      if (isEmpty(pos))
         return -1L
       bytes.get(hash2)
       attempt += 1
-    } while(!Arrays.equals(hash1, hash2))
+    } while (!Arrays.equals(hash1, hash2))
     bytes.getLong()
   }
-  
+
   /**
    * Change the salt used for key hashing making all existing keys unfindable.
    */
@@ -151,16 +150,16 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     this.lastOffset = -1L
     Arrays.fill(bytes.array, bytes.arrayOffset, bytes.arrayOffset + bytes.limit(), 0.toByte)
   }
-  
+
   /**
    * The number of entries put into the map (note that not all may remain)
    */
   override def size: Int = entries
-  
+
   /**
    * The rate of collisions in the lookups
    */
-  def collisionRate: Double = 
+  def collisionRate: Double =
     (this.probes - this.lookups) / this.lookups.toDouble
 
   /**
@@ -168,9 +167,8 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    */
   override def latestOffset: Long = lastOffset
 
-  override def updateLatestOffset(offset: Long): Unit = {
+  override def updateLatestOffset(offset: Long): Unit =
     lastOffset = offset
-  }
 
   /**
    * Calculate the ith probe position. We first try reading successive integers from the hash itself
@@ -185,7 +183,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     this.probes += 1
     slot * bytesPerEntry
   }
-  
+
   /**
    * The offset at which we have stored the given key
    * @param key The key to hash
@@ -197,5 +195,5 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     key.reset()
     digest.digest(buffer, 0, hashSize)
   }
-  
+
 }

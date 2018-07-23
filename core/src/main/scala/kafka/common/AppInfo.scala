@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 import com.yammer.metrics.core.Gauge
@@ -32,19 +31,15 @@ object AppInfo extends KafkaMetricsGroup {
       }
     }
 
-    newGauge("Version",
-      new Gauge[String] {
-        def value = {
-          AppInfoParser.getVersion()
-        }
-      })
+    newGauge("Version", new Gauge[String] {
+      def value =
+        AppInfoParser.getVersion()
+    })
 
-    newGauge("CommitID",
-      new Gauge[String] {
-        def value = {
-          AppInfoParser.getCommitId()
-        }
-      })
+    newGauge("CommitID", new Gauge[String] {
+      def value =
+        AppInfoParser.getCommitId()
+    })
 
     lock.synchronized {
       isRegistered = true

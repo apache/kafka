@@ -16,7 +16,7 @@
  */
 package kafka.utils
 
-import java.io.{File, BufferedWriter, FileWriter}
+import java.io.{BufferedWriter, File, FileWriter}
 import java.util.Properties
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Java
@@ -28,7 +28,8 @@ object JaasTestUtils {
                              keyTab: String,
                              principal: String,
                              debug: Boolean,
-                             serviceName: Option[String]) extends JaasModule {
+                             serviceName: Option[String])
+      extends JaasModule {
 
     def name =
       if (Java.isIbmJdk)
@@ -54,37 +55,39 @@ object JaasTestUtils {
   case class PlainLoginModule(username: String,
                               password: String,
                               debug: Boolean = false,
-                              validUsers: Map[String, String] = Map.empty) extends JaasModule {
+                              validUsers: Map[String, String] = Map.empty)
+      extends JaasModule {
 
     def name = "org.apache.kafka.common.security.plain.PlainLoginModule"
 
-    def entries: Map[String, String] = Map(
-      "username" -> username,
-      "password" -> password
-    ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
+    def entries: Map[String, String] =
+      Map(
+        "username" -> username,
+        "password" -> password
+      ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
 
   }
 
-  case class ZkDigestModule(debug: Boolean = false,
-                            entries: Map[String, String] = Map.empty) extends JaasModule {
+  case class ZkDigestModule(debug: Boolean = false, entries: Map[String, String] = Map.empty) extends JaasModule {
     def name = "org.apache.zookeeper.server.auth.DigestLoginModule"
   }
 
   case class ScramLoginModule(username: String,
                               password: String,
                               debug: Boolean = false,
-                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
+                              tokenProps: Map[String, String] = Map.empty)
+      extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
-    def entries: Map[String, String] = Map(
-      "username" -> username,
-      "password" -> password
-    ) ++ tokenProps.map { case (name, value) => name -> value }
+    def entries: Map[String, String] =
+      Map(
+        "username" -> username,
+        "password" -> password
+      ) ++ tokenProps.map { case (name, value) => name -> value }
   }
 
-  case class OAuthBearerLoginModule(username: String,
-                              debug: Boolean = false) extends JaasModule {
+  case class OAuthBearerLoginModule(username: String, debug: Boolean = false) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
 
@@ -99,21 +102,19 @@ object JaasTestUtils {
     def debug: Boolean
     def entries: Map[String, String]
 
-    override def toString: String = {
+    override def toString: String =
       s"""$name required
-          |  debug=$debug
-          |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
-          |""".stripMargin
-    }
+         |  debug=$debug
+         |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
+         |""".stripMargin
   }
 
   case class JaasSection(contextName: String, modules: Seq[JaasModule]) {
-    override def toString: String = {
+    override def toString: String =
       s"""|$contextName {
           |  ${modules.mkString("\n  ")}
           |};
           |""".stripMargin
-    }
   }
 
   private val ZkServerContextName = "Server"
@@ -130,7 +131,7 @@ object JaasTestUtils {
   private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
   private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
-  
+
   val KafkaPlainUser = "plain-user"
   private val KafkaPlainPassword = "plain-user-secret"
   val KafkaPlainUser2 = "plain-user2"
@@ -154,7 +155,7 @@ object JaasTestUtils {
   def saslConfigs(saslProperties: Option[Properties]): Properties = {
     val result = saslProperties match {
       case Some(properties) => properties
-      case None => new Properties
+      case None             => new Properties
     }
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
@@ -171,23 +172,30 @@ object JaasTestUtils {
 
   // Returns the dynamic configuration, using credentials for user #1
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser).toString
+    kafkaClientModule(mechanism,
+                      keytabLocation,
+                      KafkaClientPrincipal,
+                      KafkaPlainUser,
+                      KafkaPlainPassword,
+                      KafkaScramUser,
+                      KafkaScramPassword,
+                      KafkaOAuthBearerUser).toString
 
-  def tokenClientLoginModule(tokenId: String, password: String): String = {
-    ScramLoginModule(
-      tokenId,
-      password,
-      debug = false,
-      Map(
-        "tokenauth" -> "true"
-      )).toString
-  }
+  def tokenClientLoginModule(tokenId: String, password: String): String =
+    ScramLoginModule(tokenId,
+                     password,
+                     debug = false,
+                     Map(
+                       "tokenauth" -> "true"
+                     )).toString
 
   def zkSections: Seq[JaasSection] = Seq(
-    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
-      Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
-    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
-      Map("username" -> ZkUser, "password" -> ZkUserPassword))))
+    JaasSection(
+      ZkServerContextName,
+      Seq(ZkDigestModule(debug = false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))
+    ),
+    JaasSection(ZkClientContextName,
+                Seq(ZkDigestModule(debug = false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
   def kafkaServerSection(contextName: String, mechanisms: Seq[String], keytabLocation: Option[File]): JaasSection = {
@@ -196,10 +204,13 @@ object JaasTestUtils {
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
-          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          keyTab = keytabLocation
+            .getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI"))
+            .getAbsolutePath,
           principal = KafkaServerPrincipal,
           debug = true,
-          serviceName = Some(serviceName))
+          serviceName = Some(serviceName)
+        )
       case "PLAIN" =>
         PlainLoginModule(
           KafkaPlainAdmin,
@@ -209,12 +220,10 @@ object JaasTestUtils {
             KafkaPlainAdmin -> KafkaPlainAdminPassword,
             KafkaPlainUser -> KafkaPlainPassword,
             KafkaPlainUser2 -> KafkaPlainPassword2
-          ))
+          )
+        )
       case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
-        ScramLoginModule(
-          KafkaScramAdmin,
-          KafkaScramAdminPassword,
-          debug = false)
+        ScramLoginModule(KafkaScramAdmin, KafkaScramAdminPassword, debug = false)
       case "OAUTHBEARER" =>
         OAuthBearerLoginModule(KafkaOAuthBearerAdmin)
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
@@ -223,16 +232,22 @@ object JaasTestUtils {
   }
 
   // consider refactoring if more mechanisms are added
-  private def kafkaClientModule(mechanism: String, 
-      keytabLocation: Option[File], clientPrincipal: String,
-      plainUser: String, plainPassword: String, 
-      scramUser: String, scramPassword: String, oauthBearerUser: String): JaasModule = {
+  private def kafkaClientModule(mechanism: String,
+                                keytabLocation: Option[File],
+                                clientPrincipal: String,
+                                plainUser: String,
+                                plainPassword: String,
+                                scramUser: String,
+                                scramPassword: String,
+                                oauthBearerUser: String): JaasModule =
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
-          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          keyTab = keytabLocation
+            .getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI"))
+            .getAbsolutePath,
           principal = clientPrincipal,
           debug = true,
           serviceName = Some(serviceName)
@@ -253,15 +268,27 @@ object JaasTestUtils {
         )
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
-  }
 
   /*
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
-  def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
-    JaasSection(KafkaClientContextName, mechanism.map(m =>
-      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2, KafkaOAuthBearerUser2)).toSeq)
-  }
+  def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection =
+    JaasSection(
+      KafkaClientContextName,
+      mechanism
+        .map(
+          m =>
+            kafkaClientModule(m,
+                              keytabLocation,
+                              KafkaClientPrincipal2,
+                              KafkaPlainUser2,
+                              KafkaPlainPassword2,
+                              KafkaScramUser2,
+                              KafkaScramPassword2,
+                              KafkaOAuthBearerUser2)
+        )
+        .toSeq
+    )
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
     jaasSections.mkString

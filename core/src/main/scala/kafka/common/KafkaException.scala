@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.common
 
 /**
@@ -21,7 +21,7 @@ package kafka.common
  *
  * This class will be removed once ZkUtils and the kafka.security.auth classes are removed.
  * The former is internal, but widely used, so we are leaving it in the codebase for now.
-*/
+ */
 class KafkaException(message: String, t: Throwable) extends RuntimeException(message, t) {
   def this(message: String) = this(message, null)
   def this(t: Throwable) = this("", t)

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 class State
@@ -28,53 +27,53 @@ object FAILED extends State
  * override makeNext and call allDone() when there is no more items
  */
 abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T] {
-  
+
   private var state: State = NOT_READY
   private var nextItem = null.asInstanceOf[T]
 
   def next(): T = {
-    if(!hasNext())
+    if (!hasNext())
       throw new NoSuchElementException()
     state = NOT_READY
-    if(nextItem == null)
+    if (nextItem == null)
       throw new IllegalStateException("Expected item but none found.")
     nextItem
   }
-  
+
   def peek(): T = {
-    if(!hasNext)
+    if (!hasNext)
       throw new NoSuchElementException()
     nextItem
   }
-  
+
   def hasNext: Boolean = {
-    if(state == FAILED)
+    if (state == FAILED)
       throw new IllegalStateException("Iterator is in failed state")
     state match {
-      case DONE => false
+      case DONE  => false
       case READY => true
-      case _ => maybeComputeNext()
+      case _     => maybeComputeNext()
     }
   }
-  
+
   protected def makeNext(): T
-  
+
   def maybeComputeNext(): Boolean = {
     state = FAILED
     nextItem = makeNext()
-    if(state == DONE) {
+    if (state == DONE) {
       false
     } else {
       state = READY
       true
     }
   }
-  
+
   protected def allDone(): T = {
     state = DONE
     null.asInstanceOf[T]
   }
-  
+
   override def remove =
     throw new UnsupportedOperationException("Removal not supported")
 
@@ -82,4 +81,3 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
     state = NOT_READY
   }
 }
-

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.tools
 
 import java.nio.charset.StandardCharsets
@@ -28,7 +27,6 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConverters._
 import scala.util.Random
 
-
 /**
  * This class records the average end to end latency for a single message to travel through Kafka
  *
@@ -39,13 +37,14 @@ import scala.util.Random
  *
  * e.g. [localhost:9092 test 10000 1 20]
  */
-
 object EndToEndLatency {
   private val timeout: Long = 60000
 
   def main(args: Array[String]) {
     if (args.length != 5 && args.length != 6) {
-      System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
+      System.err.println(
+        "USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file"
+      )
       Exit.exit(1)
     }
 
@@ -66,8 +65,10 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                      "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                      "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
 
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
@@ -78,8 +79,10 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                      "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                      "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     def finalise() {
@@ -145,7 +148,6 @@ object EndToEndLatency {
     finalise()
   }
 
-  def randomBytesOfLen(random: Random, len: Int): Array[Byte] = {
+  def randomBytesOfLen(random: Random, len: Int): Array[Byte] =
     Array.fill(len)((random.nextInt(26) + 65).toByte)
-  }
 }

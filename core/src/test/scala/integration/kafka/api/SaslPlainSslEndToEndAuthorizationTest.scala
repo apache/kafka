@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.api
 
 import java.security.AccessController
@@ -36,7 +36,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
 
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {
 
-    override def build(context: AuthenticationContext): KafkaPrincipal = {
+    override def build(context: AuthenticationContext): KafkaPrincipal =
       context match {
         case ctx: SaslAuthenticationContext =>
           ctx.server.getAuthorizationID match {
@@ -48,17 +48,18 @@ object SaslPlainSslEndToEndAuthorizationTest {
               KafkaPrincipal.ANONYMOUS
           }
       }
-    }
   }
 
   object Credentials {
     val allUsers = Map(KafkaPlainUser -> "user1-password",
-      KafkaPlainUser2 -> KafkaPlainPassword2,
-      KafkaPlainAdmin -> "broker-password")
+                       KafkaPlainUser2 -> KafkaPlainPassword2,
+                       KafkaPlainAdmin -> "broker-password")
   }
 
   class TestServerCallbackHandler extends AuthenticateCallbackHandler {
-    def configure(configs: java.util.Map[String, _], saslMechanism: String, jaasConfigEntries: java.util.List[AppConfigurationEntry]) {}
+    def configure(configs: java.util.Map[String, _],
+                  saslMechanism: String,
+                  jaasConfigEntries: java.util.List[AppConfigurationEntry]) {}
     def handle(callbacks: Array[Callback]) {
       var username: String = null
       for (callback <- callbacks) {
@@ -75,7 +76,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
   }
 
   class TestClientCallbackHandler extends AuthenticateCallbackHandler {
-    def configure(configs: java.util.Map[String, _], saslMechanism: String, jaasConfigEntries: java.util.List[AppConfigurationEntry]) {}
+    def configure(configs: java.util.Map[String, _],
+                  saslMechanism: String,
+                  jaasConfigEntries: java.util.List[AppConfigurationEntry]) {}
     def handle(callbacks: Array[Callback]) {
       val subject = Subject.getSubject(AccessController.getContext())
       val username = subject.getPublicCredentials(classOf[String]).iterator().next()
@@ -93,7 +96,6 @@ object SaslPlainSslEndToEndAuthorizationTest {
   }
 }
 
-
 // This test uses SASL callback handler overrides for server connections of Kafka broker
 // and client connections of Kafka producers and consumers. Client connections from Kafka brokers
 // used for inter-broker communication also use custom callback handlers. The second client used in
@@ -102,10 +104,12 @@ object SaslPlainSslEndToEndAuthorizationTest {
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest._
 
-  this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+  this.serverConfig
+    .setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
   this.serverConfig.put(KafkaConfig.SaslClientCallbackHandlerClassProp, classOf[TestClientCallbackHandler].getName)
   val mechanismPrefix = ListenerName.forSecurityProtocol(SecurityProtocol.SASL_SSL).saslMechanismConfigPrefix("PLAIN")
-  this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}", classOf[TestServerCallbackHandler].getName)
+  this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}",
+                        classOf[TestServerCallbackHandler].getName)
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
@@ -124,8 +128,7 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
                             kafkaServerEntryName: String): Seq[JaasSection] = {
     val brokerLogin = new PlainLoginModule(KafkaPlainAdmin, "") // Password provided by callback handler
     val clientLogin = new PlainLoginModule(KafkaPlainUser2, KafkaPlainPassword2)
-    Seq(JaasSection(kafkaServerEntryName, Seq(brokerLogin)),
-      JaasSection(KafkaClientContextName, Seq(clientLogin))) ++ zkSections
+    Seq(JaasSection(kafkaServerEntryName, Seq(brokerLogin)), JaasSection(KafkaClientContextName, Seq(clientLogin))) ++ zkSections
   }
 
   /**
@@ -134,7 +137,8 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls() {
-    val zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+    val zkUtils =
+      ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     TestUtils.verifySecureZkAcls(zkUtils, 1)
     CoreUtils.swallow(zkUtils.close(), this)
   }

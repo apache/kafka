@@ -1,16 +1,15 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
-  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
-  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
-  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
-  * specific language governing permissions and limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 package kafka.api
 
 import java.util
@@ -33,8 +32,8 @@ import org.junit.rules.Timeout
 import scala.collection.JavaConverters._
 
 /**
-  * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
-  */
+ * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
+ */
 class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with Logging {
 
   import AdminClientWithPoliciesIntegrationTest._
@@ -121,28 +120,40 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
 
     // Alter configs: second is valid, the others are invalid
-    var alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      topicResource3 -> new Config(topicConfigEntries3),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava)
+    var alterResult = client.alterConfigs(
+      Map(
+        topicResource1 -> new Config(topicConfigEntries1),
+        topicResource2 -> new Config(topicConfigEntries2),
+        topicResource3 -> new Config(topicConfigEntries3),
+        brokerResource -> new Config(brokerConfigEntries)
+      ).asJava
+    )
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause
+        .isInstanceOf[PolicyViolationException]
+    )
     alterResult.values.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
-    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause
+        .isInstanceOf[InvalidRequestException]
+    )
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause
+        .isInstanceOf[InvalidRequestException]
+    )
 
     // Verify that the second resource was updated and the others were not
-    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
+    var describeResult =
+      client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
     var configs = describeResult.all.get
     assertEquals(4, configs.size)
 
     assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+                 configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
     assertEquals(Defaults.MinInSyncReplicas.toString,
-      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+                 configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
@@ -151,18 +162,30 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     // Alter configs with validateOnly = true: only second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.7")).asJava
 
-    alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries),
-      topicResource3 -> new Config(topicConfigEntries3)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult = client.alterConfigs(
+      Map(
+        topicResource1 -> new Config(topicConfigEntries1),
+        topicResource2 -> new Config(topicConfigEntries2),
+        brokerResource -> new Config(brokerConfigEntries),
+        topicResource3 -> new Config(topicConfigEntries3)
+      ).asJava,
+      new AlterConfigsOptions().validateOnly(true)
+    )
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause
+        .isInstanceOf[PolicyViolationException]
+    )
     alterResult.values.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
-    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause
+        .isInstanceOf[InvalidRequestException]
+    )
+    assertTrue(
+      intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause
+        .isInstanceOf[InvalidRequestException]
+    )
 
     // Verify that no resources are updated since validate_only = true
     describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
@@ -170,15 +193,14 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals(4, configs.size)
 
     assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+                 configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
     assertEquals(Defaults.MinInSyncReplicas.toString,
-      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+                 configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
   }
-
 
 }
 
@@ -189,9 +211,8 @@ object AdminClientWithPoliciesIntegrationTest {
     var configs: Map[String, _] = _
     var closed = false
 
-    def configure(configs: util.Map[String, _]): Unit = {
+    def configure(configs: util.Map[String, _]): Unit =
       this.configs = configs.asScala.toMap
-    }
 
     def validate(requestMetadata: AlterConfigPolicy.RequestMetadata): Unit = {
       require(!closed, "Policy should not be closed")

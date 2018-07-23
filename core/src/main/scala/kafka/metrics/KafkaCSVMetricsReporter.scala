@@ -17,7 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.metrics
 
 import com.yammer.metrics.Metrics
@@ -32,18 +31,14 @@ import org.apache.kafka.common.utils.Utils
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
-private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
-                              with KafkaCSVMetricsReporterMBean
-                              with Logging {
+private class KafkaCSVMetricsReporter extends KafkaMetricsReporter with KafkaCSVMetricsReporterMBean with Logging {
 
   private var csvDir: File = null
   private var underlying: CsvReporter = null
   private var running = false
   private var initialized = false
 
-
   override def getMBeanName = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
-
 
   override def init(props: VerifiableProperties) {
     synchronized {
@@ -61,7 +56,6 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
     }
   }
 
-
   override def startReporter(pollingPeriodSecs: Long) {
     synchronized {
       if (initialized && !running) {
@@ -71,7 +65,6 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
       }
     }
   }
-
 
   override def stopReporter() {
     synchronized {
@@ -85,4 +78,3 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   }
 
 }
-

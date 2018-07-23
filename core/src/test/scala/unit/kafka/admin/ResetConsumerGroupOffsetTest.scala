@@ -1,15 +1,15 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
-  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
-  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
-  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
-  * specific language governing permissions and limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
@@ -61,30 +61,35 @@ class TimeConversionTests {
 }
 
 /**
-  * Test cases by:
-  * - Non-existing consumer group
-  * - One for each scenario, with scope=all-topics
-  * - scope=one topic, scenario=to-earliest
-  * - scope=one topic+partitions, scenario=to-earliest
-  * - scope=topics, scenario=to-earliest
-  * - scope=topics+partitions, scenario=to-earliest
-  * - export/import
-  */
+ * Test cases by:
+ * - Non-existing consumer group
+ * - One for each scenario, with scope=all-topics
+ * - scope=one topic, scenario=to-earliest
+ * - scope=one topic+partitions, scenario=to-earliest
+ * - scope=topics, scenario=to-earliest
+ * - scope=topics+partitions, scenario=to-earliest
+ * - export/import
+ */
 class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
-  
+
   val overridingProps = new Properties()
   val topic1 = "foo1"
   val topic2 = "foo2"
 
-  override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false)
-      .map(KafkaConfig.fromProps(_, overridingProps))  
-  } 
-
+  override def generateConfigs: Seq[KafkaConfig] =
+    TestUtils
+      .createBrokerConfigs(1, zkConnect, enableControlledShutdown = false)
+      .map(KafkaConfig.fromProps(_, overridingProps))
   @Test
   def testResetOffsetsNotExistingGroup() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "missing.group", "--all-topics",
-      "--to-current", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     "missing.group",
+                     "--all-topics",
+                     "--to-current",
+                     "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
     val resetOffsets = consumerGroupCommand.resetOffsets()
     assertEquals(Map.empty, resetOffsets)
@@ -93,8 +98,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsExistingTopic(): Unit = {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "new.group", "--topic", topic,
-      "--to-offset", "50")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     "new.group",
+                     "--topic",
+                     topic,
+                     "--to-offset",
+                     "50")
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 50, dryRun = true)
     resetAndAssertOffsets(args ++ Array("--dry-run"), expectedOffset = 50, dryRun = true)
@@ -113,8 +125,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     awaitConsumerProgress(count = 100L)
     executor.shutdown()
 
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-datetime", format.format(calendar.getTime), "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-datetime",
+                     format.format(calendar.getTime),
+                     "--execute")
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
@@ -130,39 +149,72 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     awaitConsumerProgress(count = 100L)
     executor.shutdown()
 
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-datetime", format.format(checkpoint), "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-datetime",
+                     format.format(checkpoint),
+                     "--execute")
     resetAndAssertOffsets(args, expectedOffset = 50)
   }
 
   @Test
   def testResetOffsetsByDuration() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--by-duration", "PT1M", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--by-duration",
+                     "PT1M",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
   @Test
   def testResetOffsetsByDurationToEarliest() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--by-duration", "PT0.1S", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--by-duration",
+                     "PT0.1S",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
   @Test
   def testResetOffsetsToEarliest() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-earliest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-earliest",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
   @Test
   def testResetOffsetsToLatest() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-latest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-latest",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
@@ -170,8 +222,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsToCurrentOffset() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-current", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-current",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
@@ -179,16 +237,30 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsToSpecificOffset() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-offset", "1", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--to-offset",
+                     "1",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 1)
   }
 
   @Test
   def testResetOffsetsShiftPlus() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--shift-by", "50", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--shift-by",
+                     "50",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 150)
@@ -196,8 +268,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsShiftMinus() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--shift-by", "-50", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--shift-by",
+                     "-50",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 50)
@@ -205,8 +284,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsShiftByLowerThanEarliest() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--shift-by", "-150", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--shift-by",
+                     "-150",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
@@ -214,8 +300,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsShiftByHigherThanLatest() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--shift-by", "150", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--all-topics",
+                     "--shift-by",
+                     "150",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
@@ -223,8 +316,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   def testResetOffsetsToEarliestOnOneTopic() {
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic,
-      "--to-earliest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--topic",
+                     topic,
+                     "--to-earliest",
+                     "--execute")
     produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
@@ -234,8 +334,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val topic = "bar"
     createTopic(topic, 2, 1)
 
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic",
-      s"$topic:1", "--to-earliest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--topic",
+                     s"$topic:1",
+                     "--to-earliest",
+                     "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
     produceConsumeAndShutdown(topic, totalMessages = 100, numConsumers = 2)
@@ -256,8 +363,17 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     createTopic(topic1, 1, 1)
     createTopic(topic2, 1, 1)
 
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic1,
-      "--topic", topic2, "--to-earliest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--topic",
+                     topic1,
+                     "--topic",
+                     topic2,
+                     "--to-earliest",
+                     "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
     produceConsumeAndShutdown(topic1, 100, 1)
@@ -283,8 +399,17 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     createTopic(topic1, 2, 1)
     createTopic(topic2, 2, 1)
 
-    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic",
-      s"$topic1:1", "--topic", s"$topic2:1", "--to-earliest", "--execute")
+    val args = Array("--bootstrap-server",
+                     brokerList,
+                     "--reset-offsets",
+                     "--group",
+                     group,
+                     "--topic",
+                     s"$topic1:1",
+                     "--topic",
+                     s"$topic2:1",
+                     "--to-earliest",
+                     "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
     produceConsumeAndShutdown(topic1, 100, 2)
@@ -312,8 +437,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val tp1 = new TopicPartition(topic, 1)
     createTopic(topic, 2, 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-offset", "2", "--export")
+    val cgcArgs = Array("--bootstrap-server",
+                        brokerList,
+                        "--reset-offsets",
+                        "--group",
+                        group,
+                        "--all-topics",
+                        "--to-offset",
+                        "2",
+                        "--export")
     val consumerGroupCommand = getConsumerGroupService(cgcArgs)
 
     produceConsumeAndShutdown(topic, 100, 2)
@@ -327,8 +459,15 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     bw.close()
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), exportedOffsets.mapValues(_.offset))
 
-    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--from-file", file.getCanonicalPath, "--dry-run")
+    val cgcArgsExec = Array("--bootstrap-server",
+                            brokerList,
+                            "--reset-offsets",
+                            "--group",
+                            group,
+                            "--all-topics",
+                            "--from-file",
+                            file.getCanonicalPath,
+                            "--dry-run")
     val consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec)
     val importedOffsets = consumerGroupCommandExec.resetOffsets()
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets.mapValues(_.offset))
@@ -338,35 +477,42 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test(expected = classOf[OptionException])
   def testResetWithUnrecognizedNewConsumerOption() {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
-      "--to-offset", "2", "--export")
+    val cgcArgs = Array("--new-consumer",
+                        "--bootstrap-server",
+                        brokerList,
+                        "--reset-offsets",
+                        "--group",
+                        group,
+                        "--all-topics",
+                        "--to-offset",
+                        "2",
+                        "--export")
     getConsumerGroupService(cgcArgs)
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {
-    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
-      new Array[Byte](100 * 1000)))
+    val records =
+      (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic, new Array[Byte](100 * 1000)))
     TestUtils.produceMessages(servers, records, acks = 1)
   }
 
   private def produceConsumeAndShutdown(topic: String, totalMessages: Int, numConsumers: Int = 1) {
     produceMessages(topic, totalMessages)
-    val executor =  addConsumerGroupExecutor(numConsumers, topic)
+    val executor = addConsumerGroupExecutor(numConsumers, topic)
     awaitConsumerProgress(topic, totalMessages)
     executor.shutdown()
   }
 
-  private def awaitConsumerProgress(topic: String = topic, count: Long): Unit = {
+  private def awaitConsumerProgress(topic: String = topic, count: Long): Unit =
     TestUtils.waitUntilTrue(() => {
       val offsets = committedOffsets(topic).values
       count == offsets.sum
     }, "Expected that consumer group has consumed all messages from topic/partition.")
-  }
 
   private def resetAndAssertOffsets(args: Array[String],
-                                           expectedOffset: Long,
-                                           group: String = group,
-                                           dryRun: Boolean = false): Unit = {
+                                    expectedOffset: Long,
+                                    group: String = group,
+                                    dryRun: Boolean = false): Unit = {
     val consumerGroupCommand = getConsumerGroupService(args)
     try {
       val priorOffsets = committedOffsets(group = group)
@@ -382,14 +528,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
                                              expectedOffsets: Map[TopicPartition, Long],
                                              topic: String): Unit = {
     val allResetOffsets = resetOffsets(consumerGroupService)
-    allResetOffsets.foreach { case (tp, offset) =>
-      assertEquals(offset, expectedOffsets(tp))
+    allResetOffsets.foreach {
+      case (tp, offset) =>
+        assertEquals(offset, expectedOffsets(tp))
     }
     assertEquals(expectedOffsets, committedOffsets(topic))
   }
 
-  private def resetOffsets(consumerGroupService: ConsumerGroupService): Map[TopicPartition, Long] = {
+  private def resetOffsets(consumerGroupService: ConsumerGroupService): Map[TopicPartition, Long] =
     consumerGroupService.resetOffsets().mapValues(_.offset)
-  }
 
 }

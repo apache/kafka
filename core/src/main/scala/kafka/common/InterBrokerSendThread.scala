@@ -36,7 +36,7 @@ abstract class InterBrokerSendThread(name: String,
                                      networkClient: NetworkClient,
                                      time: Time,
                                      isInterruptible: Boolean = true)
-  extends ShutdownableThread(name, isInterruptible) {
+    extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
   def requestTimeoutMs: Int
@@ -57,8 +57,12 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString, request.request, now, true,
-          requestTimeoutMs, completionHandler))
+                         networkClient.newClientRequest(request.destination.idString,
+                                                        request.request,
+                                                        now,
+                                                        true,
+                                                        requestTimeoutMs,
+                                                        completionHandler))
     }
 
     try {
@@ -130,15 +134,26 @@ abstract class InterBrokerSendThread(name: String,
                              now: Long,
                              authenticationException: AuthenticationException): Unit = {
     val handler = request.callback
-    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-      handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
-      null /* versionMismatch */ , authenticationException, null))
+    handler.onComplete(
+      new ClientResponse(
+        request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+        handler,
+        request.destination,
+        now /* createdTimeMs */,
+        now /* receivedTimeMs */,
+        true /* disconnected */,
+        null /* versionMismatch */,
+        authenticationException,
+        null
+      )
+    )
   }
 
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
+case class RequestAndCompletionHandler(destination: Node,
+                                       request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        handler: RequestCompletionHandler)
 
 private class UnsentRequests {
@@ -180,9 +195,8 @@ private class UnsentRequests {
     }
   }
 
-  def iterator(): Iterator[Entry[Node, ArrayDeque[ClientRequest]]] = {
+  def iterator(): Iterator[Entry[Node, ArrayDeque[ClientRequest]]] =
     unsent.entrySet().iterator()
-  }
 
   def requestIterator(node: Node): Iterator[ClientRequest] = {
     val requests = unsent.get(node)

@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-
+ */
 package kafka.server
 
 import org.junit.{After, Before, Test}
@@ -25,7 +24,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 
-class ReplicaFetchTest extends ZooKeeperTestHarness  {
+class ReplicaFetchTest extends ZooKeeperTestHarness {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
@@ -50,15 +49,15 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
     val testMessageList2 = List("test5", "test6", "test7", "test8")
 
     // create a topic and partition and await leadership
-    for (topic <- List(topic1,topic2)) {
+    for (topic <- List(topic1, topic2)) {
       createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
-                                               retries = 5,
-                                               keySerializer = new StringSerializer,
-                                               valueSerializer = new StringSerializer)
+                                            retries = 5,
+                                            keySerializer = new StringSerializer,
+                                            valueSerializer = new StringSerializer)
     val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
       testMessageList2.map(m => new ProducerRecord(topic2, m, m))
     records.map(producer.send).foreach(_.get)

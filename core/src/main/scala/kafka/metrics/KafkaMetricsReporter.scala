@@ -17,14 +17,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.metrics
 
 import kafka.utils.{CoreUtils, VerifiableProperties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable.ArrayBuffer
-
 
 /**
  * Base trait for reporter MBeans. If a client wants to expose these JMX
@@ -45,8 +43,8 @@ trait KafkaMetricsReporterMBean {
 }
 
 /**
-  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
-  */
+ * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
+ */
 trait KafkaMetricsReporter {
   def init(props: VerifiableProperties)
 }
@@ -55,19 +53,19 @@ object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
   private var reporters: ArrayBuffer[KafkaMetricsReporter] = null
 
-  def startReporters (verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {
+  def startReporters(verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {
     ReporterStarted synchronized {
       if (!ReporterStarted.get()) {
         reporters = ArrayBuffer[KafkaMetricsReporter]()
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
-        if(metricsConfig.reporters.nonEmpty) {
+        if (metricsConfig.reporters.nonEmpty) {
           metricsConfig.reporters.foreach(reporterType => {
             val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
             reporters += reporter
             reporter match {
               case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
-              case _ =>
+              case _                               =>
             }
           })
           ReporterStarted.set(true)
@@ -77,4 +75,3 @@ object KafkaMetricsReporter {
     reporters
   }
 }
-

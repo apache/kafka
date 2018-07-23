@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.util.{Collections, Locale, Properties}
@@ -29,7 +28,7 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
 import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.{Map, mutable}
+import scala.collection.{mutable, Map}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 
 object Defaults {
@@ -48,8 +47,10 @@ object Defaults {
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
 
-  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
-                        "`CleanupPolicy` instead.", since = "1.0.0")
+  @deprecated(
+    message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " + "`CleanupPolicy` instead.",
+    since = "1.0.0"
+  )
   val Compact = kafka.server.Defaults.LogCleanupPolicy
 
   val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
@@ -67,7 +68,8 @@ object Defaults {
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
-  extends AbstractConfig(LogConfig.configDef, props, false) {
+    extends AbstractConfig(LogConfig.configDef, props, false) {
+
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
@@ -174,37 +176,49 @@ object LogConfig {
 
   private class LogConfigDef extends ConfigDef {
 
-    private final val serverDefaultConfigNames = mutable.Map[String, String]()
+    final private val serverDefaultConfigNames = mutable.Map[String, String]()
 
-    def define(name: String, defType: ConfigDef.Type, defaultValue: Any, validator: Validator,
-               importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String): LogConfigDef = {
+    def define(name: String,
+               defType: ConfigDef.Type,
+               defaultValue: Any,
+               validator: Validator,
+               importance: ConfigDef.Importance,
+               doc: String,
+               serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, defaultValue, validator, importance, doc)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
-    def define(name: String, defType: ConfigDef.Type, defaultValue: Any, importance: ConfigDef.Importance,
-               documentation: String, serverDefaultConfigName: String): LogConfigDef = {
+    def define(name: String,
+               defType: ConfigDef.Type,
+               defaultValue: Any,
+               importance: ConfigDef.Importance,
+               documentation: String,
+               serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, defaultValue, importance, documentation)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
-    def define(name: String, defType: ConfigDef.Type, importance: ConfigDef.Importance, documentation: String,
+    def define(name: String,
+               defType: ConfigDef.Type,
+               importance: ConfigDef.Importance,
+               documentation: String,
                serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, importance, documentation)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
-    override def headers = List("Name", "Description", "Type", "Default", "Valid Values", "Server Default Property", "Importance").asJava
+    override def headers =
+      List("Name", "Description", "Type", "Default", "Valid Values", "Server Default Property", "Importance").asJava
 
-    override def getConfigValue(key: ConfigKey, headerName: String): String = {
+    override def getConfigValue(key: ConfigKey, headerName: String): String =
       headerName match {
         case "Server Default Property" => serverDefaultConfigNames.get(key.name).get
-        case _ => super.getConfigValue(key, headerName)
+        case _                         => super.getConfigValue(key, headerName)
       }
-    }
 
     def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
@@ -216,58 +230,185 @@ object LogConfig {
     import org.apache.kafka.common.config.ConfigDef.ValidString._
 
     new LogConfigDef()
-      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
-        SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
-      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
-        KafkaConfig.LogRollTimeMillisProp)
-      .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
-        KafkaConfig.LogRollTimeJitterMillisProp)
-      .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
-        KafkaConfig.LogIndexSizeMaxBytesProp)
-      .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(0), MEDIUM, FlushIntervalDoc,
-        KafkaConfig.LogFlushIntervalMessagesProp)
-      .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc,
-        KafkaConfig.LogFlushIntervalMsProp)
+      .define(SegmentBytesProp,
+              INT,
+              Defaults.SegmentSize,
+              atLeast(LegacyRecord.RECORD_OVERHEAD_V0),
+              MEDIUM,
+              SegmentSizeDoc,
+              KafkaConfig.LogSegmentBytesProp)
+      .define(SegmentMsProp,
+              LONG,
+              Defaults.SegmentMs,
+              atLeast(1),
+              MEDIUM,
+              SegmentMsDoc,
+              KafkaConfig.LogRollTimeMillisProp)
+      .define(SegmentJitterMsProp,
+              LONG,
+              Defaults.SegmentJitterMs,
+              atLeast(0),
+              MEDIUM,
+              SegmentJitterMsDoc,
+              KafkaConfig.LogRollTimeJitterMillisProp)
+      .define(SegmentIndexBytesProp,
+              INT,
+              Defaults.MaxIndexSize,
+              atLeast(0),
+              MEDIUM,
+              MaxIndexSizeDoc,
+              KafkaConfig.LogIndexSizeMaxBytesProp)
+      .define(FlushMessagesProp,
+              LONG,
+              Defaults.FlushInterval,
+              atLeast(0),
+              MEDIUM,
+              FlushIntervalDoc,
+              KafkaConfig.LogFlushIntervalMessagesProp)
+      .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc, KafkaConfig.LogFlushIntervalMsProp)
       // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
-      .define(RetentionBytesProp, LONG, Defaults.RetentionSize, MEDIUM, RetentionSizeDoc,
-        KafkaConfig.LogRetentionBytesProp)
+      .define(RetentionBytesProp,
+              LONG,
+              Defaults.RetentionSize,
+              MEDIUM,
+              RetentionSizeDoc,
+              KafkaConfig.LogRetentionBytesProp)
       // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
-      .define(RetentionMsProp, LONG, Defaults.RetentionMs, MEDIUM, RetentionMsDoc,
-        KafkaConfig.LogRetentionTimeMillisProp)
-      .define(MaxMessageBytesProp, INT, Defaults.MaxMessageSize, atLeast(0), MEDIUM, MaxMessageSizeDoc,
-        KafkaConfig.MessageMaxBytesProp)
-      .define(IndexIntervalBytesProp, INT, Defaults.IndexInterval, atLeast(0), MEDIUM, IndexIntervalDoc,
-        KafkaConfig.LogIndexIntervalBytesProp)
-      .define(DeleteRetentionMsProp, LONG, Defaults.DeleteRetentionMs, atLeast(0), MEDIUM,
-        DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
-      .define(MinCompactionLagMsProp, LONG, Defaults.MinCompactionLagMs, atLeast(0), MEDIUM, MinCompactionLagMsDoc,
-        KafkaConfig.LogCleanerMinCompactionLagMsProp)
-      .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
-        KafkaConfig.LogDeleteDelayMsProp)
-      .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
-        MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
-      .define(CleanupPolicyProp, LIST, Defaults.CleanupPolicy, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
-        KafkaConfig.LogCleanupPolicyProp)
-      .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
-        MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
-      .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc,
-        KafkaConfig.MinInSyncReplicasProp)
-      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*),
-        MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
-      .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
-        KafkaConfig.LogPreAllocateProp)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc,
-        KafkaConfig.LogMessageFormatVersionProp)
-      .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, MessageTimestampTypeDoc,
-        KafkaConfig.LogMessageTimestampTypeProp)
-      .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs,
-        atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
-      .define(LeaderReplicationThrottledReplicasProp, LIST, Defaults.LeaderReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
-        LeaderReplicationThrottledReplicasDoc, LeaderReplicationThrottledReplicasProp)
-      .define(FollowerReplicationThrottledReplicasProp, LIST, Defaults.FollowerReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
-        FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
-      .define(MessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
-        MessageDownConversionEnableDoc, KafkaConfig.LogMessageDownConversionEnableProp)
+      .define(RetentionMsProp,
+              LONG,
+              Defaults.RetentionMs,
+              MEDIUM,
+              RetentionMsDoc,
+              KafkaConfig.LogRetentionTimeMillisProp)
+      .define(MaxMessageBytesProp,
+              INT,
+              Defaults.MaxMessageSize,
+              atLeast(0),
+              MEDIUM,
+              MaxMessageSizeDoc,
+              KafkaConfig.MessageMaxBytesProp)
+      .define(IndexIntervalBytesProp,
+              INT,
+              Defaults.IndexInterval,
+              atLeast(0),
+              MEDIUM,
+              IndexIntervalDoc,
+              KafkaConfig.LogIndexIntervalBytesProp)
+      .define(DeleteRetentionMsProp,
+              LONG,
+              Defaults.DeleteRetentionMs,
+              atLeast(0),
+              MEDIUM,
+              DeleteRetentionMsDoc,
+              KafkaConfig.LogCleanerDeleteRetentionMsProp)
+      .define(MinCompactionLagMsProp,
+              LONG,
+              Defaults.MinCompactionLagMs,
+              atLeast(0),
+              MEDIUM,
+              MinCompactionLagMsDoc,
+              KafkaConfig.LogCleanerMinCompactionLagMsProp)
+      .define(FileDeleteDelayMsProp,
+              LONG,
+              Defaults.FileDeleteDelayMs,
+              atLeast(0),
+              MEDIUM,
+              FileDeleteDelayMsDoc,
+              KafkaConfig.LogDeleteDelayMsProp)
+      .define(MinCleanableDirtyRatioProp,
+              DOUBLE,
+              Defaults.MinCleanableDirtyRatio,
+              between(0, 1),
+              MEDIUM,
+              MinCleanableRatioDoc,
+              KafkaConfig.LogCleanerMinCleanRatioProp)
+      .define(CleanupPolicyProp,
+              LIST,
+              Defaults.CleanupPolicy,
+              ValidList.in(LogConfig.Compact, LogConfig.Delete),
+              MEDIUM,
+              CompactDoc,
+              KafkaConfig.LogCleanupPolicyProp)
+      .define(
+        UncleanLeaderElectionEnableProp,
+        BOOLEAN,
+        Defaults.UncleanLeaderElectionEnable,
+        MEDIUM,
+        UncleanLeaderElectionEnableDoc,
+        KafkaConfig.UncleanLeaderElectionEnableProp
+      )
+      .define(MinInSyncReplicasProp,
+              INT,
+              Defaults.MinInSyncReplicas,
+              atLeast(1),
+              MEDIUM,
+              MinInSyncReplicasDoc,
+              KafkaConfig.MinInSyncReplicasProp)
+      .define(
+        CompressionTypeProp,
+        STRING,
+        Defaults.CompressionType,
+        in(BrokerCompressionCodec.brokerCompressionOptions: _*),
+        MEDIUM,
+        CompressionTypeDoc,
+        KafkaConfig.CompressionTypeProp
+      )
+      .define(PreAllocateEnableProp,
+              BOOLEAN,
+              Defaults.PreAllocateEnable,
+              MEDIUM,
+              PreAllocateEnableDoc,
+              KafkaConfig.LogPreAllocateProp)
+      .define(MessageFormatVersionProp,
+              STRING,
+              Defaults.MessageFormatVersion,
+              MEDIUM,
+              MessageFormatVersionDoc,
+              KafkaConfig.LogMessageFormatVersionProp)
+      .define(
+        MessageTimestampTypeProp,
+        STRING,
+        Defaults.MessageTimestampType,
+        in("CreateTime", "LogAppendTime"),
+        MEDIUM,
+        MessageTimestampTypeDoc,
+        KafkaConfig.LogMessageTimestampTypeProp
+      )
+      .define(
+        MessageTimestampDifferenceMaxMsProp,
+        LONG,
+        Defaults.MessageTimestampDifferenceMaxMs,
+        atLeast(0),
+        MEDIUM,
+        MessageTimestampDifferenceMaxMsDoc,
+        KafkaConfig.LogMessageTimestampDifferenceMaxMsProp
+      )
+      .define(
+        LeaderReplicationThrottledReplicasProp,
+        LIST,
+        Defaults.LeaderReplicationThrottledReplicas,
+        ThrottledReplicaListValidator,
+        MEDIUM,
+        LeaderReplicationThrottledReplicasDoc,
+        LeaderReplicationThrottledReplicasProp
+      )
+      .define(
+        FollowerReplicationThrottledReplicasProp,
+        LIST,
+        Defaults.FollowerReplicationThrottledReplicas,
+        ThrottledReplicaListValidator,
+        MEDIUM,
+        FollowerReplicationThrottledReplicasDoc,
+        FollowerReplicationThrottledReplicasProp
+      )
+      .define(
+        MessageDownConversionEnableProp,
+        BOOLEAN,
+        Defaults.MessageDownConversionEnable,
+        LOW,
+        MessageDownConversionEnableDoc,
+        KafkaConfig.LogMessageDownConversionEnableProp
+      )
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
@@ -292,7 +433,7 @@ object LogConfig {
    */
   def validateNames(props: Properties) {
     val names = configNames
-    for(name <- props.asScala.keys)
+    for (name <- props.asScala.keys)
       if (!names.contains(name))
         throw new InvalidConfigurationException(s"Unknown topic config name: $name")
   }

@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.api
 
 import java.util.Properties
@@ -32,10 +31,9 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-
 class TransactionsBounceTest extends KafkaServerTestHarness {
-  private val producerBufferSize =  65536
-  private val serverMessageMaxBytes =  producerBufferSize/2
+  private val producerBufferSize = 65536
+  private val serverMessageMaxBytes = producerBufferSize / 2
   private val numPartitions = 3
 
   val numServers = 4
@@ -58,7 +56,6 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
   overridingProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
 
-
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing
   // brokers too quickly when they get new, random ports. If we're not careful, the client can end up in a situation
@@ -68,10 +65,10 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   //
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
-  override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(numServers, zkConnect,enableControlledShutdown = true)
+  override def generateConfigs =
+    FixedPortTestUtils
+      .createBrokerConfigs(numServers, zkConnect, enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
-  }
 
   @Test
   def testBrokerFailure() {
@@ -102,8 +99,10 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         producer.beginTransaction()
         val shouldAbort = iteration % 3 == 0
         records.foreach { record =>
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value,
-            !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
+          producer.send(
+            TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value, !shouldAbort),
+            new ErrorLoggingCallback(outputTopic, record.key, record.value, true)
+          )
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroup)
@@ -131,14 +130,16 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).foreach { record =>
       val value = TestUtils.assertCommittedAndGetValue(record).toInt
       val topicPartition = new TopicPartition(record.topic(), record.partition())
-      recordsByPartition.getOrElseUpdate(topicPartition, new mutable.ListBuffer[Int])
+      recordsByPartition
+        .getOrElseUpdate(topicPartition, new mutable.ListBuffer[Int])
         .append(value)
     }
 
     val outputRecords = new mutable.ListBuffer[Int]()
-    recordsByPartition.values.foreach { case (partitionValues) =>
-      assertEquals("Out of order messages detected", partitionValues, partitionValues.sorted)
-      outputRecords.appendAll(partitionValues)
+    recordsByPartition.values.foreach {
+      case (partitionValues) =>
+        assertEquals("Out of order messages detected", partitionValues, partitionValues.sorted)
+        outputRecords.appendAll(partitionValues)
     }
 
     val recordSet = outputRecords.toSet
@@ -150,7 +151,9 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     verifyingConsumer.close()
   }
 
-  private def createConsumerAndSubscribeToTopics(groupId: String, topics: List[String], readCommitted: Boolean = false) = {
+  private def createConsumerAndSubscribeToTopics(groupId: String,
+                                                 topics: List[String],
+                                                 readCommitted: Boolean = false) = {
     val props = new Properties()
     if (readCommitted)
       props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
@@ -160,13 +163,15 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+                                            groupId = groupId,
+                                            securityProtocol = SecurityProtocol.PLAINTEXT,
+                                            props = Some(props))
     consumer.subscribe(topics.asJava)
     consumer
   }
 
-  private def createTopics() =  {
+  private def createTopics() = {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     createTopic(inputTopic, numPartitions, 3, topicConfig)
@@ -186,11 +191,13 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         Thread.sleep(500)
       }
 
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition))
+      (0 until numPartitions).foreach(
+        partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition)
+      )
     }
 
-    override def shutdown(){
+    override def shutdown() {
       super.shutdown()
-   }
+    }
   }
 }

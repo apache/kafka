@@ -1,26 +1,31 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util
 
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
+import org.apache.kafka.clients.admin.{
+  AdminClient,
+  AdminClientConfig,
+  CreateDelegationTokenOptions,
+  DescribeDelegationTokenOptions
+}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
@@ -34,28 +39,41 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("PLAIN")
-  protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
+  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   var adminClient: AdminClient = null
 
   override def numBrokers = 1
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    startSasl(
+      jaasSections(kafkaServerSaslMechanisms,
+                   Some(kafkaClientSaslMechanism),
+                   KafkaSasl,
+                   JaasTestUtils.KafkaServerContextName)
+    )
     super.setUp()
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
-      enableControlledShutdown = false, enableDeleteTopic = true,
+    val props = TestUtils.createBrokerConfigs(
+      numBrokers,
+      zkConnect,
+      enableControlledShutdown = false,
+      enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties,
+      enableToken = true
+    )
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 
-  private def createAdminConfig():util.Map[String, Object] = {
+  private def createAdminConfig(): util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
@@ -90,7 +108,10 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     assertEquals(Set(token1, token2), tokens.asScala.toSet)
 
     //get tokens for renewer2
-    tokens = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(renewer2)).delegationTokens().get()
+    tokens = adminClient
+      .describeDelegationToken(new DescribeDelegationTokenOptions().owners(renewer2))
+      .delegationTokens()
+      .get()
     assertTrue(tokens.size() == 1)
     assertEquals(Set(token2), tokens.asScala.toSet)
 
@@ -116,11 +137,15 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     //create token with invalid principal type
     val renewer3 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer3")).asJava
     val createResult3 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer3))
-    intercept[ExecutionException](createResult3.delegationToken().get()).getCause.isInstanceOf[InvalidPrincipalTypeException]
+    intercept[ExecutionException](createResult3.delegationToken().get()).getCause
+      .isInstanceOf[InvalidPrincipalTypeException]
 
     // try describing tokens for unknown owner
     val unknownOwner = List(SecurityUtils.parseKafkaPrincipal("User:Unknown")).asJava
-    tokens = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(unknownOwner)).delegationTokens().get()
+    tokens = adminClient
+      .describeDelegationToken(new DescribeDelegationTokenOptions().owners(unknownOwner))
+      .delegationTokens()
+      .get()
     assertTrue(tokens.isEmpty)
   }
 

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.serializer
 
 import java.nio.ByteBuffer
@@ -43,30 +42,27 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
  */
 class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
   val encoding =
-    if(props == null)
+    if (props == null)
       "UTF8"
     else
       props.getString("serializer.encoding", "UTF8")
 
-  def fromBytes(bytes: Array[Byte]): String = {
+  def fromBytes(bytes: Array[Byte]): String =
     new String(bytes, encoding)
-  }
 }
 
 /**
-  * The long decoder translates bytes into longs.
-  */
+ * The long decoder translates bytes into longs.
+ */
 class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
-  def fromBytes(bytes: Array[Byte]): Long = {
+  def fromBytes(bytes: Array[Byte]): Long =
     ByteBuffer.wrap(bytes).getLong
-  }
 }
 
 /**
-  * The integer decoder translates bytes into integers.
-  */
+ * The integer decoder translates bytes into integers.
+ */
 class IntegerDecoder(props: VerifiableProperties = null) extends Decoder[Integer] {
-  def fromBytes(bytes: Array[Byte]): Integer = {
+  def fromBytes(bytes: Array[Byte]): Integer =
     ByteBuffer.wrap(bytes).getInt()
-  }
 }

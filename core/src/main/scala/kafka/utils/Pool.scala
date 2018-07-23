@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util.concurrent._
@@ -24,12 +23,12 @@ import org.apache.kafka.common.KafkaException
 import collection.mutable
 import collection.JavaConverters._
 
-class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
+class Pool[K, V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
-  
+
   def put(k: K, v: V): V = pool.put(k, v)
-  
+
   def putIfNotExists(k: K, v: V): V = pool.putIfAbsent(k, v)
 
   /**
@@ -48,23 +47,23 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   }
 
   /**
-    * Gets the value associated with the given key. If there is no associated
-    * value, then create the value using the provided by `createValue` and return the
-    * value associated with the key.
-    *
-    * @param key The key to lookup.
-    * @param createValue Factory function.
-    * @return The final value associated with the key.
-    */
+   * Gets the value associated with the given key. If there is no associated
+   * value, then create the value using the provided by `createValue` and return the
+   * value associated with the key.
+   *
+   * @param key The key to lookup.
+   * @param createValue Factory function.
+   * @return The final value associated with the key.
+   */
   def getAndMaybePut(key: K, createValue: => V): V =
     pool.computeIfAbsent(key, new java.util.function.Function[K, V] {
       override def apply(k: K): V = createValue
     })
 
   def contains(id: K): Boolean = pool.containsKey(id)
-  
+
   def get(key: K): V = pool.get(key)
-  
+
   def remove(key: K): V = pool.remove(key)
 
   def remove(key: K, value: V): Boolean = pool.remove(key, value)
@@ -74,20 +73,20 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def values: Iterable[V] = pool.values.asScala
 
   def clear() { pool.clear() }
-  
+
   override def size: Int = pool.size
-  
-  override def iterator: Iterator[(K, V)] = new Iterator[(K,V)]() {
-    
+
+  override def iterator: Iterator[(K, V)] = new Iterator[(K, V)]() {
+
     private val iter = pool.entrySet.iterator
-    
+
     def hasNext: Boolean = iter.hasNext
-    
+
     def next: (K, V) = {
       val n = iter.next
       (n.getKey, n.getValue)
     }
-    
+
   }
-    
+
 }

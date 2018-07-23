@@ -48,14 +48,19 @@ class KafkaTest {
     assertEquals(2, config2.brokerId)
 
     // We should be also able to set completely new property
-    val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
+    val config3 =
+      KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.brokerId)
     assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
+    val config4 = KafkaConfig.fromProps(
+      Kafka.getPropsFromArgs(
+        Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")
+      )
+    )
     assertEquals(2, config4.brokerId)
-    assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
+    assertEquals(util.Arrays.asList("compact", "delete"), config4.logCleanupPolicy)
   }
 
   @Test(expected = classOf[FatalExitError])
@@ -85,9 +90,19 @@ class KafkaTest {
   @Test
   def testKafkaSslPasswords(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
-                                                                                    "--override", "ssl.key.password=key_password",
-                                                                                    "--override", "ssl.truststore.password=truststore_password")))
+    val config = KafkaConfig.fromProps(
+      Kafka.getPropsFromArgs(
+        Array(
+          propertiesFile,
+          "--override",
+          "ssl.keystore.password=keystore_password",
+          "--override",
+          "ssl.key.password=key_password",
+          "--override",
+          "ssl.truststore.password=truststore_password"
+        )
+      )
+    )
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
@@ -97,11 +112,10 @@ class KafkaTest {
     assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
   }
 
-  def prepareDefaultConfig(): String = {
+  def prepareDefaultConfig(): String =
     prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
-  }
 
-  def prepareConfig(lines : Array[String]): String = {
+  def prepareConfig(lines: Array[String]): String = {
     val file = File.createTempFile("kafkatest", ".properties")
     file.deleteOnExit()
 

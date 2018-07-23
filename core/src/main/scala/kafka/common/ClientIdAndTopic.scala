@@ -14,15 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 /**
  * Convenience case class since (clientId, topic) pairs are used in the creation
  * of many Stats objects.
  */
-trait ClientIdTopic {
-}
+trait ClientIdTopic {}
 
 case class ClientIdAndTopic(clientId: String, topic: String) extends ClientIdTopic {
   override def toString = "%s-%s".format(clientId, topic)
@@ -31,5 +29,3 @@ case class ClientIdAndTopic(clientId: String, topic: String) extends ClientIdTop
 case class ClientIdAllTopics(clientId: String) extends ClientIdTopic {
   override def toString = "%s-%s".format(clientId, "AllTopics")
 }
-
-

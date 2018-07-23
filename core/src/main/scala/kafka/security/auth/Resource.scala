@@ -26,7 +26,7 @@ object Resource {
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 
-  def fromString(str: String): Resource = {
+  def fromString(str: String): Resource =
     ResourceType.values.find(resourceType => str.startsWith(resourceType.name + Separator)) match {
       case None => throw new KafkaException("Invalid resource string: '" + str + "'")
       case Some(resourceType) =>
@@ -41,7 +41,6 @@ object Resource {
             Resource(resourceType, remaining, PatternType.LITERAL)
         }
     }
-  }
 }
 
 /**
@@ -60,24 +59,21 @@ case class Resource(resourceType: ResourceType, name: String, patternType: Patte
     throw new IllegalArgumentException("patternType must not be UNKNOWN")
 
   /**
-    * Create an instance of this class with the provided parameters.
-    * Resource pattern type would default to PatternType.LITERAL.
-    *
-    * @param resourceType non-null resource type
-    * @param name         non-null resource name
-    * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, PatternType)]]
-    */
+   * Create an instance of this class with the provided parameters.
+   * Resource pattern type would default to PatternType.LITERAL.
+   *
+   * @param resourceType non-null resource type
+   * @param name         non-null resource name
+   * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, PatternType)]]
+   */
   @deprecated("Use Resource(ResourceType, String, PatternType", "Since 2.0")
   def this(resourceType: ResourceType, name: String) {
     this(resourceType, name, PatternType.LITERAL)
   }
 
-  def toPattern: ResourcePattern = {
+  def toPattern: ResourcePattern =
     new ResourcePattern(resourceType.toJava, name, patternType)
-  }
 
-  override def toString: String = {
+  override def toString: String =
     resourceType.name + Resource.Separator + patternType + Resource.Separator + name
-  }
 }
-

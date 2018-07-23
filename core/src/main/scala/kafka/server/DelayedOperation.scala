@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.util.concurrent._
@@ -43,8 +42,9 @@ import scala.collection.mutable.ListBuffer
  *
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  */
-abstract class DelayedOperation(override val delayMs: Long,
-    lockOpt: Option[Lock] = None) extends TimerTask with Logging {
+abstract class DelayedOperation(override val delayMs: Long, lockOpt: Option[Lock] = None)
+    extends TimerTask
+    with Logging {
 
   private val completed = new AtomicBoolean(false)
   private val tryCompletePending = new AtomicBoolean(false)
@@ -63,7 +63,7 @@ abstract class DelayedOperation(override val delayMs: Long,
    * the first thread will succeed in completing the operation and return
    * true, others will still return false
    */
-  def forceComplete(): Boolean = {
+  def forceComplete(): Boolean =
     if (completed.compareAndSet(false, true)) {
       // cancel the timeout timer
       cancel()
@@ -72,7 +72,6 @@ abstract class DelayedOperation(override val delayMs: Long,
     } else {
       false
     }
-  }
 
   /**
    * Check if the delayed operation is already completed
@@ -139,10 +138,9 @@ abstract class DelayedOperation(override val delayMs: Long,
   /*
    * run() method defines a task that is executed on timeout
    */
-  override def run(): Unit = {
+  override def run(): Unit =
     if (forceComplete())
       onExpiration()
-  }
 }
 
 object DelayedOperationPurgatory {
@@ -167,7 +165,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              purgeInterval: Int = 1000,
                                                              reaperEnabled: Boolean = true,
                                                              timerEnabled: Boolean = true)
-        extends Logging with KafkaMetricsGroup {
+    extends Logging
+    with KafkaMetricsGroup {
 
   /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
@@ -234,7 +233,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       return true
 
     var watchCreated = false
-    for(key <- watchKeys) {
+    for (key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
       if (operation.isCompleted)
         return false
@@ -271,7 +270,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    */
   def checkAndComplete(key: Any): Int = {
     val watchers = inReadLock(removeWatchersLock) { watchersForKey.get(key) }
-    if(watchers == null)
+    if (watchers == null)
       0
     else
       watchers.tryCompleteWatched()
@@ -290,9 +289,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   def delayed: Int = timeoutTimer.size
 
   /**
-    * Cancel watching on any delayed operations for the given key. Note the operation will not be completed
-    */
-  def cancelForKey(key: Any): List[T] = {
+   * Cancel watching on any delayed operations for the given key. Note the operation will not be completed
+   */
+  def cancelForKey(key: Any): List[T] =
     inWriteLock(removeWatchersLock) {
       val watchers = watchersForKey.remove(key)
       if (watchers != null)
@@ -300,7 +299,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       else
         Nil
     }
-  }
   /*
    * Return all the current watcher lists,
    * note that the returned watchers may be removed from the list by other threads
@@ -432,9 +430,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   /**
    * A background reaper to expire delayed operations that have timed out
    */
-  private class ExpiredOperationReaper extends ShutdownableThread(
-    "ExpirationReaper-%d-%s".format(brokerId, purgatoryName),
-    false) {
+  private class ExpiredOperationReaper
+      extends ShutdownableThread("ExpirationReaper-%d-%s".format(brokerId, purgatoryName), false) {
 
     override def doWork() {
       advanceClock(200L)

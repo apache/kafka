@@ -24,11 +24,12 @@ object ControllerTestUtils {
   def createMockControllerEvent(controllerState: ControllerState, process: () => Unit): ControllerEvent = {
     val mockEvent = EasyMock.createNiceMock(classOf[ControllerEvent])
     EasyMock.expect(mockEvent.state).andReturn(controllerState)
-    EasyMock.expect(mockEvent.process()).andAnswer(new IAnswer[Unit]() {
-      def answer(): Unit = {
-        process()
-      }
-    })
+    EasyMock
+      .expect(mockEvent.process())
+      .andAnswer(new IAnswer[Unit]() {
+        def answer(): Unit =
+          process()
+      })
     EasyMock.replay(mockEvent)
     mockEvent
   }

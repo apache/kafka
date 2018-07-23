@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.admin
 
 import kafka.network.SocketServer
@@ -33,20 +32,20 @@ import scala.collection.JavaConverters._
 
 class AddPartitionsTest extends BaseRequestTest {
 
-  protected override def numBrokers: Int = 4
+  override protected def numBrokers: Int = 4
 
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0->Seq(0,1))
+  val topic1Assignment = Map(0 -> Seq(0, 1))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0->Seq(1,2))
+  val topic2Assignment = Map(0 -> Seq(1, 2))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0->Seq(2,3,0,1))
+  val topic3Assignment = Map(0 -> Seq(2, 3, 0, 1))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0->Seq(0,3))
+  val topic4Assignment = Map(0 -> Seq(0, 3))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1->Seq(0,1))
+  val topic5Assignment = Map(1 -> Seq(0, 1))
 
   @Before
   override def setUp() {
@@ -59,27 +58,34 @@ class AddPartitionsTest extends BaseRequestTest {
   }
 
   @Test
-  def testWrongReplicaCount(): Unit = {
+  def testWrongReplicaCount(): Unit =
     try {
-      adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
+      adminZkClient.addPartitions(topic1,
+                                  topic1Assignment,
+                                  adminZkClient.getBrokerMetadatas(),
+                                  2,
+                                  Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
       fail("Add partitions should fail")
     } catch {
       case _: InvalidReplicaAssignmentException => //this is good
     }
-  }
 
   @Test
-  def testMissingPartition0(): Unit = {
+  def testMissingPartition0(): Unit =
     try {
-      adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
+      adminZkClient.addPartitions(topic5,
+                                  topic5Assignment,
+                                  adminZkClient.getBrokerMetadatas(),
+                                  2,
+                                  Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
       fail("Add partitions should fail")
     } catch {
       case e: AdminOperationException => //this is good
-        assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
+        assertTrue(
+          e.getMessage
+            .contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing")
+        )
     }
-  }
 
   @Test
   def testIncrementPartitions(): Unit = {
@@ -109,8 +115,11 @@ class AddPartitionsTest extends BaseRequestTest {
   @Test
   def testManualAssignmentOfReplicas(): Unit = {
     // Add 2 partitions
-    adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3,
-      Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
+    adminZkClient.addPartitions(topic2,
+                                topic2Assignment,
+                                adminZkClient.getBrokerMetadatas(),
+                                3,
+                                Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1)
     val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2)
@@ -176,7 +185,9 @@ class AddPartitionsTest extends BaseRequestTest {
     validateLeaderAndReplicas(topicMetadata, 2, 3, Set(1, 3))
   }
 
-  def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int,
+  def validateLeaderAndReplicas(metadata: TopicMetadata,
+                                partitionId: Int,
+                                expectedLeaderId: Int,
                                 expectedReplicas: Set[Int]): Unit = {
     val partitionOpt = metadata.partitionMetadata.asScala.find(_.partition == partitionId)
     assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
@@ -187,7 +198,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
+  private def sendMetadataRequest(request: MetadataRequest,
+                                  destination: Option[SocketServer] = None): MetadataResponse = {
     val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
     MetadataResponse.parse(response, request.version)
   }

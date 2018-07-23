@@ -36,8 +36,8 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import scala.collection.JavaConverters._
 
 /**
-  * Test whether clients can producer and consume when there is log directory failure
-  */
+ * Test whether clients can producer and consume when there is log directory failure
+ */
 class LogDirFailureTest extends IntegrationTestHarness {
 
   val producerCount: Int = 1
@@ -115,12 +115,20 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
       leaderServer.replicaManager.getPartition(new TopicPartition(topic, i)).flatMap(_.leaderReplicaIfLocal).isDefined
     }.get
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic,
+                                                              anotherPartitionWithTheSameLeader,
+                                                              topic.getBytes,
+                                                              "message".getBytes)
     // When producer.send(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
     // has fetched from the leader and attempts to append to the offline replica.
     producer.send(record).get
 
-    assertEquals(serverCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader)).get.inSyncReplicas.size)
+    assertEquals(serverCount,
+                 leaderServer.replicaManager
+                   .getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
+                   .get
+                   .inSyncReplicas
+                   .size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }
@@ -161,7 +169,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
-    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath),
+                            "Expected log directory offline",
+                            3000L)
     assertTrue(leaderServer.replicaManager.getReplica(partition).isEmpty)
 
     // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
@@ -171,19 +181,29 @@ class LogDirFailureTest extends IntegrationTestHarness {
     } catch {
       case e: ExecutionException =>
         e.getCause match {
-          case t: KafkaStorageException =>
+          case t: KafkaStorageException          =>
           case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
-          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
+          case t: Throwable =>
+            fail(
+              s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}"
+            )
         }
-      case e: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${e.toString}")
+      case e: Throwable =>
+        fail(
+          s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${e.toString}"
+        )
     }
 
     // Wait for producer to update metadata for the partition
-    TestUtils.waitUntilTrue(() => {
-      // ProduceResponse may contain KafkaStorageException and trigger metadata update
-      producer.send(record)
-      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
-    }, "Expected new leader for the partition", 6000L)
+    TestUtils.waitUntilTrue(
+      () => {
+        // ProduceResponse may contain KafkaStorageException and trigger metadata update
+        producer.send(record)
+        producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
+      },
+      "Expected new leader for the partition",
+      6000L
+    )
 
     // Consumer should receive some messages
     TestUtils.waitUntilTrue(() => {
@@ -214,4 +234,3 @@ object LogDirFailureTest {
   case object Roll extends LogDirFailureType
   case object Checkpoint extends LogDirFailureType
 }
-

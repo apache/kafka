@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import kafka.network._
@@ -38,7 +37,9 @@ class KafkaRequestHandler(id: Int,
                           val totalHandlerThreads: AtomicInteger,
                           val requestChannel: RequestChannel,
                           apis: KafkaApis,
-                          time: Time) extends Runnable with Logging {
+                          time: Time)
+    extends Runnable
+    with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
   private val shutdownComplete = new CountDownLatch(1)
   @volatile private var stopped = false
@@ -82,9 +83,8 @@ class KafkaRequestHandler(id: Int,
     shutdownComplete.countDown()
   }
 
-  def stop(): Unit = {
+  def stop(): Unit =
     stopped = true
-  }
 
   def initiateShutdown(): Unit = requestChannel.sendShutdownRequest()
 
@@ -96,7 +96,9 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: KafkaApis,
                               time: Time,
-                              numThreads: Int) extends Logging with KafkaMetricsGroup {
+                              numThreads: Int)
+    extends Logging
+    with KafkaMetricsGroup {
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
@@ -140,7 +142,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
 class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val tags: scala.collection.Map[String, String] = name match {
-    case None => Map.empty
+    case None        => Map.empty
     case Some(topic) => Map("topic" -> topic)
   }
 
@@ -154,12 +156,16 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   private[server] val replicationBytesOutRate =
     if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
     else None
-  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val failedProduceRequestRate =
+    newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalProduceRequestRate =
+    newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val fetchMessageConversionsRate =
+    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val produceMessageConversionsRate =
+    newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
 
   def close() {
     removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
@@ -230,7 +236,6 @@ class BrokerTopicStats {
       allTopicsStats.bytesOutRate.mark(value)
     }
   }
-
 
   def close(): Unit = {
     allTopicsStats.close()

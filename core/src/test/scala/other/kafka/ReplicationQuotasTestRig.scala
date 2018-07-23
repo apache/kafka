@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package other.kafka
 
 import java.io.{File, PrintWriter}
@@ -34,22 +33,21 @@ import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
 import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{mutable, Map, Seq}
 
 /**
-  * Test rig for measuring throttling performance. Configure the parameters for a set of experiments, then execute them
-  * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
-  * you wish.
-  *
-  * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
-  * & #partitions and throttle to adjust this.
-  */
+ * Test rig for measuring throttling performance. Configure the parameters for a set of experiments, then execute them
+ * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
+ * you wish.
+ *
+ * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
+ * & #partitions and throttle to adjust this.
+ */
 object ReplicationQuotasTestRig {
   new File("Experiments").mkdir()
   private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
   new File(dir).mkdir()
   val k = 1000 * 1000
-
 
   def main(args: Array[String]): Unit = {
     val displayChartsOnScreen = if (args.length > 0 && args(0) == "show-gui") true else false
@@ -57,15 +55,40 @@ object ReplicationQuotasTestRig {
 
     val experiments = Seq(
       //1GB total data written, will take 210s
-      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 1 * k, msgsPerPartition = 500, msgSize = 100 * 1000),
+      new ExperimentDef("Experiment1",
+                        brokers = 5,
+                        partitions = 20,
+                        throttle = 1 * k,
+                        msgsPerPartition = 500,
+                        msgSize = 100 * 1000),
       //5GB total data written, will take 110s
-      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 10 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      new ExperimentDef("Experiment2",
+                        brokers = 5,
+                        partitions = 50,
+                        throttle = 10 * k,
+                        msgsPerPartition = 1000,
+                        msgSize = 100 * 1000),
       //5GB total data written, will take 110s
-      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 2 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      new ExperimentDef("Experiment3",
+                        brokers = 50,
+                        partitions = 50,
+                        throttle = 2 * k,
+                        msgsPerPartition = 1000,
+                        msgSize = 100 * 1000),
       //10GB total data written, will take 110s
-      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 4 * k, msgsPerPartition = 1000, msgSize = 100 * 1000),
+      new ExperimentDef("Experiment4",
+                        brokers = 25,
+                        partitions = 100,
+                        throttle = 4 * k,
+                        msgsPerPartition = 1000,
+                        msgSize = 100 * 1000),
       //10GB total data written, will take 80s
-      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 50 * k, msgsPerPartition = 4000, msgSize = 100 * 1000)
+      new ExperimentDef("Experiment5",
+                        brokers = 5,
+                        partitions = 50,
+                        throttle = 50 * k,
+                        msgsPerPartition = 4000,
+                        msgSize = 100 * 1000)
     )
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
@@ -79,17 +102,21 @@ object ReplicationQuotasTestRig {
       experiment.setUp
       experiment.run(config, journal, displayChartsOnScreen)
       journal.footer()
-    }
-    catch {
+    } catch {
       case e: Exception => e.printStackTrace()
-    }
-    finally {
+    } finally {
       experiment.tearDown
     }
   }
 
-  case class ExperimentDef(name: String, brokers: Int, partitions: Int, throttle: Long, msgsPerPartition: Int, msgSize: Int) {
-    val targetBytesPerBrokerMB: Long = msgsPerPartition.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
+  case class ExperimentDef(name: String,
+                           brokers: Int,
+                           partitions: Int,
+                           throttle: Long,
+                           msgsPerPartition: Int,
+                           msgSize: Int) {
+    val targetBytesPerBrokerMB
+      : Long = msgsPerPartition.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
   }
 
   class Experiment extends ZooKeeperTestHarness with Logging {
@@ -102,7 +129,8 @@ object ReplicationQuotasTestRig {
 
     def startBrokers(brokerIds: Seq[Int]) {
       println("Starting Brokers")
-      servers = brokerIds.map(i => createBrokerConfig(i, zkConnect))
+      servers = brokerIds
+        .map(i => createBrokerConfig(i, zkConnect))
         .map(c => createServer(KafkaConfig.fromProps(c)))
     }
 
@@ -138,11 +166,14 @@ object ReplicationQuotasTestRig {
       val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkClient, None, ZkUtils.getReassignmentJson(newAssignment), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(zkClient,
+                                                  None,
+                                                  ZkUtils.getReassignmentJson(newAssignment),
+                                                  Throttle(config.throttle))
 
       //Await completion
       waitForReassignmentToComplete()
-      println(s"Reassignment took ${(System.currentTimeMillis() - start)/1000}s")
+      println(s"Reassignment took ${(System.currentTimeMillis() - start) / 1000}s")
 
       validateAllOffsetsMatch(config)
 
@@ -154,19 +185,23 @@ object ReplicationQuotasTestRig {
       println("Output can be found here: " + journal.path())
     }
 
-    def validateAllOffsetsMatch(config: ExperimentDef): Unit = {
+    def validateAllOffsetsMatch(config: ExperimentDef): Unit =
       //Validate that offsets are correct in all brokers
       for (broker <- servers) {
         (0 until config.partitions).foreach { partitionId =>
-          val offset = broker.getLogManager.getLog(new TopicPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
+          val offset =
+            broker.getLogManager.getLog(new TopicPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
           if (offset >= 0 && offset != config.msgsPerPartition) {
-            throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
+            throw new RuntimeException(
+              s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset."
+            )
           }
+        }
       }
-    }
-  }
 
-    def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
+    def logOutput(config: ExperimentDef,
+                  replicas: Map[Int, Seq[Int]],
+                  newAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
       val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
 
       //Long stats
@@ -182,7 +217,7 @@ object ReplicationQuotasTestRig {
       println(s"numMessagesPerPartition: ${config.msgsPerPartition}")
       println(s"msgSize: ${config.msgSize}")
       println(s"We will write ${config.targetBytesPerBrokerMB}MB of data per broker")
-      println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
+      println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000 / config.throttle}")
     }
 
     def waitForReassignmentToComplete() {
@@ -192,7 +227,10 @@ object ReplicationQuotasTestRig {
       }, s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
     }
 
-    def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
+    def renderChart(data: mutable.Map[Int, Array[Double]],
+                    name: String,
+                    journal: Journal,
+                    displayChartsOnScreen: Boolean): Unit = {
       val dataset = addDataToChart(data)
       val chart = createChart(name, dataset)
 
@@ -201,13 +239,12 @@ object ReplicationQuotasTestRig {
       println(s"Chart generated for $name")
     }
 
-    def maybeDisplayOnScreen(displayChartsOnScreen: Boolean, chart: JFreeChart): Unit = {
+    def maybeDisplayOnScreen(displayChartsOnScreen: Boolean, chart: JFreeChart): Unit =
       if (displayChartsOnScreen) {
         val frame = new ChartFrame(experimentName, chart)
         frame.pack()
         frame.setVisible(true)
       }
-    }
 
     def writeToFile(name: String, journal: Journal, chart: JFreeChart): Unit = {
       val file = new File(dir, experimentName + "-" + name + ".png")
@@ -220,22 +257,26 @@ object ReplicationQuotasTestRig {
         experimentName + " - " + name + " Throttling Performance",
         "Time (s)",
         "Throttle Throughput (B/s)",
-        dataset
-        , PlotOrientation.VERTICAL, false, true, false
+        dataset,
+        PlotOrientation.VERTICAL,
+        false,
+        true,
+        false
       )
       chart
     }
 
     def addDataToChart(data: mutable.Map[Int, Array[Double]]): XYSeriesCollection = {
       val dataset = new XYSeriesCollection
-      data.foreach { case (broker, values) =>
-        val series = new XYSeries("Broker:" + broker)
-        var x = 0
-        values.foreach { value =>
-          series.add(x, value)
-          x += 1
-        }
-        dataset.addSeries(series)
+      data.foreach {
+        case (broker, values) =>
+          val series = new XYSeries("Broker:" + broker)
+          var x = 0
+          values.foreach { value =>
+            series.add(x, value)
+            x += 1
+          }
+          dataset.addSeries(series)
       }
       dataset
     }
@@ -270,9 +311,11 @@ object ReplicationQuotasTestRig {
     }
 
     def json(topic: String*): String = {
-      val topicStr = topic.map {
-        t => "{\"topic\": \"" + t + "\"}"
-      }.mkString(",")
+      val topicStr = topic
+        .map { t =>
+          "{\"topic\": \"" + t + "\"}"
+        }
+        .mkString(",")
       s"""{"topics": [$topicStr],"version":1}"""
     }
   }
@@ -302,13 +345,11 @@ object ReplicationQuotasTestRig {
       append(message.toString())
     }
 
-    def header(): Unit = {
+    def header(): Unit =
       append("<html><head><h1>Replication Quotas Test Rig</h1></head><body>")
-    }
 
-    def footer(): Unit = {
+    def footer(): Unit =
       append("</body></html>")
-    }
 
     def append(message: String): Unit = {
       val stream = Files.newOutputStream(log.toPath, StandardOpenOption.APPEND)
@@ -318,10 +359,8 @@ object ReplicationQuotasTestRig {
       }
     }
 
-    def path(): String = {
+    def path(): String =
       log.getAbsolutePath
-    }
   }
 
 }
-

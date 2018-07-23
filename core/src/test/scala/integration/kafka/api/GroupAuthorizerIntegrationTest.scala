@@ -18,14 +18,12 @@ import kafka.api.GroupAuthorizerIntegrationTest._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 
-
 object GroupAuthorizerIntegrationTest {
   val GroupPrincipalType = "Group"
   val TestGroupPrincipal = new KafkaPrincipal(GroupPrincipalType, "testGroup")
   class GroupPrincipalBuilder extends KafkaPrincipalBuilder {
-    override def build(context: AuthenticationContext): KafkaPrincipal = {
+    override def build(context: AuthenticationContext): KafkaPrincipal =
       TestGroupPrincipal
-    }
   }
 }
 
@@ -34,8 +32,7 @@ class GroupAuthorizerIntegrationTest extends AuthorizerIntegrationTest {
   override def userPrincipal = TestGroupPrincipal
 
   override def propertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-      classOf[GroupPrincipalBuilder].getName)
+    properties.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
     super.propertyOverrides(properties)
   }
 }

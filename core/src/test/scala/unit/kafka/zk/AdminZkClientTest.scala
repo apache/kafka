@@ -37,7 +37,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, immutable}
+import scala.collection.{immutable, Map}
 
 class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -56,17 +56,16 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
     // duplicate brokers
     intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK("test", Map(0->Seq(0,0)))
+      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK("test", Map(0 -> Seq(0, 0)))
     }
 
     // inconsistent replication factor
     intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK("test", Map(0->Seq(0,1), 1->Seq(0)))
+      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK("test", Map(0 -> Seq(0, 1), 1 -> Seq(0)))
     }
 
     // good assignment
-    val assignment = Map(0 -> List(0, 1, 2),
-                         1 -> List(1, 2, 3))
+    val assignment = Map(0 -> List(0, 1, 2), 1 -> List(1, 2, 3))
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK("test", assignment)
     val found = zkClient.getPartitionAssignmentForTopics(Set("test"))
     assertEquals(assignment, found("test"))
@@ -75,16 +74,16 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   @Test
   def testTopicCreationInZK() {
     val expectedReplicaAssignment = Map(
-      0  -> List(0, 1, 2),
-      1  -> List(1, 2, 3),
-      2  -> List(2, 3, 4),
-      3  -> List(3, 4, 0),
-      4  -> List(4, 0, 1),
-      5  -> List(0, 2, 3),
-      6  -> List(1, 3, 4),
-      7  -> List(2, 4, 0),
-      8  -> List(3, 0, 1),
-      9  -> List(4, 1, 2),
+      0 -> List(0, 1, 2),
+      1 -> List(1, 2, 3),
+      2 -> List(2, 3, 4),
+      3 -> List(3, 4, 0),
+      4 -> List(4, 0, 1),
+      5 -> List(0, 2, 3),
+      6 -> List(1, 3, 4),
+      7 -> List(2, 4, 0),
+      8 -> List(3, 0, 1),
+      9 -> List(4, 1, 2),
       10 -> List(1, 2, 3),
       11 -> List(1, 3, 4)
     )
@@ -108,9 +107,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
+    val actualReplicaMap =
+      leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
-    for(i <- 0 until actualReplicaMap.size)
+    for (i <- 0 until actualReplicaMap.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaMap(i))
 
     intercept[TopicExistsException] {
@@ -160,15 +160,17 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       catch { case _: TopicExistsException => () }
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
-      partitionAssignment.foreach { case (partition, replicas) =>
-        assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
+      partitionAssignment.foreach {
+        case (partition, replicas) =>
+          assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)
     }
 
-    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(createTopic, createTopic),
-      JTestUtils.DEFAULT_MAX_WAIT_MS.toInt)
+    TestUtils.assertConcurrent("Concurrent topic creation failed",
+                               Seq(createTopic, createTopic),
+                               JTestUtils.DEFAULT_MAX_WAIT_MS.toInt)
   }
 
   /**
@@ -191,7 +193,11 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
+    def checkConfig(messageSize: Int,
+                    retentionMs: Long,
+                    throttledLeaders: String,
+                    throttledFollowers: String,
+                    quotaManagerIsThrottled: Boolean) {
       def checkList(actual: util.List[String], expected: String): Unit = {
         assertNotNull(actual)
         if (expected == "")
@@ -216,7 +222,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     // create a topic with a few config overrides and check that they are applied
     val maxMessageSize = 1024
     val retentionMs = 1000 * 1000
-    adminZkClient.createTopic(topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    adminZkClient.createTopic(topic,
+                              partitions,
+                              1,
+                              makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
     //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
@@ -244,8 +253,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     //Now ensure updating to "" removes the throttled replica list also
-    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
+    adminZkClient.changeTopicConfig(topic,
+                                    propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""),
+                                              (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
+    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
   }
 
   @Test
@@ -265,16 +276,16 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val limit: Long = 1000000
 
     // Set the limit & check it is applied to the log
-    adminZkClient.changeBrokerConfig(brokerIds, propsWith(
-      (LeaderReplicationThrottledRateProp, limit.toString),
-      (FollowerReplicationThrottledRateProp, limit.toString)))
+    adminZkClient.changeBrokerConfig(brokerIds,
+                                     propsWith((LeaderReplicationThrottledRateProp, limit.toString),
+                                               (FollowerReplicationThrottledRateProp, limit.toString)))
     checkConfig(limit)
 
     // Now double the config values for the topic and check that it is applied
     val newLimit = 2 * limit
-    adminZkClient.changeBrokerConfig(brokerIds,  propsWith(
-      (LeaderReplicationThrottledRateProp, newLimit.toString),
-      (FollowerReplicationThrottledRateProp, newLimit.toString)))
+    adminZkClient.changeBrokerConfig(brokerIds,
+                                     propsWith((LeaderReplicationThrottledRateProp, newLimit.toString),
+                                               (FollowerReplicationThrottledRateProp, newLimit.toString)))
     checkConfig(newLimit)
 
     // Verify that the same config can be read from ZK

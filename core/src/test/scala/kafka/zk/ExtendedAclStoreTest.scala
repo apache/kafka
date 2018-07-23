@@ -35,19 +35,16 @@ class ExtendedAclStoreTest {
   }
 
   @Test
-  def shouldHaveCorrectPatternType(): Unit = {
+  def shouldHaveCorrectPatternType(): Unit =
     assertEquals(PREFIXED, store.patternType)
-  }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldThrowIfConstructedWithLiteral(): Unit = {
+  def shouldThrowIfConstructedWithLiteral(): Unit =
     new ExtendedAclStore(LITERAL)
-  }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldThrowFromEncodeOnLiteral(): Unit = {
+  def shouldThrowFromEncodeOnLiteral(): Unit =
     store.changeStore.createChangeNode(literalResource)
-  }
 
   @Test
   def shouldWriteChangesToTheWritePath(): Unit = {

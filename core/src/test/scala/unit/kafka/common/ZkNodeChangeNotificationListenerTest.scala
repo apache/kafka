@@ -50,13 +50,18 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     val notificationMessage1 = Resource(Group, "messageA", LITERAL)
     val notificationMessage2 = Resource(Group, "messageB", LITERAL)
 
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
-      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient,
+                                                                LiteralAclChangeStore.aclChangePath,
+                                                                ZkAclChangeStore.SequenceNumberPrefix,
+                                                                notificationHandler,
+                                                                changeExpirationMs)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(notificationMessage1)
-    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 1 && notificationHandler.received().last == notificationMessage1,
-      "Failed to send/process notification message in the timeout period.")
+    TestUtils.waitUntilTrue(
+      () => notificationHandler.received().size == 1 && notificationHandler.received().last == notificationMessage1,
+      "Failed to send/process notification message in the timeout period."
+    )
 
     /*
      * There is no easy way to test purging. Even if we mock kafka time with MockTime, the purging compares kafka time
@@ -67,28 +72,37 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
      */
 
     zkClient.createAclChangeNotification(notificationMessage2)
-    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 2 && notificationHandler.received().last == notificationMessage2,
-      "Failed to send/process notification message in the timeout period.")
+    TestUtils.waitUntilTrue(
+      () => notificationHandler.received().size == 2 && notificationHandler.received().last == notificationMessage2,
+      "Failed to send/process notification message in the timeout period."
+    )
 
     (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, LITERAL)))
 
-    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 10,
-      s"Expected 10 invocations of processNotifications, but there were ${notificationHandler.received()}")
+    TestUtils.waitUntilTrue(
+      () => notificationHandler.received().size == 10,
+      s"Expected 10 invocations of processNotifications, but there were ${notificationHandler.received()}"
+    )
   }
 
   @Test
-  def testSwallowsProcessorException() : Unit = {
+  def testSwallowsProcessorException(): Unit = {
     notificationHandler.setThrowSize(2)
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
-      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient,
+                                                                LiteralAclChangeStore.aclChangePath,
+                                                                ZkAclChangeStore.SequenceNumberPrefix,
+                                                                notificationHandler,
+                                                                changeExpirationMs)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(Resource(Group, "messageA", LITERAL))
     zkClient.createAclChangeNotification(Resource(Group, "messageB", LITERAL))
     zkClient.createAclChangeNotification(Resource(Group, "messageC", LITERAL))
 
-    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 3,
-      s"Expected 2 invocations of processNotifications, but there were ${notificationHandler.received()}")
+    TestUtils.waitUntilTrue(
+      () => notificationHandler.received().size == 3,
+      s"Expected 2 invocations of processNotifications, but there were ${notificationHandler.received()}"
+    )
   }
 
   private class TestNotificationHandler extends NotificationHandler {

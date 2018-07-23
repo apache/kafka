@@ -55,14 +55,16 @@ class TransactionStateManagerTest {
   val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-  EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+  EasyMock
+    .expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
     .andReturn(Some(numPartitions))
     .anyTimes()
 
   EasyMock.replay(zkClient)
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
+  val transactionManager: TransactionStateManager =
+    new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
@@ -98,15 +100,17 @@ class TransactionStateManagerTest {
 
   @Test
   def testAddGetPids() {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
     assertEquals(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1)),
-      transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1))
+                 transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
-      transactionManager.getTransactionState(transactionalId1))
+                 transactionManager.getTransactionState(transactionalId1))
     assertEquals(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1)),
-      transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata2))
+                 transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata2))
   }
 
   @Test
@@ -115,15 +119,16 @@ class TransactionStateManagerTest {
 
     // pid1's transaction started with two partitions
     txnMetadata1.state = Ongoing
-    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
-      new TopicPartition("topic1", 1)))
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic1", 1)))
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
 
     // pid1's transaction adds three more partitions
-    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic2", 0),
-      new TopicPartition("topic2", 1),
-      new TopicPartition("topic2", 2)))
+    txnMetadata1.addPartitions(
+      Set[TopicPartition](new TopicPartition("topic2", 0),
+                          new TopicPartition("topic2", 1),
+                          new TopicPartition("topic2", 2))
+    )
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
 
@@ -134,9 +139,11 @@ class TransactionStateManagerTest {
 
     // pid2's transaction started with three partitions
     txnMetadata2.state = Ongoing
-    txnMetadata2.addPartitions(Set[TopicPartition](new TopicPartition("topic3", 0),
-      new TopicPartition("topic3", 1),
-      new TopicPartition("topic3", 2)))
+    txnMetadata2.addPartitions(
+      Set[TopicPartition](new TopicPartition("topic3", 0),
+                          new TopicPartition("topic3", 1),
+                          new TopicPartition("topic3", 2))
+    )
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit()))
 
@@ -156,39 +163,49 @@ class TransactionStateManagerTest {
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit()))
 
-    val startOffset = 15L   // it should work for any start offset
+    val startOffset = 15L // it should work for any start offset
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
 
     prepareTxnLog(topicPartition, startOffset, records)
 
     // this partition should not be part of the owned partitions
-    transactionManager.getTransactionState(transactionalId1).fold(
-      err => assertEquals(Errors.NOT_COORDINATOR, err),
-      _ => fail(transactionalId1 + "'s transaction state is already in the cache")
-    )
-    transactionManager.getTransactionState(transactionalId2).fold(
-      err => assertEquals(Errors.NOT_COORDINATOR, err),
-      _ => fail(transactionalId2 + "'s transaction state is already in the cache")
-    )
+    transactionManager
+      .getTransactionState(transactionalId1)
+      .fold(
+        err => assertEquals(Errors.NOT_COORDINATOR, err),
+        _ => fail(transactionalId1 + "'s transaction state is already in the cache")
+      )
+    transactionManager
+      .getTransactionState(transactionalId2)
+      .fold(
+        err => assertEquals(Errors.NOT_COORDINATOR, err),
+        _ => fail(transactionalId2 + "'s transaction state is already in the cache")
+      )
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _, _) => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
 
-    transactionManager.getTransactionState(transactionalId1).fold(
-      err => fail(transactionalId1 + "'s transaction state access returns error " + err),
-      entry => entry.getOrElse(fail(transactionalId1 + "'s transaction state was not loaded into the cache"))
-    )
+    transactionManager
+      .getTransactionState(transactionalId1)
+      .fold(
+        err => fail(transactionalId1 + "'s transaction state access returns error " + err),
+        entry => entry.getOrElse(fail(transactionalId1 + "'s transaction state was not loaded into the cache"))
+      )
 
-    val cachedPidMetadata1 = transactionManager.getTransactionState(transactionalId1).fold(
-      err => fail(transactionalId1 + "'s transaction state access returns error " + err),
-      entry => entry.getOrElse(fail(transactionalId1 + "'s transaction state was not loaded into the cache"))
-    )
-    val cachedPidMetadata2 = transactionManager.getTransactionState(transactionalId2).fold(
-      err => fail(transactionalId2 + "'s transaction state access returns error " + err),
-      entry => entry.getOrElse(fail(transactionalId2 + "'s transaction state was not loaded into the cache"))
-    )
+    val cachedPidMetadata1 = transactionManager
+      .getTransactionState(transactionalId1)
+      .fold(
+        err => fail(transactionalId1 + "'s transaction state access returns error " + err),
+        entry => entry.getOrElse(fail(transactionalId1 + "'s transaction state was not loaded into the cache"))
+      )
+    val cachedPidMetadata2 = transactionManager
+      .getTransactionState(transactionalId2)
+      .fold(
+        err => fail(transactionalId2 + "'s transaction state access returns error " + err),
+        entry => entry.getOrElse(fail(transactionalId2 + "'s transaction state was not loaded into the cache"))
+      )
 
     // they should be equal to the latest status of the transaction
     assertEquals(txnMetadata1, cachedPidMetadata1.transactionMetadata)
@@ -199,19 +216,25 @@ class TransactionStateManagerTest {
     // let the time advance to trigger the background thread removing
     scheduler.tick()
 
-    transactionManager.getTransactionState(transactionalId1).fold(
-      err => assertEquals(Errors.NOT_COORDINATOR, err),
-      _ => fail(transactionalId1 + "'s transaction state is still in the cache")
-    )
-    transactionManager.getTransactionState(transactionalId2).fold(
-      err => assertEquals(Errors.NOT_COORDINATOR, err),
-      _ => fail(transactionalId2 + "'s transaction state is still in the cache")
-    )
+    transactionManager
+      .getTransactionState(transactionalId1)
+      .fold(
+        err => assertEquals(Errors.NOT_COORDINATOR, err),
+        _ => fail(transactionalId1 + "'s transaction state is still in the cache")
+      )
+    transactionManager
+      .getTransactionState(transactionalId2)
+      .fold(
+        err => assertEquals(Errors.NOT_COORDINATOR, err),
+        _ => fail(transactionalId2 + "'s transaction state is still in the cache")
+      )
   }
 
   @Test
   def testCompleteTransitionWhenAppendSucceeded(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
@@ -220,85 +243,110 @@ class TransactionStateManagerTest {
     expectedError = Errors.NONE
 
     // update the metadata to ongoing with two partitions
-    val newMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
-      new TopicPartition("topic1", 1)), time.milliseconds())
+    val newMetadata = txnMetadata1.prepareAddPartitions(
+      Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic1", 1)),
+      time.milliseconds()
+    )
 
     // append the new metadata into log
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch, newMetadata, assertCallback)
 
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
   }
 
   @Test
   def testAppendFailToCoordinatorNotAvailableError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     expectedError = Errors.COORDINATOR_NOT_AVAILABLE
-    var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    var failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
-    failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
-    failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
-    failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.REQUEST_TIMED_OUT)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
   }
 
   @Test
   def testAppendFailToNotCoordinatorError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     expectedError = Errors.NOT_COORDINATOR
-    var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    var failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.NOT_LEADER_FOR_PARTITION)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
-    failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch + 1, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch + 1,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
   }
 
   @Test
   def testAppendFailToCoordinatorLoadingError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     expectedError = Errors.COORDINATOR_LOAD_IN_PROGRESS
-    val failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    val failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
@@ -308,35 +356,49 @@ class TransactionStateManagerTest {
 
   @Test
   def testAppendFailToUnknownError() {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     expectedError = Errors.UNKNOWN_SERVER_ERROR
-    var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    var failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
-    failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.RECORD_LIST_TOO_LARGE)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
   }
 
   @Test
   def testPendingStateNotResetOnRetryAppend() {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     expectedError = Errors.COORDINATOR_NOT_AVAILABLE
-    val failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
+    val failedMetadata =
+      txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, _ => true)
-    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
+    transactionManager.appendTransactionToLog(transactionalId1,
+                                              coordinatorEpoch = 10,
+                                              failedMetadata,
+                                              assertCallback,
+                                              _ => true)
+    assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
+                 transactionManager.getTransactionState(transactionalId1))
     assertEquals(Some(Ongoing), txnMetadata1.pendingState)
   }
 
@@ -350,8 +412,10 @@ class TransactionStateManagerTest {
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.NOT_COORDINATOR
 
-    val newMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
-      new TopicPartition("topic1", 1)), time.milliseconds())
+    val newMetadata = txnMetadata1.prepareAddPartitions(
+      Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic1", 1)),
+      time.milliseconds()
+    )
 
     // modify the cache while trying to append the new metadata
     txnMetadata1.producerEpoch = (txnMetadata1.producerEpoch + 1).toShort
@@ -363,14 +427,18 @@ class TransactionStateManagerTest {
   @Test(expected = classOf[IllegalStateException])
   def testAppendTransactionToLogWhilePendingStateChanged() = {
     // first insert the initial transaction metadata
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId,
+                                                    coordinatorEpoch,
+                                                    new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.INVALID_PRODUCER_EPOCH
 
-    val newMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
-      new TopicPartition("topic1", 1)), time.milliseconds())
+    val newMetadata = txnMetadata1.prepareAddPartitions(
+      Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic1", 1)),
+      time.milliseconds()
+    )
 
     // modify the cache while trying to append the new metadata
     txnMetadata1.pendingState = None
@@ -380,12 +448,13 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldReturnNotCooridnatorErrorIfTransactionIdPartitionNotOwned(): Unit = {
-    transactionManager.getTransactionState(transactionalId1).fold(
-      err => assertEquals(Errors.NOT_COORDINATOR, err),
-      _ => fail(transactionalId1 + "'s transaction state is already in the cache")
-    )
-  }
+  def shouldReturnNotCooridnatorErrorIfTransactionIdPartitionNotOwned(): Unit =
+    transactionManager
+      .getTransactionState(transactionalId1)
+      .fold(
+        err => assertEquals(Errors.NOT_COORDINATOR, err),
+        _ => fail(transactionalId1 + "'s transaction state is already in the cache")
+      )
 
   @Test
   def shouldOnlyConsiderTransactionsInTheOngoingStateToAbort(): Unit = {
@@ -393,12 +462,28 @@ class TransactionStateManagerTest {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
 
-    transactionManager.putTransactionStateIfNotExists("ongoing", transactionMetadata("ongoing", producerId = 0, state = Ongoing))
-    transactionManager.putTransactionStateIfNotExists("not-expiring", transactionMetadata("not-expiring", producerId = 1, state = Ongoing, txnTimeout = 10000))
-    transactionManager.putTransactionStateIfNotExists("prepare-commit", transactionMetadata("prepare-commit", producerId = 2, state = PrepareCommit))
-    transactionManager.putTransactionStateIfNotExists("prepare-abort", transactionMetadata("prepare-abort", producerId = 3, state = PrepareAbort))
-    transactionManager.putTransactionStateIfNotExists("complete-commit", transactionMetadata("complete-commit", producerId = 4, state = CompleteCommit))
-    transactionManager.putTransactionStateIfNotExists("complete-abort", transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort))
+    transactionManager.putTransactionStateIfNotExists("ongoing",
+                                                      transactionMetadata("ongoing", producerId = 0, state = Ongoing))
+    transactionManager.putTransactionStateIfNotExists(
+      "not-expiring",
+      transactionMetadata("not-expiring", producerId = 1, state = Ongoing, txnTimeout = 10000)
+    )
+    transactionManager.putTransactionStateIfNotExists(
+      "prepare-commit",
+      transactionMetadata("prepare-commit", producerId = 2, state = PrepareCommit)
+    )
+    transactionManager.putTransactionStateIfNotExists(
+      "prepare-abort",
+      transactionMetadata("prepare-abort", producerId = 3, state = PrepareAbort)
+    )
+    transactionManager.putTransactionStateIfNotExists(
+      "complete-commit",
+      transactionMetadata("complete-commit", producerId = 4, state = CompleteCommit)
+    )
+    transactionManager.putTransactionStateIfNotExists(
+      "complete-abort",
+      transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort)
+    )
 
     time.sleep(2000)
     val expiring = transactionManager.timedOutTransactions()
@@ -406,14 +491,12 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit = {
+  def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit =
     verifyWritesTxnMarkersInPrepareState(PrepareCommit)
-  }
 
   @Test
-  def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
+  def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit =
     verifyWritesTxnMarkersInPrepareState(PrepareAbort)
-  }
 
   @Test
   def shouldRemoveCompleteCommmitExpiredTransactionalIds(): Unit = {
@@ -464,21 +547,19 @@ class TransactionStateManagerTest {
     verifyMetadataDoesExist(transactionalId2)
   }
 
-  private def verifyMetadataDoesExist(transactionalId: String) = {
+  private def verifyMetadataDoesExist(transactionalId: String) =
     transactionManager.getTransactionState(transactionalId) match {
-      case Left(errors) => fail("shouldn't have been any errors")
-      case Right(None) => fail("metadata should have been removed")
+      case Left(errors)          => fail("shouldn't have been any errors")
+      case Right(None)           => fail("metadata should have been removed")
       case Right(Some(metadata)) => // ok
     }
-  }
 
-  private def verifyMetadataDoesntExist(transactionalId: String) = {
+  private def verifyMetadataDoesntExist(transactionalId: String) =
     transactionManager.getTransactionState(transactionalId) match {
-      case Left(errors) => fail("shouldn't have been any errors")
+      case Left(errors)         => fail("shouldn't have been any errors")
       case Right(Some(metdata)) => fail("metadata should have been removed")
-      case Right(None) => // ok
+      case Right(None)          => // ok
     }
-  }
 
   private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState) = {
     for (partitionId <- 0 until numPartitions) {
@@ -488,29 +569,39 @@ class TransactionStateManagerTest {
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
     val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(transactionalId1))
-    val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
-      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(transactionalId1), null)))
+    val recordsByPartition = Map(
+      partition -> MemoryRecords.withRecords(
+        TransactionLog.EnforcedCompressionType,
+        new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs,
+                         TransactionLog.keyToBytes(transactionalId1),
+                         null)
+      )
+    )
 
     txnState match {
       case Empty | CompleteCommit | CompleteAbort =>
-
-        EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-          EasyMock.eq((-1).toShort),
-          EasyMock.eq(true),
-          EasyMock.eq(false),
-          EasyMock.eq(recordsByPartition),
-          EasyMock.capture(capturedArgument),
-          EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-          EasyMock.anyObject()
-        )).andAnswer(new IAnswer[Unit] {
-          override def answer(): Unit = {
-            capturedArgument.getValue.apply(
-              Map(partition ->
-                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-              )
+        EasyMock
+          .expect(
+            replicaManager.appendRecords(
+              EasyMock.anyLong(),
+              EasyMock.eq((-1).toShort),
+              EasyMock.eq(true),
+              EasyMock.eq(false),
+              EasyMock.eq(recordsByPartition),
+              EasyMock.capture(capturedArgument),
+              EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
+              EasyMock.anyObject()
             )
-          }
-        })
+          )
+          .andAnswer(new IAnswer[Unit] {
+            override def answer(): Unit =
+              capturedArgument.getValue.apply(
+                Map(
+                  partition ->
+                    new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
+                )
+              )
+          })
       case _ => // shouldn't append
     }
 
@@ -533,8 +624,7 @@ class TransactionStateManagerTest {
 
   private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {
     txnMetadata1.state = state
-    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
-      new TopicPartition("topic1", 1)))
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0), new TopicPartition("topic1", 1)))
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
@@ -547,9 +637,8 @@ class TransactionStateManagerTest {
                            coordinatorEpoch: Int,
                            command: TransactionResult,
                            metadata: TransactionMetadata,
-                           newMetadata: TxnTransitMetadata): Unit = {
+                           newMetadata: TxnTransitMetadata): Unit =
       txnId = transactionalId
-    }
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, rememberTxnMarkers)
     scheduler.tick()
@@ -557,23 +646,19 @@ class TransactionStateManagerTest {
     assertEquals(transactionalId1, txnId)
   }
 
-  private def assertCallback(error: Errors): Unit = {
+  private def assertCallback(error: Errors): Unit =
     assertEquals(expectedError, error)
-  }
 
   private def transactionMetadata(transactionalId: String,
                                   producerId: Long,
                                   state: TransactionState = Empty,
-                                  txnTimeout: Int = transactionTimeoutMs): TransactionMetadata = {
+                                  txnTimeout: Int = transactionTimeoutMs): TransactionMetadata =
     TransactionMetadata(transactionalId, producerId, 0.toShort, txnTimeout, state, time.milliseconds())
-  }
 
-  private def prepareTxnLog(topicPartition: TopicPartition,
-                            startOffset: Long,
-                            records: MemoryRecords): Unit = {
+  private def prepareTxnLog(topicPartition: TopicPartition, startOffset: Long, records: MemoryRecords): Unit = {
     EasyMock.reset(replicaManager)
 
-    val logMock =  EasyMock.mock(classOf[Log])
+    val logMock = EasyMock.mock(classOf[Log])
     val fileRecordsMock = EasyMock.mock(classOf[FileRecords])
 
     val endOffset = startOffset + records.records.asScala.size
@@ -582,19 +667,27 @@ class TransactionStateManagerTest {
     EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
 
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None),
-      EasyMock.eq(true), EasyMock.eq(IsolationLevel.READ_UNCOMMITTED)))
+    EasyMock
+      .expect(
+        logMock.read(EasyMock.eq(startOffset),
+                     EasyMock.anyInt(),
+                     EasyMock.eq(None),
+                     EasyMock.eq(true),
+                     EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))
+      )
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
     val bufferCapture = EasyMock.newCapture[ByteBuffer]
     fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
-    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = {
-        val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate)
-        buffer.flip()
-      }
-    })
+    EasyMock
+      .expectLastCall()
+      .andAnswer(new IAnswer[Unit] {
+        override def answer: Unit = {
+          val buffer = bufferCapture.getValue
+          buffer.put(records.buffer.duplicate)
+          buffer.flip()
+        }
+      })
     EasyMock.replay(logMock, fileRecordsMock, replicaManager)
   }
 
@@ -602,23 +695,29 @@ class TransactionStateManagerTest {
     EasyMock.reset(replicaManager)
 
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      isFromClient = EasyMock.eq(false),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
+    EasyMock
+      .expect(
+        replicaManager.appendRecords(
+          EasyMock.anyLong(),
+          EasyMock.anyShort(),
+          internalTopicsAllowed = EasyMock.eq(true),
+          isFromClient = EasyMock.eq(false),
+          EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
+          EasyMock.capture(capturedArgument),
+          EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
+          EasyMock.anyObject()
+        )
+      )
+      .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = capturedArgument.getValue.apply(
-          Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
+          Map(
+            new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
+              new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
           )
         )
-      }
-    )
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
+      })
+    EasyMock
+      .expect(replicaManager.getMagic(EasyMock.anyObject()))
       .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     EasyMock.replay(replicaManager)

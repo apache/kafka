@@ -106,8 +106,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
 
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
-    while (parts == null)
-      parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
+    while (parts == null) parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 
@@ -143,7 +142,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   protected def sendRecords(numRecords: Int, tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] =
     sendRecords(this.producers.head, numRecords, tp)
 
-  protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
+  protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                            numRecords: Int,
                             tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
     val records = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes)
@@ -175,8 +175,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
         val timestamp = startingTimestamp + i
         assertEquals(timestamp.toLong, record.timestamp)
       } else
-        assertTrue(s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
-          record.timestamp >= startingTimestamp && record.timestamp <= now)
+        assertTrue(
+          s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
+          record.timestamp >= startingTimestamp && record.timestamp <= now
+        )
       assertEquals(offset.toLong, record.offset)
       val keyAndValueIndex = startingKeyAndValueIndex + i
       assertEquals(s"key $keyAndValueIndex", new String(record.key))
@@ -209,8 +211,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                           commitCallback: CountConsumerCommitCallback,
                                           count: Int = 1): Unit = {
     val started = System.currentTimeMillis()
-    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
-      consumer.poll(50)
+    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000) consumer.poll(50)
     assertEquals(count, commitCallback.successCount)
   }
 
@@ -218,35 +219,31 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     var successCount = 0
     var failCount = 0
 
-    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
       if (exception == null)
         successCount += 1
       else
         failCount += 1
-    }
   }
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
-                                           topicsToSubscribe: List[String]) extends ShutdownableThread("daemon-consumer-assignment", false)
-  {
+                                           topicsToSubscribe: List[String])
+      extends ShutdownableThread("daemon-consumer-assignment", false) {
     @volatile private var partitionAssignment: Set[TopicPartition] = Set.empty[TopicPartition]
     private var topicsSubscription = topicsToSubscribe
     @volatile private var subscriptionChanged = false
 
     val rebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) =
         partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
-      }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) =
         partitionAssignment = Set.empty[TopicPartition]
-      }
     }
     consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
 
-    def consumerAssignment(): Set[TopicPartition] = {
+    def consumerAssignment(): Set[TopicPartition] =
       partitionAssignment
-    }
 
     /**
      * Subscribe consumer to a new set of topics.
@@ -266,9 +263,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
       subscriptionChanged = true
     }
 
-    def isSubscribeRequestProcessed(): Boolean = {
+    def isSubscribeRequestProcessed(): Boolean =
       !subscriptionChanged
-    }
 
     override def initiateShutdown(): Boolean = {
       val res = super.initiateShutdown()
@@ -300,8 +296,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
    * @param partitions set of partitions that consumers subscribed to
    * @return true if partition assignment is valid
    */
-  def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
-                                 partitions: Set[TopicPartition]): Boolean = {
+  def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]], partitions: Set[TopicPartition]): Boolean = {
     val allNonEmptyAssignments = assignments forall (assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
@@ -309,7 +304,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     }
 
     // make sure that sum of all partitions to all consumers equals total number of partitions
-    val totalPartitionsInAssignments = (0 /: assignments) (_ + _.size)
+    val totalPartitionsInAssignments = (0 /: assignments)(_ + _.size)
     if (totalPartitionsInAssignments != partitions.size) {
       // either same partitions got assigned to more than one consumer or some
       // partitions were not assigned
@@ -319,7 +314,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     // The above checks could miss the case where one or more partitions were assigned to more
     // than one consumer and the same number of partitions were missing from assignments.
     // Make sure that all unique assignments are the same as 'partitions'
-    val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
+    val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments)(_ ++ _)
     uniqueAssignedPartitions == partitions
   }
 

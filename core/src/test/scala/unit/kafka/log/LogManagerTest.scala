@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io._
@@ -112,7 +111,7 @@ class LogManagerTest {
   def testCleanupExpiredSegments() {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     var offset = 0L
-    for(_ <- 0 until 200) {
+    for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
@@ -128,7 +127,7 @@ class LogManagerTest {
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
     assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
 
     try {
       log.readUncommitted(0, 1024)
@@ -168,7 +167,9 @@ class LogManagerTest {
     }
 
     log.onHighWatermarkIncremented(log.logEndOffset)
-    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, log.numberOfSegments)
+    assertEquals("Check we have the expected number of segments.",
+                 numMessages * setSize / config.segmentSize,
+                 log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     time.sleep(logManager.InitialTaskDelayMs)
@@ -190,9 +191,9 @@ class LogManagerTest {
   }
 
   /**
-    * Ensures that LogManager only runs on logs with cleanup.policy=delete
-    * LogCleaner.CleanerThread handles all logs where compaction is enabled.
-    */
+   * Ensures that LogManager only runs on logs with cleanup.policy=delete
+   * LogCleaner.CleanerThread handles all logs where compaction is enabled.
+   */
   @Test
   def testDoesntCleanLogsWithCompactDeletePolicy() {
     val logProps = new Properties()
@@ -200,7 +201,7 @@ class LogManagerTest {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {
-      val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
+      val set = TestUtils.singletonRecords("test".getBytes(), key = "test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
     }
@@ -242,14 +243,12 @@ class LogManagerTest {
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
-    val dirs = Seq(TestUtils.tempDir(),
-                     TestUtils.tempDir(),
-                     TestUtils.tempDir())
+    val dirs = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir())
     logManager.shutdown()
     logManager = createLogManager(dirs)
 
     // verify that logs are always assigned to the least loaded partition
-    for(partition <- 0 until 20) {
+    for (partition <- 0 until 20) {
       logManager.getOrCreateLog(new TopicPartition("test", partition), logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
@@ -284,7 +283,8 @@ class LogManagerTest {
   @Test
   def testRecoveryDirectoryMappingWithTrailingSlash() {
     logManager.shutdown()
-    logManager = TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
+    logManager =
+      TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
     logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
@@ -312,18 +312,15 @@ class LogManagerTest {
     logManager.checkpointLogRecoveryOffsets()
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
-    topicPartitions.zip(logs).foreach { case (tp, log) =>
-      assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
-      assertEquals(Some(log.minSnapshotsOffsetToRetain), log.oldestProducerSnapshotOffset)
+    topicPartitions.zip(logs).foreach {
+      case (tp, log) =>
+        assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+        assertEquals(Some(log.minSnapshotsOffsetToRetain), log.oldestProducerSnapshotOffset)
     }
   }
 
-  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir)): LogManager = {
-    TestUtils.createLogManager(
-      defaultConfig = logConfig,
-      logDirs = logDirs,
-      time = this.time)
-  }
+  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir)): LogManager =
+    TestUtils.createLogManager(defaultConfig = logConfig, logDirs = logDirs, time = this.time)
 
   @Test
   def testFileReferencesAfterAsyncDelete() {
@@ -333,12 +330,13 @@ class LogManagerTest {
     val indexName = activeSegment.offsetIndex.file.getName
     val timeIndexName = activeSegment.timeIndex.file.getName
     val txnIndexName = activeSegment.txnIndex.file.getName
-    val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
+    val indexFilesOnDiskBeforeDelete =
+      activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.offsetIndex.file, removedSegment.timeIndex.file,
-      removedSegment.txnIndex.file)
+    val indexFilesAfterDelete =
+      Seq(removedSegment.offsetIndex.file, removedSegment.timeIndex.file, removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
     assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndex.file)
@@ -350,9 +348,11 @@ class LogManagerTest {
     indexFilesOnDiskBeforeDelete.foreach { fileBeforeDelete =>
       val fileInIndex = indexFilesAfterDelete.find(_.getName == fileBeforeDelete.getName)
       assertEquals(s"Could not find index file ${fileBeforeDelete.getName} in indexFilesAfterDelete",
-        Some(fileBeforeDelete.getName), fileInIndex.map(_.getName))
-      assertNotEquals("File reference was not updated in index", fileBeforeDelete.getAbsolutePath,
-        fileInIndex.get.getAbsolutePath)
+                   Some(fileBeforeDelete.getName),
+                   fileInIndex.map(_.getName))
+      assertNotEquals("File reference was not updated in index",
+                      fileBeforeDelete.getAbsolutePath,
+                      fileInIndex.get.getAbsolutePath)
     }
 
     time.sleep(logManager.InitialTaskDelayMs)

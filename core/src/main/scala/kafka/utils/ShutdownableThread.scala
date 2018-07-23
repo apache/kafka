@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -22,7 +21,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.apache.kafka.common.internals.FatalExitError
 
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
-        extends Thread(name) with Logging {
+    extends Thread(name)
+    with Logging {
   this.setDaemon(false)
   this.logIdent = "[" + name + "]: "
   private val shutdownInitiated = new CountDownLatch(1)
@@ -33,11 +33,10 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     awaitShutdown()
   }
 
-  def isShutdownComplete: Boolean = {
+  def isShutdownComplete: Boolean =
     shutdownComplete.getCount == 0
-  }
 
-  def initiateShutdown(): Boolean = {
+  def initiateShutdown(): Boolean =
     this.synchronized {
       if (isRunning) {
         info("Shutting down")
@@ -48,7 +47,6 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
       } else
         false
     }
-  }
 
   /**
    * After calling initiateShutdown(), use this API to wait until the shutdown is complete
@@ -65,10 +63,9 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
    * @param timeout
    * @param unit
    */
-  def pause(timeout: Long, unit: TimeUnit): Unit = {
+  def pause(timeout: Long, unit: TimeUnit): Unit =
     if (shutdownInitiated.await(timeout, unit))
       trace("shutdownInitiated latch count reached zero. Shutdown called.")
-  }
 
   /**
    * This method is repeatedly invoked until the thread shuts down or this method throws an exception
@@ -78,8 +75,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   override def run(): Unit = {
     info("Starting")
     try {
-      while (isRunning)
-        doWork()
+      while (isRunning) doWork()
     } catch {
       case e: FatalExitError =>
         shutdownInitiated.countDown()
@@ -90,12 +86,11 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
         if (isRunning)
           error("Error due to", e)
     } finally {
-       shutdownComplete.countDown()
+      shutdownComplete.countDown()
     }
     info("Stopped")
   }
 
-  def isRunning: Boolean = {
+  def isRunning: Boolean =
     shutdownInitiated.getCount() != 0
-  }
 }

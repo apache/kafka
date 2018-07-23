@@ -43,7 +43,8 @@ class ReplicaTest {
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
-    log = Log(logDir,
+    log = Log(
+      logDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -52,12 +53,10 @@ class ReplicaTest {
       time = time,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10)
+    )
 
-    replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      log = Some(log))
+    replica = new Replica(brokerId = 0, topicPartition = new TopicPartition("foo", 0), time = time, log = Some(log))
   }
 
   @After
@@ -71,10 +70,10 @@ class ReplicaTest {
   def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
     val initialHighWatermark = 25L
     replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      initialHighWatermarkValue = initialHighWatermark,
-      log = Some(log))
+                          topicPartition = new TopicPartition("foo", 0),
+                          time = time,
+                          initialHighWatermarkValue = initialHighWatermark,
+                          log = Some(log))
 
     assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
 

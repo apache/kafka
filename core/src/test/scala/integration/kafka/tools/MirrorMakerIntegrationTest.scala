@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.tools
 
 import java.util.Properties
@@ -57,15 +57,18 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("another_topic,new.*,foo"))
     mirrorMakerConsumer.init()
     try {
-      TestUtils.waitUntilTrue(() => {
-        try {
-          val data = mirrorMakerConsumer.receive()
-          data.topic == topic && new String(data.value) == msg
-        } catch {
-          // this exception is thrown if no record is returned within a short timeout, so safe to ignore
-          case _: TimeoutException => false
-        }
-      }, "MirrorMaker consumer should read the expected message from the expected topic within the timeout")
+      TestUtils.waitUntilTrue(
+        () => {
+          try {
+            val data = mirrorMakerConsumer.receive()
+            data.topic == topic && new String(data.value) == msg
+          } catch {
+            // this exception is thrown if no record is returned within a short timeout, so safe to ignore
+            case _: TimeoutException => false
+          }
+        },
+        "MirrorMaker consumer should read the expected message from the expected topic within the timeout"
+      )
     } finally consumer.close()
   }
 

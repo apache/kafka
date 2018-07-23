@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 import util.matching.Regex
@@ -30,12 +29,13 @@ trait Config extends Logging {
     rgx.findFirstIn(value) match {
       case Some(t) =>
         if (!t.equals(value))
-          throw new InvalidConfigurationException(prop + " " + value + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'")
-      case None => throw new InvalidConfigurationException(prop + " " + value + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'")
+          throw new InvalidConfigurationException(
+            prop + " " + value + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'"
+          )
+      case None =>
+        throw new InvalidConfigurationException(
+          prop + " " + value + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'"
+        )
     }
   }
 }
-
-
-
-

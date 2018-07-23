@@ -28,7 +28,8 @@ class MirrorMakerTest {
   @Test
   def testDefaultMirrorMakerMessageHandler() {
     val now = 12345L
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
+    val consumerRecord =
+      BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)
@@ -43,8 +44,13 @@ class MirrorMakerTest {
 
   @Test
   def testDefaultMirrorMakerMessageHandlerWithNoTimestampInSourceMessage() {
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME,
-      "key".getBytes, "value".getBytes)
+    val consumerRecord = BaseConsumerRecord("topic",
+                                            0,
+                                            1L,
+                                            RecordBatch.NO_TIMESTAMP,
+                                            TimestampType.CREATE_TIME,
+                                            "key".getBytes,
+                                            "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)
@@ -60,8 +66,8 @@ class MirrorMakerTest {
   @Test
   def testDefaultMirrorMakerMessageHandlerWithHeaders() {
     val now = 12345L
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes,
-      "value".getBytes)
+    val consumerRecord =
+      BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
     consumerRecord.headers.add("headerKey", "headerValue".getBytes)
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)

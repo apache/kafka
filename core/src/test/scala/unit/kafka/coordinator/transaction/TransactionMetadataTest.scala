@@ -40,7 +40,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Empty,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, time.milliseconds())
     txnMetadata.completeTransitionTo(transitMetadata)
@@ -61,7 +62,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Empty,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, time.milliseconds())
     txnMetadata.completeTransitionTo(transitMetadata)
@@ -82,7 +84,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Empty,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
     txnMetadata.prepareIncrementProducerEpoch(30000, time.milliseconds())
@@ -101,7 +104,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Ongoing,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
     val fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch()
@@ -129,7 +133,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Ongoing,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
     assertTrue(txnMetadata.isProducerEpochExhausted)
     txnMetadata.prepareFenceProducerEpoch()
   }
@@ -147,7 +152,8 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = Empty,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
 
     val newProducerId = 9893L
     val transitMetadata = txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds())
@@ -157,19 +163,16 @@ class TransactionMetadataTest {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testRotateProducerIdInOngoingState(): Unit = {
+  def testRotateProducerIdInOngoingState(): Unit =
     testRotateProducerIdInOngoingState(Ongoing)
-  }
 
   @Test(expected = classOf[IllegalStateException])
-  def testRotateProducerIdInPrepareAbortState(): Unit = {
+  def testRotateProducerIdInPrepareAbortState(): Unit =
     testRotateProducerIdInOngoingState(PrepareAbort)
-  }
 
   @Test(expected = classOf[IllegalStateException])
-  def testRotateProducerIdInPrepareCommitState(): Unit = {
+  def testRotateProducerIdInPrepareCommitState(): Unit =
     testRotateProducerIdInOngoingState(PrepareCommit)
-  }
 
   private def testRotateProducerIdInOngoingState(state: TransactionState): Unit = {
     val transactionalId = "txnlId"
@@ -183,10 +186,10 @@ class TransactionMetadataTest {
       txnTimeoutMs = 30000,
       state = state,
       topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds()
+    )
     val newProducerId = 9893L
     txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds())
   }
-
 
 }

@@ -63,9 +63,9 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def interBrokerListenerName: ListenerName = new ListenerName("SERVER")
 
   this.serverConfig.setProperty("listener.name.client." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-    classOf[TestClientPrincipalBuilder].getName)
+                                classOf[TestClientPrincipalBuilder].getName)
   this.serverConfig.setProperty("listener.name.server." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-    classOf[TestServerPrincipalBuilder].getName)
+                                classOf[TestServerPrincipalBuilder].getName)
   override val clientPrincipal = "client"
   override val kafkaPrincipal = "server"
 

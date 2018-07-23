@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
@@ -84,21 +83,25 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     servers.last.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient,
+                                                    topic,
+                                                    partitionId,
                                                     oldLeaderOpt = if (leader1 == 0) None else Some(leader1))
     val leaderEpoch2 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("Leader is elected to be: %s".format(leader1))
     debug("leader Epoch: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2)
     if (leader1 == leader2)
-      assertEquals("Second epoch value should be " + leaderEpoch1+1, leaderEpoch1+1, leaderEpoch2)
+      assertEquals("Second epoch value should be " + leaderEpoch1 + 1, leaderEpoch1 + 1, leaderEpoch2)
     else
-      assertEquals("Second epoch value should be %d".format(leaderEpoch1+1) , leaderEpoch1+1, leaderEpoch2)
+      assertEquals("Second epoch value should be %d".format(leaderEpoch1 + 1), leaderEpoch1 + 1, leaderEpoch2)
 
     servers.last.startup()
     servers.head.shutdown()
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient,
+                                                    topic,
+                                                    partitionId,
                                                     oldLeaderOpt = if (leader2 == 1) None else Some(leader2))
     val leaderEpoch3 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("leader Epoch: " + leaderEpoch3)
@@ -107,7 +110,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     if (leader2 == leader3)
       assertEquals("Second epoch value should be " + leaderEpoch2, leaderEpoch2, leaderEpoch3)
     else
-      assertEquals("Second epoch value should be %d".format(leaderEpoch2+1) , leaderEpoch2+1, leaderEpoch3)
+      assertEquals("Second epoch value should be %d".format(leaderEpoch2 + 1), leaderEpoch2 + 1, leaderEpoch3)
   }
 
   @Test
@@ -132,28 +135,45 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-    val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", TestUtils.boundPort(s), listenerName,
-      securityProtocol))
+    val brokers = servers.map(
+      s => new Broker(s.config.brokerId, "localhost", TestUtils.boundPort(s), listenerName, securityProtocol)
+    )
     val nodes = brokers.map(_.node(listenerName))
 
     val controllerContext = new ControllerContext
     controllerContext.liveBrokers = brokers.toSet
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
+    val controllerChannelManager = new ControllerChannelManager(
+      controllerContext,
+      controllerConfig,
+      Time.SYSTEM,
+      metrics,
+      new StateChangeLogger(controllerId, inControllerContext = true, None)
+    )
     controllerChannelManager.startup()
     try {
       val staleControllerEpoch = 0
       val partitionStates = Map(
-        new TopicPartition(topic, partitionId) -> new LeaderAndIsrRequest.PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
-          Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
-          Seq(0, 1).map(Integer.valueOf).asJava, false)
+        new TopicPartition(topic, partitionId) -> new LeaderAndIsrRequest.PartitionState(
+          2,
+          brokerId2,
+          LeaderAndIsr.initialLeaderEpoch,
+          Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava,
+          LeaderAndIsr.initialZKVersion,
+          Seq(0, 1).map(Integer.valueOf).asJava,
+          false
+        )
       )
-      val requestBuilder = new LeaderAndIsrRequest.Builder(
-        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, partitionStates.asJava, nodes.toSet.asJava)
+      val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+                                                           controllerId,
+                                                           staleControllerEpoch,
+                                                           partitionStates.asJava,
+                                                           nodes.toSet.asJava)
 
-      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
-        staleControllerEpochCallback)
+      controllerChannelManager.sendRequest(brokerId2,
+                                           ApiKeys.LEADER_AND_ISR,
+                                           requestBuilder,
+                                           staleControllerEpochCallback)
       TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
     } finally {
@@ -166,7 +186,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
     staleControllerEpochDetected = leaderAndIsrResponse.error match {
       case Errors.STALE_CONTROLLER_EPOCH => true
-      case _ => false
+      case _                             => false
     }
   }
 }

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.io._
@@ -58,7 +57,7 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{mutable, Map}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
@@ -73,14 +72,15 @@ object TestUtils extends Logging {
 
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
+
   /** ZooKeeper connection string to use for unit tests that mock/don't require a real ZK server. */
   val MockZkConnect = "127.0.0.1:" + MockZkPort
   // CN in SSL certificates - this is used for endpoint validation when enabled
   val SslCertificateCn = "localhost"
 
   private val transactionStatusKey = "transactionStatus"
-  private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
-  private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
+  private val committedValue: Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
+  private val abortedValue: Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
 
   /**
    * Create a temporary directory
@@ -105,13 +105,14 @@ object TestUtils extends Logging {
    */
   def randomPartitionLogDir(parentDir: File): File = {
     val attempts = 1000
-    val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
-                                  .take(attempts).find(_.mkdir())
-                                  .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
+    val f = Iterator
+      .continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
+      .take(attempts)
+      .find(_.mkdir())
+      .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
     f.deleteOnExit()
     f
   }
-
 
   /**
    * Create a temporary file
@@ -139,7 +140,10 @@ object TestUtils extends Logging {
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 
-  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
+  def createBroker(id: Int,
+                   host: String,
+                   port: Int,
+                   securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
 
   /**
@@ -148,45 +152,63 @@ object TestUtils extends Logging {
    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
    */
   def createBrokerConfigs(numConfigs: Int,
-    zkConnect: String,
-    enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
-    interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
-    trustStoreFile: Option[File] = None,
-    saslProperties: Option[Properties] = None,
-    enablePlaintext: Boolean = true,
-    enableSsl: Boolean = false,
-    enableSaslPlaintext: Boolean = false,
-    enableSaslSsl: Boolean = false,
-    rackInfo: Map[Int, String] = Map(),
-    logDirCount: Int = 1,
-    enableToken: Boolean = false): Seq[Properties] = {
+                          zkConnect: String,
+                          enableControlledShutdown: Boolean = true,
+                          enableDeleteTopic: Boolean = false,
+                          interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                          trustStoreFile: Option[File] = None,
+                          saslProperties: Option[Properties] = None,
+                          enablePlaintext: Boolean = true,
+                          enableSsl: Boolean = false,
+                          enableSaslPlaintext: Boolean = false,
+                          enableSaslSsl: Boolean = false,
+                          rackInfo: Map[Int, String] = Map(),
+                          logDirCount: Int = 1,
+                          enableToken: Boolean = false): Seq[Properties] =
     (0 until numConfigs).map { node =>
-      createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
-        interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken)
+      createBrokerConfig(
+        node,
+        zkConnect,
+        enableControlledShutdown,
+        enableDeleteTopic,
+        RandomPort,
+        interBrokerSecurityProtocol,
+        trustStoreFile,
+        saslProperties,
+        enablePlaintext = enablePlaintext,
+        enableSsl = enableSsl,
+        enableSaslPlaintext = enableSaslPlaintext,
+        enableSaslSsl = enableSaslSsl,
+        rack = rackInfo.get(node),
+        logDirCount = logDirCount,
+        enableToken = enableToken
+      )
     }
-  }
 
-  def getBrokerListStrFromServers(servers: Seq[KafkaServer], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    servers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.securityProtocol == protocol).getOrElse(
-        sys.error(s"Could not find listener with security protocol $protocol"))
-      formatAddress(listener.host, boundPort(s, protocol))
-    }.mkString(",")
-  }
+  def getBrokerListStrFromServers(servers: Seq[KafkaServer],
+                                  protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String =
+    servers
+      .map { s =>
+        val listener = s.config.advertisedListeners
+          .find(_.securityProtocol == protocol)
+          .getOrElse(sys.error(s"Could not find listener with security protocol $protocol"))
+        formatAddress(listener.host, boundPort(s, protocol))
+      }
+      .mkString(",")
 
-  def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String = {
-    servers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener with name ${listenerName.value}"))
-      formatAddress(listener.host, s.boundPort(listenerName))
-    }.mkString(",")
-  }
+  def bootstrapServers(servers: Seq[KafkaServer], listenerName: ListenerName): String =
+    servers
+      .map { s =>
+        val listener = s.config.advertisedListeners
+          .find(_.listenerName == listenerName)
+          .getOrElse(sys.error(s"Could not find listener with name ${listenerName.value}"))
+        formatAddress(listener.host, s.boundPort(listenerName))
+      }
+      .mkString(",")
 
   /**
-    * Shutdown `servers` and delete their log directories.
-    */
+   * Shutdown `servers` and delete their log directories.
+   */
   def shutdownServers(servers: Seq[KafkaServer]) {
     servers.par.foreach { s =>
       s.shutdown()
@@ -195,10 +217,10 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Create a test config for the provided parameters.
-    *
-    * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
-    */
+   * Create a test config for the provided parameters.
+   *
+   * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
+   */
   def createBrokerConfig(nodeId: Int,
                          zkConnect: String,
                          enableControlledShutdown: Boolean = true,
@@ -229,19 +251,25 @@ object TestUtils extends Logging {
     if (enableSaslSsl || shouldEnable(SecurityProtocol.SASL_SSL))
       protocolAndPorts += SecurityProtocol.SASL_SSL -> saslSslPort
 
-    val listeners = protocolAndPorts.map { case (protocol, port) =>
-      s"${protocol.name}://localhost:$port"
-    }.mkString(",")
+    val listeners = protocolAndPorts
+      .map {
+        case (protocol, port) =>
+          s"${protocol.name}://localhost:$port"
+      }
+      .mkString(",")
 
     val props = new Properties
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
     if (logDirCount > 1) {
-      val logDirs = (1 to logDirCount).toList.map(i =>
-        // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
-        // We can verify this by using a mixture of relative path and absolute path as log directories in the test
-        if (i % 2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
-      ).mkString(",")
+      val logDirs = (1 to logDirCount).toList
+        .map(
+          i =>
+            // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
+            // We can verify this by using a mixture of relative path and absolute path as log directories in the test
+            if (i % 2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
+        )
+        .mkString(",")
       props.put(KafkaConfig.LogDirsProp, logDirs)
     } else {
       props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
@@ -308,9 +336,8 @@ object TestUtils extends Logging {
   def createTopic(zkClient: KafkaZkClient,
                   topic: String,
                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaServer]): scala.collection.immutable.Map[Int, Int] = {
+                  servers: Seq[KafkaServer]): scala.collection.immutable.Map[Int, Int] =
     createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
-  }
 
   /**
    * Create a topic in ZooKeeper using a customized replica assignment.
@@ -326,29 +353,35 @@ object TestUtils extends Logging {
     // create topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
-    partitionReplicaAssignment.keySet.map { case i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+    partitionReplicaAssignment.keySet.map {
+      case i =>
+        TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
+        i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap
   }
 
   /**
-    * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
-    * to all brokers.
-    */
+   * Create the consumer offsets/group metadata topic and wait until the leader is elected and metadata is propagated
+   * to all brokers.
+   */
   def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaServer]): Unit = {
     val server = servers.head
-    createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME,
+    createTopic(
+      zkClient,
+      Topic.GROUP_METADATA_TOPIC_NAME,
       server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
-      server.groupCoordinator.offsetsTopicConfigs)
+      server.groupCoordinator.offsetsTopicConfigs
+    )
   }
 
   /**
    * Create a test config for a consumer
    */
-  def createConsumerProperties(zkConnect: String, groupId: String, consumerId: String,
+  def createConsumerProperties(zkConnect: String,
+                               groupId: String,
+                               consumerId: String,
                                consumerTimeout: Long = -1): Properties = {
     val props = new Properties
     props.put("zookeeper.connect", zkConnect)
@@ -377,15 +410,11 @@ object TestUtils extends Logging {
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords =
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
-  }
 
-  def recordsWithValues(magicValue: Byte,
-                        codec: CompressionType,
-                        values: Array[Byte]*): MemoryRecords = {
+  def recordsWithValues(magicValue: Byte, codec: CompressionType, values: Array[Byte]*): MemoryRecords =
     records(values.map(value => new SimpleRecord(value)), magicValue, codec)
-  }
 
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
@@ -395,8 +424,15 @@ object TestUtils extends Logging {
               sequence: Int = RecordBatch.NO_SEQUENCE,
               baseOffset: Long = 0L): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
-      System.currentTimeMillis, producerId, producerEpoch, sequence)
+    val builder = MemoryRecords.builder(buf,
+                                        magicValue,
+                                        codec,
+                                        TimestampType.CREATE_TIME,
+                                        baseOffset,
+                                        System.currentTimeMillis,
+                                        producerId,
+                                        producerEpoch,
+                                        sequence)
     records.foreach(builder.append)
     builder.build()
   }
@@ -421,7 +457,7 @@ object TestUtils extends Logging {
    */
   def checkEquals(b1: ByteBuffer, b2: ByteBuffer) {
     assertEquals("Buffers should have equal length", b1.limit() - b1.position(), b2.limit() - b2.position())
-    for(i <- 0 until b1.limit() - b1.position())
+    for (i <- 0 until b1.limit() - b1.position())
       assertEquals("byte " + i + " byte not equal.", b1.get(b1.position() + i), b2.get(b1.position() + i))
   }
 
@@ -431,7 +467,7 @@ object TestUtils extends Logging {
    */
   def checkEquals[T](expected: Iterator[T], actual: Iterator[T]) {
     var length = 0
-    while(expected.hasNext && actual.hasNext) {
+    while (expected.hasNext && actual.hasNext) {
       length += 1
       assertEquals(expected.next, actual.next)
     }
@@ -443,7 +479,7 @@ object TestUtils extends Logging {
         expected.next
         length1 += 1
       }
-      assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true)
+      assertFalse("Iterators have uneven length-- first has more: " + length1 + " > " + length, true)
     }
 
     // check if the actual iterator was longer
@@ -453,7 +489,7 @@ object TestUtils extends Logging {
         actual.next
         length2 += 1
       }
-      assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true)
+      assertFalse("Iterators have uneven length-- second has more: " + length2 + " > " + length, true)
     }
   }
 
@@ -461,10 +497,10 @@ object TestUtils extends Logging {
    *  Throw an exception if an iterable has different length than expected
    *
    */
-  def checkLength[T](s1: Iterator[T], expectedLength:Int) {
+  def checkLength[T](s1: Iterator[T], expectedLength: Int) {
     var n = 0
     while (s1.hasNext) {
-      n+=1
+      n += 1
       s1.next
     }
     assertEquals(expectedLength, n)
@@ -475,13 +511,12 @@ object TestUtils extends Logging {
    * different messages on their Nth element
    */
   def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]) {
-    while(s1.hasNext && s2.hasNext)
-      assertEquals(s1.next, s2.next)
+    while (s1.hasNext && s2.hasNext) assertEquals(s1.next, s2.next)
     assertFalse("Iterators have uneven length--first has more", s1.hasNext)
     assertFalse("Iterators have uneven length--second has more", s2.hasNext)
   }
 
-  def stackedIterator[T](s: Iterator[T]*): Iterator[T] = {
+  def stackedIterator[T](s: Iterator[T]*): Iterator[T] =
     new Iterator[T] {
       var cur: Iterator[T] = null
       val topIterator = s.iterator
@@ -502,9 +537,8 @@ object TestUtils extends Logging {
         throw new RuntimeException("should not reach here")
       }
 
-      def next() : T = cur.next
+      def next(): T = cur.next
     }
-  }
 
   /**
    * Create a hexadecimal string for the given bytes
@@ -516,17 +550,17 @@ object TestUtils extends Logging {
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
-    for(i <- 0 until buffer.limit())
+    for (i <- 0 until buffer.limit())
       builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position() + i))))
     builder.toString
   }
 
   def securityConfigs(mode: Mode,
-                              securityProtocol: SecurityProtocol,
-                              trustStoreFile: Option[File],
-                              certAlias: String,
-                              certCn: String,
-                              saslProperties: Option[Properties]): Properties = {
+                      securityProtocol: SecurityProtocol,
+                      trustStoreFile: Option[File],
+                      certAlias: String,
+                      certCn: String,
+                      saslProperties: Option[Properties]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn)
@@ -537,7 +571,9 @@ object TestUtils extends Logging {
     props
   }
 
-  def producerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+  def producerSecurityConfigs(securityProtocol: SecurityProtocol,
+                              trustStoreFile: Option[File],
+                              saslProperties: Option[Properties]): Properties =
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
 
   /**
@@ -572,8 +608,9 @@ object TestUtils extends Logging {
       ProducerConfig.LINGER_MS_CONFIG -> lingerMs.toString
     )
 
-    defaultProps.foreach { case (key, value) =>
-      if (!producerProps.containsKey(key)) producerProps.put(key, value)
+    defaultProps.foreach {
+      case (key, value) =>
+        if (!producerProps.containsKey(key)) producerProps.put(key, value)
     }
 
     /*
@@ -590,18 +627,22 @@ object TestUtils extends Logging {
 
   def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
     case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
-    case _ => false
+    case _                                                => false
   }
 
   def usesSaslAuthentication(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
     case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
-    case _ => false
+    case _                                                           => false
   }
 
-  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+  def consumerSecurityConfigs(securityProtocol: SecurityProtocol,
+                              trustStoreFile: Option[File],
+                              saslProperties: Option[Properties]): Properties =
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", SslCertificateCn, saslProperties)
 
-  def adminClientSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+  def adminClientSecurityConfigs(securityProtocol: SecurityProtocol,
+                                 trustStoreFile: Option[File],
+                                 saslProperties: Option[Properties]): Properties =
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
 
   /**
@@ -631,10 +672,12 @@ object TestUtils extends Logging {
       ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
       ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> partitionAssignmentStrategy,
       ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG -> sessionTimeout.toString,
-      ConsumerConfig.GROUP_ID_CONFIG -> groupId)
+      ConsumerConfig.GROUP_ID_CONFIG -> groupId
+    )
 
-    defaultProps.foreach { case (key, value) =>
-      if (!consumerProps.containsKey(key)) consumerProps.put(key, value)
+    defaultProps.foreach {
+      case (key, value) =>
+        if (!consumerProps.containsKey(key)) consumerProps.put(key, value)
     }
 
     /*
@@ -643,7 +686,7 @@ object TestUtils extends Logging {
      * invoke it before this call in IntegrationTestHarness, otherwise the
      * SSL client auth fails.
      */
-    if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
+    if (!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
       consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
 
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
@@ -674,8 +717,11 @@ object TestUtils extends Logging {
       val listenerName = ListenerName.forSecurityProtocol(protocol)
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), b.rack)
     }
-    brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
-      ApiVersion.latestVersion, jmxPort = -1)))
+    brokers.foreach(
+      b =>
+        zkClient
+          .registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack), ApiVersion.latestVersion, jmxPort = -1))
+    )
     brokers
   }
 
@@ -687,7 +733,7 @@ object TestUtils extends Logging {
 
   def getMsgStrings(n: Int): Seq[String] = {
     val buffer = new ListBuffer[String]
-    for (i <- 0 until  n)
+    for (i <- 0 until n)
       buffer += ("msg" + i)
     buffer
   }
@@ -696,12 +742,14 @@ object TestUtils extends Logging {
                              topic: String,
                              leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
                              controllerEpoch: Int) {
-    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map { case (partition, leader) =>
-      val topicPartition = new TopicPartition(topic, partition)
-      val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
-        .map(_.leaderAndIsr.newLeader(leader))
-        .getOrElse(LeaderAndIsr(leader, List(leader)))
-      topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
+    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map {
+      case (partition, leader) =>
+        val topicPartition = new TopicPartition(topic, partition)
+        val newLeaderAndIsr = zkClient
+          .getTopicPartitionState(topicPartition)
+          .map(_.leaderAndIsr.newLeader(leader))
+          .getOrElse(LeaderAndIsr(leader, List(leader)))
+        topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
     }
     zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs)
   }
@@ -715,14 +763,20 @@ object TestUtils extends Logging {
    *         LeaderDuringDelete).
    * @throws AssertionError if the expected condition is not true within the timeout.
    */
-  def waitUntilLeaderIsElectedOrChanged(zkClient: KafkaZkClient, topic: String, partition: Int, timeoutMs: Long = 30000L,
-                                        oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Int = {
+  def waitUntilLeaderIsElectedOrChanged(zkClient: KafkaZkClient,
+                                        topic: String,
+                                        partition: Int,
+                                        timeoutMs: Long = 30000L,
+                                        oldLeaderOpt: Option[Int] = None,
+                                        newLeaderOpt: Option[Int] = None): Int = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
     val topicPartition = new TopicPartition(topic, partition)
 
-    trace(s"Waiting for leader to be elected or changed for partition $topicPartition, old leader is $oldLeaderOpt, " +
-      s"new leader is $newLeaderOpt")
+    trace(
+      s"Waiting for leader to be elected or changed for partition $topicPartition, old leader is $oldLeaderOpt, " +
+        s"new leader is $newLeaderOpt"
+    )
 
     var leader: Option[Int] = None
     var electedOrChangedLeader: Option[Int] = None
@@ -730,19 +784,20 @@ object TestUtils extends Logging {
       // check if leader is elected
       leader = zkClient.getLeaderForPartition(topicPartition)
       leader match {
-        case Some(l) => (newLeaderOpt, oldLeaderOpt) match {
-          case (Some(newLeader), _) if newLeader == l =>
-            trace(s"Expected new leader $l is elected for partition $topicPartition")
-            electedOrChangedLeader = leader
-          case (_, Some(oldLeader)) if oldLeader != l =>
-            trace(s"Leader for partition $topicPartition is changed from $oldLeader to $l")
-            electedOrChangedLeader = leader
-          case (None, None) =>
-            trace(s"Leader $l is elected for partition $topicPartition")
-            electedOrChangedLeader = leader
-          case _ =>
-            trace(s"Current leader for partition $topicPartition is $l")
-        }
+        case Some(l) =>
+          (newLeaderOpt, oldLeaderOpt) match {
+            case (Some(newLeader), _) if newLeader == l =>
+              trace(s"Expected new leader $l is elected for partition $topicPartition")
+              electedOrChangedLeader = leader
+            case (_, Some(oldLeader)) if oldLeader != l =>
+              trace(s"Leader for partition $topicPartition is changed from $oldLeader to $l")
+              electedOrChangedLeader = leader
+            case (None, None) =>
+              trace(s"Leader $l is elected for partition $topicPartition")
+              electedOrChangedLeader = leader
+            case _ =>
+              trace(s"Current leader for partition $topicPartition is $l")
+          }
         case None =>
           trace(s"Leader for partition $topicPartition is not elected yet")
       }
@@ -769,7 +824,7 @@ object TestUtils extends Logging {
   def retry(maxWaitMs: Long)(block: => Unit) {
     var wait = 1L
     val startTime = System.currentTimeMillis()
-    while(true) {
+    while (true) {
       try {
         block
         return
@@ -788,16 +843,19 @@ object TestUtils extends Logging {
   }
 
   /**
-    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
-    *
-    * @param condition condition to check
-    * @param msg error message
-    * @param waitTime maximum time to wait and retest the condition before failing the test
-    * @param pause delay between condition checks
-    * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
-    */
-  def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
+   *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+   *
+   * @param condition condition to check
+   * @param msg error message
+   * @param waitTime maximum time to wait and retest the condition before failing the test
+   * @param pause delay between condition checks
+   * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
+   */
+  def waitUntilTrue(condition: () => Boolean,
+                    msg: => String,
+                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
+                    pause: Long = 100L,
+                    maxRetries: Int = 0): Unit = {
     val startTime = System.currentTimeMillis()
     var retry = 0
     while (true) {
@@ -807,13 +865,12 @@ object TestUtils extends Logging {
         if (System.currentTimeMillis() > startTime + waitTime)
           fail(msg)
         Thread.sleep(waitTime.min(pause))
-      }
-      catch {
+      } catch {
         case e: RetriableException if retry < maxRetries => {
           debug("Retrying after error", e)
           retry += 1
         }
-        case e : Throwable => throw e
+        case e: Throwable => throw e
       }
     }
     // should never hit here
@@ -821,14 +878,15 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Invoke `compute` until `predicate` is true or `waitTime` elapses.
-    *
-    * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
-    *
-    * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
-    */
+   * Invoke `compute` until `predicate` is true or `waitTime` elapses.
+   *
+   * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
+   *
+   * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
+   */
   def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
-                    predicate: T => Boolean): (T, Boolean) = {
+    predicate: T => Boolean
+  ): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {
       val result = compute
@@ -842,22 +900,23 @@ object TestUtils extends Logging {
     throw new RuntimeException("unexpected error")
   }
 
-  def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
+  def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean =
     server.replicaManager.getPartition(new TopicPartition(topic, partitionId)).exists(_.leaderReplicaIfLocal.isDefined)
-  }
 
   /**
-    * Wait until all brokers know about each other.
-    *
-    * @param servers The Kafka broker servers.
-    * @param timeout The amount of time waiting on this condition before assert to fail
-    */
+   * Wait until all brokers know about each other.
+   *
+   * @param servers The Kafka broker servers.
+   * @param timeout The amount of time waiting on this condition before assert to fail
+   */
   def waitUntilBrokerMetadataIsPropagated(servers: Seq[KafkaServer],
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
-    ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
+    TestUtils.waitUntilTrue(
+      () => servers.forall(server => expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet),
+      "Timed out waiting for broker metadata to propagate to all servers",
+      timeout
+    )
   }
 
   /**
@@ -870,12 +929,14 @@ object TestUtils extends Logging {
    * @param timeout The amount of time waiting on this condition before assert to fail
    * @return The leader of the partition.
    */
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
+  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer],
+                                    topic: String,
+                                    partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    TestUtils.waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.foldLeft(true) { (result, server) =>
           val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
           partitionStateOpt match {
             case None => false
@@ -885,7 +946,8 @@ object TestUtils extends Logging {
           }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
-      waitTime = timeout)
+      waitTime = timeout
+    )
 
     leader
   }
@@ -895,13 +957,18 @@ object TestUtils extends Logging {
     controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
   }
 
-  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
+  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer],
+                             topic: String,
+                             partition: Int,
                              timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val tp = new TopicPartition(topic, partition)
-    TestUtils.waitUntilTrue(() =>
-      servers.exists { server =>
-        server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
-      }, s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.exists { server =>
+          server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
+      },
+      s"Partition $tp leaders not made yet after $timeout ms",
+      waitTime = timeout
     )
   }
 
@@ -921,33 +988,49 @@ object TestUtils extends Logging {
     } finally outputStream.close()
   }
 
-  def checkForPhantomInSyncReplicas(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {
+  def checkForPhantomInSyncReplicas(zkClient: KafkaZkClient,
+                                    topic: String,
+                                    partitionToBeReassigned: Int,
+                                    assignedReplicas: Seq[Int]) {
     val inSyncReplicas = zkClient.getInSyncReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
     // in sync replicas should not have any replica that is not in the new assigned replicas
     val phantomInSyncReplicas = inSyncReplicas.get.toSet -- assignedReplicas.toSet
-    assertTrue("All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
-      phantomInSyncReplicas.isEmpty)
+    assertTrue(
+      "All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
+      phantomInSyncReplicas.isEmpty
+    )
   }
 
-  def ensureNoUnderReplicatedPartitions(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
-                                                servers: Seq[KafkaServer]) {
+  def ensureNoUnderReplicatedPartitions(zkClient: KafkaZkClient,
+                                        topic: String,
+                                        partitionToBeReassigned: Int,
+                                        assignedReplicas: Seq[Int],
+                                        servers: Seq[KafkaServer]) {
     val topicPartition = new TopicPartition(topic, partitionToBeReassigned)
-    TestUtils.waitUntilTrue(() => {
+    TestUtils.waitUntilTrue(
+      () => {
         val inSyncReplicas = zkClient.getInSyncReplicasForPartition(topicPartition)
         inSyncReplicas.get.size == assignedReplicas.size
       },
-      "Reassigned partition [%s,%d] is under replicated".format(topic, partitionToBeReassigned))
+      "Reassigned partition [%s,%d] is under replicated".format(topic, partitionToBeReassigned)
+    )
     var leader: Option[Int] = None
-    TestUtils.waitUntilTrue(() => {
+    TestUtils.waitUntilTrue(
+      () => {
         leader = zkClient.getLeaderForPartition(topicPartition)
         leader.isDefined
       },
-      "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
-    TestUtils.waitUntilTrue(() => {
+      "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned)
+    )
+    TestUtils.waitUntilTrue(
+      () => {
         val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
         leaderBroker.replicaManager.underReplicatedPartitionCount == 0
       },
-      "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
+      "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic,
+                                                                                             partitionToBeReassigned,
+                                                                                             leader.get)
+    )
   }
 
   def verifyNonDaemonThreadsStatus(threadNamePrefix: String) {
@@ -963,24 +1046,25 @@ object TestUtils extends Logging {
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
-    new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
-                   initialOfflineDirs = Array.empty[File],
-                   topicConfigs = Map(),
-                   initialDefaultConfig = defaultConfig,
-                   cleanerConfig = cleanerConfig,
-                   recoveryThreadsPerDataDir = 4,
-                   flushCheckMs = 1000L,
-                   flushRecoveryOffsetCheckpointMs = 10000L,
-                   flushStartOffsetCheckpointMs = 10000L,
-                   retentionCheckMs = 1000L,
-                   maxPidExpirationMs = 60 * 60 * 1000,
-                   scheduler = time.scheduler,
-                   time = time,
-                   brokerState = BrokerState(),
-                   brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
-  }
+                       time: MockTime = new MockTime()): LogManager =
+    new LogManager(
+      logDirs = logDirs.map(_.getAbsoluteFile),
+      initialOfflineDirs = Array.empty[File],
+      topicConfigs = Map(),
+      initialDefaultConfig = defaultConfig,
+      cleanerConfig = cleanerConfig,
+      recoveryThreadsPerDataDir = 4,
+      flushCheckMs = 1000L,
+      flushRecoveryOffsetCheckpointMs = 10000L,
+      flushStartOffsetCheckpointMs = 10000L,
+      retentionCheckMs = 1000L,
+      maxPidExpirationMs = 60 * 60 * 1000,
+      scheduler = time.scheduler,
+      time = time,
+      brokerState = BrokerState(),
+      brokerTopicStats = new BrokerTopicStats,
+      logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
+    )
 
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
@@ -1005,7 +1089,7 @@ object TestUtils extends Logging {
                                  numMessages: Int,
                                  acks: Int = -1,
                                  compressionType: CompressionType = CompressionType.NONE): Seq[String] = {
-    val values = (0 until numMessages).map(x =>  s"test-$x")
+    val values = (0 until numMessages).map(x => s"test-$x")
     val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
     produceMessages(servers, records, acks, compressionType)
     values
@@ -1023,42 +1107,64 @@ object TestUtils extends Logging {
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
-    TestUtils.waitUntilTrue(() => !zkClient.topicExists(topic),
-      "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
+    TestUtils.waitUntilTrue(
+      () => !zkClient.isTopicMarkedForDeletion(topic),
+      "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic)
+    )
+    TestUtils.waitUntilTrue(
+      () => !zkClient.topicExists(topic),
+      "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic)
+    )
     // ensure that the topic-partition has been deleted from all brokers' replica managers
-    TestUtils.waitUntilTrue(() =>
-      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
-      "Replica manager's should have deleted all of this topic's partitions")
+    TestUtils.waitUntilTrue(
+      () => servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
+      "Replica manager's should have deleted all of this topic's partitions"
+    )
     // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)))
+               servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
-    TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
-      val checkpoints = server.getLogManager.liveLogDirs.map { logDir =>
-        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
-      }
-      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
-    }), "Cleaner offset for deleted partition should have been removed")
-    import scala.collection.JavaConverters._
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.config.logDirs.forall { logDir =>
-        topicPartitions.forall { tp =>
-          !new File(logDir, tp.topic + "-" + tp.partition).exists()
-        }
-      }
-    ), "Failed to soft-delete the data to a delete directory")
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.config.logDirs.forall { logDir =>
-        topicPartitions.forall { tp =>
-          !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
-            partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
-              partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.forall(
+          server =>
+            topicPartitions.forall { tp =>
+              val checkpoints = server.getLogManager.liveLogDirs.map { logDir =>
+                new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
+              }
+              checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
           }
-        }
-      }
-    ), "Failed to hard-delete the delete directory")
+      ),
+      "Cleaner offset for deleted partition should have been removed"
+    )
+    import scala.collection.JavaConverters._
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.forall(
+          server =>
+            server.config.logDirs.forall { logDir =>
+              topicPartitions.forall { tp =>
+                !new File(logDir, tp.topic + "-" + tp.partition).exists()
+              }
+          }
+      ),
+      "Failed to soft-delete the data to a delete directory"
+    )
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.forall(
+          server =>
+            server.config.logDirs.forall { logDir =>
+              topicPartitions.forall { tp =>
+                !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
+                  partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
+                  partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+                }
+              }
+          }
+      ),
+      "Failed to hard-delete the delete directory"
+    )
   }
 
   /**
@@ -1079,7 +1185,10 @@ object TestUtils extends Logging {
     copy
   }
 
-  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
+  def sslConfigs(mode: Mode,
+                 clientCert: Boolean,
+                 trustStoreFile: Option[File],
+                 certAlias: String,
                  certCn: String = SslCertificateCn): Properties = {
     val trustStore = trustStoreFile.getOrElse {
       throw new Exception("SSL enabled but no trustStoreFile provided")
@@ -1095,13 +1204,10 @@ object TestUtils extends Logging {
   // a X509TrustManager to trust self-signed certs for unit tests.
   def trustAllCerts: X509TrustManager = {
     val trustManager = new X509TrustManager() {
-      override def getAcceptedIssuers: Array[X509Certificate] = {
+      override def getAcceptedIssuers: Array[X509Certificate] =
         null
-      }
-      override def checkClientTrusted(certs: Array[X509Certificate], authType: String) {
-      }
-      override def checkServerTrusted(certs: Array[X509Certificate], authType: String) {
-      }
+      override def checkClientTrusted(certs: Array[X509Certificate], authType: String) {}
+      override def checkServerTrusted(certs: Array[X509Certificate], authType: String) {}
     }
     trustManager
   }
@@ -1109,9 +1215,12 @@ object TestUtils extends Logging {
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     val newLine = scala.util.Properties.lineSeparator
 
-    TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
+    TestUtils.waitUntilTrue(
+      () => authorizer.getAcls(resource) == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}",
+      waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS
+    )
   }
 
   /**
@@ -1121,8 +1230,8 @@ object TestUtils extends Logging {
     debug(s"ACL $acl")
     acl.getPerms match {
       case Perms.READ => !sensitive && acl.getId.getScheme == "world"
-      case Perms.ALL => acl.getId.getScheme == "sasl"
-      case _ => false
+      case Perms.ALL  => acl.getId.getScheme == "sasl"
+      case _          => false
     }
   }
 
@@ -1134,17 +1243,16 @@ object TestUtils extends Logging {
     debug(s"ACL $acl")
     acl.getPerms match {
       case Perms.ALL => acl.getId.getScheme == "world"
-      case _ => false
+      case _         => false
     }
   }
 
   private def secureZkPaths(zkUtils: ZkUtils): Seq[String] = {
-    def subPaths(path: String): Seq[String] = {
+    def subPaths(path: String): Seq[String] =
       if (zkUtils.pathExists(path))
         path +: zkUtils.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
       else
         Seq.empty
-    }
     val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
     topLevelPaths.flatMap(subPaths)
   }
@@ -1181,10 +1289,10 @@ object TestUtils extends Logging {
   }
 
   /**
-    * To use this you pass in a sequence of functions that are your arrange/act/assert test on the SUT.
-    * They all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
-    * and thereby failing some assertion are greatly increased.
-    */
+   * To use this you pass in a sequence of functions that are your arrange/act/assert test on the SUT.
+   * They all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
+   * and thereby failing some assertion are greatly increased.
+   */
   def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int) {
 
     def failWithTimeout() {
@@ -1206,13 +1314,14 @@ object TestUtils extends Logging {
           failWithTimeout()
         else
           try future.get()
-          catch { case e: Exception =>
-            exceptions += e
+          catch {
+            case e: Exception =>
+              exceptions += e
           }
       }
     } catch {
       case _: InterruptedException => failWithTimeout()
-      case e: Throwable => exceptions += e
+      case e: Throwable            => exceptions += e
     } finally {
       threadPool.shutdownNow()
     }
@@ -1220,51 +1329,66 @@ object TestUtils extends Logging {
 
   }
 
-  def consumeTopicRecords[K, V](servers: Seq[KafkaServer],
-                                topic: String,
-                                numMessages: Int,
-                                groupId: String = "group",
-                                securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
-                                trustStoreFile: Option[File] = None,
-                                waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol), groupId = groupId,
-      securityProtocol = securityProtocol, trustStoreFile = trustStoreFile)
+  def consumeTopicRecords[K, V](
+    servers: Seq[KafkaServer],
+    topic: String,
+    numMessages: Int,
+    groupId: String = "group",
+    securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+    trustStoreFile: Option[File] = None,
+    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS
+  ): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol),
+                                  groupId = groupId,
+                                  securityProtocol = securityProtocol,
+                                  trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
       consumeRecords(consumer, numMessages, waitTime)
     } finally consumer.close()
   }
 
-  def consumeRecords[K, V](consumer: KafkaConsumer[K, V], numMessages: Int,
+  def consumeRecords[K, V](consumer: KafkaConsumer[K, V],
+                           numMessages: Int,
                            waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      records.size >= numMessages
-    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
+    waitUntilTrue(
+      () => {
+        records ++= consumer.poll(Duration.ofMillis(50)).asScala
+        records.size >= numMessages
+      },
+      s"Consumed ${records.size} records until timeout instead of the expected $numMessages records",
+      waitTime
+    )
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }
 
   /**
-    * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
-    * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
-    * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
-    * in the topic, and should not be too large (ie. more than a second) in our tests.
-    *
-    * @return All the records consumed by the consumer within the specified duration.
-    */
-  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V], duration: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+   * Will consume all the records for the given consumer for the specified duration. If you want to drain all the
+   * remaining messages in the partitions the consumer is subscribed to, the duration should be set high enough so
+   * that the consumer has enough time to poll everything. This would be based on the number of expected messages left
+   * in the topic, and should not be too large (ie. more than a second) in our tests.
+   *
+   * @return All the records consumed by the consumer within the specified duration.
+   */
+  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V],
+                              duration: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val startTime = System.currentTimeMillis()
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      System.currentTimeMillis() - startTime > duration
-    }, s"The timeout $duration was greater than the maximum wait time.")
+    waitUntilTrue(
+      () => {
+        records ++= consumer.poll(Duration.ofMillis(50)).asScala
+        System.currentTimeMillis() - startTime > duration
+      },
+      s"The timeout $duration was greater than the maximum wait time."
+    )
     records
   }
 
-  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer], batchSize: Int = 16384,
+  def createTransactionalProducer(transactionalId: String,
+                                  servers: Seq[KafkaServer],
+                                  batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
@@ -1272,7 +1396,10 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+                             retries = Integer.MAX_VALUE,
+                             acks = -1,
+                             props = Some(props))
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
@@ -1280,7 +1407,9 @@ object TestUtils extends Logging {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+                                            retries = Integer.MAX_VALUE,
+                                            acks = -1,
+                                            props = Some(props))
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
@@ -1298,39 +1427,47 @@ object TestUtils extends Logging {
   // Verifies that the record was intended to be committed by checking the headers for an expected transaction status
   // If true, this will return the value as a string. It is expected that the record in question should have been created
   // by the `producerRecordWithExpectedTransactionStatus` method.
-  def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+  def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]): String = {
     record.headers.headers(transactionStatusKey).asScala.headOption match {
       case Some(header) =>
         assertEquals(s"Got ${asString(header.value)} but expected the value to indicate " +
-          s"committed status.", asString(committedValue), asString(header.value))
+                       s"committed status.",
+                     asString(committedValue),
+                     asString(header.value))
       case None =>
         fail("expected the record header to include an expected transaction status, but received nothing.")
     }
     recordValueAsString(record)
   }
 
-  def recordValueAsString(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+  def recordValueAsString(record: ConsumerRecord[Array[Byte], Array[Byte]]): String =
     asString(record.value)
-  }
 
-  def producerRecordWithExpectedTransactionStatus(topic: String, key: Array[Byte], value: Array[Byte],
-                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
-    val header = new Header {override def key() = transactionStatusKey
-      override def value() = if (willBeCommitted)
-        committedValue
-      else
-        abortedValue
+  def producerRecordWithExpectedTransactionStatus(
+    topic: String,
+    key: Array[Byte],
+    value: Array[Byte],
+    willBeCommitted: Boolean
+  ): ProducerRecord[Array[Byte], Array[Byte]] = {
+    val header = new Header {
+      override def key() = transactionStatusKey
+      override def value() =
+        if (willBeCommitted)
+          committedValue
+        else
+          abortedValue
     }
     new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, Collections.singleton(header))
   }
 
-  def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,
-                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+  def producerRecordWithExpectedTransactionStatus(topic: String,
+                                                  key: String,
+                                                  value: String,
+                                                  willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] =
     producerRecordWithExpectedTransactionStatus(topic, asBytes(key), asBytes(value), willBeCommitted)
-  }
 
   // Collect the current positions for all partition in the consumers current assignment.
-  def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
+  def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Map[TopicPartition, OffsetAndMetadata] = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
     consumer.assignment.asScala.foreach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
@@ -1338,16 +1475,20 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      records.size >= numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
+    TestUtils.waitUntilTrue(
+      () => {
+        records ++= consumer.poll(Duration.ofMillis(50)).asScala
+        records.size >= numRecords
+      },
+      s"Consumed ${records.size} records until timeout, but expected $numRecords records."
+    )
     records
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) =
     consumer.assignment.asScala.foreach { topicPartition =>
       val offset = consumer.committed(topicPartition)
       if (offset != null)
@@ -1355,17 +1496,21 @@ object TestUtils extends Logging {
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }
-  }
 
-  def alterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
+  def alterConfigs(servers: Seq[KafkaServer],
+                   adminClient: AdminClient,
+                   props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
     val configs = if (perBrokerConfig) {
-      servers.map { server =>
-        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-        (resource, newConfig)
-      }.toMap.asJava
+      servers
+        .map { server =>
+          val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
+          (resource, newConfig)
+        }
+        .toMap
+        .asJava
     } else {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
     }
@@ -1375,7 +1520,7 @@ object TestUtils extends Logging {
   /**
    * Capture the console output during the execution of the provided function.
    */
-  def grabConsoleOutput(f: => Unit) : String = {
+  def grabConsoleOutput(f: => Unit): String = {
     val out = new ByteArrayOutputStream
     try scala.Console.withOut(out)(f)
     finally scala.Console.out.flush()
@@ -1385,7 +1530,7 @@ object TestUtils extends Logging {
   /**
    * Capture the console error during the execution of the provided function.
    */
-  def grabConsoleError(f: => Unit) : String = {
+  def grabConsoleError(f: => Unit): String = {
     val err = new ByteArrayOutputStream
     try scala.Console.withErr(err)(f)
     finally scala.Console.err.flush()
@@ -1395,7 +1540,7 @@ object TestUtils extends Logging {
   /**
    * Capture both the console output and console error during the execution of the provided function.
    */
-  def grabConsoleOutputAndError(f: => Unit) : (String, String) = {
+  def grabConsoleOutputAndError(f: => Unit): (String, String) = {
     val out = new ByteArrayOutputStream
     val err = new ByteArrayOutputStream
     try scala.Console.withOut(out)(scala.Console.withErr(err)(f))
@@ -1406,7 +1551,7 @@ object TestUtils extends Logging {
     (out.toString, err.toString)
   }
 
-  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit = {
+  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit =
     try {
       future.get()
       fail("Expected CompletableFuture.get to return an exception")
@@ -1414,7 +1559,7 @@ object TestUtils extends Logging {
       case e: ExecutionException =>
         val cause = e.getCause()
         assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass().getName, clazz.isInstance(cause))
+                     cause.getClass().getName,
+                   clazz.isInstance(cause))
     }
-  }
 }

@@ -40,12 +40,15 @@ object EndPoint {
    *                         Host can be empty (PLAINTEXT://:9092) in which case we'll bind to default interface
    *                         Negative ports are also accepted, since they are used in some unit tests
    */
-  def createEndPoint(connectionString: String, securityProtocolMap: Option[Map[ListenerName, SecurityProtocol]]): EndPoint = {
+  def createEndPoint(connectionString: String,
+                     securityProtocolMap: Option[Map[ListenerName, SecurityProtocol]]): EndPoint = {
     val protocolMap = securityProtocolMap.getOrElse(DefaultSecurityProtocolMap)
 
     def securityProtocol(listenerName: ListenerName): SecurityProtocol =
-      protocolMap.getOrElse(listenerName,
-        throw new IllegalArgumentException(s"No security protocol defined for listener ${listenerName.value}"))
+      protocolMap.getOrElse(
+        listenerName,
+        throw new IllegalArgumentException(s"No security protocol defined for listener ${listenerName.value}")
+      )
 
     connectionString match {
       case uriParseExp(listenerNameString, "", port) =>
@@ -66,7 +69,7 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
   def connectionString: String = {
     val hostport =
       if (host == null)
-        ":"+port
+        ":" + port
       else
         Utils.formatAddress(host, port)
     listenerName.value + "://" + hostport

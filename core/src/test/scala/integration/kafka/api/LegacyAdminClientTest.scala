@@ -33,8 +33,8 @@ import org.junit.Assert._
 import scala.collection.JavaConverters._
 
 /**
-  * Tests for the deprecated Scala AdminClient.
-  */
+ * Tests for the deprecated Scala AdminClient.
+ */
 class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1
@@ -136,7 +136,8 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   @Test
   def testDescribeConsumerGroupForNonExistentGroup() {
     val nonExistentGroup = "non" + groupId
-    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
+    assertTrue("Expected empty ConsumerSummary list",
+               client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

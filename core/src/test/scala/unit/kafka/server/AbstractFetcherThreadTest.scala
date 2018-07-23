@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import AbstractFetcherThread._
@@ -30,15 +29,14 @@ import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{mutable, Map, Set}
 
 class AbstractFetcherThreadTest {
 
   @Before
-  def cleanMetricRegistry(): Unit = {
+  def cleanMetricRegistry(): Unit =
     for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
       Metrics.defaultRegistry().removeMetric(metricName)
-  }
 
   @Test
   def testMetricsRemovedOnShutdown() {
@@ -51,9 +49,11 @@ class AbstractFetcherThreadTest {
     fetcherThread.addPartitions(Map(partition -> 0L))
 
     // wait until all fetcher metrics are present
-    TestUtils.waitUntilTrue(() =>
-      allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
-      "Failed waiting for all fetcher metrics to be registered")
+    TestUtils.waitUntilTrue(
+      () =>
+        allMetricsNames == Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag),
+      "Failed waiting for all fetcher metrics to be registered"
+    )
 
     fetcherThread.shutdown()
 
@@ -72,8 +72,7 @@ class AbstractFetcherThreadTest {
     fetcherThread.addPartitions(Map(partition -> 0L))
 
     // wait until lag metric is present
-    TestUtils.waitUntilTrue(() => allMetricsNames(FetcherMetrics.ConsumerLag),
-      "Failed waiting for consumer lag metric")
+    TestUtils.waitUntilTrue(() => allMetricsNames(FetcherMetrics.ConsumerLag), "Failed waiting for consumer lag metric")
 
     // remove the partition to simulate leader migration
     fetcherThread.removePartitions(Set(partition))
@@ -102,11 +101,13 @@ class AbstractFetcherThreadTest {
     override def exception: Option[Throwable] = None
   }
 
-  class DummyFetcherThread(name: String,
-                           clientId: String,
-                           sourceBroker: BrokerEndPoint,
-                           fetchBackOffMs: Int = 0)
-    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = false) {
+  class DummyFetcherThread(name: String, clientId: String, sourceBroker: BrokerEndPoint, fetchBackOffMs: Int = 0)
+      extends AbstractFetcherThread(name,
+                                    clientId,
+                                    sourceBroker,
+                                    fetchBackOffMs,
+                                    isInterruptible = true,
+                                    includeLogTruncation = false) {
 
     type REQ = DummyFetchRequest
     type PD = PartitionData
@@ -122,26 +123,29 @@ class AbstractFetcherThreadTest {
     override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] =
       fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] =
+    override protected def buildFetchRequest(
+      partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]
+    ): ResultWithPartitions[DummyFetchRequest] =
       ResultWithPartitions(new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap), Set())
 
-    override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+    override def buildLeaderEpochRequest(
+      allPartitions: Seq[(TopicPartition, PartitionFetchState)]
+    ): ResultWithPartitions[Map[TopicPartition, Int]] =
       ResultWithPartitions(Map(), Set())
-    }
 
-    override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+    override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] =
+      Map()
 
-    override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
+    override def maybeTruncate(
+      fetchedEpochs: Map[TopicPartition, EpochEndOffset]
+    ): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] =
       ResultWithPartitions(Map(), Set())
-    }
   }
-
-
   @Test
   def testFetchRequestCorruptedMessageException() {
     val partition = new TopicPartition("topic", 0)
-    val fetcherThread = new CorruptingFetcherThread("test", "client", new BrokerEndPoint(0, "localhost", 9092),
-      fetchBackOffMs = 1)
+    val fetcherThread =
+      new CorruptingFetcherThread("test", "client", new BrokerEndPoint(0, "localhost", 9092), fetchBackOffMs = 1)
 
     fetcherThread.start()
 
@@ -157,11 +161,8 @@ class AbstractFetcherThreadTest {
     assertTrue(fetcherThread.logEndOffset == 2)
   }
 
-  class CorruptingFetcherThread(name: String,
-                                clientId: String,
-                                sourceBroker: BrokerEndPoint,
-                                fetchBackOffMs: Int = 0)
-    extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
+  class CorruptingFetcherThread(name: String, clientId: String, sourceBroker: BrokerEndPoint, fetchBackOffMs: Int = 0)
+      extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
 
     @volatile var logEndOffset = 0L
     @volatile var fetchCount = 0
@@ -178,7 +179,8 @@ class AbstractFetcherThreadTest {
       if (fetchOffset != logEndOffset)
         throw new RuntimeException(
           "Offset mismatch for partition %s: fetched offset = %d, log end offset = %d."
-            .format(topicPartition, fetchOffset, logEndOffset))
+            .format(topicPartition, fetchOffset, logEndOffset)
+        )
 
       // Now check message's crc
       val records = partitionData.toRecords
@@ -206,17 +208,21 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] = {
+    override protected def buildFetchRequest(
+      partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]
+    ): ResultWithPartitions[DummyFetchRequest] = {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
-      partitionMap.foreach { case (topicPartition, partitionFetchState) =>
-        // Add backoff delay check
-        if (partitionFetchState.isReadyForFetch)
-          requestMap.put(topicPartition, partitionFetchState.fetchOffset)
+      partitionMap.foreach {
+        case (topicPartition, partitionFetchState) =>
+          // Add backoff delay check
+          if (partitionFetchState.isReadyForFetch)
+            requestMap.put(topicPartition, partitionFetchState.fetchOffset)
       }
       ResultWithPartitions(new DummyFetchRequest(requestMap), Set())
     }
 
-    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) = delayPartitions(partitions, fetchBackOffMs.toLong)
+    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) =
+      delayPartitions(partitions, fetchBackOffMs.toLong)
 
   }
 

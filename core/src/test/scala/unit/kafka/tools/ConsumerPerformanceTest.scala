@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.tools
 
 import java.io.ByteArrayOutputStream
@@ -30,24 +29,35 @@ class ConsumerPerformanceTest {
   private val dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
 
   @Test
-  def testDetailedHeaderMatchBody(): Unit = {
-    testHeaderMatchContent(detailed = true, 2,
-      () => ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L))
-  }
+  def testDetailedHeaderMatchBody(): Unit =
+    testHeaderMatchContent(
+      detailed = true,
+      2,
+      () => ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L)
+    )
 
   @Test
-  def testNonDetailedHeaderMatchBody(): Unit = {
-    testHeaderMatchContent(detailed = false, 2, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
-      s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0, 1, 1, 1.1, 1.1"))
-  }
+  def testNonDetailedHeaderMatchBody(): Unit =
+    testHeaderMatchContent(
+      detailed = false,
+      2,
+      () =>
+        println(
+          s"${dateFormat.format(System.currentTimeMillis)}, " +
+            s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0, 1, 1, 1.1, 1.1"
+      )
+    )
 
   @Test
   def testConfig(): Unit = {
     //Given
     val args: Array[String] = Array(
-      "--broker-list", "localhost:9092",
-      "--topic", "test",
-      "--messages", "10"
+      "--broker-list",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--messages",
+      "10"
     )
 
     //When
@@ -63,9 +73,12 @@ class ConsumerPerformanceTest {
   def testConfigWithUnrecognizedOption(): Unit = {
     //Given
     val args: Array[String] = Array(
-      "--broker-list", "localhost:9092",
-      "--topic", "test",
-      "--messages", "10",
+      "--broker-list",
+      "localhost:9092",
+      "--topic",
+      "test",
+      "--messages",
+      "10",
       "--new-consumer"
     )
 
@@ -73,7 +86,7 @@ class ConsumerPerformanceTest {
     new ConsumerPerformance.ConsumerPerfConfig(args)
   }
 
-  private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
+  private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit =
     Console.withOut(outContent) {
       ConsumerPerformance.printHeader(detailed)
       fun()
@@ -85,5 +98,4 @@ class ConsumerPerformanceTest {
 
       assertEquals(header.split(",").length, body.split(",").length)
     }
-  }
 }

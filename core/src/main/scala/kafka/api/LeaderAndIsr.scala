@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 object LeaderAndIsr {
@@ -28,10 +27,7 @@ object LeaderAndIsr {
   def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
 
-case class LeaderAndIsr(leader: Int,
-                        leaderEpoch: Int,
-                        isr: List[Int],
-                        zkVersion: Int) {
+case class LeaderAndIsr(leader: Int, leaderEpoch: Int, isr: List[Int], zkVersion: Int) {
   def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
 
   def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
@@ -40,7 +36,6 @@ case class LeaderAndIsr(leader: Int,
 
   def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
-  override def toString: String = {
+  override def toString: String =
     s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
-  }
 }

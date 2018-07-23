@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.network
 
 import java.net.InetAddress
@@ -57,15 +56,14 @@ object RequestChannel extends Logging {
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
     (ApiKeys.values.toSeq.map(_.name) ++
-        Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
 
     def apply(metricName: String) = metricsMap(metricName)
 
-    def close(): Unit = {
-       metricsMap.values.foreach(_.removeMetrics())
-    }
+    def close(): Unit =
+      metricsMap.values.foreach(_.removeMetrics())
   }
 
   class Request(val processor: Int,
@@ -73,7 +71,8 @@ object RequestChannel extends Logging {
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
                 @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                metrics: RequestChannel.Metrics)
+      extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -100,13 +99,12 @@ object RequestChannel extends Logging {
 
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
-    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T =
       bodyAndSize.request match {
         case r: T => r
         case r =>
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
       }
-    }
 
     trace(s"Processor $processor received request: ${requestDesc(true)}")
 
@@ -153,8 +151,7 @@ object RequestChannel extends Logging {
             if (isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
           )
-        }
-        else Seq.empty
+        } else Seq.empty
       val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
@@ -182,21 +179,36 @@ object RequestChannel extends Logging {
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.underlying.isTraceEnabled
         val responseString = response.responseString.getOrElse(
-          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
+          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled")
+        )
         val builder = new StringBuilder(256)
-        builder.append("Completed request:").append(requestDesc(detailsEnabled))
-          .append(",response:").append(responseString)
-          .append(" from connection ").append(context.connectionId)
-          .append(";totalTime:").append(totalTimeMs)
-          .append(",requestQueueTime:").append(requestQueueTimeMs)
-          .append(",localTime:").append(apiLocalTimeMs)
-          .append(",remoteTime:").append(apiRemoteTimeMs)
-          .append(",throttleTime:").append(apiThrottleTimeMs)
-          .append(",responseQueueTime:").append(responseQueueTimeMs)
-          .append(",sendTime:").append(responseSendTimeMs)
-          .append(",securityProtocol:").append(context.securityProtocol)
-          .append(",principal:").append(session.principal)
-          .append(",listener:").append(context.listenerName.value)
+        builder
+          .append("Completed request:")
+          .append(requestDesc(detailsEnabled))
+          .append(",response:")
+          .append(responseString)
+          .append(" from connection ")
+          .append(context.connectionId)
+          .append(";totalTime:")
+          .append(totalTimeMs)
+          .append(",requestQueueTime:")
+          .append(requestQueueTimeMs)
+          .append(",localTime:")
+          .append(apiLocalTimeMs)
+          .append(",remoteTime:")
+          .append(apiRemoteTimeMs)
+          .append(",throttleTime:")
+          .append(apiThrottleTimeMs)
+          .append(",responseQueueTime:")
+          .append(responseQueueTimeMs)
+          .append(",sendTime:")
+          .append(responseSendTimeMs)
+          .append(",securityProtocol:")
+          .append(context.securityProtocol)
+          .append(",principal:")
+          .append(session.principal)
+          .append(",listener:")
+          .append(context.listenerName.value)
         if (temporaryMemoryBytes > 0)
           builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
         if (messageConversionsTimeMs > 0)
@@ -205,19 +217,19 @@ object RequestChannel extends Logging {
       }
     }
 
-    def releaseBuffer(): Unit = {
+    def releaseBuffer(): Unit =
       if (buffer != null) {
         memoryPool.release(buffer)
         buffer = null
       }
-    }
 
-    override def toString = s"Request(processor=$processor, " +
-      s"connectionId=${context.connectionId}, " +
-      s"session=$session, " +
-      s"listenerName=${context.listenerName}, " +
-      s"securityProtocol=${context.securityProtocol}, " +
-      s"buffer=$buffer)"
+    override def toString =
+      s"Request(processor=$processor, " +
+        s"connectionId=${context.connectionId}, " +
+        s"session=$session, " +
+        s"listenerName=${context.listenerName}, " +
+        s"securityProtocol=${context.securityProtocol}, " +
+        s"buffer=$buffer)"
 
   }
 
@@ -242,7 +254,8 @@ object RequestChannel extends Logging {
   class SendResponse(request: Request,
                      val responseSend: Send,
                      val responseAsString: Option[String],
-                     val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
+                     val onCompleteCallback: Option[Send => Unit])
+      extends Response(request) {
     override def responseString: Option[String] = responseAsString
 
     override def onComplete: Option[Send => Unit] = onCompleteCallback
@@ -279,11 +292,11 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   private val processors = new ConcurrentHashMap[Int, Processor]()
 
   newGauge(RequestQueueSizeMetric, new Gauge[Int] {
-      def value = requestQueue.size
+    def value = requestQueue.size
   })
 
-  newGauge(ResponseQueueSizeMetric, new Gauge[Int]{
-    def value = processors.values.asScala.foldLeft(0) {(total, processor) =>
+  newGauge(ResponseQueueSizeMetric, new Gauge[Int] {
+    def value = processors.values.asScala.foldLeft(0) { (total, processor) =>
       total + processor.responseQueueSize
     }
   })
@@ -292,12 +305,9 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    newGauge(ResponseQueueSizeMetric,
-      new Gauge[Int] {
-        def value = processor.responseQueueSize
-      },
-      Map(ProcessorMetricTag -> processor.id.toString)
-    )
+    newGauge(ResponseQueueSizeMetric, new Gauge[Int] {
+      def value = processor.responseQueueSize
+    }, Map(ProcessorMetricTag -> processor.id.toString))
   }
 
   def removeProcessor(processorId: Int): Unit = {
@@ -346,8 +356,9 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
     requestQueue.take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
-    errors.foreach { case (error, count) =>
-      metrics(apiKey.name).markErrorMeter(error, count)
+    errors.foreach {
+      case (error, count) =>
+        metrics(apiKey.name).markErrorMeter(error, count)
     }
   }
 
@@ -420,35 +431,35 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   private val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
-  def requestRate(version: Short): Meter = {
-      requestRateInternal.getOrElseUpdate(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
-  }
+  def requestRate(version: Short): Meter =
+    requestRateInternal.getOrElseUpdate(
+      version,
+      newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString))
+    )
 
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
     @volatile private var meter: Meter = null
 
-    def getOrCreateMeter(): Meter = {
+    def getOrCreateMeter(): Meter =
       if (meter != null)
         meter
       else {
         synchronized {
           if (meter == null)
-             meter = newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
+            meter = newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
           meter
         }
       }
-    }
 
-    def removeMeter(): Unit = {
+    def removeMeter(): Unit =
       synchronized {
         if (meter != null) {
           removeMetric(ErrorsPerSec, tags)
           meter = null
         }
       }
-    }
   }
 
   def markErrorMeter(error: Errors, count: Int) {
