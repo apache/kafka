@@ -147,6 +147,9 @@
        error to the client.</p></li>
     <li>Dynamic broker configuration options can be stored in ZooKeeper using kafka-configs.sh before brokers are started.
         This option can be used to avoid storing clear passwords in server.properties as all password configs may be stored encrypted in ZooKeeper.</li>
+    <li>ZooKeeper hosts are now re-resolved if connection attempt fails. But if your ZooKeeper host names resolve
+    to multiple addresses and some of them are not reachable, then you may need to increase the connection timeout
+    <code>zookeeper.connection.timeout.ms</code>.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
