@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 public class ScramExtensions extends SaslExtensions {
 

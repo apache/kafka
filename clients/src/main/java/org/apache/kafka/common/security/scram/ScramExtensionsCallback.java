@@ -16,17 +16,15 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-
 import javax.security.auth.callback.Callback;
 import java.util.Collections;
 import java.util.Map;
 
 
 /**
- * @deprecated As of 2.1.0, use {@link SaslExtensionsCallback} instead. This will be removed in a future major release.
+ * Optional callback used for SCRAM mechanisms if any extensions need to be set
+ * in the SASL/SCRAM exchange.
  */
-@Deprecated
 public class ScramExtensionsCallback implements Callback {
     private Map<String, String> extensions = Collections.emptyMap();
 
