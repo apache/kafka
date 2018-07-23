@@ -38,11 +38,11 @@ class ResourceTypeTest extends JUnitSuite {
   }
 
   /**
-    * Test round trip conversions between org.apache.kafka.common.acl.ResourceType and
-    * kafka.security.auth.ResourceType.
-    */
+   * Test round trip conversions between org.apache.kafka.common.acl.ResourceType and
+   * kafka.security.auth.ResourceType.
+   */
   @Test
-  def testJavaConversions(): Unit = {
+  def testJavaConversions(): Unit =
     JResourceType.values.foreach {
       case JResourceType.UNKNOWN | JResourceType.ANY =>
       case jResourceType =>
@@ -50,5 +50,4 @@ class ResourceTypeTest extends JUnitSuite {
         val jResourceType2 = resourceType.toJava
         assertEquals(jResourceType, jResourceType2)
     }
-  }
 }

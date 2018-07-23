@@ -38,34 +38,34 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.{Seq, mutable}
+import scala.collection.{mutable, Seq}
 import scala.collection.JavaConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
-  def shouldExitWithNonZeroStatusOnArgError(): Unit = {
+  def shouldExitWithNonZeroStatusOnArgError(): Unit =
     assertNonZeroStatusExit(Array("--blah"))
-  }
 
   @Test
-  def shouldExitWithNonZeroStatusOnZkCommandError(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "security.inter.broker.protocol=PLAINTEXT"))
-  }
+  def shouldExitWithNonZeroStatusOnZkCommandError(): Unit =
+    assertNonZeroStatusExit(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "1",
+            "--entity-type",
+            "brokers",
+            "--alter",
+            "--add-config",
+            "security.inter.broker.protocol=PLAINTEXT")
+    )
 
   @Test
-  def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "invalid host",
-      "--entity-type", "brokers",
-      "--entity-name", "1",
-      "--describe"))
-  }
+  def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit =
+    assertNonZeroStatusExit(
+      Array("--bootstrap-server", "invalid host", "--entity-type", "brokers", "--entity-name", "1", "--describe")
+    )
 
   private def assertNonZeroStatusExit(args: Array[String]): Unit = {
     var exitStatus: Option[Int] = None
@@ -102,35 +102,53 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   def testArgumentParse(entityType: String) = {
     // Should parse correctly
-    var createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "x",
-      "--entity-type", entityType,
-      "--describe"))
+    var createOpts = new ConfigCommandOptions(
+      Array("--zookeeper", zkConnect, "--entity-name", "x", "--entity-type", entityType, "--describe")
+    )
     createOpts.checkArgs()
 
     // For --alter and added config
-    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "x",
-      "--entity-type", entityType,
-      "--alter",
-      "--add-config", "a=b,c=d"))
+    createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "x",
+            "--entity-type",
+            entityType,
+            "--alter",
+            "--add-config",
+            "a=b,c=d")
+    )
     createOpts.checkArgs()
 
     // For alter and deleted config
-    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "x",
-      "--entity-type", entityType,
-      "--alter",
-      "--delete-config", "a,b,c"))
+    createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "x",
+            "--entity-type",
+            entityType,
+            "--alter",
+            "--delete-config",
+            "a,b,c")
+    )
     createOpts.checkArgs()
 
     // For alter and both added, deleted config
-    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "x",
-      "--entity-type", entityType,
-      "--alter",
-      "--add-config", "a=b,c=d",
-      "--delete-config", "a"))
+    createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "x",
+            "--entity-type",
+            entityType,
+            "--alter",
+            "--add-config",
+            "a=b,c=d",
+            "--delete-config",
+            "a")
+    )
     createOpts.checkArgs()
 
     val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
@@ -142,11 +160,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals(1, deletedProps.size)
     assertEquals("a", deletedProps.head)
 
-    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "x",
-      "--entity-type", entityType,
-      "--alter",
-      "--add-config", "a=b,c=,d=e,f="))
+    createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "x",
+            "--entity-type",
+            entityType,
+            "--alter",
+            "--add-config",
+            "a=b,c=,d=e,f=")
+    )
     createOpts.checkArgs()
 
     val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
@@ -159,18 +183,33 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIfUnrecognisedEntityType(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "client",
+            "--entity-type",
+            "not-recognised",
+            "--alter",
+            "--add-config",
+            "a=b,c=d")
+    )
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test
   def shouldAddClientConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "my-client-id",
-      "--entity-type", "clients",
-      "--alter",
-      "--add-config", "a=b,c=d"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "my-client-id",
+            "--entity-type",
+            "clients",
+            "--alter",
+            "--add-config",
+            "a=b,c=d")
+    )
 
     class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeClientIdConfig(clientId: String, configChange: Properties): Unit = {
@@ -185,11 +224,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldAddTopicConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "my-topic",
-      "--entity-type", "topics",
-      "--alter",
-      "--add-config", "a=b,c=d"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "my-topic",
+            "--entity-type",
+            "topics",
+            "--alter",
+            "--add-config",
+            "a=b,c=d")
+    )
 
     class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
@@ -204,11 +249,19 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldAddBrokerQuotaConfig(): Unit = {
-    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
+    val alterOpts = new ConfigCommandOptions(
+      Array(
+        "--zookeeper",
+        zkConnect,
+        "--entity-name",
+        "1",
+        "--entity-type",
+        "brokers",
+        "--alter",
+        "--add-config",
+        "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"
+      )
+    )
 
     class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
@@ -234,10 +287,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   def verifyAlterBrokerConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
-    val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "message.max.bytes=10") ++ resourceOpts
+    val optsList = List("--bootstrap-server",
+                        "localhost:9092",
+                        "--entity-type",
+                        "brokers",
+                        "--alter",
+                        "--add-config",
+                        "message.max.bytes=10") ++ resourceOpts
     val alterOpts = new ConfigCommandOptions(optsList.toArray)
     val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
 
@@ -254,7 +310,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     EasyMock.expect(alterResult.all()).andReturn(alterFuture)
 
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
-      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+      override def describeConfigs(resources: util.Collection[ConfigResource],
+                                   options: DescribeConfigsOptions): DescribeConfigsResult = {
         assertEquals(1, resources.size)
         val resource = resources.iterator.next
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
@@ -262,13 +319,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         describeResult
       }
 
-      override def alterConfigs(configs: util.Map[ConfigResource, Config], options: AlterConfigsOptions): AlterConfigsResult = {
+      override def alterConfigs(configs: util.Map[ConfigResource, Config],
+                                options: AlterConfigsOptions): AlterConfigsResult = {
         assertEquals(1, configs.size)
         val entry = configs.entrySet.iterator.next
         val resource = entry.getKey
         val config = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        config.entries.asScala.foreach { e =>
+          brokerConfigs.put(e.name, e.value)
+        }
         alterResult
       }
     }
@@ -280,11 +340,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldSupportCommaSeparatedValues(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "my-topic",
-      "--entity-type", "topics",
-      "--alter",
-      "--add-config", "a=b,c=[d,e ,f],g=[h,i]"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "my-topic",
+            "--entity-type",
+            "topics",
+            "--alter",
+            "--add-config",
+            "a=b,c=[d,e ,f],g=[h,i]")
+    )
 
     class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
@@ -300,13 +366,21 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldNotUpdateBrokerConfigIfMalformedEntityName(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1,2,3", //Don't support multiple brokers currently
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "leader.replication.throttled.rate=10"))
+    val createOpts = new ConfigCommandOptions(
+      Array(
+        "--zookeeper",
+        zkConnect,
+        "--entity-name",
+        "1,2,3", //Don't support multiple brokers currently
+        "--entity-type",
+        "brokers",
+        "--alter",
+        "--add-config",
+        "leader.replication.throttled.rate=10"
+      )
+    )
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
@@ -316,11 +390,11 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val adminZkClient = new AdminZkClient(zkClient)
     val alterOpts = Array("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter")
 
-    def entityOpt(brokerId: Option[String]): Array[String] = {
+    def entityOpt(brokerId: Option[String]): Array[String] =
       brokerId.map(id => Array("--entity-name", id)).getOrElse(Array("--entity-default"))
-    }
 
-    def alterConfig(configs: Map[String, String], brokerId: Option[String],
+    def alterConfig(configs: Map[String, String],
+                    brokerId: Option[String],
                     encoderConfigs: Map[String, String] = Map.empty): Unit = {
       val configStr = (configs ++ encoderConfigs).map { case (k, v) => s"$k=$v" }.mkString(",")
       val addOpts = new ConfigCommandOptions(alterOpts ++ entityOpt(brokerId) ++ Array("--add-config", configStr))
@@ -338,8 +412,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
 
     def deleteAndVerifyConfig(configNames: Set[String], brokerId: Option[String]): Unit = {
-      val deleteOpts = new ConfigCommandOptions(alterOpts ++ entityOpt(brokerId) ++
-        Array("--delete-config", configNames.mkString(",")))
+      val deleteOpts = new ConfigCommandOptions(
+        alterOpts ++ entityOpt(brokerId) ++
+          Array("--delete-config", configNames.mkString(","))
+      )
       ConfigCommand.alterConfig(zkClient, deleteOpts, adminZkClient)
       verifyConfig(Map.empty, brokerId)
     }
@@ -361,11 +437,15 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     intercept[ConfigException](alterConfig(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
 
     // Per-broker config configured at default cluster-level should fail
-    intercept[ConfigException](alterConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
+    intercept[ConfigException](
+      alterConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None)
+    )
     deleteAndVerifyConfig(Set("listener.name.external.ssl.keystore.location"), Some(brokerId))
 
     // Password config update without encoder secret should fail
-    intercept[IllegalArgumentException](alterConfig(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
+    intercept[IllegalArgumentException](
+      alterConfig(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId))
+    )
 
     // Password config update with encoder secret should succeed and encoded password must be stored in ZK
     val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
@@ -381,17 +461,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Password config update with overrides for encoder parameters
     val configs2 = Map("listener.name.internal.ssl.keystore.password" -> "secret2")
-    val encoderConfigs2 = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret",
+    val encoderConfigs2 = Map(
+      KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret",
       KafkaConfig.PasswordEncoderCipherAlgorithmProp -> "DES/CBC/PKCS5Padding",
       KafkaConfig.PasswordEncoderIterationsProp -> "1024",
       KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp -> "PBKDF2WithHmacSHA1",
-      KafkaConfig.PasswordEncoderKeyLengthProp -> "64")
+      KafkaConfig.PasswordEncoderKeyLengthProp -> "64"
+    )
     alterConfig(configs2, Some(brokerId), encoderConfigs2)
     val brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId)
     val encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password")
     assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs).decode(encodedPassword2).value)
     assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2).decode(encodedPassword2).value)
-
 
     // Password config update at default cluster-level should fail
     intercept[ConfigException](alterConfig(configs, None, encoderConfigs))
@@ -405,43 +486,67 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     alterAndVerifyConfig(Map("message.max.size" -> "230000"), Some("2"))
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldNotUpdateBrokerConfigIfMalformedConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "a=="))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "1",
+            "--entity-type",
+            "brokers",
+            "--alter",
+            "--add-config",
+            "a==")
+    )
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldNotUpdateBrokerConfigIfMalformedBracketConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "a=[b,c,d=e"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "1",
+            "--entity-type",
+            "brokers",
+            "--alter",
+            "--add-config",
+            "a=[b,c,d=e")
+    )
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
-  @Test (expected = classOf[InvalidConfigurationException])
+  @Test(expected = classOf[InvalidConfigurationException])
   def shouldNotUpdateBrokerConfigIfNonExistingConfigIsDeleted(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "my-topic",
-      "--entity-type", "topics",
-      "--alter",
-      "--delete-config", "missing_config1, missing_config2"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "my-topic",
+            "--entity-type",
+            "topics",
+            "--alter",
+            "--delete-config",
+            "missing_config1, missing_config2")
+    )
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test
   def shouldDeleteBrokerConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--delete-config", "a,c"))
+    val createOpts = new ConfigCommandOptions(
+      Array("--zookeeper",
+            zkConnect,
+            "--entity-name",
+            "1",
+            "--entity-type",
+            "brokers",
+            "--alter",
+            "--delete-config",
+            "a,c")
+    )
 
     class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
@@ -463,25 +568,37 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testScramCredentials(): Unit = {
-    def createOpts(user: String, config: String): ConfigCommandOptions = {
-      new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-        "--entity-name", user,
-        "--entity-type", "users",
-        "--alter",
-        "--add-config", config))
-    }
+    def createOpts(user: String, config: String): ConfigCommandOptions =
+      new ConfigCommandOptions(
+        Array("--zookeeper",
+              zkConnect,
+              "--entity-name",
+              user,
+              "--entity-type",
+              "users",
+              "--alter",
+              "--add-config",
+              config)
+      )
 
-    def deleteOpts(user: String, mechanism: String) = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-        "--entity-name", user,
-        "--entity-type", "users",
-        "--alter",
-        "--delete-config", mechanism))
+    def deleteOpts(user: String, mechanism: String) =
+      new ConfigCommandOptions(
+        Array("--zookeeper",
+              zkConnect,
+              "--entity-name",
+              user,
+              "--entity-type",
+              "users",
+              "--alter",
+              "--delete-config",
+              mechanism)
+      )
 
     val credentials = mutable.Map[String, Properties]()
-    case class CredentialChange(user: String, mechanisms: Set[String], iterations: Int) extends AdminZkClient(zkClient) {
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
+    case class CredentialChange(user: String, mechanisms: Set[String], iterations: Int)
+        extends AdminZkClient(zkClient) {
+      override def fetchEntityConfig(entityType: String, entityName: String): Properties =
         credentials.getOrElse(entityName, new Properties())
-      }
       override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configChange: Properties): Unit = {
         assertEquals(user, sanitizedEntityName)
         assertEquals(mechanisms, configChange.keySet().asScala)
@@ -491,13 +608,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
           val scramCredential = ScramCredentialUtils.credentialFromString(value)
           assertEquals(iterations, scramCredential.iterations)
           if (configChange != null)
-              credentials.put(user, configChange)
+            credentials.put(user, configChange)
         }
       }
     }
     val optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=8192,password=abc, def]")
     ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("SCRAM-SHA-256"), 8192))
-    val optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]")
+    val optsB =
+      createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]")
     ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("SCRAM-SHA-256", "SCRAM-SHA-512"), 4096))
 
     val del256 = deleteOpts("userB", "SCRAM-SHA-256")
@@ -509,17 +627,19 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testQuotaConfigEntity() {
 
-    def createOpts(entityType: String, entityName: Option[String], otherArgs: Array[String]) : ConfigCommandOptions = {
-      val optArray = Array("--zookeeper", zkConnect,
-                           "--entity-type", entityType)
+    def createOpts(entityType: String, entityName: Option[String], otherArgs: Array[String]): ConfigCommandOptions = {
+      val optArray = Array("--zookeeper", zkConnect, "--entity-type", entityType)
       val nameArray = entityName match {
         case Some(name) => Array("--entity-name", name)
-        case None => Array[String]()
+        case None       => Array[String]()
       }
       new ConfigCommandOptions(optArray ++ nameArray ++ otherArgs)
     }
 
-    def checkEntity(entityType: String, entityName: Option[String], expectedEntityName: String, otherArgs: Array[String]) {
+    def checkEntity(entityType: String,
+                    entityName: Option[String],
+                    expectedEntityName: String,
+                    otherArgs: Array[String]) {
       val opts = createOpts(entityType, entityName, otherArgs)
       opts.checkArgs()
       val entity = ConfigCommand.parseEntity(opts)
@@ -567,11 +687,23 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     def clientIdOpts(name: String) = Array("--entity-type", "clients", "--entity-name", name)
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), userClient, opts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
-      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
+      checkEntity("users",
+                  Some(principal),
+                  sanitizedPrincipal + "/clients/" + ConfigEntityName.Default,
+                  opts ++ clientIdOpts(""))
+      checkEntity("users",
+                  Some(""),
+                  ConfigEntityName.Default + "/clients/" + clientId,
+                  describeOpts ++ clientIdOpts(clientId))
+      checkEntity("users",
+                  Some(""),
+                  ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default,
+                  opts ++ clientIdOpts(""))
     }
-    checkEntity("users", Some(principal), sanitizedPrincipal + "/clients", describeOpts ++ Array("--entity-type", "clients"))
+    checkEntity("users",
+                Some(principal),
+                sanitizedPrincipal + "/clients",
+                describeOpts ++ Array("--entity-type", "clients"))
     // Both user and client-id must be provided for alter
     checkInvalidEntity("users", Some(principal), alterOpts ++ Array("--entity-type", "clients"))
     checkInvalidEntity("users", None, alterOpts ++ clientIdOpts(clientId))
@@ -589,42 +721,119 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
 
     // <default> is a valid user principal and client-id (can be handled with URL-encoding),
-    checkEntity("users", Sanitizer.sanitize("<default>"),
-        "--entity-type", "users", "--entity-name", "<default>",
-        "--alter", "--add-config", "a=b,c=d")
-    checkEntity("clients", Sanitizer.sanitize("<default>"),
-        "--entity-type", "clients", "--entity-name", "<default>",
-        "--alter", "--add-config", "a=b,c=d")
+    checkEntity("users",
+                Sanitizer.sanitize("<default>"),
+                "--entity-type",
+                "users",
+                "--entity-name",
+                "<default>",
+                "--alter",
+                "--add-config",
+                "a=b,c=d")
+    checkEntity("clients",
+                Sanitizer.sanitize("<default>"),
+                "--entity-type",
+                "clients",
+                "--entity-name",
+                "<default>",
+                "--alter",
+                "--add-config",
+                "a=b,c=d")
 
-
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-        "--entity-type", "users", "--entity-name", "CN=user1", "--entity-type", "clients", "--entity-name", "client1",
-        "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-        "--entity-name", "CN=user1", "--entity-type", "users", "--entity-name", "client1", "--entity-type", "clients",
-        "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-        "--entity-type", "clients", "--entity-name", "client1", "--entity-type", "users", "--entity-name", "CN=user1",
-        "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-        "--entity-name", "client1", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-        "--alter", "--add-config", "a=b,c=d")
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients",
-        "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-        "--describe")
-    checkEntity("users", "/clients",
-        "--entity-type", "clients", "--entity-type", "users",
-        "--describe")
-    checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/" + Sanitizer.sanitize("client1?@%"),
-        "--entity-name", "client1?@%", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-        "--alter", "--add-config", "a=b,c=d")
+    checkEntity(
+      "users",
+      Sanitizer.sanitize("CN=user1") + "/clients/client1",
+      "--entity-type",
+      "users",
+      "--entity-name",
+      "CN=user1",
+      "--entity-type",
+      "clients",
+      "--entity-name",
+      "client1",
+      "--alter",
+      "--add-config",
+      "a=b,c=d"
+    )
+    checkEntity(
+      "users",
+      Sanitizer.sanitize("CN=user1") + "/clients/client1",
+      "--entity-name",
+      "CN=user1",
+      "--entity-type",
+      "users",
+      "--entity-name",
+      "client1",
+      "--entity-type",
+      "clients",
+      "--alter",
+      "--add-config",
+      "a=b,c=d"
+    )
+    checkEntity(
+      "users",
+      Sanitizer.sanitize("CN=user1") + "/clients/client1",
+      "--entity-type",
+      "clients",
+      "--entity-name",
+      "client1",
+      "--entity-type",
+      "users",
+      "--entity-name",
+      "CN=user1",
+      "--alter",
+      "--add-config",
+      "a=b,c=d"
+    )
+    checkEntity(
+      "users",
+      Sanitizer.sanitize("CN=user1") + "/clients/client1",
+      "--entity-name",
+      "client1",
+      "--entity-type",
+      "clients",
+      "--entity-name",
+      "CN=user1",
+      "--entity-type",
+      "users",
+      "--alter",
+      "--add-config",
+      "a=b,c=d"
+    )
+    checkEntity("users",
+                Sanitizer.sanitize("CN=user1") + "/clients",
+                "--entity-type",
+                "clients",
+                "--entity-name",
+                "CN=user1",
+                "--entity-type",
+                "users",
+                "--describe")
+    checkEntity("users", "/clients", "--entity-type", "clients", "--entity-type", "users", "--describe")
+    checkEntity(
+      "users",
+      Sanitizer.sanitize("CN=user1") + "/clients/" + Sanitizer.sanitize("client1?@%"),
+      "--entity-name",
+      "client1?@%",
+      "--entity-type",
+      "clients",
+      "--entity-name",
+      "CN=user1",
+      "--entity-type",
+      "users",
+      "--alter",
+      "--add-config",
+      "a=b,c=d"
+    )
   }
 
   @Test
   def testQuotaDescribeEntities() {
     val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
-    def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]) {
+    def checkEntities(opts: Array[String],
+                      expectedFetches: Map[String, Seq[String]],
+                      expectedEntityNames: Seq[String]) {
       val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))
       expectedFetches.foreach {
         case (name, values) => EasyMock.expect(zkClient.getAllEntitiesWithConfig(name)).andReturn(values)
@@ -658,7 +867,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     opts = Array("--entity-type", "users")
     checkEntities(opts, Map("users" -> Seq("<default>", sanitizedPrincipal)), Seq("<default>", sanitizedPrincipal))
 
-    opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients", "--entity-name", clientId)
+    opts =
+      Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients", "--entity-name", clientId)
     checkEntities(opts, Map.empty, Seq(userClient))
 
     opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients", "--entity-default")
@@ -666,20 +876,20 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients")
     checkEntities(opts,
-        Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-4")),
-        Seq(sanitizedPrincipal + "/clients/client-4"))
+                  Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-4")),
+                  Seq(sanitizedPrincipal + "/clients/client-4"))
 
     opts = Array("--entity-type", "users", "--entity-default", "--entity-type", "clients")
-    checkEntities(opts,
-        Map("users/<default>/clients" -> Seq("client-5")),
-        Seq("<default>/clients/client-5"))
+    checkEntities(opts, Map("users/<default>/clients" -> Seq("client-5")), Seq("<default>/clients/client-5"))
 
     opts = Array("--entity-type", "users", "--entity-type", "clients")
     val userMap = Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-2"))
     val defaultUserMap = Map("users/<default>/clients" -> Seq("client-3"))
-    checkEntities(opts,
-        Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
-        Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
+    checkEntities(
+      opts,
+      Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
+      Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2")
+    )
   }
 
   private def registerBrokerInZk(id: Int): Unit = {
@@ -692,7 +902,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
     override def changeBrokerConfig(brokerIds: Seq[Int], configs: Properties): Unit = {}
-    override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
+    override def fetchEntityConfig(entityType: String, entityName: String): Properties = new Properties
     override def changeClientIdConfig(clientId: String, configs: Properties): Unit = {}
     override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties): Unit = {}
     override def changeTopicConfig(topic: String, configs: Properties): Unit = {}

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io.File
@@ -51,7 +50,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
   @Test
   def cleanerTest() {
     val largeMessageKey = 20
-    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val (largeMessageValue, largeMessageSet) =
+      createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
@@ -64,7 +64,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
-    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize",
+               startSize > compactedSize)
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
@@ -90,7 +91,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
 
   @Test
   def testCleansCombinedCompactAndDeleteTopic(): Unit = {
-    val logProps  = new Properties()
+    val logProps = new Properties()
     val retentionMs: Integer = 100000
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
@@ -110,7 +111,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       // should compact the log
       checkLastCleaned("log", 0, firstDirty)
       val compactedSize = log.logSegments.map(_.size).sum
-      assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+      assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize",
+                 startSize > compactedSize)
       (log, messages)
     }
 
@@ -136,8 +138,10 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       new String(random.alphanumeric.take(length).toArray)
     }
     val value = messageValue(128)
-    val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = codec, key = key.toString.getBytes,
-      magicValue = messageFormatVersion)
+    val messageSet = TestUtils.singletonRecords(value = value.getBytes,
+                                                codec = codec,
+                                                key = key.toString.getBytes,
+                                                magicValue = messageFormatVersion)
     (value, messageSet)
   }
 
@@ -147,7 +151,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0)
     val maxMessageSize = codec match {
       case CompressionType.NONE => largeMessageSet.sizeInBytes
-      case _ =>
+      case _                    =>
         // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to
         // increase because the broker offsets are larger than the ones assigned by the client
         // adding `5` to the message set size is good enough for this test: it covers the increased message size while
@@ -162,27 +166,40 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
 
-    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    val appends =
+      writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
     val startSize = log.size
     cleaner.startup()
 
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
-    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize",
+               startSize > compactedSize)
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
     val appends2: Seq[(Int, String, Long)] = {
-      val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+      val dupsV0 =
+        writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
       val appendInfo = log.appendAsLeader(largeMessageSet, leaderEpoch = 0)
       val largeMessageOffset = appendInfo.firstOffset.get
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
       props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_11_0_IV0.version)
       log.config = new LogConfig(props)
-      val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
-      val dupsV2 = writeDups(startKey = 15, numKeys = 5, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V2)
+      val dupsV1 = writeDups(startKey = 30,
+                             numKeys = 40,
+                             numDups = 3,
+                             log = log,
+                             codec = codec,
+                             magicValue = RecordBatch.MAGIC_VALUE_V1)
+      val dupsV2 = writeDups(startKey = 15,
+                             numKeys = 5,
+                             numDups = 3,
+                             log = log,
+                             codec = codec,
+                             magicValue = RecordBatch.MAGIC_VALUE_V2)
       appends ++ dupsV0 ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dupsV1 ++ dupsV2
     }
     val firstDirty2 = log.activeSegment.baseOffset
@@ -203,15 +220,39 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
 
     // with compression enabled, these messages will be written as a single message containing
     // all of the individual messages
-    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
-    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2,
+                                              numDups = 3,
+                                              log = log,
+                                              codec = codec,
+                                              magicValue = RecordBatch.MAGIC_VALUE_V0)
+    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2,
+                                            startKey = 3,
+                                            numDups = 2,
+                                            log = log,
+                                            codec = codec,
+                                            magicValue = RecordBatch.MAGIC_VALUE_V0)
 
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
     log.config = new LogConfig(props)
 
-    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    var appendsV1 = writeDupsSingleMessageSet(startKey = 4,
+                                              numKeys = 2,
+                                              numDups = 2,
+                                              log = log,
+                                              codec = codec,
+                                              magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4,
+                                            numKeys = 2,
+                                            numDups = 2,
+                                            log = log,
+                                            codec = codec,
+                                            magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6,
+                                            numKeys = 2,
+                                            numDups = 2,
+                                            log = log,
+                                            codec = codec,
+                                            magicValue = RecordBatch.MAGIC_VALUE_V1)
 
     val appends = appendsV0 ++ appendsV1
 
@@ -223,7 +264,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
 
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
-    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize",
+               startSize > compactedSize)
 
     checkLogAfterAppendingDups(log, startSize, appends)
   }
@@ -231,11 +273,14 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
   @Test
   def cleanerConfigUpdateTest() {
     val largeMessageKey = 20
-    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val (largeMessageValue, largeMessageSet) =
+      createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
-    cleaner = makeCleaner(partitions = topicPartitions, backOffMs = 1, maxMessageSize = maxMessageSize,
-      cleanerIoBufferSize = Some(1))
+    cleaner = makeCleaner(partitions = topicPartitions,
+                          backOffMs = 1,
+                          maxMessageSize = maxMessageSize,
+                          cleanerIoBufferSize = Some(1))
     val log = cleaner.logs.get(topicPartitions(0))
 
     writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
@@ -263,19 +308,24 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
 
     // Verify cleaning done with larger LogCleanerIoBufferSizeProp
     val oldConfig = kafkaConfigWithCleanerConfig(cleaner.currentConfig)
-    val newConfig = kafkaConfigWithCleanerConfig(CleanerConfig(numThreads = 2,
-      dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
-      dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
-      ioBufferSize = 100000,
-      maxMessageSize = cleaner.currentConfig.maxMessageSize,
-      maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
-      backOffMs = cleaner.currentConfig.backOffMs))
+    val newConfig = kafkaConfigWithCleanerConfig(
+      CleanerConfig(
+        numThreads = 2,
+        dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
+        dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
+        ioBufferSize = 100000,
+        maxMessageSize = cleaner.currentConfig.maxMessageSize,
+        maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
+        backOffMs = cleaner.currentConfig.backOffMs
+      )
+    )
     cleaner.reconfigure(oldConfig, newConfig)
 
     assertEquals(2, cleaner.cleanerCount)
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
-    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize",
+               startSize > compactedSize)
   }
 
   private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
@@ -285,7 +335,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     cleaner.awaitCleaned(topicPartition, firstDirty)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(topicPartition)
     assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned",
-      lastCleaned >= firstDirty)
+               lastCleaned >= firstDirty)
   }
 
   private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]) {
@@ -294,9 +344,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     assertTrue(startSize > log.size)
   }
 
-  private def toMap(messages: Iterable[(Int, String, Long)]): Map[Int, (String, Long)] = {
+  private def toMap(messages: Iterable[(Int, String, Long)]): Map[Int, (String, Long)] =
     messages.map { case (key, value, offset) => key -> (value, offset) }.toMap
-  }
 
   private def readFromLog(log: Log): Iterable[(Int, String, Long)] = {
     import JavaConverters._
@@ -307,27 +356,38 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     }
   }
 
-  private def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                        startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
-    for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
+  private def writeDups(numKeys: Int,
+                        numDups: Int,
+                        log: Log,
+                        codec: CompressionType,
+                        startKey: Int = 0,
+                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] =
+    for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
-      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
-              key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes,
+                                                                     codec = codec,
+                                                                     key = key.toString.getBytes,
+                                                                     magicValue = magicValue),
+                                          leaderEpoch = 0)
       counter += 1
       (key, value, appendInfo.firstOffset.get)
     }
-  }
 
-  private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                                        startKey: Int = 0, magicValue: Byte): Seq[(Int, String, Long)] = {
+  private def writeDupsSingleMessageSet(numKeys: Int,
+                                        numDups: Int,
+                                        log: Log,
+                                        codec: CompressionType,
+                                        startKey: Int = 0,
+                                        magicValue: Byte): Seq[(Int, String, Long)] = {
     val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
       counter += 1
       (key, payload)
     }
 
-    val records = kvs.map { case (key, payload) =>
-      new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
+    val records = kvs.map {
+      case (key, payload) =>
+        new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
     }
 
     val appendInfo = log.appendAsLeader(MemoryRecords.withRecords(magicValue, codec, records: _*), leaderEpoch = 0)

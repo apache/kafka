@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.zk
 
 import javax.security.auth.login.Configuration
@@ -52,19 +51,23 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   def zkPort: Int = zookeeper.port
   def zkConnect: String = s"127.0.0.1:$zkPort"
-  
+
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
+    zkClient = KafkaZkClient(zkConnect,
+                             zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled),
+                             zkSessionTimeout,
+                             zkConnectionTimeout,
+                             zkMaxInFlightRequests,
+                             Time.SYSTEM)
     adminZkClient = new AdminZkClient(zkClient)
   }
 
   @After
   def tearDown() {
     if (zkClient != null)
-     zkClient.close()
+      zkClient.close()
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
@@ -75,9 +78,8 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
     val dummyWatcher = new Watcher {
       override def process(event: WatchedEvent): Unit = {}
     }
-    val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
-      zooKeeper.getSessionId,
-      zooKeeper.getSessionPasswd)
+    val anotherZkClient =
+      new ZooKeeper(zkConnect, 1000, dummyWatcher, zooKeeper.getSessionId, zooKeeper.getSessionPasswd)
     assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
     anotherZkClient
   }
@@ -90,11 +92,13 @@ object ZooKeeperTestHarness {
   // These include threads which make connections to brokers and may cause issues
   // when broker ports are reused (e.g. auto-create topics) as well as threads
   // which reset static JAAS configuration.
-  val unexpectedThreadNames = Set(ControllerEventManager.ControllerEventThreadName,
-                                  KafkaProducer.NETWORK_THREAD_PREFIX,
-                                  AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
-                                  AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
-                                  ZkClientEventThreadPrefix)
+  val unexpectedThreadNames = Set(
+    ControllerEventManager.ControllerEventThreadName,
+    KafkaProducer.NETWORK_THREAD_PREFIX,
+    AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
+    AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
+    ZkClientEventThreadPrefix
+  )
 
   /**
    * Verify that a previous test that doesn't use ZooKeeperTestHarness hasn't left behind an unexpected thread.

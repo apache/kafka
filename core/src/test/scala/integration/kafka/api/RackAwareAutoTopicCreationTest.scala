@@ -52,8 +52,9 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
 
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-      val assignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map { case (topicPartition, replicas) =>
-        topicPartition.partition -> replicas
+      val assignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map {
+        case (topicPartition, replicas) =>
+          topicPartition.partition -> replicas
       }
       val brokerMetadatas = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced)
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
@@ -62,4 +63,3 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
     } finally producer.close()
   }
 }
-

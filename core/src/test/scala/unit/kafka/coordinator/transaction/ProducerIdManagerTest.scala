@@ -27,31 +27,40 @@ class ProducerIdManagerTest {
   private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
   @After
-  def tearDown(): Unit = {
+  def tearDown(): Unit =
     EasyMock.reset(zkClient)
-  }
 
   @Test
   def testGetProducerId() {
     var zkVersion: Option[Int] = None
     var data: Array[Byte] = null
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
-      override def answer(): (Option[Array[Byte]], Int) = zkVersion.map(Some(data) -> _).getOrElse(None, 0)
-    }).anyTimes()
+    EasyMock
+      .expect(zkClient.getDataAndVersion(EasyMock.anyString))
+      .andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
+        override def answer(): (Option[Array[Byte]], Int) = zkVersion.map(Some(data) -> _).getOrElse(None, 0)
+      })
+      .anyTimes()
 
     val capturedVersion: Capture[Int] = EasyMock.newCapture()
     val capturedData: Capture[Array[Byte]] = EasyMock.newCapture()
-    EasyMock.expect(zkClient.conditionalUpdatePath(EasyMock.anyString(),
-      EasyMock.capture(capturedData),
-      EasyMock.capture(capturedVersion),
-      EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])).andAnswer(new IAnswer[(Boolean, Int)] {
+    EasyMock
+      .expect(
+        zkClient.conditionalUpdatePath(
+          EasyMock.anyString(),
+          EasyMock.capture(capturedData),
+          EasyMock.capture(capturedVersion),
+          EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]]
+        )
+      )
+      .andAnswer(new IAnswer[(Boolean, Int)] {
         override def answer(): (Boolean, Int) = {
           val newZkVersion = capturedVersion.getValue + 1
           zkVersion = Some(newZkVersion)
           data = capturedData.getValue
           (true, newZkVersion)
         }
-      }).anyTimes()
+      })
+      .anyTimes()
 
     EasyMock.replay(zkClient)
 
@@ -76,15 +85,18 @@ class ProducerIdManagerTest {
 
   @Test(expected = classOf[KafkaException])
   def testExceedProducerIdLimit() {
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
-      override def answer(): (Option[Array[Byte]], Int) = {
-        val json = ProducerIdManager.generateProducerIdBlockJson(
-          ProducerIdBlock(0, Long.MaxValue - ProducerIdManager.PidBlockSize, Long.MaxValue))
-        (Some(json), 0)
-      }
-    }).anyTimes()
+    EasyMock
+      .expect(zkClient.getDataAndVersion(EasyMock.anyString))
+      .andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
+        override def answer(): (Option[Array[Byte]], Int) = {
+          val json = ProducerIdManager.generateProducerIdBlockJson(
+            ProducerIdBlock(0, Long.MaxValue - ProducerIdManager.PidBlockSize, Long.MaxValue)
+          )
+          (Some(json), 0)
+        }
+      })
+      .anyTimes()
     EasyMock.replay(zkClient)
     new ProducerIdManager(0, zkClient)
   }
 }
-

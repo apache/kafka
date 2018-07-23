@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.server
 
 import kafka.log._
@@ -37,9 +37,7 @@ class HighwatermarkPersistenceTest {
   val topic = "foo"
   val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
   val logManagers = configs map { config =>
-    TestUtils.createLogManager(
-      logDirs = config.logDirs.map(new File(_)),
-      cleanerConfig = CleanerConfig())
+    TestUtils.createLogManager(logDirs = config.logDirs.map(new File(_)), cleanerConfig = CleanerConfig())
   }
 
   val logDirFailureChannels = configs map { config =>
@@ -63,9 +61,19 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler,
-      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+    val replicaManager = new ReplicaManager(
+      configs.head,
+      metrics,
+      time,
+      zkClient,
+      scheduler,
+      logManagers.head,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(configs.head, metrics, time, ""),
+      new BrokerTopicStats,
+      new MetadataCache(configs.head.brokerId),
+      logDirFailureChannels.head
+    )
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -108,9 +116,19 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
-      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+    val replicaManager = new ReplicaManager(
+      configs.head,
+      metrics,
+      time,
+      zkClient,
+      scheduler,
+      logManagers.head,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(configs.head, metrics, time, ""),
+      new BrokerTopicStats,
+      new MetadataCache(configs.head.brokerId),
+      logDirFailureChannels.head
+    )
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -138,7 +156,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, LogConfig())
       // create a local replica for topic2
-      val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, t2p0, time, 0, Some(topic2Log0))
+      val leaderReplicaTopic2Partition0 = new Replica(configs.head.brokerId, t2p0, time, 0, Some(topic2Log0))
       topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
@@ -165,9 +183,10 @@ class HighwatermarkPersistenceTest {
     }
   }
 
-  def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
-      new TopicPartition(topic, partition), 0L)
-  }
+  def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long =
+    replicaManager
+      .highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath)
+      .read
+      .getOrElse(new TopicPartition(topic, partition), 0L)
 
 }

@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator.group
 
 import java.util
 
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.protocol.Errors
-
 
 case class MemberSummary(memberId: String,
                          clientId: String,
@@ -70,13 +68,12 @@ private[group] class MemberMetadata(val memberId: String,
   /**
    * Get metadata corresponding to the provided protocol.
    */
-  def metadata(protocol: String): Array[Byte] = {
+  def metadata(protocol: String): Array[Byte] =
     supportedProtocols.find(_._1 == protocol) match {
       case Some((_, metadata)) => metadata
       case None =>
         throw new IllegalArgumentException("Member does not support protocol")
     }
-  }
 
   /**
    * Check if the provided protocol metadata matches the currently stored metadata.
@@ -94,27 +91,24 @@ private[group] class MemberMetadata(val memberId: String,
     true
   }
 
-  def summary(protocol: String): MemberSummary = {
+  def summary(protocol: String): MemberSummary =
     MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
-  }
 
-  def summaryNoMetadata(): MemberSummary = {
+  def summaryNoMetadata(): MemberSummary =
     MemberSummary(memberId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
-  }
 
   /**
    * Vote for one of the potential group protocols. This takes into account the protocol preference as
    * indicated by the order of supported protocols and returns the first one also contained in the set
    */
-  def vote(candidates: Set[String]): String = {
-    supportedProtocols.find({ case (protocol, _) => candidates.contains(protocol)}) match {
+  def vote(candidates: Set[String]): String =
+    supportedProtocols.find({ case (protocol, _) => candidates.contains(protocol) }) match {
       case Some((protocol, _)) => protocol
       case None =>
         throw new IllegalArgumentException("Member does not support any of the candidate protocols")
     }
-  }
 
-  override def toString: String = {
+  override def toString: String =
     "MemberMetadata(" +
       s"memberId=$memberId, " +
       s"clientId=$clientId, " +
@@ -123,6 +117,5 @@ private[group] class MemberMetadata(val memberId: String,
       s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
       s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
       ")"
-  }
 
 }

@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
@@ -51,7 +51,8 @@ class ReplicaStateMachine(config: KafkaConfig,
                           topicDeletionManager: TopicDeletionManager,
                           zkClient: KafkaZkClient,
                           replicaState: mutable.Map[PartitionAndReplica, ReplicaState],
-                          controllerBrokerRequestBatch: ControllerBrokerRequestBatch) extends Logging {
+                          controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
+    extends Logging {
   private val controllerId = config.brokerId
 
   this.logIdent = s"[ReplicaStateMachine controllerId=$controllerId] "
@@ -87,29 +88,30 @@ class ReplicaStateMachine(config: KafkaConfig,
         if (controllerContext.isReplicaOnline(replicaId, partition))
           replicaState.put(partitionAndReplica, OnlineReplica)
         else
-        // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
-        // This is required during controller failover since during controller failover a broker can go down,
-        // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+          // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
+          // This is required during controller failover since during controller failover a broker can go down,
+          // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
           replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
       }
     }
   }
 
-  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState,
-                         callbacks: Callbacks = new Callbacks()): Unit = {
+  def handleStateChanges(replicas: Seq[PartitionAndReplica],
+                         targetState: ReplicaState,
+                         callbacks: Callbacks = new Callbacks()): Unit =
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        replicas.groupBy(_.replica).map { case (replicaId, replicas) =>
-          val partitions = replicas.map(_.topicPartition)
-          doHandleStateChanges(replicaId, partitions, targetState, callbacks)
+        replicas.groupBy(_.replica).map {
+          case (replicaId, replicas) =>
+            val partitions = replicas.map(_.topicPartition)
+            doHandleStateChanges(replicaId, partitions, targetState, callbacks)
         }
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
       } catch {
         case e: Throwable => error(s"Error while moving some replicas to $targetState state", e)
       }
     }
-  }
 
   /**
    * This API exercises the replica's state machine. It ensures that every state transition happens from a legal
@@ -146,7 +148,9 @@ class ReplicaStateMachine(config: KafkaConfig,
    * @param partitions The partitions on this replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
-  private def doHandleStateChanges(replicaId: Int, partitions: Seq[TopicPartition], targetState: ReplicaState,
+  private def doHandleStateChanges(replicaId: Int,
+                                   partitions: Seq[TopicPartition],
+                                   targetState: ReplicaState,
                                    callbacks: Callbacks): Unit = {
     val replicas = partitions.map(partition => PartitionAndReplica(partition, replicaId))
     replicas.foreach(replica => replicaState.getOrElseUpdate(replica, NonExistentReplica))
@@ -159,14 +163,18 @@ class ReplicaStateMachine(config: KafkaConfig,
           controllerContext.partitionLeadershipInfo.get(partition) match {
             case Some(leaderIsrAndControllerEpoch) =>
               if (leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId) {
-                val exception = new StateChangeFailedException(s"Replica $replicaId for partition $partition cannot be moved to NewReplica state as it is being requested to become leader")
+                val exception = new StateChangeFailedException(
+                  s"Replica $replicaId for partition $partition cannot be moved to NewReplica state as it is being requested to become leader"
+                )
                 logFailedStateChange(replica, replicaState(replica), OfflineReplica, exception)
               } else {
-                controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
+                controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+                  Seq(replicaId),
                   replica.topicPartition,
                   leaderIsrAndControllerEpoch,
                   controllerContext.partitionReplicaAssignment(replica.topicPartition),
-                  isNew = true)
+                  isNew = true
+                )
                 logSuccessfulTransition(replicaId, partition, replicaState(replica), NewReplica)
                 replicaState.put(replica, NewReplica)
               }
@@ -187,10 +195,13 @@ class ReplicaStateMachine(config: KafkaConfig,
             case _ =>
               controllerContext.partitionLeadershipInfo.get(partition) match {
                 case Some(leaderIsrAndControllerEpoch) =>
-                  controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
+                  controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+                    Seq(replicaId),
                     replica.topicPartition,
                     leaderIsrAndControllerEpoch,
-                    controllerContext.partitionReplicaAssignment(partition), isNew = false)
+                    controllerContext.partitionReplicaAssignment(partition),
+                    isNew = false
+                  )
                 case None =>
               }
           }
@@ -199,24 +210,31 @@ class ReplicaStateMachine(config: KafkaConfig,
         }
       case OfflineReplica =>
         validReplicas.foreach { replica =>
-          controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId), replica.topicPartition,
-            deletePartition = false, (_, _) => ())
+          controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId),
+                                                                       replica.topicPartition,
+                                                                       deletePartition = false,
+                                                                       (_, _) => ())
         }
         val (replicasWithLeadershipInfo, replicasWithoutLeadershipInfo) = validReplicas.partition { replica =>
           controllerContext.partitionLeadershipInfo.contains(replica.topicPartition)
         }
-        val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
-        updatedLeaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
-          if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
-            val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
-            controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipients,
-              partition,
-              leaderIsrAndControllerEpoch,
-              controllerContext.partitionReplicaAssignment(partition), isNew = false)
-          }
-          val replica = PartitionAndReplica(partition, replicaId)
-          logSuccessfulTransition(replicaId, partition, replicaState(replica), OfflineReplica)
-          replicaState.put(replica, OfflineReplica)
+        val updatedLeaderIsrAndControllerEpochs =
+          removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
+        updatedLeaderIsrAndControllerEpochs.foreach {
+          case (partition, leaderIsrAndControllerEpoch) =>
+            if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
+              val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
+              controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+                recipients,
+                partition,
+                leaderIsrAndControllerEpoch,
+                controllerContext.partitionReplicaAssignment(partition),
+                isNew = false
+              )
+            }
+            val replica = PartitionAndReplica(partition, replicaId)
+            logSuccessfulTransition(replicaId, partition, replicaState(replica), OfflineReplica)
+            replicaState.put(replica, OfflineReplica)
         }
 
         replicasWithoutLeadershipInfo.foreach { replica =>
@@ -228,9 +246,9 @@ class ReplicaStateMachine(config: KafkaConfig,
           logSuccessfulTransition(replicaId, replica.topicPartition, replicaState(replica), ReplicaDeletionStarted)
           replicaState.put(replica, ReplicaDeletionStarted)
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId),
-            replica.topicPartition,
-            deletePartition = true,
-            callbacks.stopReplicaResponseCallback)
+                                                                       replica.topicPartition,
+                                                                       deletePartition = true,
+                                                                       callbacks.stopReplicaResponseCallback)
         }
       case ReplicaDeletionIneligible =>
         validReplicas.foreach { replica =>
@@ -245,7 +263,8 @@ class ReplicaStateMachine(config: KafkaConfig,
       case NonExistentReplica =>
         validReplicas.foreach { replica =>
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(replica.topicPartition)
-          controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
+          controllerContext.updatePartitionReplicaAssignment(replica.topicPartition,
+                                                             currentAssignedReplicas.filterNot(_ == replica.replica))
           logSuccessfulTransition(replicaId, replica.topicPartition, replicaState(replica), NonExistentReplica)
           replicaState.remove(replica)
         }
@@ -259,17 +278,20 @@ class ReplicaStateMachine(config: KafkaConfig,
    * @param partitions The partitions from which we're trying to remove the replica from isr
    * @return The updated LeaderIsrAndControllerEpochs of all partitions for which we successfully removed the replica from isr.
    */
-  private def removeReplicasFromIsr(replicaId: Int, partitions: Seq[TopicPartition]):
-  Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
+  private def removeReplicasFromIsr(
+    replicaId: Int,
+    partitions: Seq[TopicPartition]
+  ): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
     var results = Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
     var remaining = partitions
     while (remaining.nonEmpty) {
       val (successfulRemovals, removalsToRetry, failedRemovals) = doRemoveReplicasFromIsr(replicaId, remaining)
       results ++= successfulRemovals
       remaining = removalsToRetry
-      failedRemovals.foreach { case (partition, e) =>
-        val replica = PartitionAndReplica(partition, replicaId)
-        logFailedStateChange(replica, replicaState(replica), OfflineReplica, e)
+      failedRemovals.foreach {
+        case (partition, e) =>
+          val replica = PartitionAndReplica(partition, replicaId)
+          logFailedStateChange(replica, replicaState(replica), OfflineReplica, e)
       }
     }
     results
@@ -287,31 +309,38 @@ class ReplicaStateMachine(config: KafkaConfig,
    *         the partition leader updated partition state while the controller attempted to update partition state.
    *         3. Exceptions corresponding to failed removals that should not be retried.
    */
-  private def doRemoveReplicasFromIsr(replicaId: Int, partitions: Seq[TopicPartition]):
-  (Map[TopicPartition, LeaderIsrAndControllerEpoch],
-    Seq[TopicPartition],
-    Map[TopicPartition, Exception]) = {
+  private def doRemoveReplicasFromIsr(
+    replicaId: Int,
+    partitions: Seq[TopicPartition]
+  ): (Map[TopicPartition, LeaderIsrAndControllerEpoch], Seq[TopicPartition], Map[TopicPartition, Exception]) = {
     val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk, failedStateReads) = getTopicPartitionStatesFromZk(partitions)
-    val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, leaderAndIsr) => leaderAndIsr.isr.contains(replicaId) }
+    val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition {
+      case (_, leaderAndIsr) => leaderAndIsr.isr.contains(replicaId)
+    }
     val adjustedLeaderAndIsrs = leaderAndIsrsWithReplica.mapValues { leaderAndIsr =>
       val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
       val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
       leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
     }
-    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkClient.updateLeaderAndIsr(
-      adjustedLeaderAndIsrs, controllerContext.epoch)
+    val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) =
+      zkClient.updateLeaderAndIsr(adjustedLeaderAndIsrs, controllerContext.epoch)
     val exceptionsForPartitionsWithNoLeaderAndIsrInZk = partitionsWithNoLeaderAndIsrInZk.flatMap { partition =>
       if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
-        val exception = new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $partition since the leader and isr path in zookeeper is empty")
+        val exception = new StateChangeFailedException(
+          s"Failed to change state of replica $replicaId for partition $partition since the leader and isr path in zookeeper is empty"
+        )
         Option(partition -> exception)
       } else None
     }.toMap
-    val leaderIsrAndControllerEpochs = (leaderAndIsrsWithoutReplica ++ successfulUpdates).map { case (partition, leaderAndIsr) =>
-      val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-      controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
-      partition -> leaderIsrAndControllerEpoch
+    val leaderIsrAndControllerEpochs = (leaderAndIsrsWithoutReplica ++ successfulUpdates).map {
+      case (partition, leaderAndIsr) =>
+        val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
+        controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+        partition -> leaderIsrAndControllerEpoch
     }
-    (leaderIsrAndControllerEpochs, updatesToRetry, failedStateReads ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk ++ failedUpdates)
+    (leaderIsrAndControllerEpochs,
+     updatesToRetry,
+     failedStateReads ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk ++ failedUpdates)
   }
 
   /**
@@ -323,10 +352,9 @@ class ReplicaStateMachine(config: KafkaConfig,
    *         didn't finish partition initialization.
    *         3. Exceptions corresponding to failed zookeeper lookups or states whose controller epoch exceeds our current epoch.
    */
-  private def getTopicPartitionStatesFromZk(partitions: Seq[TopicPartition]):
-  (Map[TopicPartition, LeaderAndIsr],
-    Seq[TopicPartition],
-    Map[TopicPartition, Exception]) = {
+  private def getTopicPartitionStatesFromZk(
+    partitions: Seq[TopicPartition]
+  ): (Map[TopicPartition, LeaderAndIsr], Seq[TopicPartition], Map[TopicPartition, Exception]) = {
     val leaderAndIsrs = mutable.Map.empty[TopicPartition, LeaderAndIsr]
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
     val failed = mutable.Map.empty[TopicPartition, Exception]
@@ -346,9 +374,11 @@ class ReplicaStateMachine(config: KafkaConfig,
         } else {
           val leaderIsrAndControllerEpoch = leaderIsrAndControllerEpochOpt.get
           if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
-            val exception = new StateChangeFailedException("Leader and isr path written by another controller. This probably" +
-              s"means the current controller with epoch ${controllerContext.epoch} went through a soft failure and another " +
-              s"controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}. Aborting state change by this controller")
+            val exception = new StateChangeFailedException(
+              "Leader and isr path written by another controller. This probably" +
+                s"means the current controller with epoch ${controllerContext.epoch} went through a soft failure and another " +
+                s"controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}. Aborting state change by this controller"
+            )
             failed.put(partition, exception)
           } else {
             leaderAndIsrs.put(partition, leaderIsrAndControllerEpoch.leaderAndIsr)
@@ -363,42 +393,49 @@ class ReplicaStateMachine(config: KafkaConfig,
     (leaderAndIsrs.toMap, partitionsWithNoLeaderAndIsrInZk, failed.toMap)
   }
 
-  def isAtLeastOneReplicaInDeletionStartedState(topic: String): Boolean = {
+  def isAtLeastOneReplicaInDeletionStartedState(topic: String): Boolean =
     controllerContext.replicasForTopic(topic).exists(replica => replicaState(replica) == ReplicaDeletionStarted)
-  }
 
-  def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
+  def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] =
     replicaState.filter { case (replica, s) => replica.topic.equals(topic) && s == state }.keySet.toSet
-  }
 
-  def areAllReplicasForTopicDeleted(topic: String): Boolean = {
+  def areAllReplicasForTopicDeleted(topic: String): Boolean =
     controllerContext.replicasForTopic(topic).forall(replica => replicaState(replica) == ReplicaDeletionSuccessful)
-  }
 
-  def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {
-    replicaState.exists { case (replica, s) => replica.topic.equals(topic) && s == state}
-  }
+  def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean =
+    replicaState.exists { case (replica, s) => replica.topic.equals(topic) && s == state }
 
   private def isValidTransition(replica: PartitionAndReplica, targetState: ReplicaState) =
     targetState.validPreviousStates.contains(replicaState(replica))
 
-  private def logSuccessfulTransition(replicaId: Int, partition: TopicPartition, currState: ReplicaState, targetState: ReplicaState): Unit = {
-    stateChangeLogger.withControllerEpoch(controllerContext.epoch)
+  private def logSuccessfulTransition(replicaId: Int,
+                                      partition: TopicPartition,
+                                      currState: ReplicaState,
+                                      targetState: ReplicaState): Unit =
+    stateChangeLogger
+      .withControllerEpoch(controllerContext.epoch)
       .trace(s"Changed state of replica $replicaId for partition $partition from $currState to $targetState")
-  }
 
   private def logInvalidTransition(replica: PartitionAndReplica, targetState: ReplicaState): Unit = {
     val currState = replicaState(replica)
-    val e = new IllegalStateException(s"Replica $replica should be in the ${targetState.validPreviousStates.mkString(",")} " +
-      s"states before moving to $targetState state. Instead it is in $currState state")
+    val e = new IllegalStateException(
+      s"Replica $replica should be in the ${targetState.validPreviousStates.mkString(",")} " +
+        s"states before moving to $targetState state. Instead it is in $currState state"
+    )
     logFailedStateChange(replica, currState, targetState, e)
   }
 
-  private def logFailedStateChange(replica: PartitionAndReplica, currState: ReplicaState, targetState: ReplicaState, t: Throwable): Unit = {
-    stateChangeLogger.withControllerEpoch(controllerContext.epoch)
-      .error(s"Controller $controllerId epoch ${controllerContext.epoch} initiated state change of replica ${replica.replica} " +
-        s"for partition ${replica.topicPartition} from $currState to $targetState failed", t)
-  }
+  private def logFailedStateChange(replica: PartitionAndReplica,
+                                   currState: ReplicaState,
+                                   targetState: ReplicaState,
+                                   t: Throwable): Unit =
+    stateChangeLogger
+      .withControllerEpoch(controllerContext.epoch)
+      .error(
+        s"Controller $controllerId epoch ${controllerContext.epoch} initiated state change of replica ${replica.replica} " +
+          s"for partition ${replica.topicPartition} from $currState to $targetState failed",
+        t
+      )
 }
 
 sealed trait ReplicaState {

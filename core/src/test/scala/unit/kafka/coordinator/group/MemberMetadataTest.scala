@@ -30,14 +30,18 @@ class MemberMetadataTest extends JUnitSuite {
   val protocolType = "consumer"
   val rebalanceTimeoutMs = 60000
   val sessionTimeoutMs = 10000
-
-
   @Test
   def testMatchesSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, protocols)
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    protocols)
     assertTrue(member.matches(protocols))
     assertFalse(member.matches(List(("range", Array[Byte](0)))))
     assertFalse(member.matches(List(("roundrobin", Array.empty[Byte]))))
@@ -48,8 +52,14 @@ class MemberMetadataTest extends JUnitSuite {
   def testVoteForPreferredProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, protocols)
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    protocols)
     assertEquals("range", member.vote(Set("range", "roundrobin")))
     assertEquals("roundrobin", member.vote(Set("blah", "roundrobin")))
   }
@@ -58,8 +68,14 @@ class MemberMetadataTest extends JUnitSuite {
   def testMetadata() {
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, protocols)
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    protocols)
     assertTrue(Arrays.equals(Array[Byte](0), member.metadata("range")))
     assertTrue(Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
   }
@@ -68,8 +84,14 @@ class MemberMetadataTest extends JUnitSuite {
   def testMetadataRaisesOnUnsupportedProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, protocols)
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    protocols)
     member.metadata("blah")
     fail()
   }
@@ -78,11 +100,16 @@ class MemberMetadataTest extends JUnitSuite {
   def testVoteRaisesOnNoSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, protocols)
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    protocols)
     member.vote(Set("blah"))
     fail()
   }
-
 
 }

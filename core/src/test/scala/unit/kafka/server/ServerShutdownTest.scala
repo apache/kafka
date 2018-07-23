@@ -27,7 +27,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.serialization.{
+  IntegerDeserializer,
+  IntegerSerializer,
+  StringDeserializer,
+  StringSerializer
+}
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
@@ -149,21 +154,21 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
   }
 
-  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]) {
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](
+    config: KafkaConfig
+  )(implicit exceptionClassTag: ClassTag[E]) {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     try {
       server.startup()
       fail("Expected KafkaServer setup to fail and throw exception")
-    }
-    catch {
+    } catch {
       // Try to clean up carefully without hanging even if the test fails. This means trying to accurately
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
         assertEquals(NotRunning.state, server.brokerState.currentState)
-    }
-    finally {
+    } finally {
       if (server.brokerState.currentState != NotRunning.state)
         server.shutdown()
       server.awaitShutdown()
@@ -172,18 +177,18 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     verifyNonDaemonThreadsStatus
   }
 
-  private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
+  private[this] def isNonDaemonKafkaThread(t: Thread): Boolean =
     !t.isDaemon && t.isAlive && t.getName.startsWith(this.getClass.getName)
-  }
 
   def verifyNonDaemonThreadsStatus() {
-    assertEquals(0, Thread.getAllStackTraces.keySet.toArray
-      .map(_.asInstanceOf[Thread])
-      .count(isNonDaemonKafkaThread))
+    assertEquals(0,
+                 Thread.getAllStackTraces.keySet.toArray
+                   .map(_.asInstanceOf[Thread])
+                   .count(isNonDaemonKafkaThread))
   }
 
   @Test
-  def testConsecutiveShutdown(){
+  def testConsecutiveShutdown() {
     val server = new KafkaServer(config)
     server.startup()
     server.shutdown()

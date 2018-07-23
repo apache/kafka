@@ -1,15 +1,15 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
-  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
-  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
-  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
-  * specific language governing permissions and limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 package kafka.api
 
 import java.nio.file.Files
@@ -36,7 +36,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   override protected val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   val consumerCount = 1
   val producerCount = 1
@@ -60,8 +62,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
-      JaasTestUtils.KafkaServerContextName))
+    startSasl(
+      jaasSections(kafkaServerSaslMechanisms,
+                   Some(kafkaClientSaslMechanism),
+                   Both,
+                   JaasTestUtils.KafkaServerContextName)
+    )
     super.setUp()
     createTopic(topic, numPartitions, serverCount)
   }
@@ -135,17 +141,17 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val adminClient = AdminClient.create(props)
 
-    def describeTopic(): Unit = {
+    def describeTopic(): Unit =
       try {
         val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
         assertEquals(1, response.size)
-        response.asScala.foreach { case (topic, description) =>
-          assertEquals(numPartitions, description.partitions.size)
+        response.asScala.foreach {
+          case (topic, description) =>
+            assertEquals(numPartitions, description.partitions.size)
         }
       } catch {
         case e: ExecutionException => throw e.getCause
       }
-    }
 
     try {
       verifyAuthenticationException(describeTopic())
@@ -188,18 +194,20 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     propsStream.write(s"sasl.mechanism=$kafkaClientSaslMechanism".getBytes())
     propsStream.close()
 
-    val cgcArgs = Array("--bootstrap-server", brokerList,
+    val cgcArgs = Array("--bootstrap-server",
+                        brokerList,
                         "--describe",
-                        "--group", "test.group",
-                        "--command-config", propsFile.getAbsolutePath)
+                        "--group",
+                        "test.group",
+                        "--command-config",
+                        propsFile.getAbsolutePath)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService
   }
 
-  private def createClientCredential(): Unit = {
+  private def createClientCredential(): Unit =
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
-  }
 
   private def sendOneRecord(maxWaitMs: Long = 15000): Unit = {
     val producer = this.producers.head
@@ -220,7 +228,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       action
       fail("Expected an authentication exception")
     } catch {
-      case e : Exception =>
+      case e: Exception =>
         // expected exception
         val elapsedMs = System.currentTimeMillis - startMs
         assertTrue(s"Poll took too long, elapsed=$elapsedMs", elapsedMs <= 5000)
@@ -244,11 +252,11 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val txProducer = TestUtils.createProducer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  saslProperties = this.clientSaslProperties,
-                                  retries = 1000,
-                                  acks = -1,
-                                  props = Some(producerConfig))
+                                              securityProtocol = this.securityProtocol,
+                                              saslProperties = this.clientSaslProperties,
+                                              retries = 1000,
+                                              acks = -1,
+                                              props = Some(producerConfig))
     producers += txProducer
     txProducer
   }

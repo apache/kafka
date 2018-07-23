@@ -31,8 +31,10 @@ import scala.collection._
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
 }
-class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
-                             eventProcessedListener: ControllerEvent => Unit) extends KafkaMetricsGroup {
+class ControllerEventManager(controllerId: Int,
+                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+                             eventProcessedListener: ControllerEvent => Unit)
+    extends KafkaMetricsGroup {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
@@ -45,12 +47,10 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   newGauge(
     "EventQueueSize",
     new Gauge[Int] {
-      def value: Int = {
+      def value: Int =
         queue.size()
-      }
     }
   )
-
 
   def state: ControllerState = _state
 
@@ -73,7 +73,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     logIdent = s"[ControllerEventThread controllerId=$controllerId] "
 
-    override def doWork(): Unit = {
+    override def doWork(): Unit =
       queue.take() match {
         case KafkaController.ShutdownEventThread => initiateShutdown()
         case controllerEvent =>
@@ -96,7 +96,6 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
 
           _state = ControllerState.Idle
       }
-    }
   }
 
 }

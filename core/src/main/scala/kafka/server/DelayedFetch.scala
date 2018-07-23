@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException, KafkaStorageException}
+import org.apache.kafka.common.errors.{
+  KafkaStorageException,
+  NotLeaderForPartitionException,
+  UnknownTopicOrPartitionException
+}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.IsolationLevel
 
@@ -29,8 +32,9 @@ import scala.collection._
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
-  override def toString = "[startOffsetMetadata: " + startOffsetMetadata + ", " +
-                          "fetchInfo: " + fetchInfo + "]"
+  override def toString =
+    "[startOffsetMetadata: " + startOffsetMetadata + ", " +
+      "fetchInfo: " + fetchInfo + "]"
 }
 
 /**
@@ -45,13 +49,15 @@ case class FetchMetadata(fetchMinBytes: Int,
                          replicaId: Int,
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
-  override def toString = "[minBytes: " + fetchMinBytes + ", " +
-    "maxBytes:" + fetchMaxBytes + ", " +
-    "onlyLeader:" + fetchOnlyLeader + ", " +
-    "onlyCommitted: " + fetchOnlyCommitted + ", " +
-    "replicaId: " + replicaId + ", " +
-    "partitionStatus: " + fetchPartitionStatus + "]"
+  override def toString =
+    "[minBytes: " + fetchMinBytes + ", " +
+      "maxBytes:" + fetchMaxBytes + ", " +
+      "onlyLeader:" + fetchOnlyLeader + ", " +
+      "onlyCommitted: " + fetchOnlyCommitted + ", " +
+      "replicaId: " + replicaId + ", " +
+      "partitionStatus: " + fetchPartitionStatus + "]"
 }
+
 /**
  * A delayed fetch operation that can be created by the replica manager and watched
  * in the fetch operation purgatory
@@ -62,7 +68,7 @@ class DelayedFetch(delayMs: Long,
                    quota: ReplicaQuota,
                    isolationLevel: IsolationLevel,
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(delayMs) {
+    extends DelayedOperation(delayMs) {
 
   /**
    * The operation can be completed if:
@@ -75,7 +81,7 @@ class DelayedFetch(delayMs: Long,
    *
    * Upon completion, should return whatever data is available for each valid partition
    */
-  override def tryComplete() : Boolean = {
+  override def tryComplete(): Boolean = {
     var accumulatedSize = 0
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicPartition, fetchStatus) =>
@@ -97,7 +103,10 @@ class DelayedFetch(delayMs: Long,
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case C, this can happen when the new fetch operation is on a truncated leader
-                debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicPartition))
+                debug(
+                  "Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata,
+                                                                                                    topicPartition)
+                )
                 return forceComplete()
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case C, this can happen when the fetch operation is falling behind the current segment
@@ -116,12 +125,15 @@ class DelayedFetch(delayMs: Long,
           }
         } catch {
           case _: KafkaStorageException => // Case E
-            debug("Partition %s is in an offline log directory, satisfy %s immediately".format(topicPartition, fetchMetadata))
+            debug(
+              "Partition %s is in an offline log directory, satisfy %s immediately".format(topicPartition,
+                                                                                           fetchMetadata)
+            )
             return forceComplete()
           case _: UnknownTopicOrPartitionException => // Case B
             debug("Broker no longer know of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
             return forceComplete()
-          case _: NotLeaderForPartitionException =>  // Case A
+          case _: NotLeaderForPartitionException => // Case A
             debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
             return forceComplete()
         }
@@ -129,7 +141,7 @@ class DelayedFetch(delayMs: Long,
 
     // Case D
     if (accumulatedSize >= fetchMetadata.fetchMinBytes)
-       forceComplete()
+      forceComplete()
     else
       false
   }
@@ -153,11 +165,17 @@ class DelayedFetch(delayMs: Long,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
       readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
       quota = quota,
-      isolationLevel = isolationLevel)
+      isolationLevel = isolationLevel
+    )
 
-    val fetchPartitionData = logReadResults.map { case (tp, result) =>
-      tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-        result.lastStableOffset, result.info.abortedTransactions)
+    val fetchPartitionData = logReadResults.map {
+      case (tp, result) =>
+        tp -> FetchPartitionData(result.error,
+                                 result.highWatermark,
+                                 result.leaderLogStartOffset,
+                                 result.info.records,
+                                 result.lastStableOffset,
+                                 result.info.abortedTransactions)
     }
 
     responseCallback(fetchPartitionData)
@@ -166,7 +184,8 @@ class DelayedFetch(delayMs: Long,
 
 object DelayedFetchMetrics extends KafkaMetricsGroup {
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
-  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+  val followerExpiredRequestMeter =
+    newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
+  val consumerExpiredRequestMeter =
+    newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
 }
-

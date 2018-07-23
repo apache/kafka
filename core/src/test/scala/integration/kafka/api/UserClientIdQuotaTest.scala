@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-
 package kafka.api
 
 import java.io.File
@@ -37,16 +36,17 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
     val defaultProps = quotaTestClients.quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
-    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, defaultProps)
+    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default,
+                                                 defaultProps)
     quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients =
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producers.head, consumers.head) {
-      override def userPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "O=A client,CN=localhost")
-      override def quotaMetricTags(clientId: String): Map[String, String] = {
+      override def userPrincipal: KafkaPrincipal =
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "O=A client,CN=localhost")
+      override def quotaMetricTags(clientId: String): Map[String, String] =
         Map("user" -> Sanitizer.sanitize(userPrincipal.getName), "client-id" -> clientId)
-      }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
         val producerProps = new Properties()
@@ -63,14 +63,18 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
       override def removeQuotaOverrides() {
         val emptyProps = new Properties
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
-          "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
+                                                       "/clients/" + Sanitizer.sanitize(producerClientId),
+                                                     emptyProps)
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
-          "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
+                                                       "/clients/" + Sanitizer.sanitize(consumerClientId),
+                                                     emptyProps)
       }
 
       private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {
-        adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId), properties)
+        adminZkClient.changeUserOrUserClientIdConfig(
+          Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId),
+          properties
+        )
       }
     }
-  }
 }

@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils.json
 
-import com.fasterxml.jackson.databind.{ObjectMapper, JsonMappingException}
+import com.fasterxml.jackson.databind.{JsonMappingException, ObjectMapper}
 import org.junit.Test
 import org.junit.Assert._
 
@@ -26,20 +25,20 @@ import kafka.utils.Json
 class JsonValueTest {
 
   val json = """
-    |{
-    |  "boolean": false,
-    |  "int": 1234,
-    |  "long": 3000000000,
-    |  "double": 16.244355,
-    |  "string": "string",
-    |  "number_as_string": "123",
-    |  "array": [4.0, 11.1, 44.5],
-    |  "object": {
-    |    "a": true,
-    |    "b": false
-    |  },
-    |  "null": null
-    |}
+               |{
+               |  "boolean": false,
+               |  "int": 1234,
+               |  "long": 3000000000,
+               |  "double": 16.244355,
+               |  "string": "string",
+               |  "number_as_string": "123",
+               |  "array": [4.0, 11.1, 44.5],
+               |  "object": {
+               |    "a": true,
+               |    "b": false
+               |  },
+               |  "null": null
+               |}
    """.stripMargin
 
   private def parse(s: String): JsonValue =
@@ -57,7 +56,7 @@ class JsonValueTest {
     assertThrow[JsonMappingException](parsed.to[T])
   }
 
-  def assertThrow[E <: Throwable : Manifest](body: => Unit): Unit = {
+  def assertThrow[E <: Throwable: Manifest](body: => Unit): Unit = {
     import scala.util.control.Exception._
     val klass = manifest[E].runtimeClass
     catchingPromiscuously(klass).opt(body).foreach { _ =>
@@ -110,17 +109,16 @@ class JsonValueTest {
   }
 
   @Test
-  def testJsonObjectIterator: Unit = {
+  def testJsonObjectIterator: Unit =
     assertEquals(
       Vector("a" -> parse("true"), "b" -> parse("false")),
       parse(json).asJsonObject("object").asJsonObject.iterator.toVector
     )
-  }
 
   @Test
-  def testJsonArrayIterator: Unit = {
-    assertEquals(Vector("4.0", "11.1", "44.5").map(parse), parse(json).asJsonObject("array").asJsonArray.iterator.toVector)
-  }
+  def testJsonArrayIterator: Unit =
+    assertEquals(Vector("4.0", "11.1", "44.5").map(parse),
+                 parse(json).asJsonObject("array").asJsonArray.iterator.toVector)
 
   @Test
   def testJsonValueEquals: Unit = {
@@ -139,9 +137,8 @@ class JsonValueTest {
   }
 
   @Test
-  def testJsonValueHashCode: Unit = {
+  def testJsonValueHashCode: Unit =
     assertEquals(new ObjectMapper().readTree(json).hashCode, parse(json).hashCode)
-  }
 
   @Test
   def testJsonValueToString: Unit = {

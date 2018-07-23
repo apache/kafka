@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.utils
+package kafka.utils
 
 import java.io._
 import java.nio.channels._
@@ -22,13 +22,13 @@ import java.nio.file.StandardOpenOption
 
 /**
  * A file lock a la flock/funlock
- * 
+ *
  * The given path will be created and opened if it doesn't exist.
  */
 class FileLock(val file: File) extends Logging {
 
-  private val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
-    StandardOpenOption.WRITE)
+  private val channel =
+    FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)
   private var flock: java.nio.channels.FileLock = null
 
   /**
@@ -44,7 +44,7 @@ class FileLock(val file: File) extends Logging {
   /**
    * Try to lock the file and return true if the locking succeeds
    */
-  def tryLock(): Boolean = {
+  def tryLock(): Boolean =
     this synchronized {
       trace("Acquiring lock on " + file.getAbsolutePath)
       try {
@@ -57,7 +57,6 @@ class FileLock(val file: File) extends Logging {
         case _: OverlappingFileLockException => false
       }
     }
-  }
 
   /**
    * Unlock the lock if it is held
@@ -65,7 +64,7 @@ class FileLock(val file: File) extends Logging {
   def unlock() {
     this synchronized {
       trace("Releasing lock on " + file.getAbsolutePath)
-      if(flock != null)
+      if (flock != null)
         flock.release()
     }
   }
@@ -73,10 +72,9 @@ class FileLock(val file: File) extends Logging {
   /**
    * Destroy this lock, closing the associated FileChannel
    */
-  def destroy() = {
+  def destroy() =
     this synchronized {
       unlock()
       channel.close()
     }
-  }
 }

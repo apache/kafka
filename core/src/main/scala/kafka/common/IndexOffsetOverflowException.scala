@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 /**
  * Indicates that an attempt was made to append a message whose offset could cause the index offset to overflow.
  */
-class IndexOffsetOverflowException(message: String, cause: Throwable) extends org.apache.kafka.common.KafkaException(message, cause) {
+class IndexOffsetOverflowException(message: String, cause: Throwable)
+    extends org.apache.kafka.common.KafkaException(message, cause) {
   def this(message: String) = this(message, null)
 }

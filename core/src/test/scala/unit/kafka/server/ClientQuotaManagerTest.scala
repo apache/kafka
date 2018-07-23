@@ -41,11 +41,11 @@ class ClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback (response: RequestChannel.Response) {
+  def callback(response: RequestChannel.Response) {
     // Count how many times this callback is called for notifyThrottlingDone().
     response match {
       case _: StartThrottlingResponse =>
-      case _: EndThrottlingResponse => numCallbacks += 1
+      case _: EndThrottlingResponse   => numCallbacks += 1
     }
   }
 
@@ -54,8 +54,10 @@ class ClientQuotaManagerTest {
     numCallbacks = 0
   }
 
-  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+  private def buildRequest[T <: AbstractRequest](
+    builder: AbstractRequest.Builder[T],
+    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+  ): (T, RequestChannel.Request) = {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
@@ -63,10 +65,19 @@ class ClientQuotaManagerTest {
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT)
-    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
-      requestChannelMetrics))
+    val context = new RequestContext(header,
+                                     "1",
+                                     InetAddress.getLocalHost,
+                                     KafkaPrincipal.ANONYMOUS,
+                                     listenerName,
+                                     SecurityProtocol.PLAINTEXT)
+    (request,
+     new RequestChannel.Request(processor = 1,
+                                context = context,
+                                startTimeNanos = 0,
+                                MemoryPool.NONE,
+                                buffer,
+                                requestChannelMetrics))
   }
 
   private def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, value: Double): Int = {
@@ -74,24 +85,49 @@ class ClientQuotaManagerTest {
     quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null), clientId, value, time.milliseconds())
   }
 
-  private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
+  private def throttle(quotaManager: ClientQuotaManager,
+                       user: String,
+                       clientId: String,
+                       throttleTimeMs: Int,
                        channelThrottlingCallback: (RequestChannel.Response) => Unit) {
-    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))
+    val (_, request) = buildRequest(
+      FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData])
+    )
     quotaManager.throttle(request, throttleTimeMs, channelThrottlingCallback)
   }
 
-  private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
+  private def testQuotaParsing(config: ClientQuotaManagerConfig,
+                               client1: UserClient,
+                               client2: UserClient,
+                               randomClient: UserClient,
+                               defaultConfigClient: UserClient) {
     val clientMetrics = new ClientQuotaManager(config, newMetrics, Produce, time, "")
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(2000, true)))
-      clientMetrics.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
+      clientMetrics.updateQuota(client1.configUser,
+                                client1.configClientId,
+                                client1.sanitizedConfigClientId,
+                                Some(new Quota(2000, true)))
+      clientMetrics.updateQuota(client2.configUser,
+                                client2.configClientId,
+                                client2.sanitizedConfigClientId,
+                                Some(new Quota(4000, true)))
 
-      assertEquals("Default producer quota should be " + config.quotaBytesPerSecondDefault,
-        config.quotaBytesPerSecondDefault, clientMetrics.quota(randomClient.user, randomClient.clientId).bound, 0.0)
-      assertEquals("Should return the overridden value (2000)", 2000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
-      assertEquals("Should return the overridden value (4000)", 4000, clientMetrics.quota(client2.user, client2.clientId).bound, 0.0)
+      assertEquals(
+        "Default producer quota should be " + config.quotaBytesPerSecondDefault,
+        config.quotaBytesPerSecondDefault,
+        clientMetrics.quota(randomClient.user, randomClient.clientId).bound,
+        0.0
+      )
+      assertEquals("Should return the overridden value (2000)",
+                   2000,
+                   clientMetrics.quota(client1.user, client1.clientId).bound,
+                   0.0)
+      assertEquals("Should return the overridden value (4000)",
+                   4000,
+                   clientMetrics.quota(client2.user, client2.clientId).bound,
+                   0.0)
 
       // p1 should be throttled using the overridden quota
       var throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 2500 * config.numQuotaSamples)
@@ -99,23 +135,41 @@ class ClientQuotaManagerTest {
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(3000, true)))
-      assertEquals("Should return the newly overridden value (3000)", 3000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
+      clientMetrics.updateQuota(client1.configUser,
+                                client1.configClientId,
+                                client1.sanitizedConfigClientId,
+                                Some(new Quota(3000, true)))
+      assertEquals("Should return the newly overridden value (3000)",
+                   3000,
+                   clientMetrics.quota(client1.user, client1.clientId).bound,
+                   0.0)
 
       throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 0)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
       // Case 3: Change quota back to default. Should be throttled again
-      clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(500, true)))
-      assertEquals("Should return the default value (500)", 500, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
+      clientMetrics.updateQuota(client1.configUser,
+                                client1.configClientId,
+                                client1.sanitizedConfigClientId,
+                                Some(new Quota(500, true)))
+      assertEquals("Should return the default value (500)",
+                   500,
+                   clientMetrics.quota(client1.user, client1.clientId).bound,
+                   0.0)
 
       throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 0)
       assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
 
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, None)
-      clientMetrics.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, defaultConfigClient.sanitizedConfigClientId, Some(new Quota(4000, true)))
-      assertEquals("Should return the newly overridden value (4000)", 4000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
+      clientMetrics.updateQuota(defaultConfigClient.configUser,
+                                defaultConfigClient.configClientId,
+                                defaultConfigClient.sanitizedConfigClientId,
+                                Some(new Quota(4000, true)))
+      assertEquals("Should return the newly overridden value (4000)",
+                   4000,
+                   clientMetrics.quota(client1.user, client1.clientId).bound,
+                   0.0)
 
       throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 1000 * config.numQuotaSamples)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
@@ -192,8 +246,11 @@ class ClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence() {
-    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue),
-        newMetrics, Produce, time, "")
+    val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault = Long.MaxValue),
+                                              newMetrics,
+                                              Produce,
+                                              time,
+                                              "")
 
     def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean) {
       assertEquals(expectedBound, quotaManager.quota(user, clientId).bound, 0.0)
@@ -206,39 +263,51 @@ class ClientQuotaManagerTest {
 
     try {
       quotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, Some(new Quota(1000, true)))
-      quotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(2000, true)))
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(3000, true)))
+      quotaManager.updateQuota(None,
+                               Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(new Quota(2000, true)))
+      quotaManager.updateQuota(Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(new Quota(3000, true)))
       quotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(4000, true)))
       quotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(5000, true)))
       quotaManager.updateQuota(Some("userB"), None, None, Some(new Quota(6000, true)))
       quotaManager.updateQuota(Some("userB"), Some("client1"), Some("client1"), Some(new Quota(7000, true)))
-      quotaManager.updateQuota(Some("userB"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(8000, true)))
+      quotaManager.updateQuota(Some("userB"),
+                               Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(new Quota(8000, true)))
       quotaManager.updateQuota(Some("userC"), None, None, Some(new Quota(10000, true)))
       quotaManager.updateQuota(None, Some("client1"), Some("client1"), Some(new Quota(9000, true)))
 
       checkQuota("userA", "client1", 5000, 4500, false) // <user, client> quota takes precedence over <user>
-      checkQuota("userA", "client2", 4000, 4500, true)  // <user> quota takes precedence over <client> and defaults
-      checkQuota("userA", "client3", 4000, 0, true)     // <user> quota is shared across clients of user
-      checkQuota("userA", "client1", 5000, 0, false)    // <user, client> is exclusive use, unaffected by other clients
+      checkQuota("userA", "client2", 4000, 4500, true) // <user> quota takes precedence over <client> and defaults
+      checkQuota("userA", "client3", 4000, 0, true) // <user> quota is shared across clients of user
+      checkQuota("userA", "client1", 5000, 0, false) // <user, client> is exclusive use, unaffected by other clients
 
       checkQuota("userB", "client1", 7000, 8000, true)
       checkQuota("userB", "client2", 8000, 7000, false) // Default per-client quota for exclusive use of <user, client>
       checkQuota("userB", "client3", 8000, 7000, false)
 
-      checkQuota("userD", "client1", 3000, 3500, true)  // Default <user, client> quota
+      checkQuota("userD", "client1", 3000, 3500, true) // Default <user, client> quota
       checkQuota("userD", "client2", 3000, 2500, false)
       checkQuota("userE", "client1", 3000, 2500, false)
 
       // Remove default <user, client> quota config, revert to <user> default
-      quotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), None)
-      checkQuota("userD", "client1", 1000, 0, false)    // Metrics tags changed, restart counter
+      quotaManager.updateQuota(Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               None)
+      checkQuota("userD", "client1", 1000, 0, false) // Metrics tags changed, restart counter
       checkQuota("userE", "client4", 1000, 1500, true)
-      checkQuota("userF", "client4", 1000, 800, false)  // Default <user> quota shared across clients of user
+      checkQuota("userF", "client4", 1000, 800, false) // Default <user> quota shared across clients of user
       checkQuota("userF", "client5", 1000, 800, true)
 
       // Remove default <user> quota config, revert to <client-id> default
       quotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, None)
-      checkQuota("userF", "client4", 2000, 0, false)  // Default <client-id> quota shared across client-id of all users
+      checkQuota("userF", "client4", 2000, 0, false) // Default <client-id> quota shared across client-id of all users
       checkQuota("userF", "client5", 2000, 0, false)
       checkQuota("userF", "client5", 2000, 2500, true)
       checkQuota("userG", "client5", 2000, 0, true)
@@ -251,10 +320,13 @@ class ClientQuotaManagerTest {
       checkQuota("userA", "client1", 10000, 0, false)
       checkQuota("userA", "client1", 10000, 6000, true)
       quotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), None)
-      checkQuota("userA", "client6", 8000, 0, true)    // Throttled due to shared user quota
+      checkQuota("userA", "client6", 8000, 0, true) // Throttled due to shared user quota
       quotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), Some(new Quota(11000, true)))
       checkQuota("userA", "client6", 11000, 8500, false)
-      quotaManager.updateQuota(Some("userA"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(12000, true)))
+      quotaManager.updateQuota(Some("userA"),
+                               Some(ConfigEntityName.Default),
+                               Some(ConfigEntityName.Default),
+                               Some(new Quota(12000, true)))
       quotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), None)
       checkQuota("userA", "client6", 12000, 4000, true) // Throttled due to sum of new and earlier values
 
@@ -305,7 +377,8 @@ class ClientQuotaManagerTest {
       }
 
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 0))
+                   0,
+                   maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 0))
     } finally {
       clientMetrics.shutdown()
     }
@@ -357,7 +430,8 @@ class ClientQuotaManagerTest {
       }
 
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
+                   0,
+                   maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
 
       // Create a very large spike which requires > one quota window to bring within quota
       assertEquals(1000, maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(500)))
@@ -367,7 +441,8 @@ class ClientQuotaManagerTest {
       }
       time.sleep(1000)
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
+                   0,
+                   maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
 
     } finally {
       quotaManager.shutdown()
@@ -430,21 +505,24 @@ class ClientQuotaManagerTest {
       val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:" + clientId)
       assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
 
-      val byteRateSensor = metrics.getSensor("Produce-:"  + clientId)
+      val byteRateSensor = metrics.getSensor("Produce-:" + clientId)
       assertTrue("Byte rate sensor should exist", byteRateSensor != null)
     } finally {
       clientMetrics.shutdown()
     }
   }
 
-  def newMetrics: Metrics = {
+  def newMetrics: Metrics =
     new Metrics(new MetricConfig(), Collections.emptyList(), time)
-  }
 
-  private case class UserClient(val user: String, val clientId: String, val configUser: Option[String] = None, val configClientId: Option[String] = None) {
+  private case class UserClient(val user: String,
+                                val clientId: String,
+                                val configUser: Option[String] = None,
+                                val configClientId: Option[String] = None) {
     // The class under test expects only sanitized client configs. We pass both the default value (which should not be
     // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
     // client ID
-    def sanitizedConfigClientId = configClientId.map(x => if (x == ConfigEntityName.Default) ConfigEntityName.Default else Sanitizer.sanitize(x))
+    def sanitizedConfigClientId =
+      configClientId.map(x => if (x == ConfigEntityName.Default) ConfigEntityName.Default else Sanitizer.sanitize(x))
   }
 }

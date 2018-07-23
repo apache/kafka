@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-
 package kafka.server
 
 import java.net.Socket
@@ -19,7 +18,7 @@ import java.util.Properties
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.{ListGroupsRequest,ListGroupsResponse}
+import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -38,9 +37,13 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
   override def numBrokers: Int = 1
 
-  override def propertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
-  }
+  override def propertyOverrides(properties: Properties): Unit =
+    properties.put(
+      KafkaConfig.MetricReporterClassesProp,
+      classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[
+        KafkaMetricReporterExceptionHandlingTest.GoodReporter
+      ].getName
+    )
 
   @Before
   override def setUp() {
@@ -56,7 +59,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   override def tearDown() {
     KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.set(0)
     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.set(0)
-    
+
     super.tearDown()
   }
 
@@ -68,9 +71,11 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     try {
       TestUtils.retry(10000) {
-        val error = new ListGroupsResponse(requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder())).error()
+        val error =
+          new ListGroupsResponse(requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder())).error()
         assertEquals(Errors.NONE, error)
-        assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
+        assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get,
+                     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)
       }
     } finally {
@@ -85,11 +90,9 @@ object KafkaMetricReporterExceptionHandlingTest {
 
   class GoodReporter extends MetricsReporter {
 
-    def configure(configs: java.util.Map[String, _]) {
-    }
+    def configure(configs: java.util.Map[String, _]) {}
 
-    def init(metrics: java.util.List[KafkaMetric]) {
-    }
+    def init(metrics: java.util.List[KafkaMetric]) {}
 
     def metricChange(metric: KafkaMetric) {
       if (metric.metricName.group == "Request") {
@@ -97,11 +100,9 @@ object KafkaMetricReporterExceptionHandlingTest {
       }
     }
 
-    def metricRemoval(metric: KafkaMetric) {
-    }
+    def metricRemoval(metric: KafkaMetric) {}
 
-    def close() {
-    }
+    def close() {}
   }
 
   class BadReporter extends GoodReporter {

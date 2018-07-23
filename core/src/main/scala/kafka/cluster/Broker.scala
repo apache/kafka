@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.cluster
 
 import kafka.common.BrokerEndPointNotAvailableException
@@ -34,10 +33,12 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
   }.toMap
 
   if (endPointsMap.size != endPoints.size)
-    throw new IllegalArgumentException(s"There is more than one end point with the same listener name: ${endPoints.mkString(",")}")
+    throw new IllegalArgumentException(
+      s"There is more than one end point with the same listener name: ${endPoints.mkString(",")}"
+    )
 
   override def toString: String =
-    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull}"
+    s"$id : ${endPointsMap.values.mkString("(", ",", ")")} : ${rack.orNull}"
 
   def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
     this(id, Seq(EndPoint(host, port, listenerName, protocol)), None)
@@ -49,16 +50,22 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
 
   def node(listenerName: ListenerName): Node =
     getNode(listenerName).getOrElse {
-      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found " +
-        s"for broker $id")
+      throw new BrokerEndPointNotAvailableException(
+        s"End point with listener name ${listenerName.value} not found " +
+          s"for broker $id"
+      )
     }
 
   def getNode(listenerName: ListenerName): Option[Node] =
     endPointsMap.get(listenerName).map(endpoint => new Node(id, endpoint.host, endpoint.port, rack.orNull))
 
   def brokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
-    val endpoint = endPointsMap.getOrElse(listenerName,
-      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
+    val endpoint = endPointsMap.getOrElse(
+      listenerName,
+      throw new BrokerEndPointNotAvailableException(
+        s"End point with listener name ${listenerName.value} not found for broker $id"
+      )
+    )
     new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import kafka.server.{KafkaConfig, ReplicaFetcherManager}
@@ -71,14 +70,18 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     // regular update
     val newLeaderAndIsr1 = new LeaderAndIsr(leader, leaderEpoch, replicas, 0)
     val (updateSucceeded1, newZkVersion1) = ReplicationUtils.updateLeaderAndIsr(zkClient,
-      new TopicPartition(topic, partition), newLeaderAndIsr1, controllerEpoch)
+                                                                                new TopicPartition(topic, partition),
+                                                                                newLeaderAndIsr1,
+                                                                                controllerEpoch)
     assertTrue(updateSucceeded1)
     assertEquals(newZkVersion1, 1)
 
     // mismatched zkVersion with the same data
     val newLeaderAndIsr2 = new LeaderAndIsr(leader, leaderEpoch, replicas, zkVersion + 1)
     val (updateSucceeded2, newZkVersion2) = ReplicationUtils.updateLeaderAndIsr(zkClient,
-      new TopicPartition(topic, partition), newLeaderAndIsr2, controllerEpoch)
+                                                                                new TopicPartition(topic, partition),
+                                                                                newLeaderAndIsr2,
+                                                                                controllerEpoch)
     assertTrue(updateSucceeded2)
     // returns true with existing zkVersion
     assertEquals(newZkVersion2, 1)
@@ -86,7 +89,9 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     // mismatched zkVersion and leaderEpoch
     val newLeaderAndIsr3 = new LeaderAndIsr(leader, leaderEpoch + 1, replicas, zkVersion + 1)
     val (updateSucceeded3, newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkClient,
-      new TopicPartition(topic, partition), newLeaderAndIsr3, controllerEpoch)
+                                                                                new TopicPartition(topic, partition),
+                                                                                newLeaderAndIsr3,
+                                                                                controllerEpoch)
     assertFalse(updateSucceeded3)
     assertEquals(newZkVersion3, -1)
   }

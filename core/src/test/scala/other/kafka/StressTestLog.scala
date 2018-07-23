@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-
+ */
 package kafka
 
 import java.util.Properties
@@ -39,11 +38,12 @@ object StressTestLog {
     val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProperties = new Properties()
-    logProperties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
+    logProperties.put(LogConfig.SegmentBytesProp, 64 * 1024 * 1024: java.lang.Integer)
     logProperties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
-    logProperties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+    logProperties.put(LogConfig.SegmentIndexBytesProp, 1024 * 1024: java.lang.Integer)
 
-    val log = Log(dir = dir,
+    val log = Log(
+      dir = dir,
       config = LogConfig(logProperties),
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -52,22 +52,25 @@ object StressTestLog {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       brokerTopicStats = new BrokerTopicStats,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10)
+    )
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
     reader.start()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
-        running.set(false)
-        writer.join()
-        reader.join()
-        Utils.delete(dir)
-      }
-    })
+    Runtime
+      .getRuntime()
+      .addShutdownHook(new Thread() {
+        override def run() = {
+          running.set(false)
+          writer.join()
+          reader.join()
+          Utils.delete(dir)
+        }
+      })
 
-    while(running.get) {
+    while (running.get) {
       Thread.sleep(1000)
       println("Reader offset = %d, writer offset = %d".format(reader.currentOffset, writer.currentOffset))
       writer.checkProgress()
@@ -80,8 +83,7 @@ object StressTestLog {
 
     override def run() {
       try {
-        while(running.get)
-          work()
+        while (running.get) work()
       } catch {
         case e: Exception => {
           e.printStackTrace()
@@ -132,11 +134,14 @@ object StressTestLog {
   class ReaderThread(val log: Log) extends WorkerThread with LogProgress {
     override def work() {
       try {
-        log.read(currentOffset, 1024, Some(currentOffset + 1), isolationLevel = IsolationLevel.READ_UNCOMMITTED).records match {
+        log
+          .read(currentOffset, 1024, Some(currentOffset + 1), isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+          .records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()
             require(first.lastOffset == currentOffset, "We should either read nothing or the message we asked for.")
-            require(first.sizeInBytes == read.sizeInBytes, "Expected %d but got %d.".format(first.sizeInBytes, read.sizeInBytes))
+            require(first.sizeInBytes == read.sizeInBytes,
+                    "Expected %d but got %d.".format(first.sizeInBytes, read.sizeInBytes))
             currentOffset += 1
           }
           case _ =>

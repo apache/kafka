@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{nonthreadsafe, Logging}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Utils
@@ -73,16 +73,15 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     Files.deleteIfExists(file.toPath)
   }
 
-  private def channel: FileChannel = {
+  private def channel: FileChannel =
     maybeChannel match {
       case Some(channel) => channel
-      case None => openChannel()
+      case None          => openChannel()
     }
-  }
 
   private def openChannel(): FileChannel = {
-    val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
-      StandardOpenOption.WRITE)
+    val channel =
+      FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)
     maybeChannel = Some(channel)
     channel.position(channel.size)
     channel
@@ -101,12 +100,11 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     maybeChannel = None
   }
 
-  def renameTo(f: File): Unit = {
+  def renameTo(f: File): Unit =
     try {
       if (file.exists)
         Utils.atomicMoveWithFallback(file.toPath, f.toPath)
     } finally file = f
-  }
 
   def truncateTo(offset: Long): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
@@ -121,7 +119,9 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     }
   }
 
-  private def iterator(allocate: () => ByteBuffer = () => ByteBuffer.allocate(AbortedTxn.TotalSize)): Iterator[(AbortedTxn, Int)] = {
+  private def iterator(
+    allocate: () => ByteBuffer = () => ByteBuffer.allocate(AbortedTxn.TotalSize)
+  ): Iterator[(AbortedTxn, Int)] =
     maybeChannel match {
       case None => Iterator.empty
       case Some(channel) =>
@@ -130,7 +130,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
         new Iterator[(AbortedTxn, Int)] {
           override def hasNext: Boolean = channel.position - position >= AbortedTxn.TotalSize
 
-          override def next(): (AbortedTxn, Int) = {
+          override def next(): (AbortedTxn, Int) =
             try {
               val buffer = allocate()
               Utils.readFully(channel, buffer, position)
@@ -138,8 +138,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
               val abortedTxn = new AbortedTxn(buffer)
               if (abortedTxn.version > AbortedTxn.CurrentVersion)
-                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
-                  s"current version is ${AbortedTxn.CurrentVersion}")
+                throw new KafkaException(
+                  s"Unexpected aborted transaction version ${abortedTxn.version}, " +
+                    s"current version is ${AbortedTxn.CurrentVersion}"
+                )
               val nextEntry = (abortedTxn, position)
               position += AbortedTxn.TotalSize
               nextEntry
@@ -149,14 +151,11 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
                 // UNKNOWN error to the consumer, which will cause it to retry the fetch.
                 throw new KafkaException(s"Failed to read from the transaction index $file", e)
             }
-          }
         }
     }
-  }
 
-  def allAbortedTxns: List[AbortedTxn] = {
+  def allAbortedTxns: List[AbortedTxn] =
     iterator().map(_._1).toList
-  }
 
   /**
    * Collect all aborted transactions which overlap with a given fetch range.
@@ -187,8 +186,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
       if (abortedTxn.lastOffset < startOffset)
-        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn is less than start offset " +
-          s"$startOffset")
+        throw new CorruptIndexException(
+          s"Last offset of aborted transaction $abortedTxn is less than start offset " +
+            s"$startOffset"
+        )
     }
   }
 
@@ -213,10 +214,7 @@ private[log] object AbortedTxn {
 private[log] class AbortedTxn(val buffer: ByteBuffer) {
   import AbortedTxn._
 
-  def this(producerId: Long,
-           firstOffset: Long,
-           lastOffset: Long,
-           lastStableOffset: Long) = {
+  def this(producerId: Long, firstOffset: Long, lastOffset: Long, lastStableOffset: Long) = {
     this(ByteBuffer.allocate(AbortedTxn.TotalSize))
     buffer.putShort(CurrentVersion)
     buffer.putLong(producerId)
@@ -245,12 +243,11 @@ private[log] class AbortedTxn(val buffer: ByteBuffer) {
     s"AbortedTxn(version=$version, producerId=$producerId, firstOffset=$firstOffset, " +
       s"lastOffset=$lastOffset, lastStableOffset=$lastStableOffset)"
 
-  override def equals(any: Any): Boolean = {
+  override def equals(any: Any): Boolean =
     any match {
       case that: AbortedTxn => this.buffer.equals(that.buffer)
-      case _ => false
+      case _                => false
     }
-  }
 
   override def hashCode(): Int = buffer.hashCode
 }

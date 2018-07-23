@@ -39,10 +39,16 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
     // create the topic
-    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
-      "--replication-factor", "1",
-      "--config", cleanupKey + "=" + cleanupVal,
-      "--topic", topic))
+    val createOpts = new TopicCommandOptions(
+      Array("--partitions",
+            numPartitionsOriginal.toString,
+            "--replication-factor",
+            "1",
+            "--config",
+            cleanupKey + "=" + cleanupVal,
+            "--topic",
+            topic)
+    )
     TopicCommand.createTopic(zkClient, createOpts)
     val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
     assertTrue("Properties after creation don't contain " + cleanupKey, props.containsKey(cleanupKey))
@@ -72,9 +78,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // create the NormalTopic
-    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
-      "--replication-factor", "1",
-      "--topic", normalTopic))
+    val createOpts = new TopicCommandOptions(
+      Array("--partitions", numPartitionsOriginal.toString, "--replication-factor", "1", "--topic", normalTopic)
+    )
     TopicCommand.createTopic(zkClient, createOpts)
 
     // delete the NormalTopic
@@ -85,9 +91,14 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
 
     // create the offset topic
-    val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
-      "--replication-factor", "1",
-      "--topic", Topic.GROUP_METADATA_TOPIC_NAME))
+    val createOffsetTopicOpts = new TopicCommandOptions(
+      Array("--partitions",
+            numPartitionsOriginal.toString,
+            "--replication-factor",
+            "1",
+            "--topic",
+            Topic.GROUP_METADATA_TOPIC_NAME)
+    )
     TopicCommand.createTopic(zkClient, createOffsetTopicOpts)
 
     // try to delete the Topic.GROUP_METADATA_TOPIC_NAME and make sure it doesn't
@@ -145,7 +156,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // create the topic
     val createOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic))
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic)
+    )
     TopicCommand.createTopic(zkClient, createOpts)
 
     // try to re-create the topic without --if-not-exists
@@ -155,7 +167,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // try to re-create the topic with --if-not-exists
     val createNotExistsOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic, "--if-not-exists"))
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic, "--if-not-exists")
+    )
     TopicCommand.createTopic(zkClient, createNotExistsOpts)
   }
 
@@ -166,25 +179,29 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     val numPartitions = 18
     val replicationFactor = 3
-    val createOpts = new TopicCommandOptions(Array(
-      "--partitions", numPartitions.toString,
-      "--replication-factor", replicationFactor.toString,
-      "--topic", "foo"))
+    val createOpts = new TopicCommandOptions(
+      Array("--partitions",
+            numPartitions.toString,
+            "--replication-factor",
+            replicationFactor.toString,
+            "--topic",
+            "foo")
+    )
     TopicCommand.createTopic(zkClient, createOpts)
 
-    var assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
-      tp.partition -> replicas
+    var assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map {
+      case (tp, replicas) =>
+        tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor)
 
     val alteredNumPartitions = 36
     // verify that adding partitions will also be rack aware
-    val alterOpts = new TopicCommandOptions(Array(
-      "--partitions", alteredNumPartitions.toString,
-      "--topic", "foo"))
+    val alterOpts = new TopicCommandOptions(Array("--partitions", alteredNumPartitions.toString, "--topic", "foo"))
     TopicCommand.alterTopic(zkClient, alterOpts)
-    assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
-      tp.partition -> replicas
+    assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map {
+      case (tp, replicas) =>
+        tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
@@ -233,8 +250,15 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // create the topic
     try {
       val createOpts = new TopicCommandOptions(
-        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
-          "--config", "message.timestamp.type=boom"))
+        Array("--partitions",
+              "1",
+              "--replication-factor",
+              "1",
+              "--topic",
+              "test",
+              "--config",
+              "message.timestamp.type=boom")
+      )
       TopicCommand.createTopic(zkClient, createOpts)
       fail("Expected exception on invalid topic-level config.")
     } catch {

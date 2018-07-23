@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
@@ -56,8 +56,13 @@ class ReplicaStateMachineTest extends JUnitSuite {
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
     mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
     replicaState = mutable.Map.empty[PartitionAndReplica, ReplicaState]
-    replicaStateMachine = new ReplicaStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext, mockTopicDeletionManager, mockZkClient,
-      replicaState, mockControllerBrokerRequestBatch)
+    replicaStateMachine = new ReplicaStateMachine(config,
+                                                  new StateChangeLogger(brokerId, true, None),
+                                                  controllerContext,
+                                                  mockTopicDeletionManager,
+                                                  mockZkClient,
+                                                  replicaState,
+                                                  mockControllerBrokerRequestBatch)
   }
 
   @Test
@@ -97,9 +102,8 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidNewReplicaToNonexistentReplicaTransition(): Unit = {
+  def testInvalidNewReplicaToNonexistentReplicaTransition(): Unit =
     testInvalidTransition(NewReplica, NonExistentReplica)
-  }
 
   @Test
   def testNewReplicaToOnlineReplicaTransition(): Unit = {
@@ -113,8 +117,12 @@ class ReplicaStateMachineTest extends JUnitSuite {
   def testNewReplicaToOfflineReplicaTransition(): Unit = {
     replicaState.put(replica, NewReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)),
-      EasyMock.eq(partition), EasyMock.eq(false), EasyMock.anyObject()))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)),
+                                                                       EasyMock.eq(partition),
+                                                                       EasyMock.eq(false),
+                                                                       EasyMock.anyObject())
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
@@ -123,39 +131,40 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidNewReplicaToReplicaDeletionStartedTransition(): Unit = {
+  def testInvalidNewReplicaToReplicaDeletionStartedTransition(): Unit =
     testInvalidTransition(NewReplica, ReplicaDeletionStarted)
-  }
 
   @Test
-  def testInvalidNewReplicaToReplicaDeletionIneligibleTransition(): Unit = {
+  def testInvalidNewReplicaToReplicaDeletionIneligibleTransition(): Unit =
     testInvalidTransition(NewReplica, ReplicaDeletionIneligible)
-  }
 
   @Test
-  def testInvalidNewReplicaToReplicaDeletionSuccessfulTransition(): Unit = {
+  def testInvalidNewReplicaToReplicaDeletionSuccessfulTransition(): Unit =
     testInvalidTransition(NewReplica, ReplicaDeletionSuccessful)
-  }
 
   @Test
-  def testInvalidOnlineReplicaToNonexistentReplicaTransition(): Unit = {
+  def testInvalidOnlineReplicaToNonexistentReplicaTransition(): Unit =
     testInvalidTransition(OnlineReplica, NonExistentReplica)
-  }
 
   @Test
-  def testInvalidOnlineReplicaToNewReplicaTransition(): Unit = {
+  def testInvalidOnlineReplicaToNewReplicaTransition(): Unit =
     testInvalidTransition(OnlineReplica, NewReplica)
-  }
 
   @Test
   def testOnlineReplicaToOnlineReplicaTransition(): Unit = {
     replicaState.put(replica, OnlineReplica)
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch =
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
-      partition, leaderIsrAndControllerEpoch, Seq(brokerId), isNew = false))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
+                                                                        partition,
+                                                                        leaderIsrAndControllerEpoch,
+                                                                        Seq(brokerId),
+                                                                        isNew = false)
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
@@ -175,19 +184,38 @@ class ReplicaStateMachineTest extends JUnitSuite {
 
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)),
-      EasyMock.eq(partition), EasyMock.eq(false), EasyMock.anyObject()))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)),
+                                                                       EasyMock.eq(partition),
+                                                                       EasyMock.eq(false),
+                                                                       EasyMock.anyObject())
+    )
     val adjustedLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NoLeader, List(otherBrokerId))
-    val updatedLeaderAndIsr = adjustedLeaderAndIsr.withZkVersion(adjustedLeaderAndIsr .zkVersion + 1)
+    val updatedLeaderAndIsr = adjustedLeaderAndIsr.withZkVersion(adjustedLeaderAndIsr.zkVersion + 1)
     val updatedLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch)
-    EasyMock.expect(mockZkClient.getTopicPartitionStatesRaw(partitions)).andReturn(
-      Seq(GetDataResponse(Code.OK, null, Some(partition),
-        TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
-    EasyMock.expect(mockZkClient.updateLeaderAndIsr(Map(partition -> adjustedLeaderAndIsr), controllerEpoch))
+    EasyMock
+      .expect(mockZkClient.getTopicPartitionStatesRaw(partitions))
+      .andReturn(
+        Seq(
+          GetDataResponse(Code.OK,
+                          null,
+                          Some(partition),
+                          TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch),
+                          stat,
+                          ResponseMetadata(0, 0))
+        )
+      )
+    EasyMock
+      .expect(mockZkClient.updateLeaderAndIsr(Map(partition -> adjustedLeaderAndIsr), controllerEpoch))
       .andReturn(UpdateLeaderAndIsrResult(Map(partition -> updatedLeaderAndIsr), Seq.empty, Map.empty))
     EasyMock.expect(mockTopicDeletionManager.isPartitionToBeDeleted(partition)).andReturn(false)
-    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
-      partition, updatedLeaderIsrAndControllerEpoch, replicaIds, isNew = false))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
+                                                                        partition,
+                                                                        updatedLeaderIsrAndControllerEpoch,
+                                                                        replicaIds,
+                                                                        isNew = false)
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
 
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch, mockTopicDeletionManager)
@@ -198,39 +226,40 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidOnlineReplicaToReplicaDeletionStartedTransition(): Unit = {
+  def testInvalidOnlineReplicaToReplicaDeletionStartedTransition(): Unit =
     testInvalidTransition(OnlineReplica, ReplicaDeletionStarted)
-  }
 
   @Test
-  def testInvalidOnlineReplicaToReplicaDeletionIneligibleTransition(): Unit = {
+  def testInvalidOnlineReplicaToReplicaDeletionIneligibleTransition(): Unit =
     testInvalidTransition(OnlineReplica, ReplicaDeletionIneligible)
-  }
 
   @Test
-  def testInvalidOnlineReplicaToReplicaDeletionSuccessfulTransition(): Unit = {
+  def testInvalidOnlineReplicaToReplicaDeletionSuccessfulTransition(): Unit =
     testInvalidTransition(OnlineReplica, ReplicaDeletionSuccessful)
-  }
 
   @Test
-  def testInvalidOfflineReplicaToNonexistentReplicaTransition(): Unit = {
+  def testInvalidOfflineReplicaToNonexistentReplicaTransition(): Unit =
     testInvalidTransition(OfflineReplica, NonExistentReplica)
-  }
 
   @Test
-  def testInvalidOfflineReplicaToNewReplicaTransition(): Unit = {
+  def testInvalidOfflineReplicaToNewReplicaTransition(): Unit =
     testInvalidTransition(OfflineReplica, NewReplica)
-  }
 
   @Test
   def testOfflineReplicaToOnlineReplicaTransition(): Unit = {
     replicaState.put(replica, OfflineReplica)
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch =
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
-      partition, leaderIsrAndControllerEpoch, Seq(brokerId), isNew = false))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
+                                                                        partition,
+                                                                        leaderIsrAndControllerEpoch,
+                                                                        Seq(brokerId),
+                                                                        isNew = false)
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
@@ -243,8 +272,10 @@ class ReplicaStateMachineTest extends JUnitSuite {
     val callbacks = new Callbacks()
     replicaState.put(replica, OfflineReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(brokerId),
-      partition, true, callbacks.stopReplicaResponseCallback))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch
+        .addStopReplicaRequestForBrokers(Seq(brokerId), partition, true, callbacks.stopReplicaResponseCallback)
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, ReplicaDeletionStarted, callbacks)
@@ -253,34 +284,28 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidOfflineReplicaToReplicaDeletionIneligibleTransition(): Unit = {
+  def testInvalidOfflineReplicaToReplicaDeletionIneligibleTransition(): Unit =
     testInvalidTransition(OfflineReplica, ReplicaDeletionIneligible)
-  }
 
   @Test
-  def testInvalidOfflineReplicaToReplicaDeletionSuccessfulTransition(): Unit = {
+  def testInvalidOfflineReplicaToReplicaDeletionSuccessfulTransition(): Unit =
     testInvalidTransition(OfflineReplica, ReplicaDeletionSuccessful)
-  }
 
   @Test
-  def testInvalidReplicaDeletionStartedToNonexistentReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionStartedToNonexistentReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionStarted, NonExistentReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionStartedToNewReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionStartedToNewReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionStarted, NewReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionStartedToOnlineReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionStartedToOnlineReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionStarted, OnlineReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionStartedToOfflineReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionStartedToOfflineReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionStarted, OfflineReplica)
-  }
 
   @Test
   def testReplicaDeletionStartedToReplicaDeletionIneligibleTransition(): Unit = {
@@ -306,49 +331,48 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidReplicaDeletionSuccessfulToNewReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionSuccessfulToNewReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionSuccessful, NewReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionSuccessfulToOnlineReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionSuccessfulToOnlineReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionSuccessful, OnlineReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionSuccessfulToOfflineReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionSuccessfulToOfflineReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionSuccessful, OfflineReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionSuccessfulToReplicaDeletionStartedTransition(): Unit = {
+  def testInvalidReplicaDeletionSuccessfulToReplicaDeletionStartedTransition(): Unit =
     testInvalidTransition(ReplicaDeletionSuccessful, ReplicaDeletionStarted)
-  }
 
   @Test
-  def testInvalidReplicaDeletionSuccessfulToReplicaDeletionIneligibleTransition(): Unit = {
+  def testInvalidReplicaDeletionSuccessfulToReplicaDeletionIneligibleTransition(): Unit =
     testInvalidTransition(ReplicaDeletionSuccessful, ReplicaDeletionIneligible)
-  }
 
   @Test
-  def testInvalidReplicaDeletionIneligibleToNonexistentReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionIneligibleToNonexistentReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionIneligible, NonExistentReplica)
-  }
 
   @Test
-  def testInvalidReplicaDeletionIneligibleToNewReplicaTransition(): Unit = {
+  def testInvalidReplicaDeletionIneligibleToNewReplicaTransition(): Unit =
     testInvalidTransition(ReplicaDeletionIneligible, NewReplica)
-  }
 
   @Test
   def testReplicaDeletionIneligibleToOnlineReplicaTransition(): Unit = {
     replicaState.put(replica, ReplicaDeletionIneligible)
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch =
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
-    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
-      partition, leaderIsrAndControllerEpoch, Seq(brokerId), isNew = false))
+    EasyMock.expect(
+      mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId),
+                                                                        partition,
+                                                                        leaderIsrAndControllerEpoch,
+                                                                        Seq(brokerId),
+                                                                        isNew = false)
+    )
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
@@ -357,14 +381,12 @@ class ReplicaStateMachineTest extends JUnitSuite {
   }
 
   @Test
-  def testInvalidReplicaDeletionIneligibleToReplicaDeletionStartedTransition(): Unit = {
+  def testInvalidReplicaDeletionIneligibleToReplicaDeletionStartedTransition(): Unit =
     testInvalidTransition(ReplicaDeletionIneligible, ReplicaDeletionStarted)
-  }
 
   @Test
-  def testInvalidReplicaDeletionIneligibleToReplicaDeletionSuccessfulTransition(): Unit = {
+  def testInvalidReplicaDeletionIneligibleToReplicaDeletionSuccessfulTransition(): Unit =
     testInvalidTransition(ReplicaDeletionIneligible, ReplicaDeletionSuccessful)
-  }
 
   private def testInvalidTransition(fromState: ReplicaState, toState: ReplicaState): Unit = {
     replicaState.put(replica, fromState)

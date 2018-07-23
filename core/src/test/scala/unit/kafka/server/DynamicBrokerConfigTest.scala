@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.util
@@ -44,7 +43,9 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     assertSame(config, dynamicConfig.currentKafkaConfig)
     assertEquals(oldKeystore, config.values.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     assertEquals(oldKeystore,
-      config.valuesFromThisConfigWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+                 config
+                   .valuesFromThisConfigWithPrefixOverride("listener.name.external.")
+                   .get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
 
     (1 to 2).foreach { i =>
@@ -54,14 +55,18 @@ class DynamicBrokerConfigTest extends JUnitSuite {
       dynamicConfig.updateBrokerConfig(0, props1)
       assertNotSame(config, dynamicConfig.currentKafkaConfig)
 
+      assertEquals(
+        newKeystore,
+        config.valuesWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG)
+      )
       assertEquals(newKeystore,
-        config.valuesWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+                   config.originalsWithPrefix("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+      assertEquals(
+        newKeystore,
+        config.valuesWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG)
+      )
       assertEquals(newKeystore,
-        config.originalsWithPrefix("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
-      assertEquals(newKeystore,
-        config.valuesWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
-      assertEquals(newKeystore,
-        config.originalsWithPrefix("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+                   config.originalsWithPrefix("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
 
       assertEquals(oldKeystore, config.getString(KafkaConfig.SslKeystoreLocationProp))
       assertEquals(oldKeystore, config.originals.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
@@ -69,7 +74,9 @@ class DynamicBrokerConfigTest extends JUnitSuite {
       assertEquals(oldKeystore, config.originalsStrings.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
 
       assertEquals(oldKeystore,
-        config.valuesFromThisConfigWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
+                   config
+                     .valuesFromThisConfigWithPrefixOverride("listener.name.external.")
+                     .get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
@@ -105,7 +112,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
 
     def validateLogCleanerConfig(configs: util.Map[String, _]): Unit = {
       val cleanerThreads = configs.get(KafkaConfig.LogCleanerThreadsProp).toString.toInt
-      if (cleanerThreads <=0 || cleanerThreads >= 5)
+      if (cleanerThreads <= 0 || cleanerThreads >= 5)
         throw new ConfigException(s"Invalid cleaner threads $cleanerThreads")
     }
     val reconfigurable = new Reconfigurable {
@@ -132,7 +139,8 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val config = KafkaConfig(origProps)
     val invalidReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.BrokerIdProp, "some.prop")
-    val validReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
+    val validReconfigurableProps =
+      Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
 
     def createReconfigurable(configs: Set[String]) = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}
@@ -179,12 +187,11 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     props.put(name, value)
     val oldValue = config.originals.get(name)
 
-    def updateConfig() = {
+    def updateConfig() =
       if (perBrokerConfig)
         config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
-    }
     if (!expectFailure) {
       config.dynamicConfig.validate(props, perBrokerConfig)
       updateConfig()
@@ -206,7 +213,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
                                                   validProps: Map[String, String],
                                                   invalidProps: Map[String, String]): Unit = {
     val props = new Properties
-    validProps.foreach { case (k, v) => props.put(k, v) }
+    validProps.foreach { case (k, v)   => props.put(k, v) }
     invalidProps.foreach { case (k, v) => props.put(k, v) }
 
     // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided in
@@ -244,7 +251,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     }
     val persistedProps = configWithSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
     assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"))
+                persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"))
     val decodedProps = configWithSecret.dynamicConfig.fromPersistentProps(persistedProps, perBrokerConfig = true)
     assertEquals("myLoginModule required;", decodedProps.getProperty(KafkaConfig.SaslJaasConfigProp))
   }
@@ -260,33 +267,37 @@ class DynamicBrokerConfigTest extends JUnitSuite {
 
     val persistedProps = config.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
     assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"))
+                persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"))
     config.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals("dynamicLoginModule required;", config.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+    assertEquals("dynamicLoginModule required;",
+                 config.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
     // New config with same secret should use the dynamic password config
     val newConfigWithSameSecret = KafkaConfig(props)
     newConfigWithSameSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals("dynamicLoginModule required;", newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+    assertEquals("dynamicLoginModule required;",
+                 newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
     // New config with new secret should use the dynamic password config if new and old secrets are configured in KafkaConfig
     props.put(KafkaConfig.PasswordEncoderSecretProp, "new-encoder-secret")
     props.put(KafkaConfig.PasswordEncoderOldSecretProp, "config-encoder-secret")
     val newConfigWithNewAndOldSecret = KafkaConfig(props)
     newConfigWithNewAndOldSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals("dynamicLoginModule required;", newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+    assertEquals("dynamicLoginModule required;",
+                 newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
     // New config with new secret alone should revert to static password config since dynamic config cannot be decoded
     props.put(KafkaConfig.PasswordEncoderSecretProp, "another-new-encoder-secret")
     val newConfigWithNewSecret = KafkaConfig(props)
     newConfigWithNewSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
-    assertEquals("staticLoginModule required;", newConfigWithNewSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+    assertEquals("staticLoginModule required;",
+                 newConfigWithNewSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
   }
 
   @Test
   def testDynamicListenerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
-    val oldConfig =  KafkaConfig.fromProps(props)
+    val oldConfig = KafkaConfig.fromProps(props)
     val kafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
     EasyMock.replay(kafkaServer)
@@ -300,23 +311,33 @@ class DynamicBrokerConfigTest extends JUnitSuite {
 
   @Test
   def testSynonyms(): Unit = {
-    assertEquals(List("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
-      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", matchListenerOverride = true))
-    assertEquals(List("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
-      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", matchListenerOverride = true))
+    assertEquals(
+      List("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", matchListenerOverride = true)
+    )
+    assertEquals(
+      List("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config",
+                                               matchListenerOverride = true)
+    )
     assertEquals(List("some.config"),
-      DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
-    assertEquals(List(KafkaConfig.LogRollTimeMillisProp, KafkaConfig.LogRollTimeHoursProp),
-      DynamicBrokerConfig.brokerConfigSynonyms(KafkaConfig.LogRollTimeMillisProp, matchListenerOverride = true))
+                 DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
+    assertEquals(
+      List(KafkaConfig.LogRollTimeMillisProp, KafkaConfig.LogRollTimeHoursProp),
+      DynamicBrokerConfig.brokerConfigSynonyms(KafkaConfig.LogRollTimeMillisProp, matchListenerOverride = true)
+    )
   }
 
   @Test
   def testDynamicConfigInitializationWithoutConfigsInZK(): Unit = {
     val zkClient = EasyMock.createMock(classOf[kafka.zk.KafkaZkClient])
-    EasyMock.expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new java.util.Properties()).anyTimes()
+    EasyMock
+      .expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString()))
+      .andReturn(new java.util.Properties())
+      .anyTimes()
     EasyMock.replay(zkClient)
 
-    val oldConfig =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
+    val oldConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
     val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
     dynamicBrokerConfig.initialize(zkClient)
     dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
@@ -330,9 +351,8 @@ class DynamicBrokerConfigTest extends JUnitSuite {
 
 class TestDynamicThreadPool() extends BrokerReconfigurable {
 
-  override def reconfigurableConfigs: Set[String] = {
+  override def reconfigurableConfigs: Set[String] =
     DynamicThreadPool.ReconfigurableConfigs
-  }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     assertEquals(Defaults.NumIoThreads, oldConfig.numIoThreads)

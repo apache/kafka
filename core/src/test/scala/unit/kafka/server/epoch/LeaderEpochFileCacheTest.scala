@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server.epoch
 import java.io.File
 
@@ -29,8 +28,8 @@ import org.junit.{Before, Test}
 import scala.collection.mutable.ListBuffer
 
 /**
-  * Unit test for the LeaderEpochFileCache.
-  */
+ * Unit test for the LeaderEpochFileCache.
+ */
 class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
   var checkpoint: LeaderEpochCheckpoint = _
@@ -87,7 +86,8 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals("Expected undefined epoch and offset if undefined epoch requested. Cache not empty.",
-                 expectedEpochEndOffset, epochAndOffsetFor)
+                 expectedEpochEndOffset,
+                 epochAndOffsetFor)
   }
 
   @Test
@@ -122,7 +122,7 @@ class LeaderEpochFileCacheTest {
     //Then epoch should have been updated
     assertEquals(ListBuffer(EpochEntry(2, 9), EpochEntry(3, 9)), cache.epochEntries())
   }
-  
+
   @Test
   def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
     //Given
@@ -137,7 +137,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUnsupportedIfNoEpochRecorded(){
+  def shouldReturnUnsupportedIfNoEpochRecorded() {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -148,7 +148,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested(){
+  def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested() {
     val leo = 73
     def leoFinder() = new LogOffsetMetadata(leo)
 
@@ -160,11 +160,12 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
-                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), offsetFor)
+                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+                 offsetFor)
   }
 
   @Test
-  def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch(){
+  def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch() {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -203,7 +204,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested(){
+  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested() {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -270,7 +271,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldPersistEpochsBetweenInstances(){
+  def shouldPersistEpochsBetweenInstances() {
     def leoFinder() = new LogOffsetMetadata(0)
     val checkpointPath = TestUtils.tempFile().getAbsolutePath
     checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
@@ -476,7 +477,7 @@ class LeaderEpochFileCacheTest {
     cache.clearAndFlushEarliest(offset = 1)
 
     //Then nothing should change
-    assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(EpochEntry(2, 6), EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -493,7 +494,7 @@ class LeaderEpochFileCacheTest {
     cache.clearAndFlushEarliest(offset = 6)
 
     //Then nothing should change
-    assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(EpochEntry(2, 6), EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -544,7 +545,7 @@ class LeaderEpochFileCacheTest {
     cache.clearAndFlushEarliest(offset = 5)
 
     //Then we should keeep epoch 0 but update the offset appropriately
-    assertEquals(ListBuffer(EpochEntry(0,5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -592,10 +593,10 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 8)
     cache.assign(epoch = 4, offset = 11)
 
-    //When 
+    //When
     cache.clearAndFlush()
 
-    //Then 
+    //Then
     assertEquals(0, cache.epochEntries.size)
   }
 

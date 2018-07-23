@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import kafka.network.SocketServer
@@ -100,7 +99,9 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
 
     // Test AlterReplicaDirRequest after topic creation and log directory failure
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
-    TestUtils.waitUntilTrue(() => !servers.head.logManager.isLogDirOnline(offlineDir), s"timed out waiting for $offlineDir to be offline", 3000)
+    TestUtils.waitUntilTrue(() => !servers.head.logManager.isLogDirOnline(offlineDir),
+                            s"timed out waiting for $offlineDir to be offline",
+                            3000)
     val partitionDirs3 = mutable.Map.empty[TopicPartition, String]
     partitionDirs3.put(new TopicPartition(topic, 0), "invalidDir")
     partitionDirs3.put(new TopicPartition(topic, 1), validDir3)
@@ -111,7 +112,10 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 2)))
   }
 
-  private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String], socketServer: SocketServer = controllerSocketServer): AlterReplicaLogDirsResponse = {
+  private def sendAlterReplicaLogDirsRequest(
+    partitionDirs: Map[TopicPartition, String],
+    socketServer: SocketServer = controllerSocketServer
+  ): AlterReplicaLogDirsResponse = {
     val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
     val response = connectAndSend(request, ApiKeys.ALTER_REPLICA_LOG_DIRS, socketServer)
     AlterReplicaLogDirsResponse.parse(response, request.version)

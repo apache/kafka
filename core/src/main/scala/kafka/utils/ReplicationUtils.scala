@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
@@ -24,33 +23,38 @@ import org.apache.kafka.common.TopicPartition
 
 object ReplicationUtils extends Logging {
 
-  def updateLeaderAndIsr(zkClient: KafkaZkClient, partition: TopicPartition, newLeaderAndIsr: LeaderAndIsr,
+  def updateLeaderAndIsr(zkClient: KafkaZkClient,
+                         partition: TopicPartition,
+                         newLeaderAndIsr: LeaderAndIsr,
                          controllerEpoch: Int): (Boolean, Int) = {
     debug(s"Updated ISR for $partition to ${newLeaderAndIsr.isr.mkString(",")}")
     val path = TopicPartitionStateZNode.path(partition)
     val newLeaderData = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch))
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
-    val updatePersistentPath: (Boolean, Int) = zkClient.conditionalUpdatePath(path, newLeaderData,
-      newLeaderAndIsr.zkVersion, Some(checkLeaderAndIsrZkData))
+    val updatePersistentPath: (Boolean, Int) =
+      zkClient.conditionalUpdatePath(path, newLeaderData, newLeaderAndIsr.zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
   }
 
-  private def checkLeaderAndIsrZkData(zkClient: KafkaZkClient, path: String, expectedLeaderAndIsrInfo: Array[Byte]): (Boolean, Int) = {
+  private def checkLeaderAndIsrZkData(zkClient: KafkaZkClient,
+                                      path: String,
+                                      expectedLeaderAndIsrInfo: Array[Byte]): (Boolean, Int) =
     try {
       val (writtenLeaderOpt, writtenStat) = zkClient.getDataAndStat(path)
       val expectedLeaderOpt = TopicPartitionStateZNode.decode(expectedLeaderAndIsrInfo, writtenStat)
-      val succeeded = writtenLeaderOpt.map { writtenData =>
-        val writtenLeaderOpt = TopicPartitionStateZNode.decode(writtenData, writtenStat)
-        (expectedLeaderOpt, writtenLeaderOpt) match {
-          case (Some(expectedLeader), Some(writtenLeader)) if expectedLeader == writtenLeader => true
-          case _ => false
+      val succeeded = writtenLeaderOpt
+        .map { writtenData =>
+          val writtenLeaderOpt = TopicPartitionStateZNode.decode(writtenData, writtenStat)
+          (expectedLeaderOpt, writtenLeaderOpt) match {
+            case (Some(expectedLeader), Some(writtenLeader)) if expectedLeader == writtenLeader => true
+            case _                                                                              => false
+          }
         }
-      }.getOrElse(false)
+        .getOrElse(false)
       if (succeeded) (true, writtenStat.getVersion)
       else (false, -1)
     } catch {
       case _: Exception => (false, -1)
     }
-  }
 
 }

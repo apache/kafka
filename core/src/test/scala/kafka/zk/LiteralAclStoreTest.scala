@@ -37,14 +37,12 @@ class LiteralAclStoreTest {
   }
 
   @Test
-  def shouldHaveCorrectPatternType(): Unit = {
+  def shouldHaveCorrectPatternType(): Unit =
     assertEquals(LITERAL, store.patternType)
-  }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldThrowFromEncodeOnNoneLiteral(): Unit = {
+  def shouldThrowFromEncodeOnNoneLiteral(): Unit =
     store.changeStore.createChangeNode(prefixedResource)
-  }
 
   @Test
   def shouldWriteChangesToTheWritePath(): Unit = {
@@ -64,8 +62,9 @@ class LiteralAclStoreTest {
 
   @Test
   def shouldDecodeResourceUsingTwoPartLogic(): Unit = {
-    val resource = Resource(Group, "PREFIXED:this, including the PREFIXED part, is a valid two part group name", LITERAL)
-    val encoded = (resource.resourceType +  Resource.Separator + resource.name).getBytes(UTF_8)
+    val resource =
+      Resource(Group, "PREFIXED:this, including the PREFIXED part, is a valid two part group name", LITERAL)
+    val encoded = (resource.resourceType + Resource.Separator + resource.name).getBytes(UTF_8)
 
     val actual = store.changeStore.decode(encoded)
 

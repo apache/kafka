@@ -97,10 +97,16 @@ import java.util.concurrent.atomic.AtomicInteger
  * It is caller's responsibility to enforce it. Simultaneous add calls are thread-safe.
  */
 @nonthreadsafe
-private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, taskCounter: AtomicInteger, queue: DelayQueue[TimerTaskList]) {
+private[timer] class TimingWheel(tickMs: Long,
+                                 wheelSize: Int,
+                                 startMs: Long,
+                                 taskCounter: AtomicInteger,
+                                 queue: DelayQueue[TimerTaskList]) {
 
   private[this] val interval = tickMs * wheelSize
-  private[this] val buckets = Array.tabulate[TimerTaskList](wheelSize) { _ => new TimerTaskList(taskCounter) }
+  private[this] val buckets = Array.tabulate[TimerTaskList](wheelSize) { _ =>
+    new TimerTaskList(taskCounter)
+  }
 
   private[this] var currentTime = startMs - (startMs % tickMs) // rounding down to multiple of tickMs
 
@@ -108,7 +114,7 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
   // Therefore, it needs to be volatile due to the issue of Double-Checked Locking pattern with JVM
   @volatile private[this] var overflowWheel: TimingWheel = null
 
-  private[this] def addOverflowWheel(): Unit = {
+  private[this] def addOverflowWheel(): Unit =
     synchronized {
       if (overflowWheel == null) {
         overflowWheel = new TimingWheel(
@@ -120,7 +126,6 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
         )
       }
     }
-  }
 
   def add(timerTaskEntry: TimerTaskEntry): Boolean = {
     val expiration = timerTaskEntry.expirationMs
@@ -155,12 +160,11 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
   }
 
   // Try to advance the clock
-  def advanceClock(timeMs: Long): Unit = {
+  def advanceClock(timeMs: Long): Unit =
     if (timeMs >= currentTime + tickMs) {
       currentTime = timeMs - (timeMs % tickMs)
 
       // Try to advance the clock of the overflow wheel if present
       if (overflowWheel != null) overflowWheel.advanceClock(currentTime)
     }
-  }
 }

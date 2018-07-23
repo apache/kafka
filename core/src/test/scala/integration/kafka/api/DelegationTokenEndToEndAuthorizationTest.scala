@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.api
 
 import java.util
@@ -34,7 +34,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   val kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   override val clientPrincipal = JaasTestUtils.KafkaScramUser
@@ -62,7 +64,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val token = createDelegationToken()
 
     // pass token to client jaas config
-    val clientLoginContext = JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
+    val clientLoginContext =
+      JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
   }
@@ -86,7 +89,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val token = adminClient.createDelegationToken().delegationToken().get()
     //wait for token to reach all the brokers
     TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
-      "Timed out waiting for token to propagate to all servers")
+                            "Timed out waiting for token to propagate to all servers")
     adminClient.close()
 
     token

@@ -61,7 +61,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     val props = new Properties()
     props.put(LogConfig.MaxMessageBytesProp, maxMessageSize: java.lang.Integer)
     props.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-    props.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
+    props.put(LogConfig.SegmentIndexBytesProp, 100 * 1024: java.lang.Integer)
     props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
@@ -87,13 +87,18 @@ abstract class AbstractLogCleanerIntegrationTest {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
 
-      val logConfig = LogConfig(logConfigProperties(propertyOverrides,
-        maxMessageSize = maxMessageSize,
-        minCleanableDirtyRatio = minCleanableDirtyRatio,
-        compactionLag = compactionLag,
-        deleteDelay = deleteDelay,
-        segmentSize = segmentSize))
-      val log = Log(dir,
+      val logConfig = LogConfig(
+        logConfigProperties(
+          propertyOverrides,
+          maxMessageSize = maxMessageSize,
+          minCleanableDirtyRatio = minCleanableDirtyRatio,
+          compactionLag = compactionLag,
+          deleteDelay = deleteDelay,
+          segmentSize = segmentSize
+        )
+      )
+      val log = Log(
+        dir,
         logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,
@@ -102,20 +107,20 @@ abstract class AbstractLogCleanerIntegrationTest {
         brokerTopicStats = new BrokerTopicStats,
         maxProducerIdExpirationMs = 60 * 60 * 1000,
         producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-        logDirFailureChannel = new LogDirFailureChannel(10))
+        logDirFailureChannel = new LogDirFailureChannel(10)
+      )
       logMap.put(partition, log)
       this.logs += log
     }
 
-    val cleanerConfig = CleanerConfig(
-      numThreads = numThreads,
-      ioBufferSize = cleanerIoBufferSize.getOrElse(maxMessageSize / 2),
-      maxMessageSize = maxMessageSize,
-      backOffMs = backOffMs)
+    val cleanerConfig = CleanerConfig(numThreads = numThreads,
+                                      ioBufferSize = cleanerIoBufferSize.getOrElse(maxMessageSize / 2),
+                                      maxMessageSize = maxMessageSize,
+                                      backOffMs = backOffMs)
     new LogCleaner(cleanerConfig,
-      logDirs = Array(logDir),
-      logs = logMap,
-      logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+                   logDirs = Array(logDir),
+                   logs = logMap,
+                   logDirFailureChannel = new LogDirFailureChannel(1),
+                   time = time)
   }
 }

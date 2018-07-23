@@ -59,13 +59,14 @@ class LogSegment private[log] (val log: FileRecords,
                                val rollJitterMs: Long,
                                val maxSegmentMs: Long,
                                val maxSegmentBytes: Int,
-                               val time: Time) extends Logging {
+                               val time: Time)
+    extends Logging {
 
   def shouldRoll(messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long, now: Long): Boolean = {
     val reachedRollMs = timeWaitedForRoll(now, maxTimestampInMessages) > maxSegmentMs - rollJitterMs
     size > maxSegmentBytes - messagesSize ||
-      (size > 0 && reachedRollMs) ||
-      offsetIndex.isFull || timeIndex.isFull || !canConvertToRelativeOffset(maxOffsetInMessages)
+    (size > 0 && reachedRollMs) ||
+    offsetIndex.isFull || timeIndex.isFull || !canConvertToRelativeOffset(maxOffsetInMessages)
   }
 
   def resizeIndexes(size: Int): Unit = {
@@ -73,7 +74,7 @@ class LogSegment private[log] (val log: FileRecords,
     timeIndex.resize(size)
   }
 
-  def sanityCheck(timeIndexFileNewlyCreated: Boolean): Unit = {
+  def sanityCheck(timeIndexFileNewlyCreated: Boolean): Unit =
     if (offsetIndex.file.exists) {
       offsetIndex.sanityCheck()
       // Resize the time index file to 0 if it is newly created.
@@ -81,9 +82,7 @@ class LogSegment private[log] (val log: FileRecords,
         timeIndex.resize(0)
       timeIndex.sanityCheck()
       txnIndex.sanityCheck()
-    }
-    else throw new NoSuchFileException(s"Offset index file ${offsetIndex.file.getAbsolutePath} does not exist")
-  }
+    } else throw new NoSuchFileException(s"Offset index file ${offsetIndex.file.getAbsolutePath} does not exist")
 
   private var created = time.milliseconds
 
@@ -103,9 +102,8 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
    */
-  def canConvertToRelativeOffset(offset: Long): Boolean = {
+  def canConvertToRelativeOffset(offset: Long): Boolean =
     offsetIndex.canAppendOffset(offset)
-  }
 
   /**
    * Append the given messages starting with the given offset. Add
@@ -124,10 +122,12 @@ class LogSegment private[log] (val log: FileRecords,
   def append(largestOffset: Long,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
-             records: MemoryRecords): Unit = {
+             records: MemoryRecords): Unit =
     if (records.sizeInBytes > 0) {
-      trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
-            s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
+      trace(
+        s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
+          s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp"
+      )
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
@@ -150,12 +150,10 @@ class LogSegment private[log] (val log: FileRecords,
       }
       bytesSinceLastIndexEntry += records.sizeInBytes
     }
-  }
 
-  private def ensureOffsetInRange(offset: Long): Unit = {
+  private def ensureOffsetInRange(offset: Long): Unit =
     if (!canConvertToRelativeOffset(offset))
       throw new LogSegmentOffsetOverflowException(this, offset)
-  }
 
   private def appendChunkFromFile(records: FileRecords, position: Int, bufferSupplier: BufferSupplier): Int = {
     var bytesToAppend = 0
@@ -246,7 +244,7 @@ class LogSegment private[log] (val log: FileRecords,
    * @param startingFilePosition A lower bound on the file position from which to begin the search. This is purely an optimization and
    * when omitted, the search will begin at the position in the offset index.
    * @return The position in the log storing the message with the least offset >= the requested offset and the size of the
-    *        message or null if no message meets this criteria.
+   *        message or null if no message meets this criteria.
    */
   @threadsafe
   private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogOffsetPosition = {
@@ -268,7 +266,10 @@ class LogSegment private[log] (val log: FileRecords,
    *         or null if the startOffset is larger than the largest offset in this log
    */
   @threadsafe
-  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
+  def read(startOffset: Long,
+           maxOffset: Option[Long],
+           maxSize: Int,
+           maxPosition: Long = size,
            minOneMessage: Boolean = false): FetchDataInfo = {
     if (maxSize < 0)
       throw new IllegalArgumentException(s"Invalid max size $maxSize for log read from segment $log")
@@ -312,12 +313,13 @@ class LogSegment private[log] (val log: FileRecords,
         min(min(maxPosition, endPosition) - startPosition, adjustedMaxSize).toInt
     }
 
-    FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
-      firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
+    FetchDataInfo(offsetMetadata,
+                  log.slice(startPosition, fetchSize),
+                  firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
   }
 
-   def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Option[Long] =
-     offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
+  def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Option[Long] =
+    offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
    * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
@@ -358,7 +360,8 @@ class LogSegment private[log] (val log: FileRecords,
 
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache.foreach { cache =>
-            if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
+            if (batch.partitionLeaderEpoch > cache
+                  .latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
               cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
           }
           updateProducerState(producerStateManager, batch)
@@ -366,8 +369,10 @@ class LogSegment private[log] (val log: FileRecords,
       }
     } catch {
       case e: CorruptRecordException =>
-        warn("Found invalid messages in log segment %s at byte offset %d: %s."
-          .format(log.file.getAbsolutePath, validBytes, e.getMessage))
+        warn(
+          "Found invalid messages in log segment %s at byte offset %d: %s."
+            .format(log.file.getAbsolutePath, validBytes, e.getMessage)
+        )
     }
     val truncated = log.sizeInBytes - validBytes
     if (truncated > 0)
@@ -512,7 +517,7 @@ class LogSegment private[log] (val log: FileRecords,
    * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
    * segment rolling time.
    */
-  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long): Long = {
     // Load the timestamp of the first message into memory
     if (rollingBasedTimestamp.isEmpty) {
       val iter = log.batches.iterator()
@@ -521,7 +526,7 @@ class LogSegment private[log] (val log: FileRecords,
     }
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t
-      case _ => now - created
+      case _                 => now - created
     }
   }
 
@@ -569,8 +574,8 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-    * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
-    */
+   * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+   */
   def closeHandlers() {
     CoreUtils.swallow(offsetIndex.closeHandler(), this)
     CoreUtils.swallow(timeIndex.closeHandler(), this)
@@ -582,24 +587,24 @@ class LogSegment private[log] (val log: FileRecords,
    * Delete this log segment from the filesystem.
    */
   def deleteIfExists() {
-    def delete(delete: () => Boolean, fileType: String, file: File, logIfMissing: Boolean): Unit = {
+    def delete(delete: () => Boolean, fileType: String, file: File, logIfMissing: Boolean): Unit =
       try {
         if (delete())
           info(s"Deleted $fileType ${file.getAbsolutePath}.")
         else if (logIfMissing)
           info(s"Failed to delete $fileType ${file.getAbsolutePath} because it does not exist.")
-      }
-      catch {
+      } catch {
         case e: IOException => throw new IOException(s"Delete of $fileType ${file.getAbsolutePath} failed.", e)
       }
-    }
 
-    CoreUtils.tryAll(Seq(
-      () => delete(log.deleteIfExists _, "log", log.file, logIfMissing = true),
-      () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
-      () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
-      () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
-    ))
+    CoreUtils.tryAll(
+      Seq(
+        () => delete(log.deleteIfExists _, "log", log.file, logIfMissing = true),
+        () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
+        () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
+        () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
+      )
+    )
   }
 
   /**
@@ -626,20 +631,31 @@ class LogSegment private[log] (val log: FileRecords,
 
 object LogSegment {
 
-  def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
+  def open(dir: File,
+           baseOffset: Long,
+           config: LogConfig,
+           time: Time,
+           fileAlreadyExists: Boolean = false,
+           initFileSize: Int = 0,
+           preallocate: Boolean = false,
+           fileSuffix: String = ""): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
       FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      new OffsetIndex(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new TimeIndex(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new OffsetIndex(Log.offsetIndexFile(dir, baseOffset, fileSuffix),
+                      baseOffset = baseOffset,
+                      maxIndexSize = maxIndexSize),
+      new TimeIndex(Log.timeIndexFile(dir, baseOffset, fileSuffix),
+                    baseOffset = baseOffset,
+                    maxIndexSize = maxIndexSize),
       new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
       maxSegmentMs = config.segmentMs,
       maxSegmentBytes = config.segmentSize,
-      time)
+      time
+    )
   }
 
   def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {

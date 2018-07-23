@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
@@ -33,13 +32,14 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+    zkUtils =
+      ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
   override def tearDown() {
     if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close(), this)
+      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
   }
 
@@ -111,13 +111,18 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     val controllerEpoch = 1
     val isr = List(1, 2)
     val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
-    val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
-      "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+    val topicData = Json.legacyEncodeAsString(
+      Map("controller_epoch" -> controllerEpoch,
+          "leader" -> leader,
+          "versions" -> 1,
+          "leader_epoch" -> leaderEpoch,
+          "isr" -> isr)
+    )
     zkUtils.createPersistentPath(topicPath, topicData)
 
     val leaderIsrAndControllerEpoch = zkUtils.getLeaderIsrAndEpochForPartition(topic, partition)
-    val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, 0),
-      controllerEpoch)
+    val topicDataLeaderIsrAndControllerEpoch =
+      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, 0), controllerEpoch)
     assertEquals(topicDataLeaderIsrAndControllerEpoch, leaderIsrAndControllerEpoch.get)
     assertEquals(None, zkUtils.getLeaderIsrAndEpochForPartition(topic, partition + 1))
   }

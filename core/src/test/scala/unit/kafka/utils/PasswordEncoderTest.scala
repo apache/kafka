@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
-
 
 import javax.crypto.SecretKeyFactory
 
@@ -30,11 +28,13 @@ class PasswordEncoderTest {
 
   @Test
   def testEncodeDecode(): Unit = {
-    val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
+    val encoder = new PasswordEncoder(
+      new Password("password-encoder-secret"),
       None,
       Defaults.PasswordEncoderCipherAlgorithm,
       Defaults.PasswordEncoderKeyLength,
-      Defaults.PasswordEncoderIterations)
+      Defaults.PasswordEncoderIterations
+    )
     val password = "test-password"
     val encoded = encoder.encode(new Password(password))
     val encodedMap = CoreUtils.parseCsvMap(encoded)
@@ -55,10 +55,10 @@ class PasswordEncoderTest {
   @Test
   def testEncoderConfigChange(): Unit = {
     val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
-      Some("PBKDF2WithHmacSHA1"),
-      "DES/CBC/PKCS5Padding",
-      64,
-      1024)
+                                      Some("PBKDF2WithHmacSHA1"),
+                                      "DES/CBC/PKCS5Padding",
+                                      64,
+                                      1024)
     val password = "test-password"
     val encoded = encoder.encode(new Password(password))
     val encodedMap = CoreUtils.parseCsvMap(encoded)
@@ -69,18 +69,15 @@ class PasswordEncoderTest {
 
     // Test that decoding works even if PasswordEncoder algorithm, iterations etc. are altered
     val decoder = new PasswordEncoder(new Password("password-encoder-secret"),
-      Some("PBKDF2WithHmacSHA1"),
-      "AES/CBC/PKCS5Padding",
-      128,
-      2048)
+                                      Some("PBKDF2WithHmacSHA1"),
+                                      "AES/CBC/PKCS5Padding",
+                                      128,
+                                      2048)
     assertEquals(password, decoder.decode(encoded).value)
 
     // Test that decoding fails if secret is altered
-    val decoder2 = new PasswordEncoder(new Password("secret-2"),
-      Some("PBKDF2WithHmacSHA1"),
-      "AES/CBC/PKCS5Padding",
-      128,
-      1024)
+    val decoder2 =
+      new PasswordEncoder(new Password("secret-2"), Some("PBKDF2WithHmacSHA1"), "AES/CBC/PKCS5Padding", 128, 1024)
     try {
       decoder2.decode(encoded)
     } catch {
@@ -93,10 +90,10 @@ class PasswordEncoderTest {
 
     def verifyEncodeDecode(keyFactoryAlg: Option[String], cipherAlg: String, keyLength: Int): Unit = {
       val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
-        keyFactoryAlg,
-        cipherAlg,
-        keyLength,
-        Defaults.PasswordEncoderIterations)
+                                        keyFactoryAlg,
+                                        cipherAlg,
+                                        keyLength,
+                                        Defaults.PasswordEncoderIterations)
       val password = "test-password"
       val encoded = encoder.encode(new Password(password))
       verifyEncodedPassword(encoder, password, encoded)
@@ -107,17 +104,24 @@ class PasswordEncoderTest {
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CBC/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/OFB/PKCS5Padding", keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"),
+                       Defaults.PasswordEncoderCipherAlgorithm,
+                       keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/PKCS5Padding", keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"),
+                       Defaults.PasswordEncoderCipherAlgorithm,
+                       keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"),
+                       Defaults.PasswordEncoderCipherAlgorithm,
+                       keyLength = 128)
   }
 
   private def verifyEncodedPassword(encoder: PasswordEncoder, password: String, encoded: String): Unit = {
     val encodedMap = CoreUtils.parseCsvMap(encoded)
     assertEquals(password.length.toString, encodedMap(PasswordEncoder.PasswordLengthProp))
     assertNotNull("Invalid salt", encoder.base64Decode(encodedMap("salt")))
-    assertNotNull("Invalid encoding parameters", encoder.base64Decode(encodedMap(PasswordEncoder.InitializationVectorProp)))
+    assertNotNull("Invalid encoding parameters",
+                  encoder.base64Decode(encodedMap(PasswordEncoder.InitializationVectorProp)))
     assertNotNull("Invalid encoded password", encoder.base64Decode(encodedMap(PasswordEncoder.EncyrptedPasswordProp)))
     assertEquals(password, encoder.decode(encoded).value)
   }

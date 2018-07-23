@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator.group
 
 import kafka.server.DelayedOperation
@@ -28,9 +27,10 @@ private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
                                       member: MemberMetadata,
                                       heartbeatDeadline: Long,
                                       sessionTimeout: Long)
-  extends DelayedOperation(sessionTimeout, Some(group.lock)) {
+    extends DelayedOperation(sessionTimeout, Some(group.lock)) {
 
-  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete _)
+  override def tryComplete(): Boolean =
+    coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete _)
   override def onExpiration() = coordinator.onExpireHeartbeat(group, member, heartbeatDeadline)
   override def onComplete() = coordinator.onCompleteHeartbeat()
 }

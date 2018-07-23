@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import org.apache.kafka.common.utils.AppInfoParser

@@ -53,7 +53,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
-                                       private val time: Time = Time.SYSTEM) extends Logging {
+                                       private val time: Time = Time.SYSTEM)
+    extends Logging {
   private var lastExecutedChange = -1L
   private val queue = new LinkedBlockingQueue[ChangeNotification]
   private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")
@@ -93,7 +94,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
         purgeObsoleteNotifications(now, notifications)
       }
     } catch {
-      case e: InterruptedException => if (!isClosed.get) error(s"Error while processing notification change for path = $seqNodeRoot", e)
+      case e: InterruptedException =>
+        if (!isClosed.get) error(s"Error while processing notification change for path = $seqNodeRoot", e)
       case e: Exception => error(s"Error while processing notification change for path = $seqNodeRoot", e)
     }
   }
@@ -102,18 +104,18 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     val changeZnode = seqNodeRoot + "/" + notification
     val (data, _) = zkClient.getDataAndStat(changeZnode)
     data match {
-      case Some(d) => Try(notificationHandler.processNotification(d)) match {
-        case Failure(e) => error(s"error processing change notification ${new String(d, UTF_8)} from $changeZnode", e)
-        case _ =>
-      }
+      case Some(d) =>
+        Try(notificationHandler.processNotification(d)) match {
+          case Failure(e) => error(s"error processing change notification ${new String(d, UTF_8)} from $changeZnode", e)
+          case _          =>
+        }
       case None => warn(s"read null data from $changeZnode")
     }
   }
 
-  private def addChangeNotification(): Unit = {
+  private def addChangeNotification(): Unit =
     if (!isClosed.get && queue.peek() == null)
       queue.put(new ChangeNotification)
-  }
 
   class ChangeNotification {
     def process(): Unit = processNotifications
@@ -150,9 +152,8 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     override def handleChildChange(): Unit = addChangeNotification
   }
 
-  object ZkStateChangeHandler extends  StateChangeHandler {
+  object ZkStateChangeHandler extends StateChangeHandler {
     override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
   }
 }
-

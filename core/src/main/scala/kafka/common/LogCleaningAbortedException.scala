@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
 /**
  * Thrown when a log cleaning task is requested to be aborted.
  */
-class LogCleaningAbortedException() extends RuntimeException() {
-}
+class LogCleaningAbortedException() extends RuntimeException() {}

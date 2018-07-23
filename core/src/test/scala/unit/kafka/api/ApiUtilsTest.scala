@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 import org.junit._
@@ -36,9 +35,9 @@ class ApiUtilsTest extends JUnitSuite {
   @Test
   def testShortStringNonASCII() {
     // Random-length strings
-    for(_ <- 0 to 100) {
-      // Since we're using UTF-8 encoding, each encoded byte will be one to four bytes long 
-      val s: String = ApiUtilsTest.rnd.nextString(math.abs(ApiUtilsTest.rnd.nextInt()) % (Short.MaxValue / 4))  
+    for (_ <- 0 to 100) {
+      // Since we're using UTF-8 encoding, each encoded byte will be one to four bytes long
+      val s: String = ApiUtilsTest.rnd.nextString(math.abs(ApiUtilsTest.rnd.nextInt()) % (Short.MaxValue / 4))
       val bb: ByteBuffer = ByteBuffer.allocate(ApiUtils.shortStringLength(s))
       ApiUtils.writeShortString(bb, s)
       bb.rewind()
@@ -49,8 +48,8 @@ class ApiUtilsTest extends JUnitSuite {
   @Test
   def testShortStringASCII() {
     // Random-length strings
-    for(_ <- 0 to 100) {
-      val s: String = TestUtils.randomString(math.abs(ApiUtilsTest.rnd.nextInt()) % Short.MaxValue)  
+    for (_ <- 0 to 100) {
+      val s: String = TestUtils.randomString(math.abs(ApiUtilsTest.rnd.nextInt()) % Short.MaxValue)
       val bb: ByteBuffer = ByteBuffer.allocate(ApiUtils.shortStringLength(s))
       ApiUtils.writeShortString(bb, s)
       bb.rewind()
@@ -65,7 +64,7 @@ class ApiUtilsTest extends JUnitSuite {
     assertEquals(s1, ApiUtils.readShortString(bb))
 
     // One byte too big
-    val s2: String = TestUtils.randomString(Short.MaxValue + 1) 
+    val s2: String = TestUtils.randomString(Short.MaxValue + 1)
     try {
       ApiUtils.shortStringLength(s2)
       fail

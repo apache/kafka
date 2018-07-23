@@ -33,10 +33,14 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     val expectedGroups = Set(group, simpleGroup)
     var foundGroups = Set.empty[String]
-    TestUtils.waitUntilTrue(() => {
-      foundGroups = service.listGroups().toSet
-      expectedGroups == foundGroups
-    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.", maxRetries = 3)
+    TestUtils.waitUntilTrue(
+      () => {
+        foundGroups = service.listGroups().toSet
+        expectedGroups == foundGroups
+      },
+      s"Expected --list to show groups $expectedGroups, but found $foundGroups.",
+      maxRetries = 3
+    )
   }
 
   @Test(expected = classOf[OptionException])

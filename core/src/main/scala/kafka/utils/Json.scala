@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -50,10 +50,9 @@ object Json {
    * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of
    * exception.
    */
-  def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
+  def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] =
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
-  }
 
   /**
    * Parse a JSON byte array into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
@@ -69,36 +68,36 @@ object Json {
   /**
    * Parse a JSON byte array into either a generic type T, or a JsonProcessingException in the case of exception.
    */
-  def parseBytesAs[T](input: Array[Byte])(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
+  def parseBytesAs[T](input: Array[Byte])(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] =
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
-  }
 
   /**
    * Encode an object into a JSON string. This method accepts any type T where
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
    * Any other type will result in an exception.
-   * 
+   *
    * This implementation is inefficient, so we recommend `encodeAsString` or `encodeAsBytes` (the latter is preferred
    * if possible). This method supports scala Map implementations while the other two do not. Once this functionality
    * is no longer required, we can remove this method.
    */
-  def legacyEncodeAsString(obj: Any): String = {
+  def legacyEncodeAsString(obj: Any): String =
     obj match {
-      case null => "null"
+      case null       => "null"
       case b: Boolean => b.toString
-      case s: String => mapper.writeValueAsString(s)
-      case n: Number => n.toString
-      case m: Map[_, _] => "{" +
-        m.map {
-          case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
-          case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
-        }.mkString(",") + "}"
-      case a: Array[_] => legacyEncodeAsString(a.toSeq)
+      case s: String  => mapper.writeValueAsString(s)
+      case n: Number  => n.toString
+      case m: Map[_, _] =>
+        "{" +
+          m.map {
+              case (k, v) => legacyEncodeAsString(k) + ":" + legacyEncodeAsString(v)
+              case elem   => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
+            }
+            .mkString(",") + "}"
+      case a: Array[_]    => legacyEncodeAsString(a.toSeq)
       case i: Iterable[_] => "[" + i.map(legacyEncodeAsString).mkString(",") + "]"
-      case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
+      case other: AnyRef  => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
-  }
 
   /**
    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in

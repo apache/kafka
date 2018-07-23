@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.security
 
 import java.util.{Collection, Properties}
@@ -37,7 +36,7 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
       if (cache != null) {
         config.getProperty(mechanism.mechanismName) match {
           case null => cache.remove(username)
-          case c => cache.put(username, ScramCredentialUtils.credentialFromString(c))
+          case c    => cache.put(username, ScramCredentialUtils.credentialFromString(c))
         }
       }
     }
@@ -45,10 +44,12 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
 }
 
 object CredentialProvider {
-  def userCredentialConfigs: ConfigDef = {
-    ScramMechanism.values.foldLeft(new ConfigDef) {
-      (c, m) => c.define(m.mechanismName, Type.STRING, null, Importance.MEDIUM, s"User credentials for SCRAM mechanism ${m.mechanismName}")
+  def userCredentialConfigs: ConfigDef =
+    ScramMechanism.values.foldLeft(new ConfigDef) { (c, m) =>
+      c.define(m.mechanismName,
+               Type.STRING,
+               null,
+               Importance.MEDIUM,
+               s"User credentials for SCRAM mechanism ${m.mechanismName}")
     }
-  }
 }
-

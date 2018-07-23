@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
-
 
 import java.net.InetAddress
 import java.util
@@ -40,13 +38,15 @@ class ThrottledChannelExpirationTest {
   private val time = new MockTime
   private var numCallbacksForStartThrottling: Int = 0
   private var numCallbacksForEndThrottling: Int = 0
-  private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
-                                                                    Collections.emptyList(),
-                                                                    time)
-  private val request = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))._2
+  private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(), Collections.emptyList(), time)
+  private val request = buildRequest(
+    FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData])
+  )._2
 
-  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+  private def buildRequest[T <: AbstractRequest](
+    builder: AbstractRequest.Builder[T],
+    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+  ): (T, RequestChannel.Request) = {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
@@ -54,18 +54,26 @@ class ThrottledChannelExpirationTest {
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT)
-    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
-      requestChannelMetrics))
+    val context = new RequestContext(header,
+                                     "1",
+                                     InetAddress.getLocalHost,
+                                     KafkaPrincipal.ANONYMOUS,
+                                     listenerName,
+                                     SecurityProtocol.PLAINTEXT)
+    (request,
+     new RequestChannel.Request(processor = 1,
+                                context = context,
+                                startTimeNanos = 0,
+                                MemoryPool.NONE,
+                                buffer,
+                                requestChannelMetrics))
   }
 
-  def callback(response: Response): Unit = {
+  def callback(response: Response): Unit =
     response match {
       case _: StartThrottlingResponse => numCallbacksForStartThrottling += 1
-      case _: EndThrottlingResponse => numCallbacksForEndThrottling += 1
+      case _: EndThrottlingResponse   => numCallbacksForEndThrottling += 1
     }
-  }
 
   @Before
   def beforeMethod() {
@@ -91,7 +99,7 @@ class ThrottledChannelExpirationTest {
       delayQueue.add(channel4)
       Assert.assertEquals(4, numCallbacksForStartThrottling)
 
-      for(itr <- 1 to 3) {
+      for (itr <- 1 to 3) {
         time.sleep(10)
         reaper.doWork()
         Assert.assertEquals(itr, numCallbacksForEndThrottling)
@@ -115,10 +123,10 @@ class ThrottledChannelExpirationTest {
     Assert.assertEquals(20, t2.throttleTimeMs)
     Assert.assertEquals(20, t3.throttleTimeMs)
 
-    for(itr <- 0 to 2) {
-      Assert.assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))
-      Assert.assertEquals(20 - 10*itr, t2.getDelay(TimeUnit.MILLISECONDS))
-      Assert.assertEquals(20 - 10*itr, t3.getDelay(TimeUnit.MILLISECONDS))
+    for (itr <- 0 to 2) {
+      Assert.assertEquals(10 - 10 * itr, t1.getDelay(TimeUnit.MILLISECONDS))
+      Assert.assertEquals(20 - 10 * itr, t2.getDelay(TimeUnit.MILLISECONDS))
+      Assert.assertEquals(20 - 10 * itr, t3.getDelay(TimeUnit.MILLISECONDS))
       time.sleep(10)
     }
   }

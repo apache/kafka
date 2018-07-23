@@ -28,7 +28,7 @@ import kafka.zk.{ConfigEntityZNode, ZooKeeperTestHarness}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 
-import scala.collection.{Map, immutable}
+import scala.collection.{immutable, Map}
 import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection.JavaConverters._
@@ -42,13 +42,14 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   @Before
   override def setUp() {
     super.setUp()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+    zkUtils =
+      ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
   override def tearDown() {
     if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close(), this)
+      CoreUtils.swallow(zkUtils.close(), this)
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
@@ -60,17 +61,16 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
     // duplicate brokers
     intercept[InvalidReplicaAssignmentException] {
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, "test", Map(0->Seq(0,0)))
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, "test", Map(0 -> Seq(0, 0)))
     }
 
     // inconsistent replication factor
     intercept[InvalidReplicaAssignmentException] {
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, "test", Map(0->Seq(0,1), 1->Seq(0)))
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, "test", Map(0 -> Seq(0, 1), 1 -> Seq(0)))
     }
 
     // good assignment
-    val assignment = Map(0 -> List(0, 1, 2),
-                         1 -> List(1, 2, 3))
+    val assignment = Map(0 -> List(0, 1, 2), 1 -> List(1, 2, 3))
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, "test", assignment)
     val found = zkUtils.getPartitionAssignmentForTopics(Seq("test"))
     assertEquals(assignment, found("test"))
@@ -79,16 +79,16 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   @Test
   def testTopicCreationInZK() {
     val expectedReplicaAssignment = Map(
-      0  -> List(0, 1, 2),
-      1  -> List(1, 2, 3),
-      2  -> List(2, 3, 4),
-      3  -> List(3, 4, 0),
-      4  -> List(4, 0, 1),
-      5  -> List(0, 2, 3),
-      6  -> List(1, 3, 4),
-      7  -> List(2, 4, 0),
-      8  -> List(3, 0, 1),
-      9  -> List(4, 1, 2),
+      0 -> List(0, 1, 2),
+      1 -> List(1, 2, 3),
+      2 -> List(2, 3, 4),
+      3 -> List(3, 4, 0),
+      4 -> List(4, 0, 1),
+      5 -> List(0, 2, 3),
+      6 -> List(1, 3, 4),
+      7 -> List(2, 4, 0),
+      8 -> List(3, 0, 1),
+      9 -> List(4, 1, 2),
       10 -> List(1, 2, 3),
       11 -> List(1, 3, 4)
     )
@@ -112,9 +112,10 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => p -> zkUtils.getReplicasForPartition(topic, p)).toMap
+    val actualReplicaList =
+      leaderForPartitionMap.keys.toArray.map(p => p -> zkUtils.getReplicasForPartition(topic, p)).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
-    for(i <- 0 until actualReplicaList.size)
+    for (i <- 0 until actualReplicaList.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
 
     intercept[TopicExistsException] {
@@ -164,7 +165,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     props.setProperty("consumer_byte_rate", "2000")
 
     // Write config without notification to ZK.
-    val configMap = Map[String, String] ("producer_byte_rate" -> "1000", "consumer_byte_rate" -> "2000")
+    val configMap = Map[String, String]("producer_byte_rate" -> "1000", "consumer_byte_rate" -> "2000")
     val map = Map("version" -> 1, "config" -> configMap.asJava)
     zkUtils.updatePersistentPath(ConfigEntityZNode.path(ConfigType.Client, clientId), Json.encodeAsString(map.asJava))
 

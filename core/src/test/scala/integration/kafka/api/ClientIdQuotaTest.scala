@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  **/
-
 package kafka.api
 
 import java.util.Properties
@@ -33,12 +32,11 @@ class ClientIdQuotaTest extends BaseQuotaTest {
     super.setUp()
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients =
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producers.head, consumers.head) {
       override def userPrincipal: KafkaPrincipal = KafkaPrincipal.ANONYMOUS
-      override def quotaMetricTags(clientId: String): Map[String, String] = {
+      override def quotaMetricTags(clientId: String): Map[String, String] =
         Map("user" -> "", "client-id" -> clientId)
-      }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
         val producerProps = new Properties()
@@ -62,5 +60,4 @@ class ClientIdQuotaTest extends BaseQuotaTest {
         adminZkClient.changeClientIdConfig(Sanitizer.sanitize(clientId), properties)
       }
     }
-  }
 }

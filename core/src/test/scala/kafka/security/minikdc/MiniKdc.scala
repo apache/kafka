@@ -1,21 +1,20 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one
-  * or more contributor license agreements.  See the NOTICE file
-  * distributed with this work for additional information
-  * regarding copyright ownership.  The ASF licenses this file
-  * to you under the Apache License, Version 2.0 (the
-  * "License"); you may not use this file except in compliance
-  * with the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.security.minikdc
 
 import java.io._
@@ -52,39 +51,39 @@ import org.apache.directory.shared.kerberos.KerberosTime
 import org.apache.kafka.common.utils.{Java, Utils}
 
 /**
-  * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
-  * KDC.
-  *
-  * MiniKdc sets 2 System properties when started and unsets them when stopped:
-  *
-  * - java.security.krb5.conf: set to the MiniKDC real/host/port
-  * - sun.security.krb5.debug: set to the debug value provided in the configuration
-  *
-  * As a result of this, multiple MiniKdc instances should not be started concurrently in the same JVM.
-  *
-  * MiniKdc default configuration values are:
-  *
-  * - org.name=EXAMPLE (used to create the REALM)
-  * - org.domain=COM (used to create the REALM)
-  * - kdc.bind.address=localhost
-  * - kdc.port=0 (ephemeral port)
-  * - instance=DefaultKrbServer
-  * - max.ticket.lifetime=86400000 (1 day)
-  * - max.renewable.lifetime604800000 (7 days)
-  * - transport=TCP
-  * - debug=false
-  *
-  * The generated krb5.conf forces TCP connections.
-  *
-  * Acknowledgements: this class is derived from the MiniKdc class in the hadoop-minikdc project (git commit
-  * d8d8ed35f00b15ee0f2f8aaf3fe7f7b42141286b).
-  *
-  * @constructor creates a new MiniKdc instance.
-  * @param config the MiniKdc configuration
-  * @param workDir the working directory which will contain krb5.conf, Apache DS files and any other files needed by
-  *                MiniKdc.
-  * @throws Exception thrown if the MiniKdc could not be created.
-  */
+ * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
+ * KDC.
+ *
+ * MiniKdc sets 2 System properties when started and unsets them when stopped:
+ *
+ * - java.security.krb5.conf: set to the MiniKDC real/host/port
+ * - sun.security.krb5.debug: set to the debug value provided in the configuration
+ *
+ * As a result of this, multiple MiniKdc instances should not be started concurrently in the same JVM.
+ *
+ * MiniKdc default configuration values are:
+ *
+ * - org.name=EXAMPLE (used to create the REALM)
+ * - org.domain=COM (used to create the REALM)
+ * - kdc.bind.address=localhost
+ * - kdc.port=0 (ephemeral port)
+ * - instance=DefaultKrbServer
+ * - max.ticket.lifetime=86400000 (1 day)
+ * - max.renewable.lifetime604800000 (7 days)
+ * - transport=TCP
+ * - debug=false
+ *
+ * The generated krb5.conf forces TCP connections.
+ *
+ * Acknowledgements: this class is derived from the MiniKdc class in the hadoop-minikdc project (git commit
+ * d8d8ed35f00b15ee0f2f8aaf3fe7f7b42141286b).
+ *
+ * @constructor creates a new MiniKdc instance.
+ * @param config the MiniKdc configuration
+ * @param workDir the working directory which will contain krb5.conf, Apache DS files and any other files needed by
+ *                MiniKdc.
+ * @throws Exception thrown if the MiniKdc could not be created.
+ */
 class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   if (!config.keySet.containsAll(MiniKdc.RequiredProperties.asJava)) {
@@ -94,8 +93,9 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   info("Configuration:")
   info("---------------------------------------------------------------")
-  config.asScala.foreach { case (key, value) =>
-    info(s"\t$key: $value")
+  config.asScala.foreach {
+    case (key, value) =>
+      info(s"\t$key: $value")
   }
   info("---------------------------------------------------------------")
 
@@ -190,7 +190,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private def initKdcServer() {
 
     def addInitialEntriesToDirectoryService(bindAddress: String) {
-      val map = Map (
+      val map = Map(
         "0" -> orgName.toLowerCase(Locale.ENGLISH),
         "1" -> orgDomain.toLowerCase(Locale.ENGLISH),
         "2" -> orgName.toUpperCase(Locale.ENGLISH),
@@ -201,11 +201,9 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       try {
         var line: String = null
         val builder = new StringBuilder
-        while ({line = reader.readLine(); line != null})
-          builder.append(line).append("\n")
+        while ({ line = reader.readLine(); line != null }) builder.append(line).append("\n")
         addEntriesToDirectoryService(StrSubstitutor.replace(builder, map.asJava))
-      }
-      finally CoreUtils.swallow(reader.close(), this)
+      } finally CoreUtils.swallow(reader.close(), this)
     }
 
     val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
@@ -224,7 +222,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val absTransport = transport.trim match {
       case "TCP" => new TcpTransport(bindAddress, port, 3, 50)
       case "UDP" => new UdpTransport(port)
-      case _ => throw new IllegalArgumentException(s"Invalid transport: $transport")
+      case _     => throw new IllegalArgumentException(s"Invalid transport: $transport")
     }
     kdc.addTransports(absTransport)
     kdc.setServiceName(config.getProperty(MiniKdc.Instance))
@@ -248,10 +246,11 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private def writeKrb5Conf() {
     val stringBuilder = new StringBuilder
     val reader = new BufferedReader(
-      new InputStreamReader(MiniKdc.getResourceAsStream("minikdc-krb5.conf"), StandardCharsets.UTF_8))
+      new InputStreamReader(MiniKdc.getResourceAsStream("minikdc-krb5.conf"), StandardCharsets.UTF_8)
+    )
     try {
       var line: String = null
-      while ({line = reader.readLine(); line != null}) {
+      while ({ line = reader.readLine(); line != null }) {
         stringBuilder.append(line).append("{3}")
       }
     } finally CoreUtils.swallow(reader.close(), this)
@@ -284,38 +283,39 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   }
 
   /**
-    * Creates a principal in the KDC with the specified user and password.
-    *
-    * An exception will be thrown if the principal cannot be created.
-    *
-    * @param principal principal name, do not include the domain.
-    * @param password  password.
-    */
+   * Creates a principal in the KDC with the specified user and password.
+   *
+   * An exception will be thrown if the principal cannot be created.
+   *
+   * @param principal principal name, do not include the domain.
+   * @param password  password.
+   */
   private def createPrincipal(principal: String, password: String) {
     val ldifContent = s"""
-      |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
-      |objectClass: top
-      |objectClass: person
-      |objectClass: inetOrgPerson
-      |objectClass: krb5principal
-      |objectClass: krb5kdcentry
-      |cn: $principal
-      |sn: $principal
-      |uid: $principal
-      |userPassword: $password
-      |krb5PrincipalName: ${principal}@${realm}
-      |krb5KeyVersionNumber: 0""".stripMargin
+                         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain
+                           .toLowerCase(Locale.ENGLISH)}
+                         |objectClass: top
+                         |objectClass: person
+                         |objectClass: inetOrgPerson
+                         |objectClass: krb5principal
+                         |objectClass: krb5kdcentry
+                         |cn: $principal
+                         |sn: $principal
+                         |uid: $principal
+                         |userPassword: $password
+                         |krb5PrincipalName: ${principal}@${realm}
+                         |krb5KeyVersionNumber: 0""".stripMargin
     addEntriesToDirectoryService(ldifContent)
   }
 
   /**
-    * Creates  multiple principals in the KDC and adds them to a keytab file.
-    *
-    * An exception will be thrown if the principal cannot be created.
-    *
-    * @param keytabFile keytab file to add the created principals
-    * @param principals principals to add to the KDC, do not include the domain.
-    */
+   * Creates  multiple principals in the KDC and adds them to a keytab file.
+   *
+   * An exception will be thrown if the principal cannot be created.
+   *
+   * @param keytabFile keytab file to add the created principals
+   * @param principals principals to add to the KDC, do not include the domain.
+   */
   def createPrincipal(keytabFile: File, principals: String*) {
     val generatedPassword = UUID.randomUUID.toString
     val keytab = new Keytab
@@ -349,7 +349,7 @@ object MiniKdc {
 
   def main(args: Array[String]) {
     args match {
-      case Array(workDirPath, configPath, keytabPath, principals@ _*) if principals.nonEmpty =>
+      case Array(workDirPath, configPath, keytabPath, principals @ _*) if principals.nonEmpty =>
         val workDir = new File(workDirPath)
         if (!workDir.exists)
           throw new RuntimeException(s"Specified work directory does not exist: ${workDir.getAbsolutePath}")
@@ -359,8 +359,9 @@ object MiniKdc {
           throw new RuntimeException(s"Specified configuration does not exist: ${configFile.getAbsolutePath}")
 
         val userConfig = Utils.loadProps(configFile.getAbsolutePath)
-        userConfig.asScala.foreach { case (key, value) =>
-          config.put(key, value)
+        userConfig.asScala.foreach {
+          case (key, value) =>
+            config.put(key, value)
         }
         val keytabFile = new File(keytabPath).getAbsoluteFile
         start(workDir, config, keytabFile, principals)
@@ -375,19 +376,19 @@ object MiniKdc {
     miniKdc.start()
     miniKdc.createPrincipal(keytabFile, principals: _*)
     val infoMessage = s"""
-      |
-      |Standalone MiniKdc Running
-      |---------------------------------------------------
-      |  Realm           : ${miniKdc.realm}
-      |  Running at      : ${miniKdc.host}:${miniKdc.port}
-      |  krb5conf        : ${miniKdc.krb5conf}
-      |
-      |  created keytab  : $keytabFile
-      |  with principals : ${principals.mkString(", ")}
-      |
-      |Hit <CTRL-C> or kill <PID> to stop it
-      |---------------------------------------------------
-      |
+                         |
+                         |Standalone MiniKdc Running
+                         |---------------------------------------------------
+                         |  Realm           : ${miniKdc.realm}
+                         |  Running at      : ${miniKdc.host}:${miniKdc.port}
+                         |  krb5conf        : ${miniKdc.krb5conf}
+                         |
+                         |  created keytab  : $keytabFile
+                         |  with principals : ${principals.mkString(", ")}
+                         |
+                         |Hit <CTRL-C> or kill <PID> to stop it
+                         |---------------------------------------------------
+                         |
     """.stripMargin
     println(infoMessage)
     Runtime.getRuntime.addShutdownHook(CoreUtils.newThread("minikdc-shutdown-hook", daemon = false) {
@@ -405,8 +406,8 @@ object MiniKdc {
   val Transport = "transport"
   val Debug = "debug"
 
-  private val RequiredProperties = Set(OrgName, OrgDomain, KdcBindAddress, KdcPort, Instance, Transport,
-    MaxTicketLifetime, MaxRenewableLifetime)
+  private val RequiredProperties =
+    Set(OrgName, OrgDomain, KdcBindAddress, KdcPort, Instance, Transport, MaxTicketLifetime, MaxRenewableLifetime)
 
   private val DefaultConfig = Map(
     KdcBindAddress -> "localhost",
@@ -421,11 +422,11 @@ object MiniKdc {
   )
 
   /**
-    * Convenience method that returns MiniKdc default configuration.
-    *
-    * The returned configuration is a copy, it can be customized before using
-    * it to create a MiniKdc.
-    */
+   * Convenience method that returns MiniKdc default configuration.
+   *
+   * The returned configuration is a copy, it can be customized before using
+   * it to create a MiniKdc.
+   */
   def createConfig: Properties = {
     val properties = new Properties
     DefaultConfig.foreach { case (k, v) => properties.setProperty(k, v) }

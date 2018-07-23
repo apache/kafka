@@ -42,7 +42,8 @@ class InterBrokerSendThreadTest {
     }
 
     // poll is always called but there should be no further invocations on NetworkClient
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
     EasyMock.replay(networkClient)
@@ -63,23 +64,27 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](handler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true,
-      requestTimeoutMs, handler.handler)
+    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
 
-    EasyMock.expect(networkClient.newClientRequest(EasyMock.eq("1"),
-      EasyMock.same(handler.request),
-      EasyMock.anyLong(),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(handler.handler)))
+    EasyMock
+      .expect(
+        networkClient.newClientRequest(EasyMock.eq("1"),
+                                       EasyMock.same(handler.request),
+                                       EasyMock.anyLong(),
+                                       EasyMock.eq(true),
+                                       EasyMock.eq(requestTimeoutMs),
+                                       EasyMock.same(handler.handler))
+      )
       .andReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock
+      .expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(true)
 
     EasyMock.expect(networkClient.send(clientRequest, time.milliseconds()))
 
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
     EasyMock.replay(networkClient)
@@ -100,30 +105,40 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true,
-      requestTimeoutMs, requestAndCompletionHandler.handler)
+    val clientRequest =
+      new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, requestAndCompletionHandler.handler)
 
-    EasyMock.expect(networkClient.newClientRequest(EasyMock.eq("1"),
-      EasyMock.same(requestAndCompletionHandler.request),
-      EasyMock.anyLong(),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(requestAndCompletionHandler.handler)))
+    EasyMock
+      .expect(
+        networkClient.newClientRequest(
+          EasyMock.eq("1"),
+          EasyMock.same(requestAndCompletionHandler.request),
+          EasyMock.anyLong(),
+          EasyMock.eq(true),
+          EasyMock.eq(requestTimeoutMs),
+          EasyMock.same(requestAndCompletionHandler.handler)
+        )
+      )
       .andReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock
+      .expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
-    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
       .andReturn(0)
 
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
-    EasyMock.expect(networkClient.connectionFailed(node))
+    EasyMock
+      .expect(networkClient.connectionFailed(node))
       .andReturn(true)
 
-    EasyMock.expect(networkClient.authenticationException(node))
+    EasyMock
+      .expect(networkClient.authenticationException(node))
       .andReturn(new AuthenticationException(""))
 
     EasyMock.replay(networkClient)
@@ -144,30 +159,39 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](handler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", time.milliseconds(), true,
-      requestTimeoutMs, handler.handler)
+    val clientRequest =
+      new ClientRequest("dest", request, 0, "1", time.milliseconds(), true, requestTimeoutMs, handler.handler)
     time.sleep(1500)
 
-    EasyMock.expect(networkClient.newClientRequest(EasyMock.eq("1"),
-      EasyMock.same(handler.request),
-      EasyMock.eq(time.milliseconds()),
-      EasyMock.eq(true),
-      EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(handler.handler)))
+    EasyMock
+      .expect(
+        networkClient.newClientRequest(
+          EasyMock.eq("1"),
+          EasyMock.same(handler.request),
+          EasyMock.eq(time.milliseconds()),
+          EasyMock.eq(true),
+          EasyMock.eq(requestTimeoutMs),
+          EasyMock.same(handler.handler)
+        )
+      )
       .andReturn(clientRequest)
 
     // make the node unready so the request is not cleared
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock
+      .expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
-    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
       .andReturn(0)
 
-    EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
+    EasyMock
+      .expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
     // rule out disconnects so the request stays for the expiry check
-    EasyMock.expect(networkClient.connectionFailed(node))
+    EasyMock
+      .expect(networkClient.connectionFailed(node))
       .andReturn(false)
 
     EasyMock.replay(networkClient)
@@ -178,7 +202,6 @@ class InterBrokerSendThreadTest {
     Assert.assertFalse(sendThread.hasUnsentRequests)
     Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
-
 
   private class StubRequestBuilder extends AbstractRequest.Builder(ApiKeys.END_TXN) {
     override def build(version: Short): Nothing = ???

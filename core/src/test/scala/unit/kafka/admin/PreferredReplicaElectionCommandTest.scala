@@ -38,31 +38,36 @@ class PreferredReplicaElectionCommandTest extends ZooKeeperTestHarness with Logg
   def testPreferredReplicaJsonData() {
     // write preferred replica json data to zk path
     val partitionsForPreferredReplicaElection = Set(new TopicPartition("test", 1), new TopicPartition("test2", 1))
-    PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
+    PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient,
+                                                                            partitionsForPreferredReplicaElection)
     // try to read it back and compare with what was written
     val partitionsUndergoingPreferredReplicaElection = zkClient.getPreferredReplicaElection
-    assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
-      partitionsUndergoingPreferredReplicaElection)
+    assertEquals("Preferred replica election ser-de failed",
+                 partitionsForPreferredReplicaElection,
+                 partitionsUndergoingPreferredReplicaElection)
   }
 
   @Test
   def testBasicPreferredReplicaElection() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(1 -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
     val preferredReplica = 0
     // create brokers
     val brokerRack = Map(0 -> "rack0", 1 -> "rack1", 2 -> "rack2")
-    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
+    val serverConfigs =
+      TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
     // create the topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
     // broker 2 should be the leader since it was started first
     val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = None)
     // trigger preferred replica election
-    val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkClient, Set(new TopicPartition(topic, partition)))
+    val preferredReplicaElection =
+      new PreferredReplicaLeaderElectionCommand(zkClient, Set(new TopicPartition(topic, partition)))
     preferredReplicaElection.moveLeaderToPreferredReplica()
-    val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader))
+    val newLeader =
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader))
     assertEquals("Preferred replica election failed", preferredReplica, newLeader)
   }
 }

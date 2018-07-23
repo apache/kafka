@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import org.apache.kafka.common.requests.ListOffsetResponse
@@ -34,7 +33,6 @@ case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
   override def indexKey = offset
   override def indexValue = position.toLong
 }
-
 
 /**
  * The mapping between a timestamp to a message offset. The entry means that any message whose timestamp is greater

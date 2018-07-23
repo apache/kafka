@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.api.Request
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{LogConfig, LogManager, CleanerConfig}
+import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server._
-import kafka.utils.{MockTime, TestUtils, MockScheduler}
+import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
@@ -63,17 +63,28 @@ class PartitionTest {
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
-    logManager = TestUtils.createLogManager(
-      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, CleanerConfig(enableCleaner = false), time)
+    logManager = TestUtils.createLogManager(logDirs = Seq(logDir1, logDir2),
+                                            defaultConfig = logConfig,
+                                            CleanerConfig(enableCleaner = false),
+                                            time)
     logManager.startup()
 
     val brokerProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     brokerProps.put(KafkaConfig.LogDirsProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val brokerConfig = KafkaConfig.fromProps(brokerProps)
     replicaManager = new ReplicaManager(
-      config = brokerConfig, metrics, time, zkClient = null, new MockScheduler(time),
-      logManager, new AtomicBoolean(false), QuotaFactory.instantiate(brokerConfig, metrics, time, ""),
-      brokerTopicStats, new MetadataCache(brokerId), new LogDirFailureChannel(brokerConfig.logDirs.size))
+      config = brokerConfig,
+      metrics,
+      time,
+      zkClient = null,
+      new MockScheduler(time),
+      logManager,
+      new AtomicBoolean(false),
+      QuotaFactory.instantiate(brokerConfig, metrics, time, ""),
+      brokerTopicStats,
+      new MetadataCache(brokerId),
+      new LogDirFailureChannel(brokerConfig.logDirs.size)
+    )
   }
 
   @After
@@ -127,8 +138,6 @@ class PartitionTest {
     thread2.join()
     assertEquals(None, partition.getReplica(Request.FutureLocalReplicaId))
   }
-
-
   @Test
   def testAppendRecordsAsFollowerBelowLogStartOffset(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
@@ -140,44 +149,64 @@ class PartitionTest {
     val initialLogStartOffset = 5L
     partition.truncateFullyAndStartAt(initialLogStartOffset, isFuture = false)
     assertEquals(s"Log end offset after truncate fully and start at $initialLogStartOffset:",
-                 initialLogStartOffset, replica.logEndOffset.messageOffset)
+                 initialLogStartOffset,
+                 replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset after truncate fully and start at $initialLogStartOffset:",
-                 initialLogStartOffset, replica.logStartOffset)
+                 initialLogStartOffset,
+                 replica.logStartOffset)
 
     // verify that we cannot append records that do not contain log start offset even if the log is empty
     assertThrows[UnexpectedAppendOffsetException] {
       // append one record with offset = 3
-      partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
+      partition.appendRecordsToFollowerOrFutureReplica(
+        createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L),
+        isFuture = false
+      )
     }
-    assertEquals(s"Log end offset should not change after failure to append", initialLogStartOffset, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset should not change after failure to append",
+                 initialLogStartOffset,
+                 replica.logEndOffset.messageOffset)
 
     // verify that we can append records that contain log start offset, even when first
     // offset < log start offset if the log is empty
     val newLogStartOffset = 4L
-    val records = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-                                     new SimpleRecord("k2".getBytes, "v2".getBytes),
-                                     new SimpleRecord("k3".getBytes, "v3".getBytes)),
-                                baseOffset = newLogStartOffset)
+    val records = createRecords(
+      List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+           new SimpleRecord("k2".getBytes, "v2".getBytes),
+           new SimpleRecord("k3".getBytes, "v3".getBytes)),
+      baseOffset = newLogStartOffset
+    )
     partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
-    assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:", 7L, replica.logEndOffset.messageOffset)
-    assertEquals(s"Log start offset after append of 3 records with base offset $newLogStartOffset:", newLogStartOffset, replica.logStartOffset)
+    assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:",
+                 7L,
+                 replica.logEndOffset.messageOffset)
+    assertEquals(s"Log start offset after append of 3 records with base offset $newLogStartOffset:",
+                 newLogStartOffset,
+                 replica.logStartOffset)
 
     // and we can append more records after that
-    partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L), isFuture = false)
+    partition.appendRecordsToFollowerOrFutureReplica(
+      createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L),
+      isFuture = false
+    )
     assertEquals(s"Log end offset after append of 1 record at offset 7:", 8L, replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
 
     // but we cannot append to offset < log start if the log is not empty
     assertThrows[UnexpectedAppendOffsetException] {
-      val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-                                        new SimpleRecord("k2".getBytes, "v2".getBytes)),
-                                   baseOffset = 3L)
+      val records2 = createRecords(
+        List(new SimpleRecord("k1".getBytes, "v1".getBytes), new SimpleRecord("k2".getBytes, "v2".getBytes)),
+        baseOffset = 3L
+      )
       partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false)
     }
     assertEquals(s"Log end offset should not change after failure to append", 8L, replica.logEndOffset.messageOffset)
 
     // we still can append to next offset
-    partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L), isFuture = false)
+    partition.appendRecordsToFollowerOrFutureReplica(
+      createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L),
+      isFuture = false
+    )
     assertEquals(s"Log end offset after append of 1 record at offset 8:", 9L, replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
   }
@@ -186,8 +215,7 @@ class PartitionTest {
   def testGetReplica(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
-    val partition = new
-        Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
 
     assertEquals(None, partition.getReplica(brokerId))
     assertThrows[ReplicaNotAvailableException] {
@@ -203,15 +231,21 @@ class PartitionTest {
     val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
     assertThrows[ReplicaNotAvailableException] {
       partition.appendRecordsToFollowerOrFutureReplica(
-           createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
+        createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L),
+        isFuture = false
+      )
     }
   }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(
-      buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.LOG_APPEND_TIME,
-      baseOffset, time.milliseconds, partitionLeaderEpoch)
+    val builder = MemoryRecords.builder(buf,
+                                        RecordBatch.CURRENT_MAGIC_VALUE,
+                                        CompressionType.NONE,
+                                        TimestampType.LOG_APPEND_TIME,
+                                        baseOffset,
+                                        time.milliseconds,
+                                        partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
   }

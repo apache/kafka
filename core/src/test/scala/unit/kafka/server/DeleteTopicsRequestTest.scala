@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import kafka.network.SocketServer
@@ -58,13 +57,12 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
     // Basic
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("invalid-topic").asJava, timeout).build(),
-      Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
+                                     Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
     createTopic("partial-topic-1", 1, 1)
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(
-      "partial-topic-1",
-      "partial-invalid-topic").asJava, timeout).build(),
+    validateErrorDeleteTopicRequests(
+      new DeleteTopicsRequest.Builder(Set("partial-topic-1", "partial-invalid-topic").asJava, timeout).build(),
       Map(
         "partial-topic-1" -> Errors.NONE,
         "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
@@ -75,23 +73,26 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     createTopic(timeoutTopic, 5, 2)
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0).build(),
-      Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
+                                     Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
-    TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
+    TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic),
+                            s"Topic $timeoutTopic is never deleted")
     validateTopicIsDeleted(timeoutTopic)
   }
 
-  private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
+  private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest,
+                                               expectedResponse: Map[String, Errors]): Unit = {
     val response = sendDeleteTopicsRequest(request)
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
-    expectedResponse.foreach { case (topic, expectedError) =>
-      assertEquals("The response error should match", expectedResponse(topic), errors(topic))
-      // If no error validate the topic was deleted
-      if (expectedError == Errors.NONE) {
-        validateTopicIsDeleted(topic)
-      }
+    expectedResponse.foreach {
+      case (topic, expectedError) =>
+        assertEquals("The response error should match", expectedResponse(topic), errors(topic))
+        // If no error validate the topic was deleted
+        if (expectedError == Errors.NONE) {
+          validateTopicIsDeleted(topic)
+        }
     }
   }
 
@@ -101,17 +102,17 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
     val error = response.errors.asScala.head._2
-    assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER, error)
+    assertEquals("Expected controller error when routed incorrectly", Errors.NOT_CONTROLLER, error)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
-    val metadata = sendMetadataRequest(new MetadataRequest.
-        Builder(List(topic).asJava, true).build).topicMetadata.asScala
-    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
-      s"The topic $topic should not exist")
+    val metadata = sendMetadataRequest(new MetadataRequest.Builder(List(topic).asJava, true).build).topicMetadata.asScala
+    TestUtils.waitUntilTrue(() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
+                            s"The topic $topic should not exist")
   }
 
-  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest,
+                                      socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
     val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
     DeleteTopicsResponse.parse(response, request.version)
   }

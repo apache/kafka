@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils.json
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
@@ -66,10 +65,11 @@ trait JsonValue {
    */
   def asJsonObjectOption: Option[JsonObject] = this match {
     case j: JsonObject => Some(j)
-    case _ => node match {
-      case n: ObjectNode => Some(new JsonObject(n))
-      case _ => None
-    }
+    case _ =>
+      node match {
+        case n: ObjectNode => Some(new JsonObject(n))
+        case _             => None
+      }
   }
 
   /**
@@ -83,17 +83,18 @@ trait JsonValue {
    */
   def asJsonArrayOption: Option[JsonArray] = this match {
     case j: JsonArray => Some(j)
-    case _ => node match {
-      case n: ArrayNode => Some(new JsonArray(n))
-      case _ => None
-    }
+    case _ =>
+      node match {
+        case n: ArrayNode => Some(new JsonArray(n))
+        case _            => None
+      }
   }
 
   override def hashCode: Int = node.hashCode
 
   override def equals(a: Any): Boolean = a match {
     case a: JsonValue => node == a.node
-    case _ => false
+    case _            => false
   }
 
   override def toString: String = node.toString
@@ -107,8 +108,8 @@ object JsonValue {
    */
   def apply(node: JsonNode): JsonValue = node match {
     case n: ObjectNode => new JsonObject(n)
-    case n: ArrayNode => new JsonArray(n)
-    case _ => new BasicJsonValue(node)
+    case n: ArrayNode  => new JsonArray(n)
+    case _             => new BasicJsonValue(node)
   }
 
   private class BasicJsonValue private[json] (protected val node: JsonNode) extends JsonValue

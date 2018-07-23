@@ -13,26 +13,28 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-
+ */
 package kafka.tools
 
 import joptsimple.OptionParser
 
-
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser(false)
-  val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+  val numMessagesOpt = parser
+    .accepts("messages", "REQUIRED: The number of messages to send or consume")
     .withRequiredArg
     .describedAs("count")
     .ofType(classOf[java.lang.Long])
-  val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
+  val reportingIntervalOpt = parser
+    .accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
     .withRequiredArg
     .describedAs("interval_ms")
     .ofType(classOf[java.lang.Integer])
     .defaultsTo(5000)
-  val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
-    "See java.text.SimpleDateFormat for options.")
+  val dateFormatOpt = parser
+    .accepts("date-format",
+             "The date format to use for formatting the time field. " +
+               "See java.text.SimpleDateFormat for options.")
     .withRequiredArg
     .describedAs("date format")
     .ofType(classOf[String])

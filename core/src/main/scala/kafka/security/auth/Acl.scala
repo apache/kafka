@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.security.auth
 
 import kafka.utils.Json
@@ -61,22 +60,28 @@ object Acl {
     if (bytes == null || bytes.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseBytes(bytes).map(_.asJsonObject).map { js =>
-      //the acl json version.
-      require(js(VersionKey).to[Int] == CurrentVersion)
-      js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>
-        val principal = SecurityUtils.parseKafkaPrincipal(itemJs(PrincipalKey).to[String])
-        val permissionType = PermissionType.fromString(itemJs(PermissionTypeKey).to[String])
-        val host = itemJs(HostsKey).to[String]
-        val operation = Operation.fromString(itemJs(OperationKey).to[String])
-        new Acl(principal, permissionType, host, operation)
-      }.toSet
-    }.getOrElse(Set.empty)
+    Json
+      .parseBytes(bytes)
+      .map(_.asJsonObject)
+      .map { js =>
+        //the acl json version.
+        require(js(VersionKey).to[Int] == CurrentVersion)
+        js(AclsKey).asJsonArray.iterator
+          .map(_.asJsonObject)
+          .map { itemJs =>
+            val principal = SecurityUtils.parseKafkaPrincipal(itemJs(PrincipalKey).to[String])
+            val permissionType = PermissionType.fromString(itemJs(PermissionTypeKey).to[String])
+            val host = itemJs(HostsKey).to[String]
+            val operation = Operation.fromString(itemJs(OperationKey).to[String])
+            new Acl(principal, permissionType, host, operation)
+          }
+          .toSet
+      }
+      .getOrElse(Set.empty)
   }
 
-  def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
+  def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] =
     Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap.asJava).toList.asJava)
-  }
 }
 
 /**
@@ -95,16 +100,13 @@ case class Acl(principal: KafkaPrincipal, permissionType: PermissionType, host: 
    * TODO: Ideally we would have a symmetric toJson method but our current json library can not jsonify/dejsonify complex objects.
    * @return Map representation of the Acl.
    */
-  def toMap(): Map[String, Any] = {
+  def toMap(): Map[String, Any] =
     Map(Acl.PrincipalKey -> principal.toString,
-      Acl.PermissionTypeKey -> permissionType.name,
-      Acl.OperationKey -> operation.name,
-      Acl.HostsKey -> host)
-  }
+        Acl.PermissionTypeKey -> permissionType.name,
+        Acl.OperationKey -> operation.name,
+        Acl.HostsKey -> host)
 
-  override def toString: String = {
+  override def toString: String =
     "%s has %s permission for operations: %s from hosts: %s".format(principal, permissionType.name, operation, host)
-  }
 
 }
-

@@ -50,26 +50,32 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     properties.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
   }
 
-  private def initProducer(): Unit = {
+  private def initProducer(): Unit =
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
-  }
+                                        retries = 5,
+                                        keySerializer = new StringSerializer,
+                                        valueSerializer = new StringSerializer)
 
-  private def createTopics(numTopics: Int, numPartitions: Int,
-                           configs: Map[String, String] = Map.empty, topicSuffixStart: Int = 0): Map[TopicPartition, Int] = {
+  private def createTopics(numTopics: Int,
+                           numPartitions: Int,
+                           configs: Map[String, String] = Map.empty,
+                           topicSuffixStart: Int = 0): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic${t + topicSuffixStart}")
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 1.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
-      val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 1,
-        topicConfig = topicConfig)
+      val partitionToLeader =
+        createTopic(topic, numPartitions = numPartitions, replicationFactor = 1, topicConfig = topicConfig)
       partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap
   }
 
-  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                 offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+  private def createPartitionMap(
+    maxPartitionBytes: Int,
+    topicPartitions: Seq[TopicPartition],
+    offsetMap: Map[TopicPartition, Long] = Map.empty
+  ): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
       partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes))
@@ -90,8 +96,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions)).build(1)
+    val fetchRequest =
+      FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024, topicPartitions)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData().get(tp).error))
   }
@@ -104,8 +110,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions)).build()
+    val fetchRequest =
+      FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024, topicPartitions)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error))
   }
@@ -129,12 +135,15 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val leaderId = conversionDisabledTopicsMap.head._2
 
     allTopics.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
-      allTopics)).build(1)
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024, allTopics)).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData().get(tp).error))
-    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error))
+    conversionDisabledTopicPartitions.foreach(
+      tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData().get(tp).error)
+    )
+    conversionEnabledTopicPartitions.foreach(
+      tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error)
+    )
   }
 
   /**
@@ -155,8 +164,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val leaderId = conversionDisabledTopicsMap.head._2
 
     allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
-    val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0,
-      createPartitionMap(1024, allTopicPartitions)).build()
+    val fetchRequest =
+      FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0, createPartitionMap(1024, allTopicPartitions)).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
     allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error))

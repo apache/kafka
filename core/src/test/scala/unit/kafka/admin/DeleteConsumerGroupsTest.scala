@@ -41,8 +41,12 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
-    assertTrue(s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
-        output.contains(s"Group '$missingGroup' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message))
+    assertTrue(
+      s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
+      output.contains(s"Group '$missingGroup' could not be deleted due to:") && output.contains(
+        Errors.GROUP_ID_NOT_FOUND.message
+      )
+    )
   }
 
   @Test
@@ -55,9 +59,14 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     val result = service.deleteGroups()
-    assertTrue(s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
-      result.size == 1 && result.keySet.contains(missingGroup) && result.get(missingGroup).get.getCause
-        .isInstanceOf[GroupIdNotFoundException])
+    assertTrue(
+      s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
+      result.size == 1 && result.keySet.contains(missingGroup) && result
+        .get(missingGroup)
+        .get
+        .getCause
+        .isInstanceOf[GroupIdNotFoundException]
+    )
   }
 
   @Test
@@ -74,8 +83,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
-    assertTrue(s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group",
-      output.contains(s"Group '$group' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message))
+    assertTrue(
+      s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group",
+      output.contains(s"Group '$group' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message)
+    )
   }
 
   @Test
@@ -92,8 +103,11 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val result = service.deleteGroups()
-    assertTrue(s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group",
-      result.size == 1 && result.keySet.contains(group) && result.get(group).get.getCause.isInstanceOf[GroupNotEmptyException])
+    assertTrue(
+      s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group",
+      result.size == 1 && result.keySet
+        .contains(group) && result.get(group).get.getCause.isInstanceOf[GroupNotEmptyException]
+    )
   }
 
   @Test
@@ -117,7 +131,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
     assertTrue(s"The consumer group could not be deleted as expected",
-      output.contains(s"Deletion of requested consumer groups ('$group') was successful."))
+               output.contains(s"Deletion of requested consumer groups ('$group') was successful."))
   }
 
   @Test
@@ -141,7 +155,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val result = service.deleteGroups()
     assertTrue(s"The consumer group could not be deleted as expected",
-      result.size == 1 && result.keySet.contains(group) && result.get(group).get == null)
+               result.size == 1 && result.keySet.contains(group) && result.get(group).get == null)
   }
 
   @Test
@@ -166,9 +180,13 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val service2 = getConsumerGroupService(cgcArgs ++ Array("--group", missingGroup))
     val output = TestUtils.grabConsoleOutput(service2.deleteGroups())
-    assertTrue(s"The consumer group deletion did not work as expected",
-      output.contains(s"Group '$missingGroup' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message) &&
-      output.contains(s"These consumer groups were deleted successfully: '$group'"))
+    assertTrue(
+      s"The consumer group deletion did not work as expected",
+      output.contains(s"Group '$missingGroup' could not be deleted due to:") && output.contains(
+        Errors.GROUP_ID_NOT_FOUND.message
+      ) &&
+        output.contains(s"These consumer groups were deleted successfully: '$group'")
+    )
   }
 
   @Test
@@ -193,10 +211,13 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val service2 = getConsumerGroupService(cgcArgs ++ Array("--group", missingGroup))
     val result = service2.deleteGroups()
-    assertTrue(s"The consumer group deletion did not work as expected",
+    assertTrue(
+      s"The consumer group deletion did not work as expected",
       result.size == 2 &&
         result.keySet.contains(group) && result.get(group).get == null &&
-        result.keySet.contains(missingGroup) && result.get(missingGroup).get.getMessage.contains(Errors.GROUP_ID_NOT_FOUND.message))
+        result.keySet
+          .contains(missingGroup) && result.get(missingGroup).get.getMessage.contains(Errors.GROUP_ID_NOT_FOUND.message)
+    )
   }
 
   @Test
@@ -208,7 +229,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
     assertTrue(s"The consumer group deletion did not work as expected",
-      output.contains(s"Group '$group' could not be deleted due to"))
+               output.contains(s"Group '$group' could not be deleted due to"))
   }
 
   @Test
@@ -220,7 +241,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val result = service.deleteGroups()
     assertTrue(s"The consumer group deletion did not work as expected",
-      result.size == 1 && result.keySet.contains(group))
+               result.size == 1 && result.keySet.contains(group))
   }
 
   @Test(expected = classOf[OptionException])

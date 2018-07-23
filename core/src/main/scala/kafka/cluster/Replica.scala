@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-
+ */
 package kafka.cluster
 
 import kafka.log.Log
@@ -28,7 +27,8 @@ class Replica(val brokerId: Int,
               val topicPartition: TopicPartition,
               time: Time = Time.SYSTEM,
               initialHighWatermarkValue: Long = 0L,
-              @volatile var log: Option[Log] = None) extends Logging {
+              @volatile var log: Option[Log] = None)
+    extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
   @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
@@ -111,21 +111,29 @@ class Replica(val brokerId: Int,
   def maybeIncrementLogStartOffset(newLogStartOffset: Long) {
     if (isLocal) {
       if (newLogStartOffset > highWatermark.messageOffset)
-        throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
-          s"since it is larger than the high watermark ${highWatermark.messageOffset}")
+        throw new OffsetOutOfRangeException(
+          s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
+            s"since it is larger than the high watermark ${highWatermark.messageOffset}"
+        )
       log.get.maybeIncrementLogStartOffset(newLogStartOffset)
     } else {
-      throw new KafkaException(s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId")
+      throw new KafkaException(
+        s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId"
+      )
     }
   }
 
   private def logStartOffset_=(newLogStartOffset: Long) {
     if (isLocal) {
-      throw new KafkaException(s"Should not set log start offset on partition $topicPartition's local replica $brokerId " +
-                               s"without attempting to delete records of the log")
+      throw new KafkaException(
+        s"Should not set log start offset on partition $topicPartition's local replica $brokerId " +
+          s"without attempting to delete records of the log"
+      )
     } else {
       _logStartOffset = newLogStartOffset
-      trace(s"Setting log start offset for remote replica $brokerId for partition $topicPartition to [$newLogStartOffset]")
+      trace(
+        s"Setting log start offset for remote replica $brokerId for partition $topicPartition to [$newLogStartOffset]"
+      )
     }
   }
 
@@ -144,7 +152,9 @@ class Replica(val brokerId: Int,
       log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
-      throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
+      throw new KafkaException(
+        s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId"
+      )
     }
   }
 
@@ -157,15 +167,20 @@ class Replica(val brokerId: Int,
    * to the high watermark if there are no transactional messages in the log. Note also that the LSO cannot advance
    * beyond the high watermark.
    */
-  def lastStableOffset: LogOffsetMetadata = {
-    log.map { log =>
-      log.firstUnstableOffset match {
-        case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark.messageOffset => offsetMetadata
-        case _ => highWatermark
+  def lastStableOffset: LogOffsetMetadata =
+    log
+      .map { log =>
+        log.firstUnstableOffset match {
+          case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark.messageOffset => offsetMetadata
+          case _                                                                                  => highWatermark
+        }
       }
-    }.getOrElse(throw new KafkaException(s"Cannot fetch last stable offset on partition $topicPartition's " +
-      s"non-local replica $brokerId"))
-  }
+      .getOrElse(
+        throw new KafkaException(
+          s"Cannot fetch last stable offset on partition $topicPartition's " +
+            s"non-local replica $brokerId"
+        )
+      )
 
   /*
    * Convert hw to local offset metadata by reading the log at the hw offset.
@@ -180,13 +195,15 @@ class Replica(val brokerId: Int,
         }
       }
     } else {
-      throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
+      throw new KafkaException(
+        s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId"
+      )
     }
   }
 
   override def equals(that: Any): Boolean = that match {
     case other: Replica => brokerId == other.brokerId && topicPartition == other.topicPartition
-    case _ => false
+    case _              => false
   }
 
   override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.util.Random
@@ -92,11 +91,15 @@ class DelayedOperationTest {
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed, 2, purgatory.delayed)
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed,
+                 2,
+                 purgatory.delayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed, 1, purgatory.delayed)
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed,
+                 1,
+                 purgatory.delayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
@@ -128,9 +131,9 @@ class DelayedOperationTest {
   }
 
   /**
-    * Verify that if there is lock contention between two threads attempting to complete,
-    * completion is performed without any blocking in either thread.
-    */
+   * Verify that if there is lock contention between two threads attempting to complete,
+   * completion is performed without any blocking in either thread.
+   */
   @Test
   def testTryCompleteLockContention(): Unit = {
     executorService = Executors.newSingleThreadExecutor()
@@ -166,11 +169,11 @@ class DelayedOperationTest {
   }
 
   /**
-    * Test `tryComplete` with multiple threads to verify that there are no timing windows
-    * when completion is not performed even if the thread that makes the operation completable
-    * may not be able to acquire the operation lock. Since it is difficult to test all scenarios,
-    * this test uses random delays with a large number of threads.
-    */
+   * Test `tryComplete` with multiple threads to verify that there are no timing windows
+   * when completion is not performed even if the thread that makes the operation completable
+   * may not be able to acquire the operation lock. Since it is difficult to test all scenarios,
+   * this test uses random delays with a large number of threads.
+   */
   @Test
   def testTryCompleteWithMultipleThreads(): Unit = {
     val executor = Executors.newScheduledThreadPool(20)
@@ -198,21 +201,32 @@ class DelayedOperationTest {
       op
     }
 
-    def scheduleTryComplete(op: TestDelayOperation, delayMs: Long): Future[_] = {
-      executor.schedule(new Runnable {
-        override def run(): Unit = {
-          if (op.completionAttemptsRemaining.decrementAndGet() == 0)
-            op.completable = true
-          purgatory.checkAndComplete(op.key)
+    def scheduleTryComplete(op: TestDelayOperation, delayMs: Long): Future[_] =
+      executor.schedule(
+        new Runnable {
+          override def run(): Unit = {
+            if (op.completionAttemptsRemaining.decrementAndGet() == 0)
+              op.completable = true
+            purgatory.checkAndComplete(op.key)
+          }
+        },
+        delayMs,
+        TimeUnit.MILLISECONDS
+      )
+
+    (1 to completionAttempts)
+      .flatMap { _ =>
+        ops.map { op =>
+          scheduleTryComplete(op, random.nextInt(maxDelayMs))
         }
-      }, delayMs, TimeUnit.MILLISECONDS)
+      }
+      .foreach { future =>
+        future.get
+      }
+
+    ops.foreach { op =>
+      assertTrue("Operation should have completed", op.isCompleted)
     }
-
-    (1 to completionAttempts).flatMap { _ =>
-      ops.map { op => scheduleTryComplete(op, random.nextInt(maxDelayMs)) }
-    }.foreach { future => future.get }
-
-    ops.foreach { op => assertTrue("Operation should have completed", op.isCompleted) }
   }
 
   @Test
@@ -228,31 +242,29 @@ class DelayedOperationTest {
     }
     verifyDelayedOperationLock(newMockOperation, mismatchedLocks = false)
 
-    verifyDelayedOperationLock(new MockDelayedOperation(100000L, None, Some(new ReentrantLock)),
-        mismatchedLocks = true)
+    verifyDelayedOperationLock(new MockDelayedOperation(100000L, None, Some(new ReentrantLock)), mismatchedLocks = true)
   }
 
   def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
     val key = "key"
     executorService = Executors.newSingleThreadExecutor
-    def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
+    def createDelayedOperations(count: Int): Seq[MockDelayedOperation] =
       (1 to count).map { _ =>
         val op = mockDelayedOperation
         purgatory.tryCompleteElseWatch(op, Seq(key))
         assertFalse("Not completable", op.isCompleted)
         op
       }
-    }
 
-    def createCompletableOperations(count: Int): Seq[MockDelayedOperation] = {
+    def createCompletableOperations(count: Int): Seq[MockDelayedOperation] =
       (1 to count).map { _ =>
         val op = mockDelayedOperation
         op.completable = true
         op
       }
-    }
 
-    def checkAndComplete(completableOps: Seq[MockDelayedOperation], expectedComplete: Seq[MockDelayedOperation]): Unit = {
+    def checkAndComplete(completableOps: Seq[MockDelayedOperation],
+                         expectedComplete: Seq[MockDelayedOperation]): Unit = {
       completableOps.foreach(op => op.completable = true)
       val completed = purgatory.checkAndComplete(key)
       assertEquals(expectedComplete.size, completed)
@@ -324,7 +336,7 @@ class DelayedOperationTest {
   class MockDelayedOperation(delayMs: Long,
                              lockOpt: Option[ReentrantLock] = None,
                              val responseLockOpt: Option[ReentrantLock] = None)
-                             extends DelayedOperation(delayMs, lockOpt) {
+      extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
     def awaitExpiration() {
@@ -333,16 +345,13 @@ class DelayedOperationTest {
       }
     }
 
-    override def tryComplete() = {
+    override def tryComplete() =
       if (completable)
         forceComplete()
       else
         false
-    }
 
-    override def onExpiration() {
-
-    }
+    override def onExpiration() {}
 
     override def onComplete() {
       responseLockOpt.foreach { lock =>

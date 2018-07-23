@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.nio.ByteBuffer
@@ -27,7 +26,12 @@ import javax.crypto.{Mac, SecretKey}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CoreUtils, Json, Logging}
-import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode, KafkaZkClient}
+import kafka.zk.{
+  DelegationTokenChangeNotificationSequenceZNode,
+  DelegationTokenChangeNotificationZNode,
+  DelegationTokensZNode,
+  KafkaZkClient
+}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
@@ -41,7 +45,7 @@ import scala.collection.mutable
 
 object DelegationTokenManager {
   val DefaultHmacAlgorithm = "HmacSHA512"
-  val OwnerKey ="owner"
+  val OwnerKey = "owner"
   val RenewersKey = "renewers"
   val IssueTimestampKey = "issueTimestamp"
   val MaxTimestampKey = "maxTimestamp"
@@ -57,18 +61,16 @@ object DelegationTokenManager {
    * @param secretKey
    * @return
    */
-  def createHmac(tokenId: String, secretKey: String) : Array[Byte] = {
+  def createHmac(tokenId: String, secretKey: String): Array[Byte] =
     createHmac(tokenId, createSecretKey(secretKey.getBytes(StandardCharsets.UTF_8)))
-  }
 
   /**
    * Convert the byte[] to a secret key
    * @param keybytes the byte[] to create the secret key from
    * @return the secret key
    */
-  def createSecretKey(keybytes: Array[Byte]) : SecretKey = {
+  def createSecretKey(keybytes: Array[Byte]): SecretKey =
     new SecretKeySpec(keybytes, DefaultHmacAlgorithm)
-  }
 
   /**
    *
@@ -77,7 +79,7 @@ object DelegationTokenManager {
    * @param secretKey
    * @return
    */
-  def createBase64HMAC(tokenId: String, secretKey: SecretKey) : String = {
+  def createBase64HMAC(tokenId: String, secretKey: SecretKey): String = {
     val hmac = createHmac(tokenId, secretKey)
     Base64.getEncoder.encodeToString(hmac)
   }
@@ -88,17 +90,16 @@ object DelegationTokenManager {
    * @param secretKey  the secret key
    * @return  String of the generated hmac
    */
-  def createHmac(tokenId: String, secretKey: SecretKey) : Array[Byte] = {
-    val mac =  Mac.getInstance(DefaultHmacAlgorithm)
-    try
-      mac.init(secretKey)
+  def createHmac(tokenId: String, secretKey: SecretKey): Array[Byte] = {
+    val mac = Mac.getInstance(DefaultHmacAlgorithm)
+    try mac.init(secretKey)
     catch {
       case ike: InvalidKeyException => throw new IllegalArgumentException("Invalid key to HMAC computation", ike);
     }
     mac.doFinal(tokenId.getBytes(StandardCharsets.UTF_8))
   }
 
-  def toJsonCompatibleMap(token: DelegationToken):  Map[String, Any] = {
+  def toJsonCompatibleMap(token: DelegationToken): Map[String, Any] = {
     val tokenInfo = token.tokenInfo
     val tokenInfoMap = mutable.Map[String, Any]()
     tokenInfoMap(VersionKey) = CurrentVersion
@@ -127,8 +128,8 @@ object DelegationTokenManager {
         val maxTimestamp = mainJs(MaxTimestampKey).to[Long]
         val tokenId = mainJs(TokenIdKey).to[String]
 
-        val tokenInfo = new TokenInformation(tokenId, owner, renewers.asJava,
-          issueTimestamp, maxTimestamp, expiryTimestamp)
+        val tokenInfo =
+          new TokenInformation(tokenId, owner, renewers.asJava, issueTimestamp, maxTimestamp, expiryTimestamp)
 
         Some(tokenInfo)
       case None =>
@@ -136,10 +137,13 @@ object DelegationTokenManager {
     }
   }
 
-  def filterToken(requestedPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation, authorizeToken: String => Boolean) : Boolean = {
+  def filterToken(requestedPrincipal: KafkaPrincipal,
+                  owners: Option[List[KafkaPrincipal]],
+                  token: TokenInformation,
+                  authorizeToken: String => Boolean): Boolean = {
 
     val allow =
-    //exclude tokens which are not requested
+      //exclude tokens which are not requested
       if (!owners.isEmpty && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
         false
         //Owners and the renewers can describe their own tokens
@@ -148,8 +152,7 @@ object DelegationTokenManager {
         // Check permission for non-owned tokens
       } else if ((authorizeToken(token.tokenId))) {
         true
-      }
-      else {
+      } else {
         false
       }
 
@@ -160,7 +163,9 @@ object DelegationTokenManager {
 class DelegationTokenManager(val config: KafkaConfig,
                              val tokenCache: DelegationTokenCache,
                              val time: Time,
-                             val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                             val zkClient: KafkaZkClient)
+    extends Logging
+    with KafkaMetricsGroup {
   this.logIdent = "[Token Manager on Broker " + config.brokerId + "]: "
 
   import DelegationTokenManager._
@@ -171,7 +176,8 @@ class DelegationTokenManager(val config: KafkaConfig,
   type DescribeResponseCallback = (Errors, List[DelegationToken]) => Unit
 
   val secretKey = {
-    val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenMasterKey.value.getBytes(StandardCharsets.UTF_8) else null
+    val keyBytes =
+      if (config.tokenAuthEnabled) config.delegationTokenMasterKey.value.getBytes(StandardCharsets.UTF_8) else null
     if (keyBytes == null || keyBytes.length == 0) null
     else
       createSecretKey(keyBytes)
@@ -183,20 +189,23 @@ class DelegationTokenManager(val config: KafkaConfig,
   private val lock = new Object()
   private var tokenChangeListener: ZkNodeChangeNotificationListener = null
 
-  def startup() = {
+  def startup() =
     if (config.tokenAuthEnabled) {
       zkClient.createDelegationTokenPaths
       loadCache
-      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, DelegationTokenChangeNotificationZNode.path, DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler)
+      tokenChangeListener = new ZkNodeChangeNotificationListener(
+        zkClient,
+        DelegationTokenChangeNotificationZNode.path,
+        DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix,
+        TokenChangedNotificationHandler
+      )
       tokenChangeListener.init
     }
-  }
 
-  def shutdown() = {
+  def shutdown() =
     if (config.tokenAuthEnabled) {
       if (tokenChangeListener != null) tokenChangeListener.close()
     }
-  }
 
   private def loadCache() {
     lock.synchronized {
@@ -206,7 +215,7 @@ class DelegationTokenManager(val config: KafkaConfig,
         try {
           getTokenFromZk(tokenId) match {
             case Some(token) => updateCache(token)
-            case None =>
+            case None        =>
           }
         } catch {
           case ex: Throwable => error(s"Error while getting Token for tokenId :$tokenId", ex)
@@ -215,7 +224,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     }
   }
 
-  private def getTokenFromZk(tokenId: String): Option[DelegationToken] = {
+  private def getTokenFromZk(tokenId: String): Option[DelegationToken] =
     zkClient.getDelegationTokenInfo(tokenId) match {
       case Some(tokenInformation) => {
         val hmac = createHmac(tokenId, secretKey)
@@ -224,7 +233,6 @@ class DelegationTokenManager(val config: KafkaConfig,
       case None =>
         None
     }
-  }
 
   /**
    *
@@ -232,18 +240,18 @@ class DelegationTokenManager(val config: KafkaConfig,
    */
   private def updateCache(token: DelegationToken): Unit = {
     val hmacString = token.hmacAsBase64String
-    val scramCredentialMap =  prepareScramCredentials(hmacString)
+    val scramCredentialMap = prepareScramCredentials(hmacString)
     tokenCache.updateCache(token, scramCredentialMap.asJava)
   }
+
   /**
    * @param hmacString
    */
-  private def prepareScramCredentials(hmacString: String) : Map[String, ScramCredential] = {
+  private def prepareScramCredentials(hmacString: String): Map[String, ScramCredential] = {
     val scramCredentialMap = mutable.Map[String, ScramCredential]()
 
-    def scramCredential(mechanism: ScramMechanism): ScramCredential = {
+    def scramCredential(mechanism: ScramMechanism): ScramCredential =
       new ScramFormatter(mechanism).generateCredential(hmacString, mechanism.minIterations)
-    }
 
     for (mechanism <- ScramMechanism.values)
       scramCredentialMap(mechanism.mechanismName) = scramCredential(mechanism)
@@ -274,13 +282,16 @@ class DelegationTokenManager(val config: KafkaConfig,
         val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
         val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
 
-        val tokenInfo = new TokenInformation(tokenId, owner, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
+        val tokenInfo =
+          new TokenInformation(tokenId, owner, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
 
         val hmac = createHmac(tokenId, secretKey)
         val token = new DelegationToken(tokenInfo, hmac)
         updateToken(token)
         info(s"Created a delegation token : $tokenId for owner : $owner")
-        responseCallback(CreateTokenResult(issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
+        responseCallback(
+          CreateTokenResult(issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE)
+        )
       }
     }
   }
@@ -300,11 +311,11 @@ class DelegationTokenManager(val config: KafkaConfig,
     if (!config.tokenAuthEnabled) {
       renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
     } else {
-      lock.synchronized  {
+      lock.synchronized {
         getToken(hmac) match {
           case Some(token) => {
             val now = time.milliseconds
-            val tokenInfo =  token.tokenInfo
+            val tokenInfo = token.tokenInfo
 
             if (!allowedToRenew(principal, tokenInfo)) {
               renewCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
@@ -341,7 +352,7 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param hmac
    * @return
    */
-  private def getToken(hmac: ByteBuffer): Option[DelegationToken] = {
+  private def getToken(hmac: ByteBuffer): Option[DelegationToken] =
     try {
       val byteArray = new Array[Byte](hmac.remaining)
       hmac.get(byteArray)
@@ -353,7 +364,6 @@ class DelegationTokenManager(val config: KafkaConfig,
         error("Exception while getting token for hmac", e)
         None
     }
-  }
 
   /**
    *
@@ -361,9 +371,8 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param tokenInfo
    * @return
    */
-  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean = {
+  private def allowedToRenew(principal: KafkaPrincipal, tokenInfo: TokenInformation): Boolean =
     if (principal.equals(tokenInfo.owner) || tokenInfo.renewers.asScala.toList.contains(principal)) true else false
-  }
 
   /**
    *
@@ -400,10 +409,10 @@ class DelegationTokenManager(val config: KafkaConfig,
     if (!config.tokenAuthEnabled) {
       expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
     } else {
-      lock.synchronized  {
+      lock.synchronized {
         getToken(hmac) match {
-          case Some(token) =>  {
-            val tokenInfo =  token.tokenInfo
+          case Some(token) => {
+            val tokenInfo = token.tokenInfo
             val now = time.milliseconds
 
             if (!allowedToRenew(principal, tokenInfo)) {
@@ -444,15 +453,14 @@ class DelegationTokenManager(val config: KafkaConfig,
    *
    * @param tokenId
    */
-  private def removeCache(tokenId: String): Unit = {
+  private def removeCache(tokenId: String): Unit =
     tokenCache.removeCache(tokenId)
-  }
 
   /**
    *
    * @return
    */
-  def expireTokens(): Unit = {
+  def expireTokens(): Unit =
     lock.synchronized {
       for (tokenInfo <- getAllTokenInformation) {
         val now = time.milliseconds
@@ -462,19 +470,16 @@ class DelegationTokenManager(val config: KafkaConfig,
         }
       }
     }
-  }
 
   /**
    *
    * @return
    */
-  def getAllTokenInformation(): List[TokenInformation] = {
+  def getAllTokenInformation(): List[TokenInformation] =
     tokenCache.tokens.asScala.toList
-  }
 
-  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] = {
+  def getTokens(filterToken: TokenInformation => Boolean): List[DelegationToken] =
     getAllTokenInformation().filter(filterToken).map(token => getToken(token))
-  }
 
   object TokenChangedNotificationHandler extends NotificationHandler {
     override def processNotification(tokenIdBytes: Array[Byte]) {
@@ -483,7 +488,7 @@ class DelegationTokenManager(val config: KafkaConfig,
         info(s"Processing Token Notification for tokenId : $tokenId")
         getTokenFromZk(tokenId) match {
           case Some(token) => updateCache(token)
-          case None => removeCache(tokenId)
+          case None        => removeCache(tokenId)
         }
       }
     }
@@ -498,7 +503,7 @@ case class CreateTokenResult(issueTimestamp: Long,
                              hmac: Array[Byte],
                              error: Errors) {
 
-  override def equals(other: Any): Boolean = {
+  override def equals(other: Any): Boolean =
     other match {
       case that: CreateTokenResult =>
         error.equals(that.error) &&
@@ -509,7 +514,6 @@ case class CreateTokenResult(issueTimestamp: Long,
           (hmac sameElements that.hmac)
       case _ => false
     }
-  }
 
   override def hashCode(): Int = {
     val fields = Seq(issueTimestamp, expiryTimestamp, maxTimestamp, tokenId, hmac, error)

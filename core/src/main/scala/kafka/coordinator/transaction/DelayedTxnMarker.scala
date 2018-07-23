@@ -23,25 +23,25 @@ import kafka.server.DelayedOperation
 import org.apache.kafka.common.protocol.Errors
 
 /**
-  * Delayed transaction state change operations that are added to the purgatory without timeout (i.e. these operations should never time out)
-  */
+ * Delayed transaction state change operations that are added to the purgatory without timeout (i.e. these operations should never time out)
+ */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
-                                           completionCallback: Errors => Unit,
-                                           lock: Lock)
-  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365), Some(lock)) {
+                                            completionCallback: Errors => Unit,
+                                            lock: Lock)
+    extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365), Some(lock)) {
 
-  override def tryComplete(): Boolean = {
+  override def tryComplete(): Boolean =
     txnMetadata.inLock {
       if (txnMetadata.topicPartitions.isEmpty)
         forceComplete()
       else false
     }
-  }
 
-  override def onExpiration(): Unit = {
+  override def onExpiration(): Unit =
     // this should never happen
-    throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
-  }
+    throw new IllegalStateException(
+      s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen."
+    )
 
   // TODO: if we will always return NONE upon completion, we can remove the error code in the param
   override def onComplete(): Unit = completionCallback(Errors.NONE)

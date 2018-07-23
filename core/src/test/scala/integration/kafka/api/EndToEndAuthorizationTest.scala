@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 import java.io.File
@@ -38,23 +37,23 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 
 /**
-  * The test cases here verify that a producer authorized to publish to a topic
-  * is able to, and that consumers in a group authorized to consume are able to
-  * to do so.
-  *
-  * This test relies on a chain of test harness traits to set up. It directly
-  * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
-  * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
-  * brokers, but first it initializes a ZooKeeper server and client, which happens
-  * in ZooKeeperTestHarness.
-  *
-  * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
-  * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
-  *
-  * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
-  * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
-  * would end up with ZooKeeperTestHarness twice.
-  */
+ * The test cases here verify that a producer authorized to publish to a topic
+ * is able to, and that consumers in a group authorized to consume are able to
+ * to do so.
+ *
+ * This test relies on a chain of test harness traits to set up. It directly
+ * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
+ * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
+ * brokers, but first it initializes a ZooKeeper server and client, which happens
+ * in ZooKeeperTestHarness.
+ *
+ * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
+ * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+ *
+ * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
+ * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
+ * would end up with ZooKeeperTestHarness twice.
+ */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
@@ -88,82 +87,119 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val wildcardGroupResource = Resource(Group, wildcard, LITERAL)
 
   // Arguments to AclCommand to set ACLs.
-  def clusterActionArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--cluster",
-                                          s"--operation=ClusterAction",
-                                          s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
-  def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$wildcard",
-                                          s"--operation=Read",
-                                          s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
-  def produceAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--producer",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def describeAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--operation=Describe",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def deleteDescribeAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--remove",
-                                          s"--force",
-                                          s"--topic=$topic",
-                                          s"--operation=Describe",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def deleteWriteAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--remove",
-                                          s"--force",
-                                          s"--topic=$topic",
-                                          s"--operation=Write",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def consumeAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--group=$group",
-                                          s"--consumer",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def groupAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--group=$group",
-                                          s"--operation=Read",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def produceConsumeWildcardAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$wildcard",
-                                          s"--group=$wildcard",
-                                          s"--consumer",
-                                          s"--producer",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def produceConsumePrefixedAclsArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topicPrefix",
-                                          s"--group=$groupPrefix",
-                                          s"--resource-pattern-type=prefixed",
-                                          s"--consumer",
-                                          s"--producer",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def clusterActionArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--cluster",
+      s"--operation=ClusterAction",
+      s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal"
+    )
+  def topicBrokerReadAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$wildcard",
+      s"--operation=Read",
+      s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal"
+    )
+  def produceAclArgs(topic: String): Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$topic",
+      s"--producer",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def describeAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$topic",
+      s"--operation=Describe",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def deleteDescribeAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--remove",
+      s"--force",
+      s"--topic=$topic",
+      s"--operation=Describe",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def deleteWriteAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--remove",
+      s"--force",
+      s"--topic=$topic",
+      s"--operation=Write",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def consumeAclArgs(topic: String): Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$topic",
+      s"--group=$group",
+      s"--consumer",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def groupAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--group=$group",
+      s"--operation=Read",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def produceConsumeWildcardAclArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$wildcard",
+      s"--group=$wildcard",
+      s"--consumer",
+      s"--producer",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
+  def produceConsumePrefixedAclsArgs: Array[String] =
+    Array(
+      "--authorizer-properties",
+      s"zookeeper.connect=$zkConnect",
+      s"--add",
+      s"--topic=$topicPrefix",
+      s"--group=$groupPrefix",
+      s"--resource-pattern-type=prefixed",
+      s"--consumer",
+      s"--producer",
+      s"--allow-principal=$kafkaPrincipalType:$clientPrincipal"
+    )
 
-  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
-  def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
-  def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
-  def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
-  def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
-  def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
-  def TopicCreateAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Create))
+  def ClusterActionAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def TopicBrokerReadAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
+  def GroupReadAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
+  def TopicReadAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
+  def TopicWriteAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
+  def TopicDescribeAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
+  def TopicCreateAcl =
+    Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Create))
   // The next two configuration parameters enable ZooKeeper secure ACLs
   // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -176,8 +212,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   /**
-    * Starts MiniKDC and only then sets up the parent trait.
-    */
+   * Starts MiniKDC and only then sets up the parent trait.
+   */
   @Before
   override def setUp() {
     super.setUp()
@@ -189,18 +225,19 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     createTopic(topic, 1, 3)
   }
 
-  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(brokerList,
-                                maxBlockMs = 3000L,
-                                securityProtocol = this.securityProtocol,
-                                trustStoreFile = this.trustStoreFile,
-                                saslProperties = this.clientSaslProperties,
-                                props = Some(producerConfig))
-  }
+  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] =
+    TestUtils.createProducer(
+      brokerList,
+      maxBlockMs = 3000L,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(producerConfig)
+    )
 
   /**
-    * Closes MiniKDC last when tearing down.
-    */
+   * Closes MiniKDC last when tearing down.
+   */
   @After
   override def tearDown() {
     consumers.foreach(_.wakeup())
@@ -209,8 +246,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   /**
-    * Tests the ability of producing and consuming with the appropriate ACLs set.
-    */
+   * Tests the ability of producing and consuming with the appropriate ACLs set.
+   */
   @Test
   def testProduceConsumeViaAssign(): Unit = {
     setAclsAndProduce(tp)
@@ -253,7 +290,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   private def setWildcardResourceAcls() {
     AclCommand.main(produceConsumeWildcardAclArgs)
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(
+        TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl,
+        s.apis.authorizer.get,
+        wildcardTopicResource
+      )
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
     }
   }
@@ -261,7 +302,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   private def setPrefixedResourceAcls() {
     AclCommand.main(produceConsumePrefixedAclsArgs)
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl,
+                                  s.apis.authorizer.get,
+                                  prefixedTopicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, prefixedGroupResource)
     }
   }
@@ -270,20 +313,21 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, new Resource(Topic, tp.topic))
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl,
+                                  s.apis.authorizer.get,
+                                  new Resource(Topic, tp.topic))
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
     sendRecords(numRecords, tp)
   }
 
   /**
-    * Tests that a producer fails to publish messages when the appropriate ACL
-    * isn't set.
-    */
+   * Tests that a producer fails to publish messages when the appropriate ACL
+   * isn't set.
+   */
   @Test(expected = classOf[TopicAuthorizationException])
-  def testNoProduceWithoutDescribeAcl(): Unit = {
+  def testNoProduceWithoutDescribeAcl(): Unit =
     sendRecords(numRecords, tp)
-  }
 
   @Test
   def testNoProduceWithDescribeAcl(): Unit = {
@@ -291,7 +335,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.apis.authorizer.get, topicResource)
     }
-    try{
+    try {
       sendRecords(numRecords, tp)
       fail("exception expected")
     } catch {
@@ -299,11 +343,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
-   /**
-    * Tests that a consumer fails to consume messages without the appropriate
-    * ACL set.
-    */
+
+  /**
+   * Tests that a consumer fails to consume messages without the appropriate
+   * ACL set.
+   */
   @Test(expected = classOf[KafkaException])
   def testNoConsumeWithoutDescribeAclViaAssign(): Unit = {
     noConsumeWithoutDescribeAclSetup()
@@ -311,7 +355,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // the exception is expected when the consumer attempts to lookup offsets
     consumeRecords(this.consumers.head)
   }
-  
+
   @Test(expected = classOf[TopicAuthorizationException])
   def testNoConsumeWithoutDescribeAclViaSubscribe(): Unit = {
     noConsumeWithoutDescribeAclSetup()
@@ -319,12 +363,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
     consumeRecords(this.consumers.head, timeout = 3000)
   }
-  
+
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl,
+                                  s.apis.authorizer.get,
+                                  topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
 
@@ -336,7 +382,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
   }
-  
+
   @Test
   def testNoConsumeWithDescribeAclViaAssign(): Unit = {
     noConsumeWithDescribeAclSetup()
@@ -350,7 +396,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
+
   @Test
   def testNoConsumeWithDescribeAclViaSubscribe(): Unit = {
     noConsumeWithDescribeAclSetup()
@@ -364,26 +410,30 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
+
   private def noConsumeWithDescribeAclSetup(): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl,
+                                  s.apis.authorizer.get,
+                                  topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
     sendRecords(numRecords, tp)
   }
 
   /**
-    * Tests that a consumer fails to consume messages without the appropriate
-    * ACL set.
-    */
+   * Tests that a consumer fails to consume messages without the appropriate
+   * ACL set.
+   */
   @Test
   def testNoGroupAcl(): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl,
+                                  s.apis.authorizer.get,
+                                  topicResource)
     }
     sendRecords(numRecords, tp)
     consumers.head.assign(List(tp).asJava)
@@ -396,7 +446,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  protected final def sendRecords(numRecords: Int, tp: TopicPartition) {
+  final protected def sendRecords(numRecords: Int, tp: TopicPartition) {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
@@ -409,12 +459,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  protected final def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
-                             numRecords: Int = 1,
-                             startingOffset: Int = 0,
-                             topic: String = topic,
-                             part: Int = part,
-                             timeout: Long = 10000) {
+  final protected def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+                                     numRecords: Int = 1,
+                                     startingOffset: Int = 0,
+                                     topic: String = topic,
+                                     part: Int = part,
+                                     timeout: Long = 10000) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
     val deadlineMs = System.currentTimeMillis() + timeout
@@ -434,4 +484,3 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 }
-

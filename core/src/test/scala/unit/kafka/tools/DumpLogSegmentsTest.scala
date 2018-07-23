@@ -19,13 +19,13 @@ package kafka.tools
 
 import java.io.ByteArrayOutputStream
 
-import kafka.log.{ Log, LogConfig, LogManager }
-import kafka.server.{ BrokerTopicStats, LogDirFailureChannel }
-import kafka.utils.{ MockTime, TestUtils }
-import org.apache.kafka.common.record.{ CompressionType, MemoryRecords, SimpleRecord }
+import kafka.log.{Log, LogConfig, LogManager}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
-import org.junit.{ After, Before, Test }
+import org.junit.{After, Before, Test}
 
 class DumpLogSegmentsTest {
 
@@ -36,21 +36,31 @@ class DumpLogSegmentsTest {
 
   @Before
   def setUp(): Unit = {
-    val log = Log(logDir, LogConfig(), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+    val log = Log(
+      logDir,
+      LogConfig(),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10)
+    )
 
     /* append two messages */
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
-      new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE,
+                                                 0,
+                                                 new SimpleRecord("hello".getBytes),
+                                                 new SimpleRecord("there".getBytes)),
+                       leaderEpoch = 0)
     log.flush()
   }
 
   @After
-  def tearDown(): Unit = {
+  def tearDown(): Unit =
     Utils.delete(tmpDir)
-  }
 
   @Test
   def testPrintDataLog(): Unit = {

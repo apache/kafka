@@ -42,24 +42,25 @@ object LeaderEpochCheckpointFile {
 
     override def toLine(entry: EpochEntry): String = s"${entry.epoch} ${entry.startOffset}"
 
-    override def fromLine(line: String): Option[EpochEntry] = {
+    override def fromLine(line: String): Option[EpochEntry] =
       WhiteSpacesPattern.split(line) match {
         case Array(epoch, offset) =>
           Some(EpochEntry(epoch.toInt, offset.toLong))
         case _ => None
       }
-    }
 
   }
 }
 
 /**
-  * This class persists a map of (LeaderEpoch => Offsets) to a file (for a certain replica)
-  */
-class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) extends LeaderEpochCheckpoint {
+ * This class persists a map of (LeaderEpoch => Offsets) to a file (for a certain replica)
+ */
+class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null)
+    extends LeaderEpochCheckpoint {
   import LeaderEpochCheckpointFile._
 
-  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
+  val checkpoint =
+    new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
 
   def write(epochs: Seq[EpochEntry]): Unit = checkpoint.write(epochs)
 

@@ -16,14 +16,11 @@ package kafka.common
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Convenience case class since (clientId, brokerInfo) pairs are used to create
  * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
  */
-
-trait ClientIdBroker {
-}
+trait ClientIdBroker {}
 
 case class ClientIdAndBroker(clientId: String, brokerHost: String, brokerPort: Int) extends ClientIdBroker {
   override def toString = "%s-%s-%d".format(clientId, brokerHost, brokerPort)

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.zk
 
 import org.apache.zookeeper.server.ZooKeeperServer
@@ -50,17 +49,16 @@ class EmbeddedZookeeper() extends Logging {
     CoreUtils.swallow(zookeeper.shutdown(), this)
     CoreUtils.swallow(factory.shutdown(), this)
 
-    def isDown(): Boolean = {
+    def isDown(): Boolean =
       try {
         ZkFourLetterWords.sendStat("127.0.0.1", port, 3000)
         false
       } catch { case _: Throwable => true }
-    }
 
     Iterator.continually(isDown()).exists(identity)
 
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
   }
-  
+
 }

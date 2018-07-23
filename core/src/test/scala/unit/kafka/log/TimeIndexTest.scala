@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io.File
@@ -40,7 +39,7 @@ class TimeIndexTest extends JUnitSuite {
 
   @After
   def teardown() {
-    if(this.idx != null)
+    if (this.idx != null)
       this.idx.file.delete()
   }
 
@@ -135,4 +134,3 @@ class TimeIndexTest extends JUnitSuite {
   }
 
 }
-

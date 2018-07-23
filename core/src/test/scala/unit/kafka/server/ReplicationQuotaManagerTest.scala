@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util.Collections
@@ -44,7 +44,12 @@ class ReplicationQuotaManagerTest {
   @Test
   def shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses(): Unit = {
     val metrics = newMetrics()
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), metrics, LeaderReplication, time)
+    val quota = new ReplicationQuotaManager(
+      ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1),
+      metrics,
+      LeaderReplication,
+      time
+    )
 
     //Given
     quota.updateQuota(new Quota(100, true))
@@ -98,7 +103,8 @@ class ReplicationQuotaManagerTest {
   }
 
   def rate(metrics: Metrics): Double = {
-    val metricName = metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
+    val metricName =
+      metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
     val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
     leaderThrottledRate
   }
@@ -117,7 +123,6 @@ class ReplicationQuotaManagerTest {
 
   private def tp1(id: Int): TopicPartition = new TopicPartition("topic1", id)
 
-  private def newMetrics(): Metrics = {
+  private def newMetrics(): Metrics =
     new Metrics(new MetricConfig(), Collections.emptyList(), time)
-  }
 }

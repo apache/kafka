@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator.group
 
 import kafka.message.{CompressionCodec, NoCompressionCodec}
@@ -44,17 +43,18 @@ case class OffsetConfig(maxMetadataSize: Int = OffsetConfig.DefaultMaxMetadataSi
                         offsetsTopicNumPartitions: Int = OffsetConfig.DefaultOffsetsTopicNumPartitions,
                         offsetsTopicSegmentBytes: Int = OffsetConfig.DefaultOffsetsTopicSegmentBytes,
                         offsetsTopicReplicationFactor: Short = OffsetConfig.DefaultOffsetsTopicReplicationFactor,
-                        offsetsTopicCompressionCodec: CompressionCodec = OffsetConfig.DefaultOffsetsTopicCompressionCodec,
+                        offsetsTopicCompressionCodec: CompressionCodec =
+                          OffsetConfig.DefaultOffsetsTopicCompressionCodec,
                         offsetCommitTimeoutMs: Int = OffsetConfig.DefaultOffsetCommitTimeoutMs,
                         offsetCommitRequiredAcks: Short = OffsetConfig.DefaultOffsetCommitRequiredAcks)
 
 object OffsetConfig {
   val DefaultMaxMetadataSize = 4096
-  val DefaultLoadBufferSize = 5*1024*1024
-  val DefaultOffsetRetentionMs = 24*60*60*1000L
+  val DefaultLoadBufferSize = 5 * 1024 * 1024
+  val DefaultOffsetRetentionMs = 24 * 60 * 60 * 1000L
   val DefaultOffsetsRetentionCheckIntervalMs = 600000L
   val DefaultOffsetsTopicNumPartitions = 50
-  val DefaultOffsetsTopicSegmentBytes = 100*1024*1024
+  val DefaultOffsetsTopicSegmentBytes = 100 * 1024 * 1024
   val DefaultOffsetsTopicReplicationFactor = 3.toShort
   val DefaultOffsetsTopicCompressionCodec = NoCompressionCodec
   val DefaultOffsetCommitTimeoutMs = 5000

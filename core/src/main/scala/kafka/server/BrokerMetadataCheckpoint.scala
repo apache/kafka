@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.io._
@@ -27,12 +26,12 @@ import org.apache.kafka.common.utils.Utils
 case class BrokerMetadata(brokerId: Int)
 
 /**
-  * This class saves broker's metadata to a file
-  */
+ * This class saves broker's metadata to a file
+ */
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
 
-  def write(brokerMetadata: BrokerMetadata) = {
+  def write(brokerMetadata: BrokerMetadata) =
     lock synchronized {
       try {
         val brokerMetaProps = new Properties()
@@ -54,7 +53,6 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
           throw ie
       }
     }
-  }
 
   def read(): Option[BrokerMetadata] = {
     Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
@@ -75,7 +73,9 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
           warn("No meta.properties file under dir %s".format(file.getAbsolutePath()))
           None
         case e1: Exception =>
-          error("Failed to read meta.properties file under dir %s due to %s".format(file.getAbsolutePath(), e1.getMessage))
+          error(
+            "Failed to read meta.properties file under dir %s due to %s".format(file.getAbsolutePath(), e1.getMessage)
+          )
           throw e1
       }
     }

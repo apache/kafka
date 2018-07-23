@@ -21,24 +21,23 @@ import org.scalatest.Assertions
 import org.junit.Test
 
 class IteratorTemplateTest extends Assertions {
-  
+
   val lst = 0 until 10
   val iterator = new IteratorTemplate[Int]() {
     var i = 0
-    override def makeNext() = {
-      if(i >= lst.size) {
+    override def makeNext() =
+      if (i >= lst.size) {
         allDone()
       } else {
         val item = lst(i)
         i += 1
         item
       }
-    }
   }
 
   @Test
   def testIterator() {
-    for(i <- 0 until 10) {
+    for (i <- 0 until 10) {
       assertEquals("We should have an item to read.", true, iterator.hasNext)
       assertEquals("Checking again shouldn't change anything.", true, iterator.hasNext)
       assertEquals("Peeking at the item should show the right thing.", i, iterator.peek)
@@ -53,5 +52,5 @@ class IteratorTemplateTest extends Assertions {
       iterator.next
     }
   }
-  
+
 }

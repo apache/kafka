@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util.concurrent._
@@ -32,9 +31,8 @@ class DelayedItem(delayMs: Long) extends Delayed with Logging {
   /**
    * The remaining delay time
    */
-  def getDelay(unit: TimeUnit): Long = {
+  def getDelay(unit: TimeUnit): Long =
     unit.convert(max(dueMs - Time.SYSTEM.milliseconds, 0), TimeUnit.MILLISECONDS)
-  }
 
   def compareTo(d: Delayed): Int = {
     val other = d.asInstanceOf[DelayedItem]

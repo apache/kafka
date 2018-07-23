@@ -14,8 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.common
 
-class TopicAlreadyMarkedForDeletionException(message: String) extends RuntimeException(message) {
-}
+class TopicAlreadyMarkedForDeletionException(message: String) extends RuntimeException(message) {}

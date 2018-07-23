@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.log
 
 import java.io.{File, RandomAccessFile}
@@ -53,9 +52,8 @@ class LogCleanerTest extends JUnitSuite {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
 
   @After
-  def teardown(): Unit = {
+  def teardown(): Unit =
     Utils.delete(tmpdir)
-  }
 
   /**
    * Test simple log cleaning
@@ -69,8 +67,8 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
-    while(log.numberOfSegments < 4)
-      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 4) log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt),
+                                                        leaderEpoch = 0)
     val keysFound = LogTest.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
@@ -99,11 +97,11 @@ class LogCleanerTest extends JUnitSuite {
     logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 4
     // roll the segment, so we can clean the messages already appended
     log.roll()
 
@@ -111,7 +109,7 @@ class LogCleanerTest extends JUnitSuite {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
     assertTrue("Cleaned segment file should be trimmed to its real size.",
-      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
+               log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
   }
 
   @Test
@@ -477,15 +475,17 @@ class LogCleanerTest extends JUnitSuite {
   def testLargeMessage() {
     val largeMessageSize = 1024 * 1024
     // Create cleaner with very small default max message size
-    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize = 1024)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 2)
-      log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
+    while (log.numberOfSegments < 2) log.appendAsLeader(
+      record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)),
+      leaderEpoch = 0
+    )
     val keysFound = LogTest.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
@@ -508,7 +508,7 @@ class LogCleanerTest extends JUnitSuite {
   def testMessageLargerThanMaxMessageSize() {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
 
-    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize = 1024)
     cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
     val shouldRemain = LogTest.keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
     assertEquals(shouldRemain, LogTest.keysInLog(log))
@@ -526,7 +526,7 @@ class LogCleanerTest extends JUnitSuite {
     file.write(0xff)
     file.close()
 
-    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize = 1024)
     intercept[CorruptRecordException] {
       cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
     }
@@ -543,7 +543,7 @@ class LogCleanerTest extends JUnitSuite {
     file.setLength(1024)
     file.close()
 
-    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize = 1024)
     intercept[CorruptRecordException] {
       cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
     }
@@ -556,8 +556,10 @@ class LogCleanerTest extends JUnitSuite {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 2)
-      log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
+    while (log.numberOfSegments < 2) log.appendAsLeader(
+      record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)),
+      leaderEpoch = 0
+    )
     val keysFound = LogTest.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
 
@@ -582,22 +584,21 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages with the keys 0 through N
-    while(log.numberOfSegments < 2)
-      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 2) log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt),
+                                                        leaderEpoch = 0)
 
     // delete all even keys between 0 and N
     val leo = log.logEndOffset
-    for(key <- 0 until leo.toInt by 2)
+    for (key <- 0 until leo.toInt by 2)
       log.appendAsLeader(tombstoneRecord(key), leaderEpoch = 0)
 
     // append some new unique keys to pad out to a new active segment
-    while(log.numberOfSegments < 4)
-      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 4) log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt),
+                                                        leaderEpoch = 0)
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     val keys = LogTest.keysInLog(log).toSet
-    assertTrue("None of the keys we deleted should still exist.",
-               (0 until leo.toInt by 2).forall(!keys.contains(_)))
+    assertTrue("None of the keys we deleted should still exist.", (0 until leo.toInt by 2).forall(!keys.contains(_)))
   }
 
   def testLogCleanerStats(): Unit = {
@@ -608,17 +609,18 @@ class LogCleanerTest extends JUnitSuite {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 4
     // roll the segment, so we can clean the messages already appended
     log.roll()
 
     val initialLogSize = log.size
 
-    val (endOffset, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    val (endOffset, stats) =
+      cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
     assertEquals(5, endOffset)
     assertEquals(5, stats.messagesRead)
     assertEquals(initialLogSize, stats.bytesRead)
@@ -693,27 +695,27 @@ class LogCleanerTest extends JUnitSuite {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
-    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
-    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 4
     // roll the segment, so we can clean the messages already appended
     log.roll()
 
     // clean the log with only one message removed
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals(List(1,0,1,0), LogTest.keysInLog(log))
-    assertEquals(List(1,2,3,4), offsetsInLog(log))
+    assertEquals(List(1, 0, 1, 0), LogTest.keysInLog(log))
+    assertEquals(List(1, 2, 3, 4), offsetsInLog(log))
 
     // continue to make progress, even though we can only clean one message at a time
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 3, log.activeSegment.baseOffset))
-    assertEquals(List(0,1,0), LogTest.keysInLog(log))
-    assertEquals(List(2,3,4), offsetsInLog(log))
+    assertEquals(List(0, 1, 0), LogTest.keysInLog(log))
+    assertEquals(List(2, 3, 4), offsetsInLog(log))
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 4, log.activeSegment.baseOffset))
-    assertEquals(List(1,0), LogTest.keysInLog(log))
-    assertEquals(List(3,4), offsetsInLog(log))
+    assertEquals(List(1, 0), LogTest.keysInLog(log))
+    assertEquals(List(3, 4), offsetsInLog(log))
   }
 
   @Test
@@ -730,32 +732,50 @@ class LogCleanerTest extends JUnitSuite {
     val numTotalSegments = 7
 
     // append messages with the keys 0 through N-1, values equal offset
-    while(log.numberOfSegments <= numCleanableSegments)
-      log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments <= numCleanableSegments) log.appendAsLeader(
+      record(log.logEndOffset.toInt % N, log.logEndOffset.toInt),
+      leaderEpoch = 0
+    )
 
     // at this point one message past the cleanable segments has been added
     // the entire segment containing the first uncleanable offset should not be cleaned.
-    val firstUncleanableOffset = log.logEndOffset + 1  // +1  so it is past the baseOffset
+    val firstUncleanableOffset = log.logEndOffset + 1 // +1  so it is past the baseOffset
 
-    while(log.numberOfSegments < numTotalSegments - 1)
-      log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < numTotalSegments - 1) log.appendAsLeader(
+      record(log.logEndOffset.toInt % N, log.logEndOffset.toInt),
+      leaderEpoch = 0
+    )
 
     // the last (active) segment has just one message
 
-    def distinctValuesBySegment = log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
+    def distinctValuesBySegment =
+      log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
     val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
-    assertTrue("Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
-      distinctValuesBySegment.reverse.tail.forall(_ > N))
+    assertTrue(
+      "Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
+      distinctValuesBySegment.reverse.tail.forall(_ > N)
+    )
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, firstUncleanableOffset))
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
-    assertTrue("The cleanable segments should have fewer number of values after cleaning",
-      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
-    assertTrue("The uncleanable segments should have the same number of values after cleaning", disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
+    assertTrue(
+      "The cleanable segments should have fewer number of values after cleaning",
+      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall {
+        case (before, after) => after < before
+      }
+    )
+    assertTrue(
+      "The uncleanable segments should have the same number of values after cleaning",
+      disctinctValuesBySegmentBeforeClean
+        .zip(distinctValuesBySegmentAfterClean)
+        .slice(numCleanableSegments, numTotalSegments)
+        .forall { x =>
+          x._1 == x._2
+        }
+    )
   }
 
   @Test
@@ -770,10 +790,12 @@ class LogCleanerTest extends JUnitSuite {
     for (_ <- 0 until 6)
       log.appendAsLeader(createRecorcs, leaderEpoch = 0)
 
-    val logToClean = LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
+    val logToClean =
+      LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
 
     assertEquals("Total bytes of LogToClean should equal size of all segments excluding the active segment",
-      logToClean.totalBytes, log.size - log.activeSegment.size)
+                 logToClean.totalBytes,
+                 log.size - log.activeSegment.size)
   }
 
   @Test
@@ -795,14 +817,26 @@ class LogCleanerTest extends JUnitSuite {
     val expectedCleanSize = segs.take(2).map(_.size).sum
     val expectedCleanableSize = segs.slice(2, 4).map(_.size).sum
 
-    assertEquals("Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty",
-      logToClean.cleanBytes, expectedCleanSize)
-    assertEquals("Cleanable bytes of LogToClean should equal size of all segments from the one containing first dirty offset" +
-      " to the segment prior to the one with the first uncleanable offset",
-      logToClean.cleanableBytes, expectedCleanableSize)
-    assertEquals("Total bytes should be the sum of the clean and cleanable segments", logToClean.totalBytes, expectedCleanSize + expectedCleanableSize)
-    assertEquals("Total cleanable ratio should be the ratio of cleanable size to clean plus cleanable", logToClean.cleanableRatio,
-      expectedCleanableSize / (expectedCleanSize + expectedCleanableSize).toDouble, 1.0e-6d)
+    assertEquals(
+      "Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty",
+      logToClean.cleanBytes,
+      expectedCleanSize
+    )
+    assertEquals(
+      "Cleanable bytes of LogToClean should equal size of all segments from the one containing first dirty offset" +
+        " to the segment prior to the one with the first uncleanable offset",
+      logToClean.cleanableBytes,
+      expectedCleanableSize
+    )
+    assertEquals("Total bytes should be the sum of the clean and cleanable segments",
+                 logToClean.totalBytes,
+                 expectedCleanSize + expectedCleanableSize)
+    assertEquals(
+      "Total cleanable ratio should be the ratio of cleanable size to clean plus cleanable",
+      logToClean.cleanableRatio,
+      expectedCleanableSize / (expectedCleanSize + expectedCleanableSize).toDouble,
+      1.0e-6d
+    )
   }
 
   @Test
@@ -817,15 +851,14 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append unkeyed messages
-    while(log.numberOfSegments < 2)
-      log.appendAsLeader(unkeyedRecord(log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 2) log.appendAsLeader(unkeyedRecord(log.logEndOffset.toInt), leaderEpoch = 0)
     val numInvalidMessages = unkeyedMessageCountInLog(log)
 
     val sizeWithUnkeyedMessages = log.size
 
     // append keyed messages
-    while(log.numberOfSegments < 3)
-      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 3) log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt),
+                                                        leaderEpoch = 0)
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
     val (_, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
@@ -835,16 +868,14 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, stats.invalidMessagesRead)
   }
 
-  def lastOffsetsPerBatchInLog(log: Log): Iterable[Long] = {
+  def lastOffsetsPerBatchInLog(log: Log): Iterable[Long] =
     for (segment <- log.logSegments; batch <- segment.log.batches.asScala)
       yield batch.lastOffset
-  }
 
-  def lastSequencesInLog(log: Log): Map[Long, Int] = {
+  def lastSequencesInLog(log: Log): Map[Long, Int] =
     (for (segment <- log.logSegments;
           batch <- segment.log.batches.asScala if !batch.isControlBatch && batch.hasProducerId)
       yield batch.producerId -> batch.lastSequence).toMap
-  }
 
   /* extract all the offsets from a log */
   def offsetsInLog(log: Log): Iterable[Long] =
@@ -853,9 +884,8 @@ class LogCleanerTest extends JUnitSuite {
   def unkeyedMessageCountInLog(log: Log) =
     log.logSegments.map(s => s.log.records.asScala.filter(_.hasValue).count(m => !m.hasKey)).sum
 
-  def abortCheckDone(topicPartition: TopicPartition): Unit = {
+  def abortCheckDone(topicPartition: TopicPartition): Unit =
     throw new LogCleaningAbortedException()
-  }
 
   /**
    * Test that abortion during cleaning throws a LogCleaningAbortedException
@@ -869,8 +899,8 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
-    while(log.numberOfSegments < 4)
-      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    while (log.numberOfSegments < 4) log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt),
+                                                        leaderEpoch = 0)
 
     val keys = LogTest.keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
@@ -894,13 +924,16 @@ class LogCleanerTest extends JUnitSuite {
 
     // append some messages to the log
     var i = 0
-    while(log.numberOfSegments < 10) {
+    while (log.numberOfSegments < 10) {
       log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
       i += 1
     }
 
     // grouping by very large values should result in a single group with all the segments in it
-    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments,
+                                             maxSize = Int.MaxValue,
+                                             maxIndexSize = Int.MaxValue,
+                                             log.logEndOffset)
     assertEquals(1, groups.size)
     assertEquals(log.numberOfSegments, groups.head.size)
     checkSegmentOrder(groups)
@@ -919,13 +952,15 @@ class LogCleanerTest extends JUnitSuite {
 
     // check grouping by log size
     val logSize = log.logSegments.take(groupSize).map(_.size).sum.toInt + 1
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = logSize, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    groups =
+      cleaner.groupSegmentsBySize(log.logSegments, maxSize = logSize, maxIndexSize = Int.MaxValue, log.logEndOffset)
     checkSegmentOrder(groups)
     assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
 
     // check grouping by index size
     val indexSize = log.logSegments.take(groupSize).map(_.offsetIndex.sizeInBytes).sum + 1
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = indexSize, log.logEndOffset)
+    groups =
+      cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = indexSize, log.logEndOffset)
     checkSegmentOrder(groups)
     assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
   }
@@ -947,8 +982,10 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // fill up first segment
-    while (log.numberOfSegments == 1)
-      log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
+    while (log.numberOfSegments == 1) log.appendAsLeader(
+      TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes),
+      leaderEpoch = 0
+    )
 
     // forward offset and append message to next segment at offset Int.MaxValue
     val records = messageWithOffset("hello".getBytes, "hello".getBytes, Int.MaxValue - 1)
@@ -957,25 +994,37 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(Int.MaxValue, log.activeSegment.offsetIndex.lastOffset)
 
     // grouping should result in a single group with maximum relative offset of Int.MaxValue
-    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments,
+                                             maxSize = Int.MaxValue,
+                                             maxIndexSize = Int.MaxValue,
+                                             log.logEndOffset)
     assertEquals(1, groups.size)
 
     // append another message, making last offset of second segment > Int.MaxValue
     log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
 
     // grouping should not group the two segments to ensure that maximum relative offset in each group <= Int.MaxValue
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    groups = cleaner.groupSegmentsBySize(log.logSegments,
+                                         maxSize = Int.MaxValue,
+                                         maxIndexSize = Int.MaxValue,
+                                         log.logEndOffset)
     assertEquals(2, groups.size)
     checkSegmentOrder(groups)
 
     // append more messages, creating new segments, further grouping should still occur
-    while (log.numberOfSegments < 4)
-      log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
+    while (log.numberOfSegments < 4) log.appendAsLeader(
+      TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes),
+      leaderEpoch = 0
+    )
 
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    groups = cleaner.groupSegmentsBySize(log.logSegments,
+                                         maxSize = Int.MaxValue,
+                                         maxIndexSize = Int.MaxValue,
+                                         log.logEndOffset)
     assertEquals(log.numberOfSegments - 1, groups.size)
     for (group <- groups)
-      assertTrue("Relative offset greater than Int.MaxValue", group.last.offsetIndex.lastOffset - group.head.offsetIndex.baseOffset <= Int.MaxValue)
+      assertTrue("Relative offset greater than Int.MaxValue",
+                 group.last.offsetIndex.lastOffset - group.head.offsetIndex.baseOffset <= Int.MaxValue)
     checkSegmentOrder(groups)
   }
 
@@ -1003,21 +1052,26 @@ class LogCleanerTest extends JUnitSuite {
     log.appendAsFollower(record1)
     val record2 = messageWithOffset("hello".getBytes, "hello".getBytes, 1)
     log.appendAsFollower(record2)
-    log.roll(Int.MaxValue/2) // starting a new log segment at offset Int.MaxValue/2
-    val record3 = messageWithOffset("hello".getBytes, "hello".getBytes, Int.MaxValue/2)
+    log.roll(Int.MaxValue / 2) // starting a new log segment at offset Int.MaxValue/2
+    val record3 = messageWithOffset("hello".getBytes, "hello".getBytes, Int.MaxValue / 2)
     log.appendAsFollower(record3)
     val record4 = messageWithOffset("hello".getBytes, "hello".getBytes, Int.MaxValue.toLong + 1)
     log.appendAsFollower(record4)
 
     assertTrue("Actual offset range should be > Int.MaxValue", log.logEndOffset - 1 - log.logStartOffset > Int.MaxValue)
-    assertTrue("index.lastOffset is reporting the wrong last offset", log.logSegments.last.offsetIndex.lastOffset - log.logStartOffset <= Int.MaxValue)
+    assertTrue("index.lastOffset is reporting the wrong last offset",
+               log.logSegments.last.offsetIndex.lastOffset - log.logStartOffset <= Int.MaxValue)
 
     // grouping should result in two groups because the second segment takes the offset range > MaxInt
-    val groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    val groups = cleaner.groupSegmentsBySize(log.logSegments,
+                                             maxSize = Int.MaxValue,
+                                             maxIndexSize = Int.MaxValue,
+                                             log.logEndOffset)
     assertEquals(2, groups.size)
 
     for (group <- groups)
-      assertTrue("Relative offset greater than Int.MaxValue", group.last.readNextOffset - 1 - group.head.baseOffset <= Int.MaxValue)
+      assertTrue("Relative offset greater than Int.MaxValue",
+                 group.last.readNextOffset - 1 - group.head.baseOffset <= Int.MaxValue)
     checkSegmentOrder(groups)
   }
 
@@ -1043,8 +1097,8 @@ class LogCleanerTest extends JUnitSuite {
       cleaner.buildOffsetMap(log, start, end, map, stats)
       val endOffset = map.latestOffset + 1
       assertEquals("Last offset should be the end offset.", end, endOffset)
-      assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
-      for(i <- start until end)
+      assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
+      for (i <- start until end)
         assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
       assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
       assertEquals("Should not find a value too large", -1L, map.get(key(end)))
@@ -1118,7 +1172,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-   // create a log and append some messages
+    // create a log and append some messages
     var log = makeLog(config = config)
     var messageCount = 0
     while (log.numberOfSegments < 10) {
@@ -1143,7 +1197,8 @@ class LogCleanerTest extends JUnitSuite {
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath,
+                                   Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
     log = recoverAndCheck(config, allKeys)
 
@@ -1158,7 +1213,8 @@ class LogCleanerTest extends JUnitSuite {
     //    renamed to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath,
+                                   Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
     log = recoverAndCheck(config, cleanedKeys)
 
@@ -1231,11 +1287,11 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog()
     val cleaner = makeCleaner(2)
 
-    log.appendAsLeader(record(0,0), leaderEpoch = 0)
-    log.appendAsLeader(record(1,1), leaderEpoch = 0)
-    log.appendAsLeader(record(2,2), leaderEpoch = 0)
-    log.appendAsLeader(record(3,3), leaderEpoch = 0)
-    log.appendAsLeader(record(4,4), leaderEpoch = 0)
+    log.appendAsLeader(record(0, 0), leaderEpoch = 0)
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0)
+    log.appendAsLeader(record(2, 2), leaderEpoch = 0)
+    log.appendAsLeader(record(3, 3), leaderEpoch = 0)
+    log.appendAsLeader(record(4, 4), leaderEpoch = 0)
     log.roll()
 
     val stats = new CleanerStats()
@@ -1319,31 +1375,37 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(10)
 
     // Append a message with a large timestamp.
-    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
-                                          key = "0".getBytes,
-                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+    log.appendAsLeader(
+      TestUtils.singletonRecords(value = "0".getBytes,
+                                 key = "0".getBytes,
+                                 timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000),
+      leaderEpoch = 0
+    )
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     // Append a tombstone with a small timestamp and roll out a new log segment.
-    log.appendAsLeader(TestUtils.singletonRecords(value = null,
-                                          key = "0".getBytes,
-                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+    log.appendAsLeader(
+      TestUtils.singletonRecords(value = null,
+                                 key = "0".getBytes,
+                                 timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000),
+      leaderEpoch = 0
+    )
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
     // Append a message and roll out another log segment.
-    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
-                                          key = "1".getBytes,
-                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.appendAsLeader(
+      TestUtils.singletonRecords(value = "1".getBytes, key = "1".getBytes, timestamp = time.milliseconds()),
+      leaderEpoch = 0
+    )
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
-  private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
-    for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
+  private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] =
+    for (((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
-  }
 
   private def invalidCleanedMessage(initialOffset: Long,
                                     keysAndValues: Iterable[(Int, Int)],
@@ -1351,14 +1413,17 @@ class LogCleanerTest extends JUnitSuite {
     // this function replicates the old versions of the cleaner which under some circumstances
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
-    val records = keysAndValues.map(kv =>
-      LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0,
-        RecordBatch.NO_TIMESTAMP,
-        kv._1.toString.getBytes,
-        kv._2.toString.getBytes))
+    val records = keysAndValues.map(
+      kv =>
+        LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0,
+                            RecordBatch.NO_TIMESTAMP,
+                            kv._1.toString.getBytes,
+                            kv._2.toString.getBytes)
+    )
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
+    val builder =
+      MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
 
     var offset = initialOffset
     records.foreach { record =>
@@ -1376,69 +1441,107 @@ class LogCleanerTest extends JUnitSuite {
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
   private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
-    Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+    Log(
+      dir = dir,
+      config = config,
+      logStartOffset = 0L,
+      recoveryPoint = recoveryPoint,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10)
+    )
 
-  private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
-    new Cleaner(id = 0,
-                offsetMap = new FakeOffsetMap(capacity),
-                ioBufferSize = maxMessageSize,
-                maxIoBufferSize = maxMessageSize,
-                dupBufferLoadFactor = 0.75,
-                throttler = throttler,
-                time = time,
-                checkDone = checkDone)
+  private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64 * 1024) =
+    new Cleaner(
+      id = 0,
+      offsetMap = new FakeOffsetMap(capacity),
+      ioBufferSize = maxMessageSize,
+      maxIoBufferSize = maxMessageSize,
+      dupBufferLoadFactor = 0.75,
+      throttler = throttler,
+      time = time,
+      checkDone = checkDone
+    )
 
-  private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
+  private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] =
     for ((key, value) <- seq) yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get
-  }
 
   private def key(id: Long) = ByteBuffer.wrap(id.toString.getBytes)
 
-  private def record(key: Int, value: Int,
-             producerId: Long = RecordBatch.NO_PRODUCER_ID,
-             producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-             sequence: Int = RecordBatch.NO_SEQUENCE,
-             partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
-    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
-      partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
-  }
+  private def record(key: Int,
+                     value: Int,
+                     producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                     producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+                     sequence: Int = RecordBatch.NO_SEQUENCE,
+                     partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords =
+    MemoryRecords.withIdempotentRecords(
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      0L,
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      partitionLeaderEpoch,
+      new SimpleRecord(key.toString.getBytes, value.toString.getBytes)
+    )
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Seq[Int] => LogAppendInfo = {
+  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Seq[Int] => LogAppendInfo =
     appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
-  }
 
-  private def appendIdempotentAsLeader(log: Log, producerId: Long,
+  private def appendIdempotentAsLeader(log: Log,
+                                       producerId: Long,
                                        producerEpoch: Short,
                                        isTransactional: Boolean = false): Seq[Int] => LogAppendInfo = {
     var sequence = 0
-    keys: Seq[Int] => {
-      val simpleRecords = keys.map { key =>
-        val keyBytes = key.toString.getBytes
-        new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
+    keys: Seq[Int] =>
+      {
+        val simpleRecords = keys.map { key =>
+          val keyBytes = key.toString.getBytes
+          new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
+        }
+        val records =
+          if (isTransactional)
+            MemoryRecords.withTransactionalRecords(CompressionType.NONE,
+                                                   producerId,
+                                                   producerEpoch,
+                                                   sequence,
+                                                   simpleRecords: _*)
+          else
+            MemoryRecords.withIdempotentRecords(CompressionType.NONE,
+                                                producerId,
+                                                producerEpoch,
+                                                sequence,
+                                                simpleRecords: _*)
+        sequence += simpleRecords.size
+        log.appendAsLeader(records, leaderEpoch = 0)
       }
-      val records = if (isTransactional)
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
-      else
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
-      sequence += simpleRecords.size
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }
   }
 
-  private def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def commitMarker(producerId: Long,
+                           producerEpoch: Short,
+                           timestamp: Long = time.milliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.COMMIT, 0L, timestamp)
 
-  private def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def abortMarker(producerId: Long,
+                          producerEpoch: Short,
+                          timestamp: Long = time.milliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.ABORT, 0L, timestamp)
 
-  private def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,
-                   offset: Long, timestamp: Long): MemoryRecords = {
+  private def endTxnMarker(producerId: Long,
+                           producerEpoch: Short,
+                           controlRecordType: ControlRecordType,
+                           offset: Long,
+                           timestamp: Long): MemoryRecords = {
     val endTxnMarker = new EndTransactionMarker(controlRecordType, 0)
-    MemoryRecords.withEndTransactionMarker(offset, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      producerId, producerEpoch, endTxnMarker)
+    MemoryRecords.withEndTransactionMarker(offset,
+                                           timestamp,
+                                           RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                                           producerId,
+                                           producerEpoch,
+                                           endTxnMarker)
   }
 
   private def record(key: Int, value: Array[Byte]): MemoryRecords =
@@ -1449,9 +1552,8 @@ class LogCleanerTest extends JUnitSuite {
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
-  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
+  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log =
     LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
-  }
 }
 
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
@@ -1468,7 +1570,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
 
   override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
-    if(map.containsKey(k))
+    if (map.containsKey(k))
       map.get(k)
     else
       -1L
@@ -1480,9 +1582,8 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
 
   override def latestOffset: Long = lastOffset
 
-  override def updateLatestOffset(offset: Long): Unit = {
+  override def updateLatestOffset(offset: Long): Unit =
     lastOffset = offset
-  }
 
   override def toString: String = map.toString
 }

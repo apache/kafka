@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import kafka.server.QuotaType._
@@ -23,7 +23,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
 
-object QuotaType  {
+object QuotaType {
   case object Fetch extends QuotaType
   case object Produce extends QuotaType
   case object Request extends QuotaType
@@ -58,8 +58,9 @@ object QuotaFactory extends Logging {
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
 
-    val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
-      classOf[ClientQuotaCallback]))
+    val clientQuotaCallback = Option(
+      cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp, classOf[ClientQuotaCallback])
+    )
     QuotaManagers(
       new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
       new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix, clientQuotaCallback),
@@ -73,7 +74,9 @@ object QuotaFactory extends Logging {
 
   def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
-      warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+      warn(
+        s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead."
+      )
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
@@ -83,7 +86,9 @@ object QuotaFactory extends Logging {
 
   def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     if (cfg.consumerQuotaBytesPerSecondDefault != Long.MaxValue)
-      warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+      warn(
+        s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead."
+      )
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
@@ -91,25 +96,22 @@ object QuotaFactory extends Logging {
     )
   }
 
-  def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+  def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig =
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
-  }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
     ReplicationQuotaManagerConfig(
       numQuotaSamples = cfg.numReplicationQuotaSamples,
       quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
     )
-  }
 
-  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
     ReplicationQuotaManagerConfig(
       numQuotaSamples = cfg.numAlterLogDirsReplicationQuotaSamples,
       quotaWindowSizeSeconds = cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
     )
-  }
 
 }

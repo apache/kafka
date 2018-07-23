@@ -47,7 +47,7 @@ class ConsoleProducerTest {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1001", "localhost:1002"),
-      producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
+                 producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
   @Test
@@ -64,7 +64,7 @@ class ConsoleProducerTest {
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[LineMessageReader]
-    reader.init(System.in,ConsoleProducer.getReaderProps(config))
+    reader.init(System.in, ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)
   }

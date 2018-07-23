@@ -20,7 +20,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
 
-class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
+class PartitionLeaderElectionAlgorithmsTest extends JUnitSuite {
   private var controllerContext: ControllerContext = null
 
   @Before
@@ -35,10 +35,11 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val isr = Seq(2, 4)
     val liveReplicas = Set(4)
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
-      isr,
-      liveReplicas,
-      uncleanLeaderElectionEnabled = false,
-      controllerContext)
+                                                                                     isr,
+                                                                                     liveReplicas,
+                                                                                     uncleanLeaderElectionEnabled =
+                                                                                       false,
+                                                                                     controllerContext)
     assertEquals(Option(4), leaderOpt)
   }
 
@@ -48,10 +49,11 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val isr = Seq(2)
     val liveReplicas = Set(4)
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
-      isr,
-      liveReplicas,
-      uncleanLeaderElectionEnabled = false,
-      controllerContext)
+                                                                                     isr,
+                                                                                     liveReplicas,
+                                                                                     uncleanLeaderElectionEnabled =
+                                                                                       false,
+                                                                                     controllerContext)
     assertEquals(None, leaderOpt)
     assertEquals(0, controllerContext.stats.uncleanLeaderElectionRate.count())
   }
@@ -61,11 +63,13 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val assignment = Seq(2, 4)
     val isr = Seq(2)
     val liveReplicas = Set(4)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
+    val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
+      assignment,
       isr,
       liveReplicas,
       uncleanLeaderElectionEnabled = true,
-      controllerContext)
+      controllerContext
+    )
     assertEquals(Option(4), leaderOpt)
     assertEquals(1, controllerContext.stats.uncleanLeaderElectionRate.count())
   }
@@ -75,9 +79,7 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val reassignment = Seq(2, 4)
     val isr = Seq(2, 4)
     val liveReplicas = Set(4)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment,
-      isr,
-      liveReplicas)
+    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment, isr, liveReplicas)
     assertEquals(Option(4), leaderOpt)
   }
 
@@ -86,9 +88,7 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val reassignment = Seq(2, 4)
     val isr = Seq(2)
     val liveReplicas = Set.empty[Int]
-    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment,
-      isr,
-      liveReplicas)
+    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment, isr, liveReplicas)
     assertEquals(None, leaderOpt)
   }
 
@@ -97,9 +97,7 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val reassignment = Seq(2, 4)
     val isr = Seq.empty[Int]
     val liveReplicas = Set(2)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment,
-      isr,
-      liveReplicas)
+    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment, isr, liveReplicas)
     assertEquals(None, leaderOpt)
   }
 
@@ -108,9 +106,8 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val assignment = Seq(2, 4)
     val isr = Seq(2, 4)
     val liveReplicas = Set(2, 4)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas)
+    val leaderOpt =
+      PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas)
     assertEquals(Option(2), leaderOpt)
   }
 
@@ -119,9 +116,8 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val assignment = Seq(2, 4)
     val isr = Seq(2)
     val liveReplicas = Set.empty[Int]
-    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas)
+    val leaderOpt =
+      PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas)
     assertEquals(None, leaderOpt)
   }
 
@@ -130,9 +126,8 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val assignment = Seq(2, 4)
     val isr = Seq(4)
     val liveReplicas = Set(2, 4)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas)
+    val leaderOpt =
+      PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas)
     assertEquals(None, leaderOpt)
   }
 
@@ -141,9 +136,8 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val assignment = Seq(2, 4)
     val isr = Seq.empty[Int]
     val liveReplicas = Set.empty[Int]
-    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas)
+    val leaderOpt =
+      PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas)
     assertEquals(None, leaderOpt)
   }
 
@@ -154,9 +148,9 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val liveReplicas = Set(2, 4)
     val shuttingDownBrokers = Set(2)
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas,
-      shuttingDownBrokers)
+                                                                                                isr,
+                                                                                                liveReplicas,
+                                                                                                shuttingDownBrokers)
     assertEquals(Option(4), leaderOpt)
   }
 
@@ -167,9 +161,9 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val liveReplicas = Set(2, 4)
     val shuttingDownBrokers = Set(2)
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas,
-      shuttingDownBrokers)
+                                                                                                isr,
+                                                                                                liveReplicas,
+                                                                                                shuttingDownBrokers)
     assertEquals(None, leaderOpt)
   }
 
@@ -180,9 +174,9 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val liveReplicas = Set(2, 4)
     val shuttingDownBrokers = Set(2, 4)
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment,
-      isr,
-      liveReplicas,
-      shuttingDownBrokers)
+                                                                                                isr,
+                                                                                                liveReplicas,
+                                                                                                shuttingDownBrokers)
     assertEquals(None, leaderOpt)
   }
 }

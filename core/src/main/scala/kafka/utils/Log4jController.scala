@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
 
 import java.util
 import java.util.Locale
 
 import org.apache.log4j.{Level, LogManager, Logger}
-
 
 /**
  * An MBean that allows the user to dynamically alter log4j levels at runtime.
@@ -38,25 +36,22 @@ private class Log4jController extends Log4jControllerMBean {
     while (loggers.hasMoreElements) {
       val logger = loggers.nextElement().asInstanceOf[Logger]
       if (logger != null) {
-        val level =  if (logger != null) logger.getLevel else null
+        val level = if (logger != null) logger.getLevel else null
         lst.add("%s=%s".format(logger.getName, if (level != null) level.toString else "null"))
       }
     }
     lst
   }
 
-
   private def newLogger(loggerName: String) =
     if (loggerName == "root")
       LogManager.getRootLogger
     else LogManager.getLogger(loggerName)
 
-
   private def existingLogger(loggerName: String) =
     if (loggerName == "root")
       LogManager.getRootLogger
     else LogManager.exists(loggerName)
-
 
   def getLogLevel(loggerName: String) = {
     val log = existingLogger(loggerName)
@@ -65,26 +60,21 @@ private class Log4jController extends Log4jControllerMBean {
       if (level != null)
         log.getLevel.toString
       else "Null log level."
-    }
-    else "No such logger."
+    } else "No such logger."
   }
-
 
   def setLogLevel(loggerName: String, level: String) = {
     val log = newLogger(loggerName)
     if (!loggerName.trim.isEmpty && !level.trim.isEmpty && log != null) {
       log.setLevel(Level.toLevel(level.toUpperCase(Locale.ROOT)))
       true
-    }
-    else false
+    } else false
   }
 
 }
-
 
 private trait Log4jControllerMBean {
   def getLoggers: java.util.List[String]
   def getLogLevel(logger: String): String
   def setLogLevel(logger: String, level: String): Boolean
 }
-

@@ -20,7 +20,7 @@ import kafka.common.{BaseEnum, KafkaException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
-sealed trait ResourceType extends BaseEnum with Ordered[ ResourceType ] {
+sealed trait ResourceType extends BaseEnum with Ordered[ResourceType] {
   def error: Errors
   def toJava: JResourceType
 
@@ -61,7 +61,11 @@ object ResourceType {
 
   def fromString(resourceType: String): ResourceType = {
     val rType = values.find(rType => rType.name.equalsIgnoreCase(resourceType))
-    rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
+    rType.getOrElse(
+      throw new KafkaException(
+        resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")
+      )
+    )
   }
 
   def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId, DelegationToken)

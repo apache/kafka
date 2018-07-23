@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util.Properties
@@ -57,8 +56,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val controllerId = controllerServer.config.brokerId
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
 
-    assertEquals("Controller id should match the active controller",
-      controllerId, metadataResponse.controller.id)
+    assertEquals("Controller id should match the active controller", controllerId, metadataResponse.controller.id)
 
     // Fail over the controller
     controllerServer.shutdown()
@@ -67,10 +65,14 @@ class MetadataRequestTest extends BaseRequestTest {
     val controllerServer2 = servers.find(_.kafkaController.isActive).get
     val controllerId2 = controllerServer2.config.brokerId
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
-    TestUtils.waitUntilTrue(() => {
-      val metadataResponse2 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
-      metadataResponse2.controller != null && controllerServer2.apis.brokerId == metadataResponse2.controller.id
-    }, "Controller id should match the active controller after failover", 5000)
+    TestUtils.waitUntilTrue(
+      () => {
+        val metadataResponse2 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
+        metadataResponse2.controller != null && controllerServer2.apis.brokerId == metadataResponse2.controller.id
+      },
+      "Controller id should match the active controller after failover",
+      5000
+    )
   }
 
   @Test
@@ -132,7 +134,9 @@ class MetadataRequestTest extends BaseRequestTest {
     val topic4 = "t4"
     createTopic(topic1, 1, 1)
 
-    val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion))
+    val response1 = sendMetadataRequest(
+      new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion)
+    )
     checkAutoCreatedTopic(topic1, topic2, response1)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
@@ -173,7 +177,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals(topic1, topicMetadata1.topic)
     assertEquals(Errors.INVALID_TOPIC_EXCEPTION, topicMetadata2.error)
     assertEquals(topic2, topicMetadata2.topic)
-    
+
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 0)
 
@@ -207,8 +211,8 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   /**
-    * Preferred replica should be the first item in the replicas list
-    */
+   * Preferred replica should be the first item in the replicas list
+   */
   @Test
   def testPreferredReplica(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
@@ -252,12 +256,16 @@ class MetadataRequestTest extends BaseRequestTest {
     }.get
     downNode.shutdown()
 
-    TestUtils.waitUntilTrue(() => {
-      val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
-      val metadata = response.topicMetadata.asScala.head.partitionMetadata.asScala.head
-      val replica = metadata.replicas.asScala.find(_.id == downNode.apis.brokerId).get
-      replica.host == "" & replica.port == -1
-    }, "Replica was not found down", 5000)
+    TestUtils.waitUntilTrue(
+      () => {
+        val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
+        val metadata = response.topicMetadata.asScala.head.partitionMetadata.asScala.head
+        val replica = metadata.replicas.asScala.find(_.id == downNode.apis.brokerId).get
+        replica.host == "" & replica.port == -1
+      },
+      "Replica was not found down",
+      5000
+    )
 
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 0.toShort))
@@ -267,7 +275,8 @@ class MetadataRequestTest extends BaseRequestTest {
     assertTrue("Response should have one topic", v0MetadataResponse.topicMetadata.size == 1)
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertTrue("PartitionMetadata should have an error", v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE)
-    assertTrue(s"Response should have ${replicaCount - 1} replicas", v0PartitionMetadata.replicas.size == replicaCount - 1)
+    assertTrue(s"Response should have ${replicaCount - 1} replicas",
+               v0PartitionMetadata.replicas.size == replicaCount - 1)
 
     // Validate version 1 returns unavailable replicas with no error
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
@@ -284,24 +293,32 @@ class MetadataRequestTest extends BaseRequestTest {
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
       val activeBrokers = servers.filter(_.brokerState.currentState != NotRunning.state)
-      val expectedIsr = activeBrokers.map { broker =>
-        new Node(broker.config.brokerId, "localhost", TestUtils.boundPort(broker), broker.config.rack.orNull)
-      }.sortBy(_.id)
+      val expectedIsr = activeBrokers
+        .map { broker =>
+          new Node(broker.config.brokerId, "localhost", TestUtils.boundPort(broker), broker.config.rack.orNull)
+        }
+        .sortBy(_.id)
 
       // Assert that topic metadata at new brokers is updated correctly
       activeBrokers.foreach { broker =>
         var actualIsr: Seq[Node] = Seq.empty
-        TestUtils.waitUntilTrue(() => {
-          val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic).asJava, false).build,
-            Some(brokerSocketServer(broker.config.brokerId)))
-          val firstPartitionMetadata = metadataResponse.topicMetadata.asScala.headOption.flatMap(_.partitionMetadata.asScala.headOption)
-          actualIsr = firstPartitionMetadata.map { partitionMetadata =>
-            partitionMetadata.isr.asScala.sortBy(_.id)
-          }.getOrElse(Seq.empty)
-          expectedIsr == actualIsr
-        }, s"Topic metadata not updated correctly in broker $broker\n" +
-          s"Expected ISR: $expectedIsr \n" +
-          s"Actual ISR : $actualIsr")
+        TestUtils.waitUntilTrue(
+          () => {
+            val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic).asJava, false).build,
+                                                       Some(brokerSocketServer(broker.config.brokerId)))
+            val firstPartitionMetadata =
+              metadataResponse.topicMetadata.asScala.headOption.flatMap(_.partitionMetadata.asScala.headOption)
+            actualIsr = firstPartitionMetadata
+              .map { partitionMetadata =>
+                partitionMetadata.isr.asScala.sortBy(_.id)
+              }
+              .getOrElse(Seq.empty)
+            expectedIsr == actualIsr
+          },
+          s"Topic metadata not updated correctly in broker $broker\n" +
+            s"Expected ISR: $expectedIsr \n" +
+            s"Actual ISR : $actualIsr"
+        )
       }
     }
 
@@ -320,25 +337,32 @@ class MetadataRequestTest extends BaseRequestTest {
   def testAliveBrokersWithNoTopics(): Unit = {
     def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
       var controllerMetadataResponse: Option[MetadataResponse] = None
-      TestUtils.waitUntilTrue(() => {
-        val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
-          Some(controllerSocketServer))
-        controllerMetadataResponse = Some(metadataResponse)
-        metadataResponse.brokers.size == expectedBrokersCount
-      }, s"Expected $expectedBrokersCount brokers, but there are ${controllerMetadataResponse.get.brokers.size} " +
-        "according to the Controller")
+      TestUtils.waitUntilTrue(
+        () => {
+          val metadataResponse =
+            sendMetadataRequest(MetadataRequest.Builder.allTopics.build, Some(controllerSocketServer))
+          controllerMetadataResponse = Some(metadataResponse)
+          metadataResponse.brokers.size == expectedBrokersCount
+        },
+        s"Expected $expectedBrokersCount brokers, but there are ${controllerMetadataResponse.get.brokers.size} " +
+          "according to the Controller"
+      )
 
       val brokersInController = controllerMetadataResponse.get.brokers.asScala.toSeq.sortBy(_.id)
 
       // Assert that metadata is propagated correctly
       servers.filter(_.brokerState.currentState != NotRunning.state).foreach { broker =>
-        TestUtils.waitUntilTrue(() => {
-          val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
-            Some(brokerSocketServer(broker.config.brokerId)))
-          val brokers = metadataResponse.brokers.asScala.toSeq.sortBy(_.id)
-          val topicMetadata = metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic)
-          brokersInController == brokers && metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic) == topicMetadata
-        }, s"Topic metadata not updated correctly")
+        TestUtils.waitUntilTrue(
+          () => {
+            val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
+                                                       Some(brokerSocketServer(broker.config.brokerId)))
+            val brokers = metadataResponse.brokers.asScala.toSeq.sortBy(_.id)
+            val topicMetadata = metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic)
+            brokersInController == brokers && metadataResponse.topicMetadata.asScala.toSeq
+              .sortBy(_.topic) == topicMetadata
+          },
+          s"Topic metadata not updated correctly"
+        )
       }
     }
 
@@ -351,7 +375,8 @@ class MetadataRequestTest extends BaseRequestTest {
     checkMetadata(servers, servers.size)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
+  private def sendMetadataRequest(request: MetadataRequest,
+                                  destination: Option[SocketServer] = None): MetadataResponse = {
     val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
     MetadataResponse.parse(response, request.version)
   }

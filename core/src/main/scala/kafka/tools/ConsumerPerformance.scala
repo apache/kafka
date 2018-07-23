@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.tools
 
 import java.util
@@ -56,7 +55,15 @@ object ConsumerPerformance extends LazyLogging {
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
     consumer.subscribe(Collections.singletonList(config.topic))
     startMs = System.currentTimeMillis
-    consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+    consume(consumer,
+            List(config.topic),
+            config.numMessages,
+            config.recordFetchTimeoutMs,
+            config,
+            totalMessagesRead,
+            totalBytesRead,
+            joinGroupTimeInMs,
+            startMs)
     endMs = System.currentTimeMillis
 
     if (config.printMetrics) {
@@ -67,18 +74,20 @@ object ConsumerPerformance extends LazyLogging {
     val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f".format(
-        config.dateFormat.format(startMs),
-        config.dateFormat.format(endMs),
-        totalMBRead,
-        totalMBRead / elapsedSecs,
-        totalMessagesRead.get,
-        totalMessagesRead.get / elapsedSecs,
-        joinGroupTimeInMs.get,
-        fetchTimeInMs,
-        totalMBRead / (fetchTimeInMs / 1000.0),
-        totalMessagesRead.get / (fetchTimeInMs / 1000.0)
-      ))
+      println(
+        "%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f".format(
+          config.dateFormat.format(startMs),
+          config.dateFormat.format(endMs),
+          totalMBRead,
+          totalMBRead / elapsedSecs,
+          totalMessagesRead.get,
+          totalMessagesRead.get / elapsedSecs,
+          joinGroupTimeInMs.get,
+          fetchTimeInMs,
+          totalMBRead / (fetchTimeInMs / 1000.0),
+          totalMessagesRead.get / (fetchTimeInMs / 1000.0)
+        )
+      )
     }
 
     if (metrics != null) {
@@ -111,14 +120,18 @@ object ConsumerPerformance extends LazyLogging {
     var joinStart = 0L
     var joinTimeMsInSingleRound = 0L
 
-    consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-        joinTime.addAndGet(System.currentTimeMillis - joinStart)
-        joinTimeMsInSingleRound += System.currentTimeMillis - joinStart
+    consumer.subscribe(
+      topics.asJava,
+      new ConsumerRebalanceListener {
+        def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+          joinTime.addAndGet(System.currentTimeMillis - joinStart)
+          joinTimeMsInSingleRound += System.currentTimeMillis - joinStart
+        }
+        def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
+          joinStart = System.currentTimeMillis
+        }
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
-        joinStart = System.currentTimeMillis
-      }})
+    )
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis
@@ -140,8 +153,15 @@ object ConsumerPerformance extends LazyLogging {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-              lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
+            printConsumerProgress(0,
+                                  bytesRead,
+                                  lastBytesRead,
+                                  messagesRead,
+                                  lastMessagesRead,
+                                  lastReportTime,
+                                  currentTimeMillis,
+                                  config.dateFormat,
+                                  joinTimeMsInSingleRound)
           joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
@@ -151,23 +171,31 @@ object ConsumerPerformance extends LazyLogging {
     }
 
     if (messagesRead < count)
-      println(s"WARNING: Exiting before consuming the expected number of messages: timeout ($timeout ms) exceeded. " +
-        "You can use the --timeout option to increase the timeout.")
+      println(
+        s"WARNING: Exiting before consuming the expected number of messages: timeout ($timeout ms) exceeded. " +
+          "You can use the --timeout option to increase the timeout."
+      )
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
   }
 
   def printConsumerProgress(id: Int,
-                               bytesRead: Long,
-                               lastBytesRead: Long,
-                               messagesRead: Long,
-                               lastMessagesRead: Long,
-                               startMs: Long,
-                               endMs: Long,
-                               dateFormat: SimpleDateFormat,
-                               periodicJoinTimeInMs: Long): Unit = {
+                            bytesRead: Long,
+                            lastBytesRead: Long,
+                            messagesRead: Long,
+                            lastMessagesRead: Long,
+                            startMs: Long,
+                            endMs: Long,
+                            dateFormat: SimpleDateFormat,
+                            periodicJoinTimeInMs: Long): Unit = {
     printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
-    printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, periodicJoinTimeInMs)
+    printExtendedProgress(bytesRead,
+                          lastBytesRead,
+                          messagesRead,
+                          lastMessagesRead,
+                          startMs,
+                          endMs,
+                          periodicJoinTimeInMs)
     println()
   }
 
@@ -184,8 +212,10 @@ object ConsumerPerformance extends LazyLogging {
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs
     val intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0
-    print("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMbRead,
-      intervalMbPerSec, messagesRead, intervalMessagesPerSec))
+    print(
+      "%s, %d, %.4f, %.4f, %d, %.4f"
+        .format(dateFormat.format(endMs), id, totalMbRead, intervalMbPerSec, messagesRead, intervalMessagesPerSec)
+    )
   }
 
   private def printExtendedProgress(bytesRead: Long,
@@ -198,57 +228,71 @@ object ConsumerPerformance extends LazyLogging {
     val fetchTimeMs = endMs - startMs - periodicJoinTimeInMs
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMessagesRead = messagesRead - lastMessagesRead
-    val (intervalMbPerSec, intervalMessagesPerSec) = if (fetchTimeMs <= 0)
-      (0.0, 0.0)
-    else
-      (1000.0 * intervalMbRead / fetchTimeMs, 1000.0 * intervalMessagesRead / fetchTimeMs)
+    val (intervalMbPerSec, intervalMessagesPerSec) =
+      if (fetchTimeMs <= 0)
+        (0.0, 0.0)
+      else
+        (1000.0 * intervalMbRead / fetchTimeMs, 1000.0 * intervalMessagesRead / fetchTimeMs)
     print(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
+    val bootstrapServersOpt = parser
+      .accepts("broker-list", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg()
       .describedAs("host")
       .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+    val topicOpt = parser
+      .accepts("topic", "REQUIRED: The topic to consume from.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val groupIdOpt = parser.accepts("group", "The group id to consume on.")
+    val groupIdOpt = parser
+      .accepts("group", "The group id to consume on.")
       .withRequiredArg
       .describedAs("gid")
       .defaultsTo("perf-consumer-" + new Random().nextInt(100000))
       .ofType(classOf[String])
-    val fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
+    val fetchSizeOpt = parser
+      .accepts("fetch-size", "The amount of data to fetch in a single request.")
       .withRequiredArg
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024 * 1024)
-    val resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
-      "offset to consume from, start with the latest message present in the log rather than the earliest message.")
-    val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
+    val resetBeginningOffsetOpt = parser.accepts(
+      "from-latest",
+      "If the consumer does not already have an established " +
+        "offset to consume from, start with the latest message present in the log rather than the earliest message."
+    )
+    val socketBufferSizeOpt = parser
+      .accepts("socket-buffer-size", "The size of the tcp RECV size.")
       .withRequiredArg
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2 * 1024 * 1024)
-    val numThreadsOpt = parser.accepts("threads", "Number of processing threads.")
+    val numThreadsOpt = parser
+      .accepts("threads", "Number of processing threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10)
-    val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
+    val numFetchersOpt = parser
+      .accepts("num-fetch-threads", "Number of fetcher threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
-    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+    val consumerConfigOpt = parser
+      .accepts("consumer.config", "Consumer config properties file.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.")
-    val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-      "interval as configured by reporting-interval")
-    val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
+    val showDetailedStatsOpt = parser.accepts("show-detailed-stats",
+                                              "If set, stats are reported for each reporting " +
+                                                "interval as configured by reporting-interval")
+    val recordFetchTimeoutOpt = parser
+      .accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
       .withOptionalArg()
       .describedAs("milliseconds")
       .ofType(classOf[Long])
@@ -260,17 +304,19 @@ object ConsumerPerformance extends LazyLogging {
 
     val printMetrics = options.has(printMetricsOpt)
 
-    val props = if (options.has(consumerConfigOpt))
-      Utils.loadProps(options.valueOf(consumerConfigOpt))
-    else
-      new Properties
+    val props =
+      if (options.has(consumerConfigOpt))
+        Utils.loadProps(options.valueOf(consumerConfigOpt))
+      else
+        new Properties
 
     import org.apache.kafka.clients.consumer.ConsumerConfig
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
     props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
     props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
     props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (options.has(resetBeginningOffsetOpt)) "latest" else "earliest")
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+              if (options.has(resetBeginningOffsetOpt)) "latest" else "earliest")
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
     props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false")

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 import java.io.File
@@ -27,7 +26,13 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.requests.{
+  FetchRequest,
+  FetchResponse,
+  IsolationLevel,
+  ListOffsetRequest,
+  ListOffsetResponse
+}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
@@ -38,11 +43,11 @@ class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  protected override def numBrokers = 1
+  override protected def numBrokers = 1
 
-  protected override def brokerTime(brokerId: Int) = time
+  override protected def brokerTime(brokerId: Int) = time
 
-  protected override def propertyOverrides(props: Properties): Unit = {
+  override protected def propertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")
     props.put("num.partitions", "20")
     props.put("log.retention.hours", "10")
@@ -53,9 +58,15 @@ class LogOffsetTest extends BaseRequestTest {
   @Test
   def testGetOffsetsForUnknownTopic() {
     val topicPartition = new TopicPartition("foo", 0)
-    val request = ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-      .setOffsetData(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 10)).asJava).build(0)
+    val request = ListOffsetRequest.Builder
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+      .setOffsetData(
+        Map(
+          topicPartition ->
+            new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 10)
+        ).asJava
+      )
+      .build(0)
     val response = sendListOffsetsRequest(request)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.responseData.get(topicPartition).error)
   }
@@ -69,7 +80,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-                  "Log for partition [topic,0] should be created")
+                            "Log for partition [topic,0] should be created")
     val log = logManager.getLog(topicPartition).get
 
     for (_ <- 0 until 20)
@@ -84,10 +95,16 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
-      "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setOffsetData(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
+                            "Leader should be elected")
+    val request = ListOffsetRequest.Builder
+      .forReplica(0, 0)
+      .setOffsetData(
+        Map(
+          topicPartition ->
+            new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)
+        ).asJava
+      )
+      .build()
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), consumerOffsets)
   }
@@ -101,7 +118,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
-      s"Log for partition $topicPartition should be created")
+                            s"Log for partition $topicPartition should be created")
     val log = logManager.getLog(topicPartition).get
 
     for (_ <- 0 until 20)
@@ -112,17 +129,29 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
-      "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setOffsetData(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
+                            "Leader should be elected")
+    val request = ListOffsetRequest.Builder
+      .forReplica(0, 0)
+      .setOffsetData(
+        Map(
+          topicPartition ->
+            new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)
+        ).asJava
+      )
+      .build()
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
-    val fetchRequest = FetchRequest.Builder.forConsumer(0, 1,
-      Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
-        300 * 1024)).asJava).build()
+    val fetchRequest = FetchRequest.Builder
+      .forConsumer(0,
+                   1,
+                   Map(
+                     topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head,
+                                                                      FetchRequest.INVALID_LOG_START_OFFSET,
+                                                                      300 * 1024)
+                   ).asJava)
+      .build()
     val fetchResponse = sendFetchRequest(fetchRequest)
     assertFalse(fetchResponse.responseData.get(topicPartition).records.batches.iterator.hasNext)
   }
@@ -141,9 +170,15 @@ class LogOffsetTest extends BaseRequestTest {
     var offsetChanged = false
     for (_ <- 1 to 14) {
       val topicPartition = new TopicPartition(topic, 0)
-      val request = ListOffsetRequest.Builder.forReplica(0, 0)
-        .setOffsetData(Map(topicPartition ->
-          new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 1)).asJava).build()
+      val request = ListOffsetRequest.Builder
+        .forReplica(0, 0)
+        .setOffsetData(
+          Map(
+            topicPartition ->
+              new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 1)
+          ).asJava
+        )
+        .build()
       val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
       if (consumerOffsets.head == 1)
         offsetChanged = true
@@ -172,10 +207,16 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
-      "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setOffsetData(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(now, 15)).asJava).build()
+                            "Leader should be elected")
+    val request = ListOffsetRequest.Builder
+      .forReplica(0, 0)
+      .setOffsetData(
+        Map(
+          topicPartition ->
+            new ListOffsetRequest.PartitionData(now, 15)
+        ).asJava
+      )
+      .build()
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
@@ -199,10 +240,16 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
-      "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
-      .setOffsetData(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)).asJava).build()
+                            "Leader should be elected")
+    val request = ListOffsetRequest.Builder
+      .forReplica(0, 0)
+      .setOffsetData(
+        Map(
+          topicPartition ->
+            new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)
+        ).asJava
+      )
+      .build()
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(0L), consumerOffsets)
   }
@@ -213,10 +260,12 @@ class LogOffsetTest extends BaseRequestTest {
   def testFetchOffsetsBeforeWithChangingSegmentSize() {
     val log = EasyMock.niceMock(classOf[Log])
     val logSegment = EasyMock.niceMock(classOf[LogSegment])
-    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
-      private val value = new AtomicInteger(0)
-      def answer: Int = value.getAndIncrement()
-    })
+    EasyMock
+      .expect(logSegment.size)
+      .andStubAnswer(new IAnswer[Int] {
+        private val value = new AtomicInteger(0)
+        def answer: Int = value.getAndIncrement()
+      })
     EasyMock.replay(logSegment)
     val logSegments = Seq(logSegment)
     EasyMock.expect(log.logSegments).andStubReturn(logSegments)
@@ -245,12 +294,14 @@ class LogOffsetTest extends BaseRequestTest {
 
   private def server: KafkaServer = servers.head
 
-  private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {
+  private def sendListOffsetsRequest(request: ListOffsetRequest,
+                                     destination: Option[SocketServer] = None): ListOffsetResponse = {
     val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = destination.getOrElse(anySocketServer))
     ListOffsetResponse.parse(response, request.version)
   }
 
-  private def sendFetchRequest(request: FetchRequest, destination: Option[SocketServer] = None): FetchResponse[MemoryRecords] = {
+  private def sendFetchRequest(request: FetchRequest,
+                               destination: Option[SocketServer] = None): FetchResponse[MemoryRecords] = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = destination.getOrElse(anySocketServer))
     FetchResponse.parse(response, request.version)
   }

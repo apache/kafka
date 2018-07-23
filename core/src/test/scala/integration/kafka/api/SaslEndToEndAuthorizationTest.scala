@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.api
 
 import java.util.Properties
@@ -31,12 +31,14 @@ import scala.collection.JavaConverters._
 
 abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
+  override protected val serverSaslProperties = Some(
+    kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+  )
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  
+
   protected def kafkaClientSaslMechanism: String
   protected def kafkaServerSaslMechanisms: List[String]
-  
+
   @Before
   override def setUp() {
     // create static config including client login context with credentials for JaasTestUtils 'client2'
@@ -50,10 +52,10 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   /**
-    * Test with two consumers, each with different valid SASL credentials.
-    * The first consumer succeeds because it is allowed by the ACL, 
-    * the second one connects ok, but fails to consume messages due to the ACL.
-    */
+   * Test with two consumers, each with different valid SASL credentials.
+   * The first consumer succeeds because it is allowed by the ACL,
+   * the second one connects ok, but fails to consume messages due to the ACL.
+   */
   @Test(timeout = 15000)
   def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce(tp)
@@ -66,10 +68,10 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     consumer2Config.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
 
     val consumer2 = TestUtils.createConsumer(brokerList,
-                                                securityProtocol = securityProtocol,
-                                                trustStoreFile = trustStoreFile,
-                                                saslProperties = clientSaslProperties,
-                                                props = Some(consumer2Config))
+                                             securityProtocol = securityProtocol,
+                                             trustStoreFile = trustStoreFile,
+                                             saslProperties = clientSaslProperties,
+                                             props = Some(consumer2Config))
     consumers += consumer2
 
     consumer1.assign(List(tp).asJava)

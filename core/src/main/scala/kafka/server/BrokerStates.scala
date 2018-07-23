@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
 
 /**
@@ -62,7 +61,6 @@ case object RecoveringFromUncleanShutdown extends BrokerStates { val state: Byte
 case object RunningAsBroker extends BrokerStates { val state: Byte = 3 }
 case object PendingControlledShutdown extends BrokerStates { val state: Byte = 6 }
 case object BrokerShuttingDown extends BrokerStates { val state: Byte = 7 }
-
 
 case class BrokerState() {
   @volatile var currentState: Byte = NotRunning.state

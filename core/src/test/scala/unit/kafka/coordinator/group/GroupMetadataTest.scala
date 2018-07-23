@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
@@ -191,23 +190,47 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testSelectProtocol() {
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    val member = new MemberMetadata(
+      memberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    )
 
     group.add(member)
     assertEquals("range", group.selectProtocol)
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+    val otherMember = new MemberMetadata(
+      otherMemberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte]))
+    )
 
     group.add(otherMember)
     // now could be either range or robin since there is no majority preference
     assertTrue(Set("range", "roundrobin")(group.selectProtocol))
 
     val lastMemberId = "lastMemberId"
-    val lastMember = new MemberMetadata(lastMemberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+    val lastMember = new MemberMetadata(
+      lastMemberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte]))
+    )
 
     group.add(lastMember)
     // now we should prefer 'roundrobin'
@@ -223,12 +246,28 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testSelectProtocolChoosesCompatibleProtocol() {
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    val member = new MemberMetadata(
+      memberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    )
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+    val otherMember = new MemberMetadata(
+      otherMemberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte]))
+    )
 
     group.add(member)
     group.add(otherMember)
@@ -241,8 +280,16 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.supportsProtocols(Set("roundrobin", "range")))
 
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    val member = new MemberMetadata(
+      memberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    )
 
     group.add(member)
     assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
@@ -250,8 +297,16 @@ class GroupMetadataTest extends JUnitSuite {
     assertFalse(group.supportsProtocols(Set("foo", "bar")))
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+    val otherMember = new MemberMetadata(
+      otherMemberId,
+      groupId,
+      clientId,
+      clientHost,
+      rebalanceTimeoutMs,
+      sessionTimeoutMs,
+      protocolType,
+      List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte]))
+    )
 
     group.add(otherMember)
 
@@ -262,8 +317,14 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testInitNextGeneration() {
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("roundrobin", Array.empty[Byte])))
+    val member = new MemberMetadata(memberId,
+                                    groupId,
+                                    clientId,
+                                    clientHost,
+                                    rebalanceTimeoutMs,
+                                    sessionTimeoutMs,
+                                    protocolType,
+                                    List(("roundrobin", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
     member.awaitingJoinCallback = _ => ()

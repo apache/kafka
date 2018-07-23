@@ -22,9 +22,8 @@ import org.apache.kafka.common.acl.AclOperation
 /**
  * Different operations a client may perform on kafka resources.
  */
-
 sealed trait Operation extends BaseEnum {
-  def toJava : AclOperation
+  def toJava: AclOperation
 }
 
 case object Read extends Operation {
@@ -76,11 +75,23 @@ object Operation {
 
   def fromString(operation: String): Operation = {
     val op = values.find(op => op.name.equalsIgnoreCase(operation))
-    op.getOrElse(throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(",")))
+    op.getOrElse(
+      throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(","))
+    )
   }
 
   def fromJava(operation: AclOperation): Operation = fromString(operation.toString.replaceAll("_", ""))
 
-  def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
-     DescribeConfigs, IdempotentWrite, All)
+  def values: Seq[Operation] =
+    List(Read,
+         Write,
+         Create,
+         Delete,
+         Alter,
+         Describe,
+         ClusterAction,
+         AlterConfigs,
+         DescribeConfigs,
+         IdempotentWrite,
+         All)
 }

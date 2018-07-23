@@ -18,7 +18,6 @@ import org.apache.kafka.common.TopicPartition
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Convenience case class since (topic, partition) pairs are ubiquitous.
  */

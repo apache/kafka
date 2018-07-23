@@ -1,20 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
-
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.api
 
 import java.util.concurrent.ExecutionException
@@ -39,17 +38,16 @@ import org.apache.kafka.test.TestUtils.isValidClusterId
 import scala.collection.mutable.ArrayBuffer
 
 /** The test cases here verify the following conditions.
-  * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
-  * 2. The Serializer receives the cluster id before the serialize() method is called.
-  * 3. The producer MetricReporter receives the cluster id after send() method is called on KafkaProducer.
-  * 4. The ConsumerInterceptor receives the cluster id before the onConsume() method.
-  * 5. The Deserializer receives the cluster id before the deserialize() method is called.
-  * 6. The consumer MetricReporter receives the cluster id after poll() is called on KafkaConsumer.
-  * 7. The broker MetricReporter receives the cluster id after the broker startup is over.
-  * 8. The broker KafkaMetricReporter receives the cluster id after the broker startup is over.
-  * 9. All the components receive the same cluster id.
-  */
-
+ * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
+ * 2. The Serializer receives the cluster id before the serialize() method is called.
+ * 3. The producer MetricReporter receives the cluster id after send() method is called on KafkaProducer.
+ * 4. The ConsumerInterceptor receives the cluster id before the onConsume() method.
+ * 5. The Deserializer receives the cluster id before the deserialize() method is called.
+ * 6. The consumer MetricReporter receives the cluster id after poll() is called on KafkaConsumer.
+ * 7. The broker MetricReporter receives the cluster id after the broker startup is over.
+ * 8. The broker KafkaMetricReporter receives the cluster id after the broker startup is over.
+ * 9. All the components receive the same cluster id.
+ */
 object EndToEndClusterIdTest {
 
   object MockConsumerMetricsReporter {
@@ -104,8 +102,11 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+    val cfgs = TestUtils.createBrokerConfigs(serverCount,
+                                             zkConnect,
+                                             interBrokerSecurityProtocol = Some(securityProtocol),
+                                             trustStoreFile = trustStoreFile,
+                                             saslProperties = serverSaslProperties)
     cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
@@ -138,7 +139,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     sendRecords(testProducer, 1, tp)
     assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT, MockProducerInterceptor.NO_CLUSTER_ID)
     assertNotNull(MockProducerInterceptor.CLUSTER_META)
-    assertEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get.clusterId, MockProducerInterceptor.CLUSTER_META.get.clusterId)
+    assertEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.get.clusterId,
+                 MockProducerInterceptor.CLUSTER_META.get.clusterId)
     isValidClusterId(MockProducerInterceptor.CLUSTER_META.get.clusterId)
 
     // Make sure that serializer gets the cluster id before serialize method.
@@ -163,7 +165,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME, MockConsumerInterceptor.NO_CLUSTER_ID)
     assertNotNull(MockConsumerInterceptor.CLUSTER_META)
     isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get.clusterId)
-    assertEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get.clusterId, MockConsumerInterceptor.CLUSTER_META.get.clusterId)
+    assertEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get.clusterId,
+                 MockConsumerInterceptor.CLUSTER_META.get.clusterId)
 
     assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize, MockDeserializer.noClusterId)
     assertNotNull(MockDeserializer.clusterMeta)
@@ -175,11 +178,14 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
     // Make sure everyone receives the same cluster id.
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockSerializer.CLUSTER_META.get.clusterId)
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId,
+                 MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockConsumerInterceptor.CLUSTER_META.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockDeserializer.clusterMeta.get.clusterId)
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockConsumerMetricsReporter.CLUSTER_META.get.clusterId)
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockBrokerMetricsReporter.CLUSTER_META.get.clusterId)
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId,
+                 MockConsumerMetricsReporter.CLUSTER_META.get.clusterId)
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId,
+                 MockBrokerMetricsReporter.CLUSTER_META.get.clusterId)
 
     testConsumer.close()
     testProducer.close()

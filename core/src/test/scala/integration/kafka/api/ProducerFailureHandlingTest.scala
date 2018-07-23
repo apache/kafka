@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.api
 
 import java.util.concurrent.{ExecutionException, TimeoutException}
@@ -34,7 +33,7 @@ import org.junit.{After, Before, Test}
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
-  private val serverMessageMaxBytes =  producerBufferSize/2
+  private val serverMessageMaxBytes = producerBufferSize / 2
   private val replicaFetchMaxPartitionBytes = serverMessageMaxBytes + 200
   private val replicaFetchMaxResponseBytes = replicaFetchMaxPartitionBytes + 200
 
@@ -64,12 +63,21 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   override def setUp() {
     super.setUp()
 
-    producer1 = TestUtils.createProducer(brokerList, acks = 0, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
-    producer2 = TestUtils.createProducer(brokerList, acks = 1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
-    producer3 = TestUtils.createProducer(brokerList, acks = -1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
+    producer1 = TestUtils.createProducer(brokerList,
+                                         acks = 0,
+                                         requestTimeoutMs = 30000L,
+                                         maxBlockMs = 10000L,
+                                         bufferSize = producerBufferSize)
+    producer2 = TestUtils.createProducer(brokerList,
+                                         acks = 1,
+                                         requestTimeoutMs = 30000L,
+                                         maxBlockMs = 10000L,
+                                         bufferSize = producerBufferSize)
+    producer3 = TestUtils.createProducer(brokerList,
+                                         acks = -1,
+                                         requestTimeoutMs = 30000L,
+                                         maxBlockMs = 10000L,
+                                         bufferSize = producerBufferSize)
   }
 
   @After
@@ -125,7 +133,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     createTopic(topic10, numPartitions = servers.size, replicationFactor = numServers, topicConfig)
 
     // send a record that is too large for replication, but within the broker max message limit
-    val value = new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
+    val value =
+      new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic10, null, value)
     val recordMetadata = producer3.send(record).get
 
@@ -172,7 +181,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     createTopic(topic1, replicationFactor = numServers)
 
     // producer with incorrect broker list
-    producer4 = TestUtils.createProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer4 = TestUtils.createProducer("localhost:8686,localhost:4242",
+                                         acks = 1,
+                                         maxBlockMs = 10000L,
+                                         bufferSize = producerBufferSize)
 
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
@@ -182,9 +194,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-    * Send with invalid partition id should throw KafkaException when partition is higher than the upper bound of
-    * partitions.
-    */
+   * Send with invalid partition id should throw KafkaException when partition is higher than the upper bound of
+   * partitions.
+   */
   @Test
   def testInvalidPartition() {
     // create topic with a single partition
@@ -232,14 +244,15 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     val thrown = intercept[ExecutionException] {
       producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get
     }
-    assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
+    assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause,
+               thrown.getCause.isInstanceOf[InvalidTopicException])
   }
 
   @Test
   def testNotEnoughReplicas() {
     val topicName = "minisrtest"
     val topicProps = new Properties()
-    topicProps.put("min.insync.replicas",(numServers+1).toString)
+    topicProps.put("min.insync.replicas", (numServers + 1).toString)
 
     createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
 
@@ -250,7 +263,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     } catch {
       case e: ExecutionException =>
         if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
+          fail(
+            "Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas"
+          )
         }
     }
   }
@@ -275,11 +290,13 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
     } catch {
       case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
+        if (!e.getCause.isInstanceOf[NotEnoughReplicasException] &&
             !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
             !e.getCause.isInstanceOf[TimeoutException]) {
-          fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
-            "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
+          fail(
+            "Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
+              "with fewer brokers than min.insync.replicas, but saw " + e.getCause
+          )
         }
     }
 

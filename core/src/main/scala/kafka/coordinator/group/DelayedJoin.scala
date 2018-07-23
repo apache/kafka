@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.coordinator.group
 
 import kafka.server.{DelayedOperation, DelayedOperationPurgatory, GroupKey}
@@ -31,9 +30,8 @@ import scala.math.{max, min}
  * the group are marked as failed, and complete this operation to proceed rebalance with
  * the rest of the group.
  */
-private[group] class DelayedJoin(coordinator: GroupCoordinator,
-                                 group: GroupMetadata,
-                                 rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout, Some(group.lock)) {
+private[group] class DelayedJoin(coordinator: GroupCoordinator, group: GroupMetadata, rebalanceTimeout: Long)
+    extends DelayedOperation(rebalanceTimeout, Some(group.lock)) {
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
   override def onExpiration() = coordinator.onExpireJoin()
@@ -41,38 +39,35 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
 }
 
 /**
-  * Delayed rebalance operation that is added to the purgatory when a group is transitioning from
-  * Empty to PreparingRebalance
-  *
-  * When onComplete is triggered we check if any new members have been added and if there is still time remaining
-  * before the rebalance timeout. If both are true we then schedule a further delay. Otherwise we complete the
-  * rebalance.
-  */
+ * Delayed rebalance operation that is added to the purgatory when a group is transitioning from
+ * Empty to PreparingRebalance
+ *
+ * When onComplete is triggered we check if any new members have been added and if there is still time remaining
+ * before the rebalance timeout. If both are true we then schedule a further delay. Otherwise we complete the
+ * rebalance.
+ */
 private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
                                         purgatory: DelayedOperationPurgatory[DelayedJoin],
                                         group: GroupMetadata,
                                         configuredRebalanceDelay: Int,
                                         delayMs: Int,
-                                        remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
+                                        remainingMs: Int)
+    extends DelayedJoin(coordinator, group, delayMs) {
 
   override def tryComplete(): Boolean = false
 
-  override def onComplete(): Unit = {
-    group.inLock  {
+  override def onComplete(): Unit =
+    group.inLock {
       if (group.newMemberAdded && remainingMs != 0) {
         group.newMemberAdded = false
         val delay = min(configuredRebalanceDelay, remainingMs)
         val remaining = max(remainingMs - delayMs, 0)
-        purgatory.tryCompleteElseWatch(new InitialDelayedJoin(coordinator,
-          purgatory,
-          group,
-          configuredRebalanceDelay,
-          delay,
-          remaining
-        ), Seq(GroupKey(group.groupId)))
+        purgatory.tryCompleteElseWatch(
+          new InitialDelayedJoin(coordinator, purgatory, group, configuredRebalanceDelay, delay, remaining),
+          Seq(GroupKey(group.groupId))
+        )
       } else
         super.onComplete()
     }
-  }
 
 }

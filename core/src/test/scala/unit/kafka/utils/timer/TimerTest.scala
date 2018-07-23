@@ -20,20 +20,20 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
 class TimerTest {
 
-  private class TestTask(override val delayMs: Long, id: Int, latch: CountDownLatch, output: ArrayBuffer[Int]) extends TimerTask {
+  private class TestTask(override val delayMs: Long, id: Int, latch: CountDownLatch, output: ArrayBuffer[Int])
+      extends TimerTask {
     private[this] val completed = new AtomicBoolean(false)
-    def run(): Unit = {
+    def run(): Unit =
       if (completed.compareAndSet(false, true)) {
         output.synchronized { output += id }
         latch.countDown()
       }
-    }
   }
 
   private[this] var timer: Timer = null
@@ -44,14 +44,12 @@ class TimerTest {
   }
 
   @After
-  def teardown(): Unit = {
+  def teardown(): Unit =
     timer.shutdown()
-  }
 
   @Test
   def testAlreadyExpiredTask(): Unit = {
     val output = new ArrayBuffer[Int]()
-
 
     val latches = (-5 until 0).map { i =>
       val latch = new CountDownLatch(1)
@@ -96,11 +94,15 @@ class TimerTest {
       }
 
     // randomly submit requests
-    tasks.foreach { task => timer.add(task) }
+    tasks.foreach { task =>
+      timer.add(task)
+    }
 
     while (timer.advanceClock(2000)) {}
 
-    latches.foreach { latch => latch.await() }
+    latches.foreach { latch =>
+      latch.await()
+    }
 
     assertEquals("output should match", ids.sorted, output.toSeq)
   }

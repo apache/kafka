@@ -36,7 +36,7 @@ buildscript {
 apply plugin: "com.diffplug.gradle.spotless"
 spotless {
   scala {
-    target 'streams/**/*.scala'
+    target '**/*.scala'
     scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
   }
 }

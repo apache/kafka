@@ -20,7 +20,7 @@ import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.{Set, mutable}
+import scala.collection.{mutable, Set}
 
 /**
  * This manages the state machine for topic deletion.
@@ -28,8 +28,8 @@ import scala.collection.{Set, mutable}
  * 2. The controller listens for child changes on /admin/delete_topic and starts topic deletion for the respective topics
  * 3. The controller's ControllerEventThread handles topic deletion. A topic will be ineligible
  *    for deletion in the following scenarios -
-  *   3.1 broker hosting one of the replicas for that topic goes down
-  *   3.2 partition reassignment for partitions of that topic is in progress
+ *   3.1 broker hosting one of the replicas for that topic goes down
+ *   3.2 partition reassignment for partitions of that topic is in progress
  * 4. Topic deletion is resumed when -
  *    4.1 broker hosting one of the replicas for that topic is started
  *    4.2 partition reassignment for partitions of that topic completes
@@ -55,9 +55,8 @@ import scala.collection.{Set, mutable}
  *    it marks the topic for deletion retry.
  * @param controller
  */
-class TopicDeletionManager(controller: KafkaController,
-                           eventManager: ControllerEventManager,
-                           zkClient: KafkaZkClient) extends Logging {
+class TopicDeletionManager(controller: KafkaController, eventManager: ControllerEventManager, zkClient: KafkaZkClient)
+    extends Logging {
   this.logIdent = s"[Topic Deletion Manager ${controller.config.brokerId}], "
   val controllerContext = controller.controllerContext
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
@@ -65,7 +64,7 @@ class TopicDeletionManager(controller: KafkaController,
   val partitionsToBeDeleted = mutable.Set.empty[TopicPartition]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
-  def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
+  def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit =
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted ++= initialTopicsToBeDeleted
       partitionsToBeDeleted ++= topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
@@ -75,13 +74,11 @@ class TopicDeletionManager(controller: KafkaController,
       info(s"Removing $initialTopicsToBeDeleted since delete topic is disabled")
       zkClient.deleteTopicDeletions(initialTopicsToBeDeleted.toSeq)
     }
-  }
 
-  def tryTopicDeletion(): Unit = {
+  def tryTopicDeletion(): Unit =
     if (isDeleteTopicEnabled) {
       resumeDeletions()
     }
-  }
 
   /**
    * Invoked when the current controller resigns. At this time, all state for topic deletion should be cleared.
@@ -136,7 +133,9 @@ class TopicDeletionManager(controller: KafkaController,
       val replicasThatFailedToDelete = replicas.filter(r => isTopicQueuedUpForDeletion(r.topic))
       if (replicasThatFailedToDelete.nonEmpty) {
         val topics = replicasThatFailedToDelete.map(_.topic)
-        debug(s"Deletion failed for replicas ${replicasThatFailedToDelete.mkString(",")}. Halting deletion for topics $topics")
+        debug(
+          s"Deletion failed for replicas ${replicasThatFailedToDelete.mkString(",")}. Halting deletion for topics $topics"
+        )
         controller.replicaStateMachine.handleStateChanges(replicasThatFailedToDelete.toSeq, ReplicaDeletionIneligible)
         markTopicIneligibleForDeletion(topics)
         resumeDeletions()
@@ -159,33 +158,29 @@ class TopicDeletionManager(controller: KafkaController,
     }
   }
 
-  private def isTopicIneligibleForDeletion(topic: String): Boolean = {
+  private def isTopicIneligibleForDeletion(topic: String): Boolean =
     if (isDeleteTopicEnabled) {
       topicsIneligibleForDeletion.contains(topic)
     } else
       true
-  }
 
-  private def isTopicDeletionInProgress(topic: String): Boolean = {
+  private def isTopicDeletionInProgress(topic: String): Boolean =
     if (isDeleteTopicEnabled) {
       controller.replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)
     } else
       false
-  }
 
-  def isPartitionToBeDeleted(topicAndPartition: TopicPartition) = {
+  def isPartitionToBeDeleted(topicAndPartition: TopicPartition) =
     if (isDeleteTopicEnabled) {
       partitionsToBeDeleted.contains(topicAndPartition)
     } else
       false
-  }
 
-  def isTopicQueuedUpForDeletion(topic: String): Boolean = {
+  def isTopicQueuedUpForDeletion(topic: String): Boolean =
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted.contains(topic)
     } else
       false
-  }
 
   /**
    * Invoked by the StopReplicaResponse callback when it receives no error code for a replica of a topic to be deleted.
@@ -208,9 +203,8 @@ class TopicDeletionManager(controller: KafkaController,
    * @param topic Topic
    * @return Whether or not deletion can be retried for the topic
    */
-  private def isTopicEligibleForDeletion(topic: String): Boolean = {
+  private def isTopicEligibleForDeletion(topic: String): Boolean =
     topicsToBeDeleted.contains(topic) && (!isTopicDeletionInProgress(topic) && !isTopicIneligibleForDeletion(topic))
-  }
 
   /**
    * If the topic is queued for deletion but deletion is not currently under progress, then deletion is retried for that topic
@@ -220,7 +214,9 @@ class TopicDeletionManager(controller: KafkaController,
   private def markTopicForDeletionRetry(topic: String) {
     // reset replica states from ReplicaDeletionIneligible to OfflineReplica
     val failedReplicas = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionIneligible)
-    info(s"Retrying delete topic for topic $topic since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
+    info(
+      s"Retrying delete topic for topic $topic since replicas ${failedReplicas.mkString(",")} were not successfully deleted"
+    )
     controller.replicaStateMachine.handleStateChanges(failedReplicas.toSeq, OfflineReplica)
   }
 
@@ -287,9 +283,14 @@ class TopicDeletionManager(controller: KafkaController,
       // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
       controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry.toSeq, OfflineReplica)
       debug(s"Deletion started for replicas ${replicasForDeletionRetry.mkString(",")}")
-      controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry.toSeq, ReplicaDeletionStarted,
-        new Callbacks(stopReplicaResponseCallback = (stopReplicaResponseObj, replicaId) =>
-          eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponseObj, replicaId))))
+      controller.replicaStateMachine.handleStateChanges(
+        replicasForDeletionRetry.toSeq,
+        ReplicaDeletionStarted,
+        new Callbacks(
+          stopReplicaResponseCallback = (stopReplicaResponseObj, replicaId) =>
+            eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponseObj, replicaId))
+        )
+      )
       if (deadReplicasForTopic.nonEmpty) {
         debug(s"Dead Replicas (${deadReplicasForTopic.mkString(",")}) found for topic $topic")
         markTopicIneligibleForDeletion(Set(topic))
@@ -329,10 +330,13 @@ class TopicDeletionManager(controller: KafkaController,
       } else {
         if (controller.replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)) {
           // ignore since topic deletion is in progress
-          val replicasInDeletionStartedState = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)
+          val replicasInDeletionStartedState =
+            controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)
           val replicaIds = replicasInDeletionStartedState.map(_.replica)
           val partitions = replicasInDeletionStartedState.map(_.topicPartition)
-          info(s"Deletion for replicas ${replicaIds.mkString(",")} for partition ${partitions.mkString(",")} of topic $topic in progress")
+          info(
+            s"Deletion for replicas ${replicaIds.mkString(",")} for partition ${partitions.mkString(",")} of topic $topic in progress"
+          )
         } else {
           // if you come here, then no replica is in TopicDeletionStarted and all replicas are not in
           // TopicDeletionSuccessful. That means, that either given topic haven't initiated deletion

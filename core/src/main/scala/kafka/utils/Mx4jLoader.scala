@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.utils
-
 
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
@@ -54,14 +52,15 @@ object Mx4jLoader extends Logging {
 
       val xsltProcessorClass = Class.forName("mx4j.tools.adaptor.http.XSLTProcessor")
       val xsltProcessor = xsltProcessorClass.newInstance()
-      httpAdaptorClass.getMethod("setProcessor", Class.forName("mx4j.tools.adaptor.http.ProcessorMBean")).invoke(httpAdaptor, xsltProcessor.asInstanceOf[AnyRef])
+      httpAdaptorClass
+        .getMethod("setProcessor", Class.forName("mx4j.tools.adaptor.http.ProcessorMBean"))
+        .invoke(httpAdaptor, xsltProcessor.asInstanceOf[AnyRef])
       mbs.registerMBean(xsltProcessor, processorName)
       httpAdaptorClass.getMethod("start").invoke(httpAdaptor)
       info("mx4j successfuly loaded")
       return true
-    }
-    catch {
-	  case _: ClassNotFoundException =>
+    } catch {
+      case _: ClassNotFoundException =>
         info("Will not load MX4J, mx4j-tools.jar is not in the classpath")
       case e: Throwable =>
         warn("Could not start register mbean in JMX", e)
