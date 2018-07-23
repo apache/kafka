@@ -914,7 +914,7 @@ public class ConsumerCoordinatorTest {
         try {
             coordinator.poll(Long.MAX_VALUE);
             fail("Expected exception thrown from assignment callback");
-        } catch (RuntimeException e) {
+        } catch (WakeupException e) {
         }
 
         // The second call should retry the assignment callback and succeed
