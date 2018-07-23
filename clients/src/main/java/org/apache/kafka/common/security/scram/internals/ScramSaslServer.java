@@ -98,9 +98,9 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
                     this.clientFirstMessage = new ClientFirstMessage(response);
                     this.scramExtensions = clientFirstMessage.extensions();
-                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.extensionNames())) {
+                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.map().keySet())) {
                         log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
-                                SUPPORTED_EXTENSIONS, scramExtensions.extensionNames());
+                                SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
                     }
                     String serverNonce = formatter.secureRandomString();
                     try {

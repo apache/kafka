@@ -38,10 +38,6 @@ public class ScramExtensions extends SaslExtensions {
         super(extensionMap);
     }
 
-    public Set<String> extensionNames() {
-        return extensionsMap.keySet();
-    }
-
     public boolean tokenAuthenticated() {
         return Boolean.parseBoolean(extensionsMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
     }

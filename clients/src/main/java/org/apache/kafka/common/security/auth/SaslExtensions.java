@@ -24,7 +24,7 @@ import java.util.Map;
  * A simple immutable value object class holding customizable SASL extensions
  */
 public class SaslExtensions {
-    protected Map<String, String> extensionsMap;
+    protected final Map<String, String> extensionsMap;
 
     public SaslExtensions(Map<String, String> extensionsMap) {
         this.extensionsMap = Collections.unmodifiableMap(new HashMap<>(extensionsMap));
