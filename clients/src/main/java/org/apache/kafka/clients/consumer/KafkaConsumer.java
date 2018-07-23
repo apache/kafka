@@ -1225,11 +1225,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return result;
     }
 
-    // method only intended for the use of RebalanceKafkaConsumer (it is created to ensure that no internals are exposed)
-    protected ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
-        return poll(timeoutMs, includeMetadataInTimeout, false);
-    }
-
     private ConsumerRecords<K, V>  mergeRecords(final ConsumerRecords<K, V> records1, final ConsumerRecords<K, V> records2) {
         final HashMap<TopicPartition, List<ConsumerRecord<K, V>>> map = new HashMap<>();
         for (final TopicPartition partition : records1.partitions()) {
