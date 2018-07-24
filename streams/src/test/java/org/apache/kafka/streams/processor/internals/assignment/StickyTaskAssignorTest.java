@@ -152,6 +152,40 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes() {
+        final TaskId task10 = new TaskId(1, 0);
+        final TaskId task11 = new TaskId(1, 1);
+        final TaskId task12 = new TaskId(1, 2);
+        final TaskId task13 = new TaskId(1, 3);
+        final TaskId task14 = new TaskId(1, 4);
+        final TaskId task15 = new TaskId(1, 5);
+        final TaskId task16 = new TaskId(1, 6);
+        final TaskId task17 = new TaskId(1, 7);
+        final TaskId task18 = new TaskId(1, 8);
+        final TaskId task19 = new TaskId(1, 9);
+        final TaskId task110 = new TaskId(1, 10);
+        final TaskId task111 = new TaskId(1, 11);
+
+        createClientWithPreviousActiveTasks(p1, 1, task00, task10, task11, task12, task13, task14,
+                                                            task15, task15, task16, task17, task18, task19,
+                                                            task110, task111);
+
+        createClient(p2, 1);
+
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(task110, task111, task12, task13, task14,
+                                                                   task15, task15, task16, task17, task18, task19,
+                                                                   task10, task11, task00);
+
+        final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task10, task11, task12, task13, task14, task111));
+        final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(task15, task16, task17, task18, task19, task110));
+
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p1).activeTasks(), equalTo(expectedClientITasks));
+        assertThat(clients.get(p2).activeTasks(), equalTo(expectedClientIITasks));
+    }
+
+    @Test
     public void shouldKeepActiveTaskStickynessWhenMoreClientThanActiveTasks() {
         final int p5 = 5;
         createClientWithPreviousActiveTasks(p1, 1, task00);
@@ -245,7 +279,6 @@ public class StickyTaskAssignorTest {
         assertTrue(nonEmptyStandbyTaskCount >= 3);
         assertThat(allStandbyTasks(), equalTo(Arrays.asList(task00, task01, task02, task03)));
     }
-
 
 
     @Test
@@ -567,7 +600,9 @@ public class StickyTaskAssignorTest {
         final ClientState newClient = createClient(p4, 1);
         newClient.addPreviousStandbyTasks(Utils.mkSet(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23));
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
+        final StickyTaskAssignor<Integer>
+            taskAssignor =
+            createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
@@ -598,7 +633,9 @@ public class StickyTaskAssignorTest {
         final ClientState bounce2 = createClient(p4, 1);
         bounce2.addPreviousStandbyTasks(Utils.mkSet(task02, task03, task10));
 
-        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
+        final StickyTaskAssignor<Integer>
+            taskAssignor =
+            createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
 
         assertThat(c1.activeTasks(), equalTo(Utils.mkSet(task01, task12, task13)));
