@@ -31,7 +31,6 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.LoginException;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
@@ -53,7 +52,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertEquals("1", callback.extensions().map().get("testId"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test(expected = IOException.class)
     public void throwsErrorOnInvalidExtensionName() throws IOException, UnsupportedCallbackException {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_test.Id", "1");
@@ -63,7 +62,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         callbackHandler.handle(new Callback[] {callback});
     }
 
-    @Test(expected = ConfigException.class)
+    @Test(expected = IOException.class)
     public void throwsErrorOnInvalidExtensionValue() throws IOException, UnsupportedCallbackException {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_testId", "Çalifornia");

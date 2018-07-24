@@ -97,7 +97,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
  * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}. Note that there
- * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at {@code OAuthBearerClientInitialResponse.AUTH_KEY}.
+ * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at {@link OAuthBearerClientInitialResponse.AUTH_KEY}.
  * The {@code OAuthBearerLoginModule} instance also asks its configured {@link AuthenticateCallbackHandler}
  * implementation to handle an instance of {@link SaslExtensionsCallback} and return an instance of {@link SaslExtensions}.
  * The configured callback handler does not need to handle this callback, though -- any {@code UnsupportedCallbackException}
@@ -285,7 +285,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             callbackHandler.handle(new Callback[] {tokenCallback});
         } catch (IOException | UnsupportedCallbackException e) {
             log.error(e.getMessage(), e);
-            throw new LoginException("An internal error occurred");
+            throw new LoginException("An internal error occurred while retrieving token from callback handler");
         }
 
         tokenRequiringCommit = tokenCallback.token();
@@ -306,7 +306,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             extensionsRequiringCommit = extensionsCallback.extensions();
         } catch (IOException e) {
             log.error(e.getMessage(), e);
-            throw new LoginException("An internal error occurred");
+            throw new LoginException("An internal error occurred while retrieving SASL extensions from callback handler");
         } catch (UnsupportedCallbackException e) {
             extensionsRequiringCommit = new SaslExtensions(Collections.emptyMap());
             log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
@@ -340,12 +340,7 @@ public class OAuthBearerLoginModule implements LoginModule {
 
         log.info("Logging out my extensions");
         for (Iterator<Object> iterator = subject.getPublicCredentials().iterator(); iterator.hasNext();) {
-            Object credential = iterator.next();
-            if (!(credential instanceof SaslExtensions))
-                continue;
-
-            SaslExtensions extensions = (SaslExtensions) credential;
-            if (myCommittedExtensions == extensions) {
+            if (myCommittedExtensions == iterator.next()) {
                 iterator.remove();
                 myCommittedExtensions = null;
                 break;

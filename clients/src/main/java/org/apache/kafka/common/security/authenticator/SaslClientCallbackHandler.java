@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 /**
  * Default callback handler for Sasl clients. The callbacks required for the SASL mechanism
@@ -82,7 +83,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
             } else if (callback instanceof ScramExtensionsCallback) {
-                if (mechanism.startsWith("SCRAM") && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                if (ScramMechanism.isScram(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
                     Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
                     ((ScramExtensionsCallback) callback).extensions(extensions);
                 }

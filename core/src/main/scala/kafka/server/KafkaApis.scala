@@ -1468,7 +1468,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
+  def thandleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {

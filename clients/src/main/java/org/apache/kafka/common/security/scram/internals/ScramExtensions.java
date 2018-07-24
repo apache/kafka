@@ -38,6 +38,6 @@ public class ScramExtensions extends SaslExtensions {
     }
 
     public boolean tokenAuthenticated() {
-        return Boolean.parseBoolean(extensionsMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
+        return Boolean.parseBoolean(map().get(ScramLoginModule.TOKEN_AUTH_CONFIG));
     }
 }
