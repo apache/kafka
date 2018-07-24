@@ -210,9 +210,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     break;
                 case COMMIT_ASYNC:
                     super.commitAsyncWithHashCodes(offsets,
-                                                   (OffsetCommitCallback) inputArgument,
-                                                   hashCode1,
-                                                   hashCode2);
+                            (OffsetCommitCallback) inputArgument,
+                            hashCode1,
+                            hashCode2);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:

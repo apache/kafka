@@ -38,7 +38,7 @@ import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
-/*
+
   @Test
   def testHeaders() {
     val numRecords = 1
@@ -168,7 +168,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.poll(0)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(2, listener.callsToRevoked)
-  }*/
+  }
 
   @Test
   def testSecondaryThreadIsAliveWithNewRebalanceMode() {
@@ -195,7 +195,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     //test if child consumer thread is alive
     assertTrue(consumer0.childConsumerIsAlive())
   }
-/*
+
   @Test
   def testMaxPollIntervalMsDelayInRevocation() {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
@@ -1661,7 +1661,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoExemptRequestMetric(_))
-  }*/
+  }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
