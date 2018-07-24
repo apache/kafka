@@ -34,19 +34,20 @@ public interface WrappedStateStore extends StateStore {
 
     /**
      * Return the state store this store directly wraps
-     * @return
+     * @return the state store this store directly wraps
      */
     StateStore wrappedStore();
 
     abstract class AbstractStateStore implements WrappedStateStore {
         final StateStore innerState;
 
-        AbstractStateStore(StateStore inner) {
+        AbstractStateStore(final StateStore inner) {
             this.innerState = inner;
         }
 
         @Override
-        public void init(ProcessorContext context, StateStore root) {
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
             innerState.init(context, root);
         }
 

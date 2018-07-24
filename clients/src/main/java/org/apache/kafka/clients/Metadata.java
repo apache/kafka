@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,7 +50,7 @@ import java.util.Set;
  * is removed from the metadata refresh set after an update. Consumers disable topic expiry since they explicitly
  * manage topics while producers rely on topic expiry to limit the refresh set.
  */
-public final class Metadata {
+public final class Metadata implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
@@ -70,6 +72,7 @@ public final class Metadata {
     private boolean needMetadataForAllTopics;
     private final boolean allowAutoTopicCreation;
     private final boolean topicExpiryEnabled;
+    private boolean isClosed;
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean allowAutoTopicCreation) {
         this(refreshBackoffMs, metadataExpireMs, allowAutoTopicCreation, false, new ClusterResourceListeners());
@@ -100,6 +103,7 @@ public final class Metadata {
         this.listeners = new ArrayList<>();
         this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
+        this.isClosed = false;
     }
 
     /**
@@ -164,12 +168,12 @@ public final class Metadata {
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
-        if (maxWaitMs < 0) {
+        if (maxWaitMs < 0)
             throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milliseconds");
-        }
+
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
-        while (this.version <= lastVersion) {
+        while ((this.version <= lastVersion) && !isClosed()) {
             AuthenticationException ex = getAndClearAuthenticationException();
             if (ex != null)
                 throw ex;
@@ -180,6 +184,8 @@ public final class Metadata {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             remainingWaitMs = maxWaitMs - elapsed;
         }
+        if (isClosed())
+            throw new KafkaException("Requested metadata update after close");
     }
 
     /**
@@ -224,6 +230,8 @@ public final class Metadata {
      */
     public synchronized void update(Cluster newCluster, Set<String> unavailableTopics, long now) {
         Objects.requireNonNull(newCluster, "cluster should not be null");
+        if (isClosed())
+            throw new IllegalStateException("Update requested after metadata close");
 
         this.needUpdate = false;
         this.lastRefreshMs = now;
@@ -332,6 +340,25 @@ public final class Metadata {
     }
 
     /**
+     * "Close" this metadata instance to indicate that metadata updates are no longer possible. This is typically used
+     * when the thread responsible for performing metadata updates is exiting and needs a way to relay this information
+     * to any other thread(s) that could potentially wait on metadata update to come through.
+     */
+    @Override
+    public synchronized void close() {
+        this.isClosed = true;
+        this.notifyAll();
+    }
+
+    /**
+     * Check if this metadata instance has been closed. See {@link #close()} for more information.
+     * @return True if this instance has been closed; false otherwise
+     */
+    public synchronized boolean isClosed() {
+        return this.isClosed;
+    }
+
+    /**
      * MetadataUpdate Listener
      */
     public interface Listener {
@@ -353,6 +380,7 @@ public final class Metadata {
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Set<String> unauthorizedTopics = new HashSet<>();
+        Set<String> invalidTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         Set<String> internalTopics = Collections.emptySet();
@@ -364,6 +392,9 @@ public final class Metadata {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics.keySet());
 
+            invalidTopics.addAll(cluster.invalidTopics());
+            invalidTopics.addAll(this.cluster.invalidTopics());
+
             for (String topic : this.topics.keySet()) {
                 List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
                 if (!partitionInfoList.isEmpty()) {
@@ -373,6 +404,6 @@ public final class Metadata {
             nodes = cluster.nodes();
             controller  = cluster.controller();
         }
-        return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, internalTopics, controller);
+        return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, invalidTopics, internalTopics, controller);
     }
 }

@@ -112,7 +112,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     this.servers = allServers
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
       "Replicas for topic test not created.")
@@ -170,7 +170,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIncreasePartitiovnCountDuringDeleteTopic() {
+  def testIncreasePartitionCountDuringDeleteTopic() {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
@@ -181,7 +181,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     this.servers = allServers
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
       "Replicas for topic test not created.")
@@ -282,9 +282,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // re-create topic on same replicas
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
-    // wait until leader is elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // check if all replica logs are created
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
       "Replicas for topic test not created.")
@@ -374,7 +372,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // create brokers
     val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, replicaAssignment)
+    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
       "Replicas for topic test not created")

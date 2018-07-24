@@ -36,7 +36,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.waitUntilTrue(() => {
       foundGroups = service.listGroups().toSet
       expectedGroups == foundGroups
-    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
+    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.", maxRetries = 3)
   }
 
   @Test(expected = classOf[OptionException])

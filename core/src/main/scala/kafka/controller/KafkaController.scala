@@ -195,7 +195,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
-    zkClient.updateBrokerInfoInZk(newBrokerInfo)
+    zkClient.updateBrokerInfo(newBrokerInfo)
   }
 
   private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
@@ -1208,7 +1208,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
 
     try {
-      zkClient.checkedEphemeralCreate(ControllerZNode.path, ControllerZNode.encode(config.brokerId, timestamp))
+      zkClient.registerController(config.brokerId, timestamp)
       info(s"${config.brokerId} successfully elected as the controller")
       activeControllerId = config.brokerId
       onControllerFailover()
@@ -1516,7 +1516,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state: ControllerState = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      zkClient.registerBrokerInZk(brokerInfo)
+      zkClient.registerBroker(brokerInfo)
       Reelect.process()
     }
   }

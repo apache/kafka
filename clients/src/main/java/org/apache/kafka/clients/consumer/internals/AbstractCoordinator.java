@@ -200,9 +200,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                                                  Map<String, ByteBuffer> allMemberMetadata);
 
     /**
-     * Invoked when a group member has successfully joined a group. If this call is woken up (i.e.
-     * if the invocation raises {@link org.apache.kafka.common.errors.WakeupException}), then it
-     * will be retried on the next call to {@link #ensureActiveGroup()}.
+     * Invoked when a group member has successfully joined a group. If this call fails with an exception,
+     * then it will be retried using the same assignment state on the next call to {@link #ensureActiveGroup()}.
      *
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
@@ -418,7 +417,9 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
-                onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
+                // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
+                ByteBuffer memberAssignment = future.value().duplicate();
+                onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
 
                 // We reset the join group future only after the completion callback returns. This ensures
                 // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
