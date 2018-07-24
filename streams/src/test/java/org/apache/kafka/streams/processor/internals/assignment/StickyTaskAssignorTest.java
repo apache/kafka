@@ -167,13 +167,13 @@ public class StickyTaskAssignorTest {
         final TaskId task111 = new TaskId(1, 11);
 
         createClientWithPreviousActiveTasks(p1, 1, task00, task10, task11, task12, task13, task14,
-                                                            task15, task15, task16, task17, task18, task19,
+                                                            task15, task16, task17, task18, task19,
                                                             task110, task111);
 
         createClient(p2, 1);
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task110, task111, task12, task13, task14,
-                                                                   task15, task15, task16, task17, task18, task19,
+                                                                   task15, task16, task17, task18, task19,
                                                                    task10, task11, task00);
 
         final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task10, task11, task12, task13, task14, task111));
