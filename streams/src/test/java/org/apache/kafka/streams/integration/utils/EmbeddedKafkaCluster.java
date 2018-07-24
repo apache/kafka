@@ -274,6 +274,24 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
+    /**
+     * Deletes all topics and blocks until all topics got deleted.
+     *
+     * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
+     */
+    public void deleteAllTopicsAndWait(final long timeoutMs) throws InterruptedException {
+        final Set<String> topics = new HashSet<>(JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
+        for (final String topic : topics) {
+            try {
+                brokers[0].deleteTopic(topic);
+            } catch (final UnknownTopicOrPartitionException e) { }
+        }
+
+        if (timeoutMs > 0) {
+            TestUtils.waitForCondition(new TopicsDeletedCondition(topics), timeoutMs, "Topics not deleted after " + timeoutMs + " milli seconds.");
+        }
+    }
+
     public void deleteAndRecreateTopics(final String... topics) throws InterruptedException {
         deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
         createTopics(topics);
@@ -293,6 +311,10 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         private TopicsDeletedCondition(final String... topics) {
             Collections.addAll(deletedTopics, topics);
+        }
+
+        public TopicsDeletedCondition(final Set<String> topics) {
+            deletedTopics.addAll(topics);
         }
 
         @Override
