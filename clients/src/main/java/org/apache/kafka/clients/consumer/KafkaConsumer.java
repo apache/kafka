@@ -566,13 +566,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final ConsumerInterceptors<K, V> interceptors;
 
     protected final Time time;
-    private final ConsumerNetworkClient client;
-    private final SubscriptionState subscriptions;
-    private final Metadata metadata;
-    private final long retryBackoffMs;
-    private final long requestTimeoutMs;
-    private final int defaultApiTimeoutMs;
-    private final boolean useParallelRebalance;
+    protected final ConsumerNetworkClient client;
+    protected final SubscriptionState subscriptions;
+    protected final Metadata metadata;
+    protected final long retryBackoffMs;
+    protected final long requestTimeoutMs;
+    protected final int defaultApiTimeoutMs;
+    protected final boolean useParallelRebalance;
     private RebalanceKafkaConsumer rebalanceConsumer;
     private Thread consumerThread;
     private volatile RebalanceKafkaConsumer.RequestResult result;
@@ -1169,7 +1169,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.ensureActiveGroup();
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
             OffsetAndMetadata offsetMetadata = committed(partition, Duration.ofMillis(requestTimeoutMs), true);
-            startOffsets.put(partition, offsetMetadata == null ? new OffsetAndMetadata(-1L) : offsetMetadata);
+            startOffsets.put(partition, offsetMetadata == null ? new OffsetAndMetadata(0L) : offsetMetadata);
         }
         seekToEnd(Collections.EMPTY_LIST);
         for (TopicPartition partition : this.subscriptions.assignedPartitions()) {
