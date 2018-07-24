@@ -190,7 +190,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     Thread.sleep(3500)
 
-    consumer0.poll(1000)
+    assertTrue(consumer0.poll(1000).count() > 0)
 
     //test if child consumer thread is alive
     assertTrue(consumer0.childConsumerIsAlive())

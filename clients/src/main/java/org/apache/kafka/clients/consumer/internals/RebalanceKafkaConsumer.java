@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -51,6 +54,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private volatile long hashCode2;
     private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
+    private Map<TopicPartition, OffsetRangeToken> localRangeTokens;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeserializer,
@@ -126,7 +130,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             final long pos = offsetRanges.get(partition).get(0).startOffset;
             super.seek(partition, pos <= -1 ? 0 : pos);
         }
-        //super.commitSync(rangeTokens, Duration.ofMillis(requestTimeoutMs), true);
+        localRangeTokens = rangeTokens;
     }
 
     private Set<TopicPartition> findUnfinished() {
@@ -163,10 +167,12 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public ConsumerRecords<K, V> poll(Duration timeout) {
         if (!terminated()) {
             ConsumerRecords result = super.poll(timeout.toMillis(), true, false);
-            System.out.println("Returning new records with count: " + result.count());
+            if (localRangeTokens != null) {
+                super.commitAsync(localRangeTokens, null, true);
+                localRangeTokens = null;
+            }
             return result;
         }
-        System.out.println("Returning empty records");
         return ConsumerRecords.empty();
     }
 
@@ -329,7 +335,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         public String toString() {
             return "OffsetRangeToken{" +
                     "offset=" + offset() +
-                    ", metadata='" + metadata() +
+                    ", metadata=" + metadata() +
                     ", range=(" + range.startOffset + ", " + range.endOffset + ")" +
                     '}';
         }

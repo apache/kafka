@@ -1337,7 +1337,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Visible for testing
      */
-    boolean updateAssignmentMetadataIfNeeded(final long timeoutMs) {
+    public boolean updateAssignmentMetadataIfNeeded(final long timeoutMs) {
         final long startMs = time.milliseconds();
         if (!coordinator.poll(timeoutMs)) {
             return false;

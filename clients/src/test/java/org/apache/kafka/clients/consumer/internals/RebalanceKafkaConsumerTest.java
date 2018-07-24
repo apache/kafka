@@ -72,7 +72,6 @@ public class RebalanceKafkaConsumerTest {
 
     @Test
     public void testConsumerClose() {
-        System.out.println("Testing close");
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
         consumerThread.start();
@@ -90,7 +89,6 @@ public class RebalanceKafkaConsumerTest {
 
     @Test
     public void testConsumerPoll() {
-        System.out.println("Testing poll");
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
         consumerThread.start();
