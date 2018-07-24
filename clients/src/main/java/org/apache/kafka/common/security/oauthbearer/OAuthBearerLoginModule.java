@@ -339,9 +339,13 @@ public class OAuthBearerLoginModule implements LoginModule {
         log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
 
         log.info("Logging out my extensions");
-        for (Iterator<SaslExtensions> iterator = subject.getPublicCredentials(SaslExtensions.class).iterator(); iterator.hasNext();) {
-            SaslExtensions extensions = iterator.next();
-            if (myCommittedExtensions.equals(extensions)) {
+        for (Iterator<Object> iterator = subject.getPublicCredentials().iterator(); iterator.hasNext();) {
+            Object credential = iterator.next();
+            if (!(credential instanceof SaslExtensions))
+                continue;
+
+            SaslExtensions extensions = (SaslExtensions) credential;
+            if (myCommittedExtensions == extensions) {
                 iterator.remove();
                 myCommittedExtensions = null;
                 break;

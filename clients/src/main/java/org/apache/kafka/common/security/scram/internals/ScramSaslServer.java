@@ -183,7 +183,7 @@ public class ScramSaslServer implements SaslServer {
             throw new IllegalStateException("Authentication exchange has not completed");
 
         if (SUPPORTED_EXTENSIONS.contains(propName))
-            return scramExtensions.extensionValue(propName);
+            return scramExtensions.map().get(propName);
         else
             return null;
     }

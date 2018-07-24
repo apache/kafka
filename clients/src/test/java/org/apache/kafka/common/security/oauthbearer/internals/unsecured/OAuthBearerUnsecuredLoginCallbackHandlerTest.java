@@ -50,7 +50,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
 
         callbackHandler.handle(new Callback[] {callback});
 
-        assertEquals("1", callback.extensions().extensionValue("testId"));
+        assertEquals("1", callback.extensions().map().get("testId"));
     }
 
     @Test(expected = ConfigException.class)

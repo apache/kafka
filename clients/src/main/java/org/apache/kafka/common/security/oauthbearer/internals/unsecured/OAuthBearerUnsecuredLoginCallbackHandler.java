@@ -59,7 +59,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <p>
  * You can also add custom unsecured SASL extensions using
- * {@code unsecuredLoginExtension_<extensionname>}
+ * {@code unsecuredLoginExtension_<extensionname>}. Extension keys and values are subject to regex validation.
+ * The extension key must also not be equal to the reserved key {@code OAuthBearerClientInitialResponse.AUTH_KEY}
  * <p>
  * This implementation also accepts the following options:
  * <ul>
@@ -221,7 +222,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             if (!OAuthBearerClientInitialResponse.EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
                 throw new ConfigException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
 
-            extensions.put(extensionName, configEntry.getValue());
+            extensions.put(extensionName, extensionValue);
         }
         callback.extensions(new SaslExtensions(extensions));
     }

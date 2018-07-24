@@ -112,7 +112,7 @@ public class OAuthBearerClientInitialResponse {
      *  Section 3.1</a>
      */
     private SaslExtensions validateExtensions(SaslExtensions extensions) throws SaslException {
-        if (extensions.extensionValue(OAuthBearerClientInitialResponse.AUTH_KEY) != null)
+        if (extensions.map().get(OAuthBearerClientInitialResponse.AUTH_KEY) != null)
             throw new SaslException("Extension name " + OAuthBearerClientInitialResponse.AUTH_KEY + " is invalid");
 
         for (Map.Entry<String, String> entry : extensions.map().entrySet()) {

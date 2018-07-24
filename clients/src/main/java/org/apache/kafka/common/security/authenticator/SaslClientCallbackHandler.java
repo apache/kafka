@@ -29,10 +29,10 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
 
 /**
@@ -87,7 +87,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                     ((ScramExtensionsCallback) callback).extensions(extensions);
                 }
             } else if (callback instanceof SaslExtensionsCallback) {
-                if (OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(mechanism) &&
+                if (!SaslConfigs.GSSAPI_MECHANISM.equals(mechanism) &&
                         subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
                     SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
                     ((SaslExtensionsCallback) callback).extensions(extensions);

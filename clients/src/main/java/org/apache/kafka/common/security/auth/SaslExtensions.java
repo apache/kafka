@@ -37,10 +37,6 @@ public class SaslExtensions {
         return extensionsMap;
     }
 
-    public String extensionValue(String name) {
-        return extensionsMap.get(name);
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

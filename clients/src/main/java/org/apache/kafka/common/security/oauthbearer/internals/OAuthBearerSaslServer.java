@@ -118,7 +118,7 @@ public class OAuthBearerSaslServer implements SaslServer {
         if (NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName))
             return tokenForNegotiatedProperty;
 
-        return extensions.extensionValue(propName);
+        return extensions.map().get(propName);
     }
 
     @Override
@@ -144,6 +144,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     public void dispose() throws SaslException {
         complete = false;
         tokenForNegotiatedProperty = null;
+        extensions = null;
     }
 
     private byte[] process(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {

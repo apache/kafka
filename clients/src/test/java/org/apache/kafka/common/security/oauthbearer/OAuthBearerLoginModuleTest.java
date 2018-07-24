@@ -340,7 +340,7 @@ public class OAuthBearerLoginModuleTest {
         loginModule1.commit();
         SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
         assertFalse(extensions.map().isEmpty());
-        assertEquals("true", extensions.extensionValue("test"));
+        assertEquals("true", extensions.map().get("test"));
     }
 
     /**

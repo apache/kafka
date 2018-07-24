@@ -45,9 +45,9 @@ public class SaslExtensionsTest {
     public void testCannotAddValueToMapReferenceAndGetFromExtensions() {
         SaslExtensions extensions = new SaslExtensions(this.map);
 
-        assertNull(extensions.extensionValue("hello"));
+        assertNull(extensions.map().get("hello"));
         this.map.put("hello", "42");
-        assertNull(extensions.extensionValue("hello"));
+        assertNull(extensions.map().get("hello"));
         assertNull(extensions.map().get("hello"));
     }
 }
