@@ -58,6 +58,7 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -1181,10 +1182,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (useParallelRebalance) {
             if (rebalanceConsumer == null) {
                 rebalanceConsumer = new RebalanceKafkaConsumer(configs,
-                                                               null,
-                                                               null,
-                                                               new HashMap<>(),
-                                                               new HashMap<>());
+                        null,
+                        null,
+                        new HashMap<>(),
+                        new HashMap<>());
                 consumerThread = new Thread(rebalanceConsumer);
             }
             if (coordinator.isRebalancing(false)) {
@@ -1208,9 +1209,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         if (consumerThread != null && consumerThread.isAlive()) {
             rebalanceConsumer.sendRequest(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
-                                          RebalanceKafkaConsumer.ConsumerRequest.POLL,
-                             null,
-                                          new DefaultTaskCompletionCallback());
+                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                    null,
+                    new DefaultTaskCompletionCallback());
         }
     }
 
@@ -1224,13 +1225,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             elapsed = time.milliseconds() - now;
             condition = remainingTimeAtLeastZero(timeoutMs, elapsed) != 0;
         }
-        return result;
+
+        final RebalanceKafkaConsumer.RequestResult returnValue = result;
+        result = null;
+        return returnValue;
     }
 
     private ConsumerRecords<K, V>  mergeRecords(final ConsumerRecords<K, V> records1, final ConsumerRecords<K, V> records2) {
         final HashMap<TopicPartition, List<ConsumerRecord<K, V>>> map = new HashMap<>();
         for (final TopicPartition partition : records1.partitions()) {
-            map.put(partition, records1.records(partition));
+            map.put(partition, new ArrayList<ConsumerRecord<K, V>>(records1.records(partition)));
         }
         for (final TopicPartition partition : records2.partitions()) {
             if (!map.containsKey(partition)) {
@@ -1315,7 +1319,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } while (elapsedTime < timeoutMs);
 
             if (result != null) {
-                return (ConsumerRecords<K, V>) result.value;
+                return (ConsumerRecords) pollForResults(1, time.milliseconds()).value;
             }
             return ConsumerRecords.empty();
         } finally {
@@ -1549,9 +1553,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 rebalanceConsumer.sendRequest(timeout,
-                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_SYNC,
-                                              childConsumerMetadata,
-                                              null);
+                        RebalanceKafkaConsumer.ConsumerRequest.COMMIT_SYNC,
+                        childConsumerMetadata,
+                        null);
                 if (!coordinator.commitOffsetsSync(parentConsumerMetadata, timeout.toMillis())) {
                     throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                             "committing offsets " + offsets);
@@ -1640,9 +1644,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         callback,
                         null);
                 coordinator.commitOffsetsAsync(parentConsumerMetadata,
-                                               callback,
-                                               hashCode1,
-                                               hashCode2);
+                        callback,
+                        hashCode1,
+                        hashCode2);
             } else {
                 coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
             }
@@ -1882,14 +1886,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 checkRebalance();
                 rebalanceConsumer.sendRequest(timeout, RebalanceKafkaConsumer.ConsumerRequest.COMMITTED, partition, new DefaultTaskCompletionCallback());
             }
-            final long start = time.milliseconds();
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
                     Collections.singleton(partition), timeout.toMillis());
-            Map<TopicPartition, OffsetAndMetadata> offsets2 = null;
+            OffsetAndMetadata offset2 = null;
             if (!isChildConsumer && useParallelRebalance) {
-                offsets2 = (Map<TopicPartition, OffsetAndMetadata>) pollForResults(remainingTimeAtLeastZero(timeout.toMillis(),
-                                                                                   time.milliseconds() - start),
-                                                                                   time.milliseconds()).value;
+                offset2 = (OffsetAndMetadata) pollForResults(timeout.toMillis(), time.milliseconds()).value;
             }
 
             if (offsets == null) {
@@ -1897,8 +1898,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         "committed offset for partition " + partition + " could be determined");
             }
 
-            if (offsets2 != null && offsets2.get(partition) != null) {
-                return offsets2.get(partition);
+            if (offset2 != null) {
+                return offset2;
             }
             return offsets.get(partition);
         } finally {
@@ -2201,9 +2202,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
                 rebalanceConsumer.sendRequest(timeout,
-                                              RebalanceKafkaConsumer.ConsumerRequest.BEGINNING_OFFSETS,
-                                              partitions,
-                                              new DefaultTaskCompletionCallback());
+                        RebalanceKafkaConsumer.ConsumerRequest.BEGINNING_OFFSETS,
+                        partitions,
+                        new DefaultTaskCompletionCallback());
                 final Map<TopicPartition, Long> offsets1 = fetcher.beginningOffsets(partitions, timeout.toMillis());
                 final Map<TopicPartition, Long> offsets2 = (Map<TopicPartition, Long>) pollForResults(timeout.toMillis(), time.milliseconds()).value;
                 final Map<TopicPartition, Long> result = new HashMap<>();

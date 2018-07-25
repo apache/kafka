@@ -54,7 +54,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private volatile long hashCode2;
     private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
-    private Map<TopicPartition, OffsetRangeToken> localRangeTokens;
+    private Map<TopicPartition, OffsetInterval> localRangeTokens;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeserializer,
@@ -109,7 +109,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
                               Map<TopicPartition, Long> endOffsets) {
         final Set<TopicPartition> newPartitions = new HashSet<>();
-        final HashMap<TopicPartition, OffsetRangeToken> rangeTokens = new HashMap<>();
+        final HashMap<TopicPartition, OffsetInterval> rangeTokens = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : startOffsets.entrySet()) {
             if (entry.getValue().offset() == endOffsets.get(entry.getKey())) {
                 continue;
@@ -121,7 +121,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 newPartitions.add(entry.getKey());
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
             }
-            rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
+            rangeTokens.put(entry.getKey(), offsetInterval);
             offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
         super.assign(assignedPartitions);
@@ -166,12 +166,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
         if (!terminated()) {
-            ConsumerRecords result = super.poll(timeout.toMillis(), true, false);
-            if (localRangeTokens != null) {
-                super.commitAsync(localRangeTokens, null, true);
-                localRangeTokens = null;
-            }
-            return result;
+            return super.poll(timeout.toMillis(), true, false);
         }
         return ConsumerRecords.empty();
     }
@@ -182,6 +177,11 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             if (request == null) {
                 continue;
             }
+
+            //sleep for a little to confirm that last result went through
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException exc) { }
 
             // Cases which have no return value will have their result be marked as a boolean value: true.
             // This is intended as a marker to represent that a particular operation has succeeded or has finished.
