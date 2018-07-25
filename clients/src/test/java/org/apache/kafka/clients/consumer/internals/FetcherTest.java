@@ -64,6 +64,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -307,6 +308,25 @@ public class FetcherTest {
 
         fetcher.clearBufferedDataForUnassignedPartitions(newAssignedTopicPartitions);
         assertFalse(fetcher.hasCompletedFetches());
+    }
+
+    @Test
+    public void testFetcherCloseClosesFetchSessionsInBroker() throws Exception {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        fetcher.sendFetches();
+        consumerClient.poll(time.timer(0));
+        assertEquals(0, consumerClient.pendingRequestCount(node));
+        this.fetcher.close(); // should send request to close the session
+
+        assertEquals(1, consumerClient.pendingRequestCount(node));
+        assertEquals(0, client.inFlightRequestCount());
+        consumerClient.poll(time.timer(0));
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, consumerClient.pendingRequestCount(node));
+        FetchRequest sessionCloseReq = (FetchRequest) client.requests().peek().requestBuilder().build();
+        assertEquals(FetchMetadata.FINAL_EPOCH, sessionCloseReq.metadata().epoch());  // final epoch indicates we want to close the session
     }
 
     @Test

@@ -1538,6 +1538,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             nextInLineRecords.drain();
         decompressionBufferSupplier.close();
         closeFetchSessions();
+        sessionHandlers.clear();
     }
 
 }
