@@ -186,13 +186,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(1000)
 
     //get initial assignment
-    consumer0.poll(0)
+    consumer0.poll(5)
 
     Thread.sleep(3500)
     assertTrue(consumer0.beginningOffsets(Collections.singleton(tp)).get(tp) == 0)
     assertTrue(consumer0.endOffsets(Collections.singleton(tp)).get(tp) == 1000)
 
     assertTrue(consumer0.poll(1000).count() > 0)
+    System.out.println("Committing sync")
     consumer0.commitSync()
     assertTrue(consumer0.committed(tp).offset() == 1000)
 
@@ -205,7 +206,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     Thread.sleep(3500)
 
     consumer0.poll(1000)
-    consumer0.commitSync()
+    consumer0.commitAsync()
+
+    Thread.sleep(1000)
 
     assertTrue(consumer0.committed(tp).offset() == 2000)
   }

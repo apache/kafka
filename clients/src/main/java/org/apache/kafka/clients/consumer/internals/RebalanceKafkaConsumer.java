@@ -80,10 +80,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         coordinator.setNewQueue(queue);
     }
 
-    public Map<TopicPartition, ArrayList<OffsetInterval>> getOffsetRanges() {
-        return offsetRanges;
-    }
-
     public RequestResult getResult() {
         return result;
     }
@@ -273,10 +269,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             this.startOffset = startOffset;
             this.endOffset = endOffset;
         }
-
-        public boolean containsOffset(final long offset) {
-            return offset >= startOffset && offset <= endOffset;
-        }
     }
 
     public static class OffsetInclusion {
@@ -298,25 +290,15 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    public static OffsetInclusion getRanges(final RebalanceKafkaConsumer consumer,
+    public static OffsetInclusion getRanges(final Map<TopicPartition, OffsetAndMetadata> consumedParentMetadata,
                                             final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
         final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = new HashMap<>();
         final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsToCommit.entrySet()) {
-            if (consumer.getOffsetRanges().containsKey(entry.getKey())) {
-                boolean added = false;
-                for (final OffsetInterval interval : (ArrayList<OffsetInterval>) consumer.getOffsetRanges().get(entry.getKey())) {
-                    if (interval.containsOffset(entry.getValue().offset())) {
-                        added = true;
-                        childConsumerMetadata.put(entry.getKey(), entry.getValue());
-                        break;
-                    }
-                }
-                if (!added) {
-                    parentConsumerMetadata.put(entry.getKey(), entry.getValue());
-                }
-            } else {
+            if (consumedParentMetadata.containsKey(entry.getKey()) && consumedParentMetadata.get(entry.getKey()).equals(entry.getValue())) {
                 parentConsumerMetadata.put(entry.getKey(), entry.getValue());
+            } else {
+                childConsumerMetadata.put(entry.getKey(), entry.getValue());
             }
         }
         return new OffsetInclusion(parentConsumerMetadata, childConsumerMetadata);

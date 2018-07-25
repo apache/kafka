@@ -1457,15 +1457,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(Duration timeout) {
-        acquireAndEnsureOpen();
-        try {
-            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), timeout.toMillis())) {
-                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing the current consumed offsets");
-            }
-        } finally {
-            release();
-        }
+        commitSync(subscriptions.allConsumed(), timeout, false);
     }
 
     /**
@@ -1547,7 +1539,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer, offsets);
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(subscriptions.allConsumed(), offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 rebalanceConsumer.sendRequest(timeout,
@@ -1630,7 +1622,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Committing offsets: {}", offsets);
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer, offsets);
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(subscriptions.allConsumed(), offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 final long hashCode1 = parentConsumerMetadata.hashCode();
