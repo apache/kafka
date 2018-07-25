@@ -25,6 +25,7 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
 
     OUTPUT_DIR = "/mnt/logcompaction_tool"
     LOG_PATH = os.path.join(OUTPUT_DIR, "logcompaction_tool_stdout.log")
+    VERIFICATION_STRING = "Data verification is completed"
 
     logs = {
         "tool_logs": {
@@ -47,9 +48,9 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
         self.logger.info("TestLogCleaning tool %d command: %s" % (idx, cmd))
         self.security_config.setup_node(node)
         for line in node.account.ssh_capture(cmd):
-            self.logger.info("Checking line:{}".format(line))
+            self.logger.debug("Checking line:{}".format(line))
 
-            if "Data verification is completed" in line:
+            if line.startswith(LogCompactionTool.VERIFICATION_STRING):
                 self.log_compaction_completed = True
 
     def start_cmd(self, node):
@@ -61,7 +62,7 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
         cmd += " export CLASSPATH;"
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " %s" % self.java_class_name()
-        cmd += " --broker %s --messages 1000000 --sleep 20 --duplicates 10 --percent-deletes 10" % (self.kafka.bootstrap_servers(self.security_protocol))
+        cmd += " --bootstrap-server %s --messages 1000000 --sleep 20 --duplicates 10 --percent-deletes 10" % (self.kafka.bootstrap_servers(self.security_protocol))
 
         cmd += " 2>> %s | tee -a %s &" % (self.logs["tool_logs"]["path"], self.logs["tool_logs"]["path"])
         return cmd

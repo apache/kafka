@@ -20,6 +20,7 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.Files
 import java.time.Duration
 import java.util.{Properties, Random}
 
@@ -55,6 +56,9 @@ import scala.collection.JavaConverters._
  */
 object TestLogCleaning {
 
+  //maximum line size while reading produced/consumed record text file
+  private val ReadAheadLimit = 4906
+
   def main(args: Array[String]) {
     val parser = new OptionParser(false)
     val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
@@ -72,7 +76,7 @@ object TestLogCleaning {
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5)
-    val brokerOpt = parser.accepts("broker", "Url to connect to.")
+    val brokerOpt = parser.accepts("bootstrap-server", "The server(s) to connect to.")
       .withRequiredArg
       .describedAs("url")
       .ofType(classOf[String])
@@ -86,7 +90,7 @@ object TestLogCleaning {
       .describedAs("percent")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
-    val sleepSecsOpt = parser.accepts("sleep", "Time to sleep between production and consumption.")
+    val sleepSecsOpt = parser.accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
       .withRequiredArg
       .describedAs("ms")
       .ofType(classOf[java.lang.Integer])
@@ -117,13 +121,13 @@ object TestLogCleaning {
     val topicCount = options.valueOf(topicsOpt).intValue
     val sleepSecs = options.valueOf(sleepSecsOpt).intValue
 
-    val testId = new Random().nextInt(Int.MaxValue)
+    val testId = new Random().nextLong()
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
     createTopics(brokerUrl, topics.toSeq)
 
-    println("Producing %d messages..to topics %s".format(messages, topics.mkString(",")))
+    println(s"Producing $messages messages..to topics ${topics.mkString(",")}")
     val producedDataFile = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
-    println("Sleeping for %d seconds...".format(sleepSecs))
+    println(s"Sleeping for $sleepSecs seconds...")
     Thread.sleep(sleepSecs * 1000)
     println("Consuming messages...")
     val consumedDataFile = consumeMessages(brokerUrl, topics)
@@ -146,16 +150,17 @@ object TestLogCleaning {
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     val adminClient = admin.AdminClient.create(adminConfig)
 
-    val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
-    val newTopics = topics.map(name => new NewTopic(name, 1, 1).configs(topicConfigs.asJava)).asJava
-    adminClient.createTopics(newTopics).all.get()
+    try {
+      val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
+      val newTopics = topics.map(name => new NewTopic(name, 1, 1).configs(topicConfigs.asJava)).asJava
+      adminClient.createTopics(newTopics).all.get()
 
-    TestUtils.waitUntilTrue(() => {
+      TestUtils.waitUntilTrue(() => {
         val newTopics = adminClient.listTopics.names.get()
         topics.forall(topicName => newTopics.contains(topicName))
-    }, "timed out waiting for topics")
+      }, "timed out waiting for topics")
 
-    adminClient.close()
+    } finally adminClient.close()
   }
 
   def dumpLog(dir: File) {
@@ -169,7 +174,7 @@ object TestLogCleaning {
             null
           else
             readString(entry.value)
-        println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
+        println(s"offset = $entry.offset, key = $key, content = $content")
       }
     }
   }
@@ -183,12 +188,10 @@ object TestLogCleaning {
     val consumed = valuesIterator(consumedReader)
 
     val producedDedupedFile = new File(producedDataFile.getAbsolutePath + ".deduped")
-    val produceWriter : OutputStreamWriter = new OutputStreamWriter(new FileOutputStream(producedDedupedFile), UTF_8)
-    val producedDeduped = new BufferedWriter(produceWriter, 1024 * 1024)
+    val producedDeduped : BufferedWriter = Files.newBufferedWriter(producedDedupedFile.toPath, UTF_8)
 
     val consumedDedupedFile = new File(consumedDataFile.getAbsolutePath + ".deduped")
-    val consumeWriter : OutputStreamWriter = new OutputStreamWriter(new FileOutputStream(consumedDedupedFile), UTF_8)
-    val consumedDeduped = new BufferedWriter(consumeWriter, 1024 * 1024)
+    val consumedDeduped : BufferedWriter = Files.newBufferedWriter(consumedDedupedFile.toPath, UTF_8)
     var total = 0
     var mismatched = 0
     while (produced.hasNext && consumed.hasNext) {
@@ -204,13 +207,20 @@ object TestLogCleaning {
     }
     producedDeduped.close()
     consumedDeduped.close()
-    println("Validated " + total + " values, " + mismatched + " mismatches.")
+    println(s"Validated $total values, $mismatched mismatches.")
     require(!produced.hasNext, "Additional values produced not found in consumer log.")
     require(!consumed.hasNext, "Additional values consumed not found in producer log.")
     require(mismatched == 0, "Non-zero number of row mismatches.")
     // if all the checks worked out we can delete the deduped files
     Utils.delete(producedDedupedFile)
     Utils.delete(consumedDedupedFile)
+  }
+
+  def require(requirement: Boolean, message: => Any) {
+    if (!requirement) {
+      System.err.println(s"Data validation failed : $message")
+      Exit.exit(1)
+    }
   }
 
   def valuesIterator(reader: BufferedReader) = {
@@ -246,7 +256,7 @@ object TestLogCleaning {
   }
 
   def peekLine(reader: BufferedReader) = {
-    reader.mark(4096)
+    reader.mark(ReadAheadLimit)
     val line = reader.readLine
     reader.reset()
     line
@@ -282,28 +292,30 @@ object TestLogCleaning {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
-    val rand = new Random(1)
-    val keyCount = (messages / dups).toInt
-    val producedFile = File.createTempFile("kafka-log-cleaner-produced-", ".txt")
-    println("Logging produce requests to " + producedFile.getAbsolutePath)
-    val produceFileWriter : OutputStreamWriter = new OutputStreamWriter(new FileOutputStream(producedFile), UTF_8)
-    val producedWriter = new BufferedWriter(produceFileWriter, 1024 * 1024)
-    for (i <- 0L until (messages * topics.length)) {
-      val topic = topics((i % topics.length).toInt)
-      val key = rand.nextInt(keyCount)
-      val delete = i % 100 < percentDeletes
-      val msg =
-        if (delete)
-          new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
-        else
-          new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
-      producer.send(msg)
-      producedWriter.write(TestRecord(topic, key, i, delete).toString)
-      producedWriter.newLine()
+    try {
+      val rand = new Random(1)
+      val keyCount = (messages / dups).toInt
+      val producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt")
+      println(s"Logging produce requests to $producedFilePath")
+      val producedWriter : BufferedWriter = Files.newBufferedWriter(producedFilePath, UTF_8)
+      for (i <- 0L until (messages * topics.length)) {
+        val topic = topics((i % topics.length).toInt)
+        val key = rand.nextInt(keyCount)
+        val delete = (i % 100) < percentDeletes
+        val msg =
+          if (delete)
+            new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
+          else
+            new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
+        producer.send(msg)
+        producedWriter.write(TestRecord(topic, key, i, delete).toString)
+        producedWriter.newLine()
+      }
+      producedWriter.close()
+      producedFilePath.toFile
+    } finally {
+      producer.close()
     }
-    producedWriter.close()
-    producer.close()
-    producedFile
   }
 
   def createConsumer(brokerUrl: String): KafkaConsumer[String, String] = {
@@ -319,30 +331,30 @@ object TestLogCleaning {
   def consumeMessages(brokerUrl: String, topics: Array[String]): File = {
     val consumer = createConsumer(brokerUrl)
     consumer.subscribe(topics.seq.asJava)
-    val consumedFile = File.createTempFile("kafka-log-cleaner-consumed-", ".txt")
-    println("Logging consumed messages to " + consumedFile.getAbsolutePath)
+    val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
+    println(s"Logging consumed messages to $consumedFilePath")
+    val consumedWriter: BufferedWriter = Files.newBufferedWriter(consumedFilePath, UTF_8)
 
-    val consumeFileWriter : OutputStreamWriter = new OutputStreamWriter(new FileOutputStream(consumedFile), UTF_8)
-    val consumedWriter = new BufferedWriter(consumeFileWriter)
-
-    var done = false
-    while (!done) {
-      val consumerRecords = consumer.poll(Duration.ofSeconds(20))
-      if (!consumerRecords.isEmpty) {
-        for (record <- consumerRecords.asScala) {
-          val delete = record.value() == null
-          val value = if (delete) -1L else record.value().toLong
-          consumedWriter.write(TestRecord(record.topic(), record.key.toInt, value, delete).toString)
-          consumedWriter.newLine()
+    try {
+      var done = false
+      while (!done) {
+        val consumerRecords = consumer.poll(Duration.ofSeconds(20))
+        if (!consumerRecords.isEmpty) {
+          for (record <- consumerRecords.asScala) {
+            val delete = record.value() == null
+            val value = if (delete) -1L else record.value().toLong
+            consumedWriter.write(TestRecord(record.topic(), record.key.toInt, value, delete).toString)
+            consumedWriter.newLine()
+          }
+        } else {
+          done = true
         }
-      } else {
-        done = true
       }
+      consumedFilePath.toFile
+    } finally {
+      consumedWriter.close()
+      consumer.close()
     }
-
-    consumedWriter.close()
-    consumer.close()
-    consumedFile
   }
 
   def readString(buffer: ByteBuffer): String = {

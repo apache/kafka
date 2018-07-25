@@ -24,10 +24,10 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.log_compaction_tool import LogCompactionTool
 
 class LogCompactionTest(Test):
-    """
-    Tests Log Compaction
-    :return: None
-    """
+
+    # Configure smaller segment size to create more segments for compaction
+    LOG_SEGMENT_BYTES = "1024000"
+
     def __init__(self, test_context):
         super(LogCompactionTest, self).__init__(test_context)
         self.num_zk = 1
@@ -48,7 +48,7 @@ class LogCompactionTest(Test):
             security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol,
             server_prop_overides=[
-                [config_property.LOG_SEGMENT_BYTES, "1073000"],
+                [config_property.LOG_SEGMENT_BYTES, LogCompactionTest.LOG_SEGMENT_BYTES],
             ])
         self.kafka.start()
 
@@ -58,10 +58,7 @@ class LogCompactionTest(Test):
 
     @cluster(num_nodes=4)
     def test_log_compaction(self, security_protocol='PLAINTEXT'):
-        """
-        Tests Log Compaction
-        :return: None
-        """
+
         self.start_kafka(security_protocol, security_protocol)
         self.start_test_log_compaction_tool(security_protocol)
 
