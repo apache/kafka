@@ -169,10 +169,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case CLOSE:
-                    System.out.println("Beginning close...");
                     super.close(currentRequest.timeout);
                     result = new RequestResult<>(true);
-                    System.out.println("Concluding close");
                     break;
                 case PAUSE:
                     super.pause((Collection<TopicPartition>) currentRequest.inputArgument, true);
@@ -199,7 +197,6 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 case POLL:
                     ConsumerRecords<K, V> records = poll(currentRequest.timeout);
                     result = new RequestResult<>(records);
-                    System.out.println("Polling has concluded");
                     break;
                 default:
                     continue;
