@@ -35,6 +35,7 @@ import java.util.concurrent.Future;
 import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.MAX_BLOCK_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
@@ -64,6 +65,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String saslKerberosServiceName;
     private String clientJaasConfPath;
     private String kerb5ConfPath;
+    private Integer timeout;
 
     private int retries = Integer.MAX_VALUE;
     private int requiredNumAcks = 1;
@@ -212,6 +214,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         return kerb5ConfPath;
     }
 
+    public int getTimeout() {
+        return timeout;
+    }
+
+    public void setTimeout(int timeout) {
+        this.timeout = timeout;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -251,6 +261,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 System.setProperty("java.security.krb5.conf", kerb5ConfPath);
             }
         }
+        if (timeout != null) {
+            props.put(MAX_BLOCK_MS_CONFIG, timeout);
+        }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
@@ -271,17 +284,13 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
         if (syncSend) {
             try {
-                getResponse(response);
+                response.get();
             } catch (InterruptedException | ExecutionException ex) {
                 LogLog.debug("Exception while getting response", ex);
                 if (!ignoreExceptions)
                     throw new RuntimeException(ex);
             }
         }
-    }
-
-    void getResponse(Future<RecordMetadata> response) throws InterruptedException, ExecutionException {
-        response.get();
     }
 
     private String subAppend(LoggingEvent event) {

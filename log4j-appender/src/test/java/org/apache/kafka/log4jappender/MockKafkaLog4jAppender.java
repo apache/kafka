@@ -19,19 +19,15 @@ package org.apache.kafka.log4jappender;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.log4j.spi.LoggingEvent;
 
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
     private MockProducer<byte[], byte[]> mockProducer =
-            new MockProducer<>(true, new MockSerializer(), new MockSerializer());
-    private boolean failSync = false;
+            new MockProducer<>(false, new MockSerializer(), new MockSerializer());
 
     @Override
     protected Producer<byte[], byte[]> getKafkaProducer(Properties props) {
@@ -44,17 +40,6 @@ public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
             activateOptions();
         }
         super.append(event);
-    }
-
-    @Override
-    void getResponse(Future<RecordMetadata> response) throws InterruptedException, ExecutionException {
-        if (failSync)
-            throw new InterruptedException("Failed");
-        super.getResponse(response);
-    }
-
-    public void setFailSync(boolean failSync) {
-        this.failSync = failSync;
     }
 
     List<ProducerRecord<byte[], byte[]>> getHistory() {
