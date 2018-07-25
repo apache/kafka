@@ -32,11 +32,13 @@ import java.util.Set;
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
-
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
+    private final int numQueues;
+
     private long streamTime;
     private int totalBuffered;
     private boolean allBuffered;
+
 
     public static class RecordInfo {
         RecordQueue queue;
@@ -60,6 +62,7 @@ public class PartitionGroup {
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.NOT_KNOWN;
+        numQueues = this.partitionQueues.keySet().size();
     }
 
     /**
@@ -87,13 +90,9 @@ public class PartitionGroup {
                     allBuffered = false;
                 }
 
-                // Since this was previously a queue with min timestamp,
-                // streamTime could only advance if this queue's time did.
-                if (queue.timestamp() > streamTime) {
-                    computeStreamTime();
-                }
+                // always update the stream time to the record's timestamp yet to be processed if it is larger
+                streamTime = record.timestamp > streamTime ? record.timestamp : streamTime;
             }
-
         }
 
         return record;
@@ -110,22 +109,22 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         final int oldSize = recordQueue.size();
-        final long oldTimestamp = recordQueue.timestamp();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
             nonEmptyQueuesByTime.offer(recordQueue);
 
-            // if all partitions now are non-empty, set the flag
-            if (nonEmptyQueuesByTime.size() == partitionQueues.keySet().size()) {
+            // if all partitions now are non-empty, set the flag and compute the stream time
+            if (nonEmptyQueuesByTime.size() == numQueues) {
                 allBuffered = true;
-            }
-        }
 
-        // Adding to this queue could only advance streamTime if it was previously the queue with min timestamp (= streamTime)
-        if (oldTimestamp <= streamTime && recordQueue.timestamp() > streamTime) {
-            computeStreamTime();
+                // since we may enforce processing even if some queue is empty, it is possible that after some
+                // raw data has been added to that queue the new partition's timestamp is even smaller than the current
+                // stream time, in this case we should not update.
+                final long newTimestamp = nonEmptyQueuesByTime.peek().timestamp();
+                streamTime = newTimestamp > streamTime ? newTimestamp : streamTime;
+            }
         }
 
         totalBuffered += newSize - oldSize;
@@ -137,28 +136,12 @@ public class PartitionGroup {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
-    public Map<TopicPartition, RecordQueue> partitionQueues() {
-        return partitionQueues;
-    }
-
     /**
      * Return the timestamp of this partition group as the smallest
      * partition timestamp among all its partitions
      */
     public long timestamp() {
         return streamTime;
-    }
-
-    private void computeStreamTime() {
-        // we should always return the smallest timestamp of all partitions
-        // to avoid group partition time goes backward
-        long timestamp = Long.MAX_VALUE;
-        for (final RecordQueue queue : partitionQueues.values()) {
-            if (queue.timestamp() < timestamp) {
-                timestamp = queue.timestamp();
-            }
-        }
-        this.streamTime = timestamp;
     }
 
     /**

@@ -310,97 +310,6 @@ public class StreamTaskTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testMaybePunctuateStreamTime() {
-        task = createStatelessTask(createConfig(false));
-        task.initializeStateStores();
-        task.initializeTopology();
-
-        task.addRecords(partition1, Arrays.asList(
-            getConsumerRecord(partition1, 0),
-            getConsumerRecord(partition1, 20),
-            getConsumerRecord(partition1, 32),
-            getConsumerRecord(partition1, 40),
-            getConsumerRecord(partition1, 60)
-        ));
-
-        task.addRecords(partition2, Arrays.asList(
-            getConsumerRecord(partition2, 25),
-            getConsumerRecord(partition2, 35),
-            getConsumerRecord(partition2, 45),
-            getConsumerRecord(partition2, 61)
-        ));
-
-        assertTrue(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(8, task.numBuffered());
-        assertEquals(1, source1.numReceived);
-        assertEquals(0, source2.numReceived);
-
-        assertTrue(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(7, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(0, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(6, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(1, source2.numReceived);
-
-        assertTrue(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(5, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(1, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(4, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(2, source2.numReceived);
-
-        assertTrue(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(3, task.numBuffered());
-        assertEquals(4, source1.numReceived);
-        assertEquals(2, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(2, task.numBuffered());
-        assertEquals(4, source1.numReceived);
-        assertEquals(3, source2.numReceived);
-
-        assertTrue(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(1, task.numBuffered());
-        assertEquals(5, source1.numReceived);
-        assertEquals(3, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(0, task.numBuffered());
-        assertEquals(5, source1.numReceived);
-        assertEquals(4, source2.numReceived);
-
-        assertFalse(task.process());
-        assertFalse(task.maybePunctuateStreamTime());
-
-        processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 0L, 20L, 32L, 40L, 60L);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
@@ -420,6 +329,7 @@ public class StreamTaskTest {
             getConsumerRecord(partition2, 161)
         ));
 
+        // st: 20
         assertTrue(task.maybePunctuateStreamTime()); // punctuate at 20
 
         assertTrue(task.process());
@@ -427,6 +337,7 @@ public class StreamTaskTest {
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
+        // st: 20
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
@@ -434,9 +345,7 @@ public class StreamTaskTest {
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 142
-
-        // only one punctuation after 100ms gap
+        // st: 25
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
@@ -444,40 +353,49 @@ public class StreamTaskTest {
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertFalse(task.maybePunctuateStreamTime());
+        // st: 142
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 142
 
         assertTrue(task.process());
         assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 155
+        // st: 145
+        // only one punctuation after 100ms gap
+        assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(3, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
-        assertFalse(task.maybePunctuateStreamTime());
+        // st: 155
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 155
 
         assertTrue(task.process());
         assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 160, still aligned on the initial punctuation
+        // st: 159
+        assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(1, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
 
-        assertFalse(task.maybePunctuateStreamTime());
+        // st: 160, aligned at 0
+        assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(0, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(4, source2.numReceived);
+
+        // st: 161
+        assertFalse(task.maybePunctuateStreamTime());
 
         assertFalse(task.process());
         assertFalse(task.maybePunctuateStreamTime());
