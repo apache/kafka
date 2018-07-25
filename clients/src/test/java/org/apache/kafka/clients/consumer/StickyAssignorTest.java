@@ -49,7 +49,7 @@ public class StickyAssignorTest {
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, Subscription> subscriptions =
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList()));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
@@ -369,7 +369,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 20; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= i; j++)
                 topics.add(getTopicName(j, 20));
             subscriptions.put(getConsumerName(i, 20), new Subscription(topics));
@@ -419,7 +419,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 9; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= partitionsPerTopic.size(); j++)
                 topics.add(getTopicName(j, 15));
             subscriptions.put(getConsumerName(i, 9), new Subscription(topics));
@@ -453,7 +453,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < consumerCount; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 0; j < rand.nextInt(20); j++)
                 topics.add(getTopicName(rand.nextInt(topicCount), topicCount));
             subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics));
@@ -486,7 +486,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < 3; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = i; j <= 3 * i - 2; j++)
                 topics.add(getTopicName(j, 5));
             subscriptions.put(getConsumerName(i, 3), new Subscription(topics));
@@ -748,7 +748,7 @@ public class StickyAssignorTest {
         subscriptions.remove(consumer3);
         assignment = assignor.assign(partitionsPerTopic, subscriptions, 1);
         List<TopicPartition> r2partitions2 = assignment.get(consumer2);
-        assertTrue(r2partitions2.size() == 6);
+        assertEquals(6, r2partitions2.size());
         assertEquals(2, assignor.generation());
         assertTrue(r2partitions2.containsAll(r1partitions2));
         verifyValidityAndBalance(subscriptions, assignment);
@@ -770,9 +770,9 @@ public class StickyAssignorTest {
         List<TopicPartition> r3partitions3 = assignment.get(consumer3);
         assertTrue(r3partitions1.size() == 2 && r3partitions2.size() == 2 && r3partitions3.size() == 2);
         assertEquals(3, assignor.generation());
-        assertTrue(r3partitions1.equals(r1partitions1));
-        assertTrue(r3partitions2.equals(r1partitions2));
-        assertTrue(r3partitions3.equals(r1partitions3));
+        assertEquals(r1partitions1, r3partitions1);
+        assertEquals(r1partitions2, r3partitions2);
+        assertEquals(r1partitions3, r3partitions3);
         verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
@@ -901,7 +901,7 @@ public class StickyAssignorTest {
         assertTrue(assignor.isSticky());
     }
 
-    static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
+    private static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
         Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
         List<Struct> topicAssignments = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupDataByTopic(partitions).entrySet()) {

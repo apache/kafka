@@ -583,7 +583,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // send follower's sync group with an empty assignment
         SyncGroupRequest.Builder requestBuilder =
                 new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId,
-                        Collections.<String, ByteBuffer>emptyMap());
+                        Collections.emptyMap());
         log.debug("Sending follower SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
         return sendSyncGroupRequest(requestBuilder);
     }

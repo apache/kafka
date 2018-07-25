@@ -59,7 +59,9 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                                                     Map<String, Subscription> subscriptions,
                                                     int generation) {
         return assign(partitionsPerTopic, subscriptions);
-    }    @Override
+    }
+
+    @Override
     public Subscription subscription(Set<String> topics) {
         return new Subscription(new ArrayList<>(topics));
     }

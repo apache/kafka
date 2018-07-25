@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -241,12 +240,12 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // initialize partition2AllPotentialConsumers and consumer2AllPotentialPartitions in the following two for loops
         for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
             for (int i = 0; i < entry.getValue(); ++i)
-                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<String>());
+                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<>());
         }
 
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
-            consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
+            consumer2AllPotentialPartitions.put(consumer, new ArrayList<>());
             entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
@@ -257,7 +256,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
-                currentAssignment.put(consumer, new ArrayList<TopicPartition>());
+                currentAssignment.put(consumer, new ArrayList<>());
         }
 
         // a mapping of partition to current consumer
@@ -374,7 +373,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             if (currentAssignment.containsKey(consumer))
                 currentAssignment.get(consumer).add(partition);
             else {
-                List<TopicPartition> partitions = new ArrayList<>(Arrays.asList(partition));
+                List<TopicPartition> partitions = new ArrayList<>(Collections.singletonList(partition));
                 currentAssignment.put(consumer, partitions);
             }
         }
@@ -519,7 +518,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             TreeSet<String> sortedConsumers = new TreeSet<>(new SubscriptionComparator(assignments));
             sortedConsumers.addAll(assignments.keySet());
 
-            List<TopicPartition> prevAssignedPartitions = new ArrayList(prevAssignment.keySet());
+            List<TopicPartition> prevAssignedPartitions = new ArrayList<>(prevAssignment.keySet());
             while (!sortedConsumers.isEmpty()) {
                 String consumer = sortedConsumers.pollLast();
                 List<TopicPartition> remainingPartitions = assignments.get(consumer);
@@ -564,17 +563,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (!hasIdenticalListElements(partition2AllPotentialConsumers.values()))
             return false;
 
-        if (!hasIdenticalListElements(consumer2AllPotentialPartitions.values()))
-            return false;
-
-        return true;
+        return hasIdenticalListElements(consumer2AllPotentialPartitions.values());
     }
 
     /**
-     * @return the consumer to which the given partition is assigned. The assignment should improve the overall balance
-     * of the partition assignments to consumers.
+     * The assignment should improve the overall balance of the partition assignments to consumers.
      */
-    private String assignPartition(TopicPartition partition,
+    private void assignPartition(TopicPartition partition,
                                    TreeSet<String> sortedCurrentSubscriptions,
                                    Map<String, List<TopicPartition>> currentAssignment,
                                    Map<String, List<TopicPartition>> consumer2AllPotentialPartitions,
@@ -585,10 +580,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 currentAssignment.get(consumer).add(partition);
                 currentPartitionConsumer.put(partition, consumer);
                 sortedCurrentSubscriptions.add(consumer);
-                return consumer;
+                break;
             }
         }
-        return null;
     }
 
     private boolean canParticipateInReassignment(TopicPartition partition,
@@ -632,7 +626,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                          Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
                          Map<TopicPartition, String> currentPartitionConsumer) {
         boolean initializing = currentAssignment.get(sortedCurrentSubscriptions.last()).isEmpty();
-        boolean reassignmentPerformed = false;
+        boolean reassignmentPerformed; // starts with a 'false' default value
 
         // assign all unassigned partitions
         for (TopicPartition partition: unassignedPartitions) {
@@ -817,7 +811,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 struct = STICKY_ASSIGNOR_USER_DATA_V0.read(copy);
             } catch (Exception e2) {
                 // ignore the consumer's previous assignment if it cannot be parsed
-                return new ConsumerUserData(Arrays.asList(), -2);
+                return new ConsumerUserData(Collections.emptyList(), -2);
             }
         }
 
@@ -930,11 +924,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             String topic = partition.topic();
             if (!partitionMovementsByTopic.containsKey(topic))
-                partitionMovementsByTopic.put(topic, new HashMap<ConsumerPair, Set<TopicPartition>>());
+                partitionMovementsByTopic.put(topic, new HashMap<>());
 
             Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
             if (!partitionMovementsForThisTopic.containsKey(pair))
-                partitionMovementsForThisTopic.put(pair, new HashSet<TopicPartition>());
+                partitionMovementsForThisTopic.put(pair, new HashSet<>());
 
             partitionMovementsForThisTopic.get(pair).add(partition);
         }
