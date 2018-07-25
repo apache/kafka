@@ -168,7 +168,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       consumer0.poll(0)
       assertEquals(2, listener.callsToAssigned)
       assertEquals(2, listener.callsToRevoked)
-    }*/
+    }
 
   @Test
   def testSecondaryThreadIsAliveWithNewRebalanceMode() {
