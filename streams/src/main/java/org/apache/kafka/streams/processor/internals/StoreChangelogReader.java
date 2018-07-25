@@ -193,18 +193,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
                 if (task.isEosEnabled()) {
                     log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
-                            "Reinitializing the task.", task.id, restorer.storeName(), restorer.partition());
+                            "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), restorer.partition());
                     task.reinitializeStateStoresForPartitions(Collections.singleton(restorer.partition()));
-                    restoreConsumer.seekToBeginning(Collections.singleton(restorer.partition()));
-
                 } else {
                     log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), restorer.partition());
-
-                    restoreConsumer.seekToBeginning(Collections.singletonList(restorer.partition()));
-                    needsPositionUpdate.add(restorer);
                 }
 
-
+                restoreConsumer.seekToBeginning(Collections.singletonList(restorer.partition()));
+                needsPositionUpdate.add(restorer);
             }
         }
 

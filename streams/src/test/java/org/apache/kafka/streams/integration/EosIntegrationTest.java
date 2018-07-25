@@ -636,8 +636,6 @@ public class EosIntegrationTest {
                             }
                             state.put(key, sum);
                             state.flush();
-                            //context.forward(key, sum);
-                            //return null;
                         }
 
 
