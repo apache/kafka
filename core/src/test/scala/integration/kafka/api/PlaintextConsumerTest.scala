@@ -39,136 +39,136 @@ import kafka.server.KafkaServer
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
 
-  @Test
-  def testHeaders() {
-    val numRecords = 1
-    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
+    @Test
+    def testHeaders() {
+      val numRecords = 1
+      val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
-    record.headers().add("headerKey", "headerValue".getBytes)
+      record.headers().add("headerKey", "headerValue".getBytes)
 
-    this.producers.head.send(record)
+      this.producers.head.send(record)
 
-    assertEquals(0, this.consumers.head.assignment.size)
-    this.consumers.head.assign(List(tp).asJava)
-    assertEquals(1, this.consumers.head.assignment.size)
+      assertEquals(0, this.consumers.head.assignment.size)
+      this.consumers.head.assign(List(tp).asJava)
+      assertEquals(1, this.consumers.head.assignment.size)
 
-    this.consumers.head.seek(tp, 0)
-    val records = consumeRecords(consumer = this.consumers.head, numRecords = numRecords)
+      this.consumers.head.seek(tp, 0)
+      val records = consumeRecords(consumer = this.consumers.head, numRecords = numRecords)
 
-    assertEquals(numRecords, records.size)
+      assertEquals(numRecords, records.size)
 
-    for (i <- 0 until numRecords) {
-      val record = records(i)
-      val header = record.headers().lastHeader("headerKey")
-      assertEquals("headerValue", if (header == null) null else new String(header.value()))
-    }
-  }
-
-  @Test
-  def testHeadersExtendedSerializerDeserializer() {
-    val numRecords = 1
-    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
-
-    val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
-
-      var serializer = new ByteArraySerializer()
-
-      override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        headers.add("content-type", "application/octet-stream".getBytes)
-        serializer.serialize(topic, data)
-      }
-
-      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-
-      override def close(): Unit = serializer.close()
-
-      override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
-        fail("method should not be invoked")
-        null
+      for (i <- 0 until numRecords) {
+        val record = records(i)
+        val header = record.headers().lastHeader("headerKey")
+        assertEquals("headerValue", if (header == null) null else new String(header.value()))
       }
     }
 
+    @Test
+    def testHeadersExtendedSerializerDeserializer() {
+      val numRecords = 1
+      val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
-    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] {
+      val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
 
-      var deserializer = new ByteArrayDeserializer()
+        var serializer = new ByteArraySerializer()
 
-      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        val header = headers.lastHeader("content-type")
-        assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
-        deserializer.deserialize(topic, data)
+        override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+          headers.add("content-type", "application/octet-stream".getBytes)
+          serializer.serialize(topic, data)
+        }
+
+        override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+
+        override def close(): Unit = serializer.close()
+
+        override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
+          fail("method should not be invoked")
+          null
+        }
       }
 
-      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+
+      val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] {
+
+        var deserializer = new ByteArrayDeserializer()
+
+        override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+          val header = headers.lastHeader("content-type")
+          assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
+          deserializer.deserialize(topic, data)
+        }
+
+        override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
 
 
-      override def close(): Unit = deserializer.close()
+        override def close(): Unit = deserializer.close()
 
-      override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
-        fail("method should not be invoked")
-        null
+        override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
+          fail("method should not be invoked")
+          null
+        }
+
       }
 
+      val producer0 = new KafkaProducer(this.producerConfig, new ByteArraySerializer(), extendedSerializer)
+      producers += producer0
+      producer0.send(record)
+
+      val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), extendedDeserializer)
+      consumers += consumer0
+
+      assertEquals(0, consumer0.assignment.size)
+      consumer0.assign(List(tp).asJava)
+      assertEquals(1, consumer0.assignment.size)
+
+      consumer0.seek(tp, 0)
+      val records = consumeRecords(consumer = consumer0, numRecords = numRecords)
+
+      assertEquals(numRecords, records.size)
     }
 
-    val producer0 = new KafkaProducer(this.producerConfig, new ByteArraySerializer(), extendedSerializer)
-    producers += producer0
-    producer0.send(record)
+    @Test
+    def testMaxPollRecords() {
+      val maxPollRecords = 2
+      val numRecords = 10000
 
-    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), extendedDeserializer)
-    consumers += consumer0
+      sendRecords(numRecords)
 
-    assertEquals(0, consumer0.assignment.size)
-    consumer0.assign(List(tp).asJava)
-    assertEquals(1, consumer0.assignment.size)
+      this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
+      val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+      consumers += consumer0
 
-    consumer0.seek(tp, 0)
-    val records = consumeRecords(consumer = consumer0, numRecords = numRecords)
+      consumer0.assign(List(tp).asJava)
 
-    assertEquals(numRecords, records.size)
-  }
+      consumeAndVerifyRecords(consumer0, numRecords = numRecords, startingOffset = 0,
+        maxPollRecords = maxPollRecords)
+    }
 
-  @Test
-  def testMaxPollRecords() {
-    val maxPollRecords = 2
-    val numRecords = 10000
+    @Test
+    def testMaxPollIntervalMs() {
+      this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+      this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+      this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
 
-    sendRecords(numRecords)
+      val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+      consumers += consumer0
 
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumers += consumer0
+      val listener = new TestConsumerReassignmentListener()
+      consumer0.subscribe(List(topic).asJava, listener)
 
-    consumer0.assign(List(tp).asJava)
+      // poll once to get the initial assignment
+      consumer0.poll(0)
+      assertEquals(1, listener.callsToAssigned)
+      assertEquals(1, listener.callsToRevoked)
 
-    consumeAndVerifyRecords(consumer0, numRecords = numRecords, startingOffset = 0,
-      maxPollRecords = maxPollRecords)
-  }
+      Thread.sleep(3500)
 
-  @Test
-  def testMaxPollIntervalMs() {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
-
-    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumers += consumer0
-
-    val listener = new TestConsumerReassignmentListener()
-    consumer0.subscribe(List(topic).asJava, listener)
-
-    // poll once to get the initial assignment
-    consumer0.poll(0)
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
-
-    Thread.sleep(3500)
-
-    // we should fall out of the group and need to rebalance
-    consumer0.poll(0)
-    assertEquals(2, listener.callsToAssigned)
-    assertEquals(2, listener.callsToRevoked)
-  }
+      // we should fall out of the group and need to rebalance
+      consumer0.poll(0)
+      assertEquals(2, listener.callsToAssigned)
+      assertEquals(2, listener.callsToRevoked)
+    }*/
 
   @Test
   def testSecondaryThreadIsAliveWithNewRebalanceMode() {
@@ -181,7 +181,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumers += consumer0
     //val partition = new TopicPartition(topic, 0)
 
-    val listener = new TestConsumerReassignmentListener()
     consumer0.subscribe(Collections.singleton(topic))
     sendRecords(1000)
 
@@ -213,6 +212,47 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertTrue(consumer0.committed(tp).offset() == 2000)
   }
+
+  @Test
+  def testConsumerAPIWithRebalanceModeEnabled() {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_PARALLEL_REBALANCE_CONFIG, true.toString)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+
+    consumer0.subscribe(Collections.singleton(topic))
+    sendRecords(1000)
+
+    consumer0.poll(0) // initial assignment
+
+    Thread.sleep(3500)
+
+    consumer0.pause(Collections.singleton(tp))
+    assertTrue(consumer0.poll(100).count() == 0)
+
+    //Thread.sleep(100)
+
+    consumer0.resume(Collections.singleton(tp))
+    assertTrue(consumer0.poll(100).count() > 0)
+
+    sendRecords(10000)
+    val time = System.currentTimeMillis();
+
+    val x = new Thread(new Runnable() {
+      override def run(){
+        consumer0.poll(1000)
+        System.out.println("Has exited poll?")
+        val currentTime = System.currentTimeMillis()
+        assertTrue(currentTime - time < 1000)
+      }
+    })
+    x.start()
+    consumer0.wakeup()
+    x.interrupt()
+  }
+
 
   @Test
   def testMaxPollIntervalMsDelayInRevocation() {

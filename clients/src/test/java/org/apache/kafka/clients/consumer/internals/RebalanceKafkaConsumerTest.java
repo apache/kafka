@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 import java.time.Duration;
@@ -91,26 +92,46 @@ public class RebalanceKafkaConsumerTest {
     public void testConsumerPoll() {
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
+        final ArrayList<RebalanceKafkaConsumer.RequestResult> results = new ArrayList<>();
         consumerThread.start();
 
-        consumer.sendRequest(Duration.ofMillis(1000),
-                             RebalanceKafkaConsumer.ConsumerRequest.POLL,
-                null,
-                             new MockTaskCompletionCallback());
-        waitForRequestResult();
-        assertTrue(((ConsumerRecords) requestResult.value).count() == 0);
-        requestResult = null;
+        final TaskCompletionCallback callback = new TaskCompletionCallback() {
+            @Override
+            public void onTaskComplete(RebalanceKafkaConsumer.RequestResult result) {
+                results.add(result);
+            }
+        };
 
+        consumer.sendRequest(new RequestInformation(Duration.ofMillis(1000),
+                                                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                                                    null,
+                                                    callback));
+        System.out.println("Results request has been sent");
+        waitForPollResult(results);
+        assertTrue(((ConsumerRecords) results.get(0).value).count() == 0);
+
+        System.out.println("close request has being sent");
         consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
         waitForRequestResult();
         assertFalse(consumerThread.isAlive());
         requestResult = null;
     }
 
+    private void waitForPollResult(ArrayList<RebalanceKafkaConsumer.RequestResult> results) {
+        while (results.size() == 0) {
+            System.out.println("Iterating ...");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException exc) { }
+        }
+        System.out.println("Finishing with results");
+    }
+
     private void waitForRequestResult() {
         while (requestResult == null) {
+            System.out.println("Starting our wait for requestResult");
             try {
-                Thread.sleep(10);
+                Thread.sleep(1000);
             } catch (InterruptedException exc) { }
         }
     }

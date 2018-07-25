@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.RebalanceKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.RequestInformation;
 import org.apache.kafka.clients.consumer.internals.TaskCompletionCallback;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -1206,10 +1207,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         final long elapsedMs = time.milliseconds() - now;
 
         if (consumerThread != null && consumerThread.isAlive()) {
-            rebalanceConsumer.sendRequest(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
-                    RebalanceKafkaConsumer.ConsumerRequest.POLL,
-                    null,
-                    new DefaultTaskCompletionCallback());
+            rebalanceConsumer.sendRequest(new RequestInformation(Duration.ofMillis(remainingTimeAtLeastZero(timeoutMs, elapsedMs)),
+                                                                 RebalanceKafkaConsumer.ConsumerRequest.POLL,
+                                                                 null,
+                                                                 new DefaultTaskCompletionCallback()));
         }
     }
 
@@ -1542,10 +1543,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(subscriptions.allConsumed(), offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
-                rebalanceConsumer.sendRequest(timeout,
-                        RebalanceKafkaConsumer.ConsumerRequest.COMMIT_SYNC,
-                        childConsumerMetadata,
-                        null);
+                final RequestInformation requestInformation =
+                        new RequestInformation(timeout,
+                                               RebalanceKafkaConsumer.ConsumerRequest.COMMIT_SYNC,
+                                               childConsumerMetadata,
+                                               null);
+                rebalanceConsumer.sendRequest(requestInformation);
                 if (!coordinator.commitOffsetsSync(parentConsumerMetadata, timeout.toMillis())) {
                     throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                             "committing offsets " + offsets);
@@ -1628,11 +1631,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final long hashCode1 = parentConsumerMetadata.hashCode();
                 final long hashCode2 = childConsumerMetadata.hashCode();
 
-                rebalanceConsumer.setOptionalInputArgument(childConsumerMetadata, hashCode1, hashCode2);
-                rebalanceConsumer.sendRequest(null,
-                        RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
-                        callback,
-                        null);
+                rebalanceConsumer.sendRequest(new RequestInformation(null,
+                                              RebalanceKafkaConsumer.ConsumerRequest.COMMIT_ASYNC,
+                                              callback,
+                                              null,
+                                              childConsumerMetadata,
+                                              hashCode1,
+                                              hashCode2));
                 coordinator.commitOffsetsAsync(parentConsumerMetadata,
                         callback,
                         hashCode1,
@@ -1874,7 +1879,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                rebalanceConsumer.sendRequest(timeout, RebalanceKafkaConsumer.ConsumerRequest.COMMITTED, partition, new DefaultTaskCompletionCallback());
+                rebalanceConsumer.sendRequest(new RequestInformation(timeout,
+                                                                     RebalanceKafkaConsumer.ConsumerRequest.COMMITTED,
+                                                                     partition,
+                                                                     new DefaultTaskCompletionCallback()));
             }
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
                     Collections.singleton(partition), timeout.toMillis());
@@ -2027,7 +2035,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Pausing partitions {}", partitions);
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.PAUSE, partitions, null);
+                rebalanceConsumer.sendRequest(new RequestInformation(null,
+                                                                     RebalanceKafkaConsumer.ConsumerRequest.PAUSE,
+                                                                     partitions,
+                                                                     null));
             }
             for (TopicPartition partition: partitions) {
                 subscriptions.pause(partition);
@@ -2055,7 +2066,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Resuming partitions {}", partitions);
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.RESUME, partitions, null);
+                rebalanceConsumer.sendRequest(new RequestInformation(null,
+                                                                     RebalanceKafkaConsumer.ConsumerRequest.RESUME,
+                                                                     partitions,
+                                                                     null));
             }
             for (TopicPartition partition: partitions) {
                 subscriptions.resume(partition);
@@ -2191,10 +2205,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                rebalanceConsumer.sendRequest(timeout,
-                        RebalanceKafkaConsumer.ConsumerRequest.BEGINNING_OFFSETS,
-                        partitions,
-                        new DefaultTaskCompletionCallback());
+                rebalanceConsumer.sendRequest(new RequestInformation(timeout,
+                                                                     RebalanceKafkaConsumer.ConsumerRequest.BEGINNING_OFFSETS,
+                                                                     partitions,
+                                                                     new DefaultTaskCompletionCallback()));
                 final Map<TopicPartition, Long> offsets1 = fetcher.beginningOffsets(partitions, timeout.toMillis());
                 final Map<TopicPartition, Long> offsets2 = (Map<TopicPartition, Long>) pollForResults(timeout.toMillis(), time.milliseconds()).value;
                 final Map<TopicPartition, Long> result = new HashMap<>();
@@ -2271,7 +2285,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
 
-                rebalanceConsumer.sendRequest(timeout, RebalanceKafkaConsumer.ConsumerRequest.END_OFFSETS, partitions, new DefaultTaskCompletionCallback());
+                rebalanceConsumer.sendRequest(new RequestInformation(timeout,
+                                                                     RebalanceKafkaConsumer.ConsumerRequest.END_OFFSETS,
+                                                                     partitions,
+                                                                     new DefaultTaskCompletionCallback()));
                 final Map<TopicPartition, Long> offsets1 = fetcher.endOffsets(partitions, timeout.toMillis());
                 final Map<TopicPartition, Long> offsets2 = (Map<TopicPartition, Long>) pollForResults(timeout.toMillis(), time.milliseconds()).value;
                 final Map<TopicPartition, Long> result = new HashMap<>();
@@ -2379,7 +2396,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     protected void wakeup(boolean isChildConsumer) {
         if (!isChildConsumer && useParallelRebalance) {
             checkRebalance();
-            rebalanceConsumer.sendRequest(null, RebalanceKafkaConsumer.ConsumerRequest.WAKE_UP, null, null);
+            rebalanceConsumer.sendRequest(new RequestInformation(null,
+                                                                 RebalanceKafkaConsumer.ConsumerRequest.WAKE_UP,
+                                                                 null,
+                                                                 null));
         }
         this.client.wakeup();
     }

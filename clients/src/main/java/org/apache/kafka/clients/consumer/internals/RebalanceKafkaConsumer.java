@@ -23,13 +23,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
-import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,14 +45,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     // these offset ranges needs to be checkpointed somewhere, right now, this is not tenable
     private final Map<TopicPartition, ArrayList<OffsetInterval>> offsetRanges;
     private final Set<TopicPartition> assignedPartitions;
-    private volatile ConsumerRequest request;
+    private final ArrayBlockingQueue<RequestInformation> pendingRequests;
+    private RequestInformation currentRequest;
     private RequestResult result;
-    private volatile Duration waitTime;
-    private volatile Object inputArgument;
-    private volatile Map<TopicPartition, OffsetAndMetadata> offsets;
-    private volatile long hashCode1;
-    private volatile long hashCode2;
-    private volatile TaskCompletionCallback callback;
     private final AtomicBoolean shouldClose;
     private Map<TopicPartition, OffsetInterval> localRangeTokens;
 
@@ -65,41 +60,19 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.offsetRanges = new HashMap<>();
         this.assignedPartitions = new HashSet<>();
         addNewOffsets(startOffsets, endOffsets);
-        this.request = null;
+        this.currentRequest = null;
         this.result = null;
-        this.waitTime = null;
-        this.inputArgument = null;
-        this.offsets = null;
-        this.hashCode1 = 0;
-        this.hashCode2 = 0;
-        this.callback = null;
         this.shouldClose = new AtomicBoolean(false);
+        this.pendingRequests = new ArrayBlockingQueue<>(10);
     }
 
     public void setNewQueue(PriorityBlockingQueue<ConsumerCoordinator.OffsetCommitCompletion> queue) {
         coordinator.setNewQueue(queue);
     }
 
-    public RequestResult getResult() {
-        return result;
-    }
-
-    public void sendRequest(Duration waitTime,
-                            ConsumerRequest request,
-                            Object inputArgument,
-                            TaskCompletionCallback callback) {
-        this.request = request;
-        this.waitTime = waitTime;
-        this.inputArgument = inputArgument;
-        this.callback = callback;
-    }
-
-    public void setOptionalInputArgument(Map<TopicPartition, OffsetAndMetadata> metadata,
-                                         final long hashCode1,
-                                         final long hashCode2) {
-        this.offsets = metadata;
-        this.hashCode1 = hashCode1;
-        this.hashCode2 = hashCode2;
+    public void sendRequest(RequestInformation requestInformation) {
+        pendingRequests.add(requestInformation);
+        System.out.println("request information has been added with pendingRequests size: " + pendingRequests.size());
     }
 
     public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
@@ -173,70 +146,73 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     @Override
     public void run() {
         while (!shouldClose.get()) {
-            if (request == null) {
+            if (currentRequest == null) {
+                currentRequest = pendingRequests.poll();
                 continue;
             }
 
-            //sleep for a little to confirm that last result went through
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException exc) { }
-
             // Cases which have no return value will have their result be marked as a boolean value: true.
             // This is intended as a marker to represent that a particular operation has succeeded or has finished.
-            switch (request) {
+            switch (currentRequest.request) {
                 case RESUME:
-                    super.resume((Collection<TopicPartition>) inputArgument, true);
+                    super.resume((Collection<TopicPartition>) currentRequest.inputArgument, true);
                     result = new RequestResult<>(true);
                     break;
                 case END_OFFSETS:
-                    result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
+                    result = new RequestResult<>(super.endOffsets((Collection<TopicPartition>) currentRequest.inputArgument, currentRequest.timeout, true));
                     break;
                 case BEGINNING_OFFSETS:
-                    result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) inputArgument, waitTime, true));
+                    result = new RequestResult<>(super.beginningOffsets((Collection<TopicPartition>) currentRequest.inputArgument, currentRequest.timeout, true));
                     break;
                 case WAKE_UP:
                     super.wakeup(true);
                     result = new RequestResult<>(true);
                     break;
                 case CLOSE:
-                    super.close(waitTime);
+                    System.out.println("Beginning close...");
+                    super.close(currentRequest.timeout);
                     result = new RequestResult<>(true);
+                    System.out.println("Concluding close");
                     break;
                 case PAUSE:
-                    super.pause((Collection<TopicPartition>) inputArgument, true);
+                    super.pause((Collection<TopicPartition>) currentRequest.inputArgument, true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
-                    super.commitAsyncWithHashCodes(offsets,
-                            (OffsetCommitCallback) inputArgument,
-                            hashCode1,
-                            hashCode2);
+                    super.commitAsyncWithHashCodes(currentRequest.offsets,
+                            (OffsetCommitCallback) currentRequest.inputArgument,
+                            currentRequest.hashCode1,
+                            currentRequest.hashCode2);
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
-                    super.commitSync((Map<TopicPartition, OffsetAndMetadata>) inputArgument, waitTime, true);
+                    super.commitSync((Map<TopicPartition, OffsetAndMetadata>) currentRequest.inputArgument,
+                                     currentRequest.timeout,
+                                     true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMITTED:
-                    result = new RequestResult<>(super.committed((TopicPartition) inputArgument, waitTime, true));
+                    result = new RequestResult<>(super.committed((TopicPartition) currentRequest.inputArgument,
+                                                 currentRequest.timeout,
+                                                 true));
                     break;
                 case POLL:
-                    ConsumerRecords<K, V> records = poll(waitTime);
+                    ConsumerRecords<K, V> records = poll(currentRequest.timeout);
                     result = new RequestResult<>(records);
+                    System.out.println("Polling has concluded");
                     break;
                 default:
                     continue;
             }
-            if (callback != null) {
-                callback.onTaskComplete(result);
+            if (currentRequest.callback != null) {
+                currentRequest.callback.onTaskComplete(result);
             }
-            request = null;
+            currentRequest = pendingRequests.poll();
         }
     }
 
     public void close(Duration timeout, TaskCompletionCallback callback) {
-        sendRequest(timeout, ConsumerRequest.CLOSE, null, callback);
+        sendRequest(new RequestInformation(timeout, ConsumerRequest.CLOSE, null, callback));
         this.shouldClose.set(true);
     }
 
@@ -260,7 +236,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    private static class OffsetInterval implements Serializable {
+    private class OffsetInterval {
         public final long startOffset;
         public final long endOffset;
 
