@@ -124,7 +124,7 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
-        Set<SaslExtensions> publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
@@ -156,7 +156,6 @@ public class OAuthBearerLoginModuleTest {
         loginModule1.commit();
         // Now we should have the first token and extensions
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class); // call throughout test since it returns a copy of the credentials
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
         assertSame(extensions[0], publicCredentials.iterator().next());
@@ -166,17 +165,15 @@ public class OAuthBearerLoginModuleTest {
         loginModule2.login();
         // Should still have just the first token and extensions
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
         assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule2.commit();
         // Should have the first and second tokens at this point
         assertEquals(2, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(2, publicCredentials.size());
         Iterator<Object> iterator = privateCredentials.iterator();
-        Iterator<SaslExtensions> publicIterator = publicCredentials.iterator();
+        Iterator<Object> publicIterator = publicCredentials.iterator();
         assertNotSame(tokens[2], iterator.next());
         assertNotSame(tokens[2], iterator.next());
         assertNotSame(extensions[2], publicIterator.next());
@@ -185,7 +182,6 @@ public class OAuthBearerLoginModuleTest {
         loginModule1.logout();
         // Now we should have just the second token and extension
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
         assertEquals(EMPTY_EXTENSIONS, publicCredentials.iterator().next());
@@ -194,14 +190,12 @@ public class OAuthBearerLoginModuleTest {
         loginModule3.login();
         // Should still have just the second token and extensions
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
         assertEquals(EMPTY_EXTENSIONS, publicCredentials.iterator().next());
         loginModule3.commit();
         // Should have the second and third tokens at this point
         assertEquals(2, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(2, publicCredentials.size());
         iterator = privateCredentials.iterator();
         publicIterator = publicCredentials.iterator();
@@ -213,7 +207,6 @@ public class OAuthBearerLoginModuleTest {
         loginModule2.logout();
         // Now we should have just the third token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
         assertSame(extensions[2], publicCredentials.iterator().next());
@@ -227,7 +220,7 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
-        Set<SaslExtensions> publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
@@ -252,37 +245,31 @@ public class OAuthBearerLoginModuleTest {
         loginModule1.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class); // call throughout test since it returns a copy of the credentials
         assertEquals(0, publicCredentials.size());
         loginModule1.commit();
         // Now we should have the first token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
         assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule1.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
 
         loginModule2.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
         loginModule2.commit();
         // Now we should have the second token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
         assertSame(extensions[1], publicCredentials.iterator().next());
         loginModule2.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
     }
 
@@ -293,7 +280,7 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
-        Set<SaslExtensions> publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
@@ -315,30 +302,25 @@ public class OAuthBearerLoginModuleTest {
         loginModule.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);   // call throughout test since it returns a copy of the credentials
         assertEquals(0, publicCredentials.size());
         loginModule.abort();
         // Should still have nothing since we aborted
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
 
         loginModule.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
         loginModule.commit();
         // Now we should have the second token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
         assertSame(extensions[1], publicCredentials.iterator().next());
         loginModule.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(0, publicCredentials.size());
     }
 
@@ -350,7 +332,7 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
-        Set<SaslExtensions> publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
@@ -377,13 +359,11 @@ public class OAuthBearerLoginModuleTest {
         assertEquals(0, publicCredentials.size());
         loginModule1.login();
         // Should still have nothing until commit() is called
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);   // call throughout test since it returns a copy of the credentials
         assertEquals(0, privateCredentials.size());
         assertEquals(0, publicCredentials.size());
         loginModule1.commit();
         // Now we should have the first token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
         assertSame(extensions[0], publicCredentials.iterator().next());
@@ -392,7 +372,6 @@ public class OAuthBearerLoginModuleTest {
         loginModule2.login();
         // Should still have first token
         assertEquals(1, privateCredentials.size());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
         assertSame(extensions[0], publicCredentials.iterator().next());
@@ -400,7 +379,6 @@ public class OAuthBearerLoginModuleTest {
         // Should still have just the first token because we aborted
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(extensions[0], publicCredentials.iterator().next());
 
@@ -409,7 +387,6 @@ public class OAuthBearerLoginModuleTest {
         // Should still have first token
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule2.commit();
@@ -418,16 +395,14 @@ public class OAuthBearerLoginModuleTest {
         Iterator<Object> iterator = privateCredentials.iterator();
         assertNotSame(tokens[1], iterator.next());
         assertNotSame(tokens[1], iterator.next());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(2, publicCredentials.size());
-        Iterator<SaslExtensions> publicIterator = publicCredentials.iterator();
+        Iterator<Object> publicIterator = publicCredentials.iterator();
         assertNotSame(extensions[1], publicIterator.next());
         assertNotSame(extensions[1], publicIterator.next());
         loginModule1.logout();
         // Now we should have just the third token
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
-        publicCredentials = subject.getPublicCredentials(SaslExtensions.class);
         assertEquals(1, publicCredentials.size());
         assertSame(extensions[2], publicCredentials.iterator().next());
     }
