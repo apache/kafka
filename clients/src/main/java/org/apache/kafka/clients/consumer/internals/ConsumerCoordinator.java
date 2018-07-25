@@ -607,9 +607,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     completions.get(completions.size() - 1);
             boolean containsMatch =
                     !completions.isEmpty() && previous.hashCode == completion.hashCode;
-            if (completion.hashCode == 0) {
+            if (completion.hashCode == 0 && completion.largerHashCode == 0) {
                 completion.invoke();
             } else if (containsMatch && previous.hashCodeEquals(completion)) {
+                if (!completions.isEmpty()) {
+                    completions.remove(completions.size() - 1);
+                }
                 completion.invoke(previous.offsets);
             } else {
                 completions.add(completion);
@@ -809,6 +812,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            System.out.println("Call to callback has been made :)");
             if (exception != null)
                 log.error("Offset commit with offsets {} failed", offsets, exception);
         }
