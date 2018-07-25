@@ -1189,12 +1189,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 consumerThread = new Thread(rebalanceConsumer);
             }
             if (coordinator.isRebalancing(false)) {
-                System.out.println("Starting thread");
                 getStartAndEndOffsets();
                 rebalanceConsumer.addNewOffsets(startOffsets, endOffsets);
                 rebalanceConsumer.setNewQueue(coordinator.getQueue());
                 if (!consumerThread.isAlive()) {
-                    System.out.println("consumerThread has started");
                     consumerThread.start();
                 }
             }

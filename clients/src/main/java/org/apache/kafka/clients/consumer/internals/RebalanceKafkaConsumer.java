@@ -165,6 +165,9 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
+        if (localRangeTokens != null) {
+            //do something to get it checkpointed
+        }
         if (!terminated()) {
             return super.poll(timeout.toMillis(), true, false);
         }

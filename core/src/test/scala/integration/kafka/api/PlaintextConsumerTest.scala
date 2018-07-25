@@ -38,7 +38,7 @@ import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
-/*
+
   @Test
   def testHeaders() {
     val numRecords = 1
@@ -168,7 +168,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.poll(0)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(2, listener.callsToRevoked)
-  }*/
+  }
 
   @Test
   def testSecondaryThreadIsAliveWithNewRebalanceMode() {
@@ -210,7 +210,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer0.committed(tp).offset() == 2000)
   }
 
-  /*@Test
+  @Test
   def testMaxPollIntervalMsDelayInRevocation() {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -1865,5 +1865,5 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       consumer.assignment() == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
   }
-*/
+
 }
