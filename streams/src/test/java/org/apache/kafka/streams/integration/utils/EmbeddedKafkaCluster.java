@@ -128,7 +128,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * You can use this to e.g. tell Kafka brokers how to connect to this instance.
      */
     public String zKConnectString() {
-        return "localhost:" + zookeeper.port();
+        return "127.0.0.1:" + zookeeper.port();
     }
 
     /**
