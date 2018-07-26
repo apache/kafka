@@ -1531,7 +1531,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
-      val error = if(request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
+      val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
       val results = deleteTopicRequest.topics.asScala.map { topic =>
         (topic, error)
       }.toMap
