@@ -83,12 +83,13 @@ object TopicCommand extends Logging {
 
   private def getTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions): Seq[String] = {
     val allTopics = zkClient.getAllTopicsInCluster.sorted
+    val excludeInternalTopics = opts.options.has(opts.excludeInternalTopicOpt)
     if (opts.options.has(opts.topicOpt)) {
       val topicsSpec = opts.options.valueOf(opts.topicOpt)
       val topicsFilter = new Whitelist(topicsSpec)
-      allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics = false))
+      allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
-      allTopics
+      allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
   def createTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
@@ -355,6 +356,8 @@ object TopicCommand extends Logging {
 
     val forceOpt = parser.accepts("force", "Suppress console prompts")
 
+    val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
+
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
@@ -381,6 +384,7 @@ object TopicCommand extends Logging {
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
     }
   }
 
