@@ -33,6 +33,7 @@ public abstract class StreamsGraphNode {
     private boolean keyChangingOperation;
     private Integer id;
     private InternalStreamsBuilder internalStreamsBuilder;
+    private boolean hasWrittenToTopology = false;
 
     public StreamsGraphNode(final String nodeName,
                             final boolean repartitionRequired) {
@@ -90,6 +91,14 @@ public abstract class StreamsGraphNode {
     }
 
     public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
+
+    public boolean hasWrittenToTopology() {
+        return hasWrittenToTopology;
+    }
+
+    public void setHasWrittenToTopology(boolean hasWrittenToTopology) {
+        this.hasWrittenToTopology = hasWrittenToTopology;
+    }
 
     @Override
     public String toString() {

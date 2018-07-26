@@ -45,7 +45,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     final InternalTopologyBuilder internalTopologyBuilder;
     private final AtomicInteger index = new AtomicInteger(0);
-    private boolean topologyBuilt;
 
     private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
     private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
@@ -217,27 +216,26 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     public void buildAndOptimizeTopology() {
-        if (!topologyBuilt) {
 
-            final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
+        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
-            graphNodePriorityQueue.offer(root);
+        graphNodePriorityQueue.offer(root);
 
-            while (!graphNodePriorityQueue.isEmpty()) {
-                final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
+        while (!graphNodePriorityQueue.isEmpty()) {
+            final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
 
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
-                }
-
-                streamGraphNode.writeToTopology(internalTopologyBuilder);
-
-                for (StreamsGraphNode graphNode : streamGraphNode.children()) {
-                    graphNodePriorityQueue.offer(graphNode);
-                }
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
             }
 
-            topologyBuilt = true;
+            if (!streamGraphNode.hasWrittenToTopology()) {
+                streamGraphNode.writeToTopology(internalTopologyBuilder);
+                streamGraphNode.setHasWrittenToTopology(true);
+            }
+
+            for (StreamsGraphNode graphNode : streamGraphNode.children()) {
+                graphNodePriorityQueue.offer(graphNode);
+            }
         }
     }
 
