@@ -51,9 +51,11 @@ public class DeleteTopicsRequest extends AbstractRequest {
      */
     private static final Schema DELETE_TOPICS_REQUEST_V2 = DELETE_TOPICS_REQUEST_V1;
 
+    private static final Schema DELETE_TOPICS_REQUEST_V3 = DELETE_TOPICS_REQUEST_V2;
+
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1,
-            DELETE_TOPICS_REQUEST_V2};
+            DELETE_TOPICS_REQUEST_V2, DELETE_TOPICS_REQUEST_V3};
     }
 
     private final Set<String> topics;
