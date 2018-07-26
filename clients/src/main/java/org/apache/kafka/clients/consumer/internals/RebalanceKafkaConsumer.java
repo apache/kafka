@@ -280,6 +280,10 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
+    /**
+     * Remember to call terminated() method for consumer before calling this method.
+     * This is to guarantee that we have the most recent version of a consumer's offset ranges.
+     */
     public static OffsetInclusion getRanges(final Map<TopicPartition, ArrayList<OffsetInterval>> consumerRanges,
                                             final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
         final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = new HashMap<>();
