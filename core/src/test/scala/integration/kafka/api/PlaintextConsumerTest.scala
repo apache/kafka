@@ -212,7 +212,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.commitSync() // invoke default callbacks
 
     val lastCommittedOffset2 = consumer0.committed(tp).offset()
-    assertTrue(lastCommittedOffset2 > lastCommittedOffset && lastCommittedOffset2 < 2000)
+    assertTrue(lastCommittedOffset2 > 0 && lastCommittedOffset2 < 2000)
 
     consumer0.close()
     assertFalse(consumer0.childConsumerIsAlive())
