@@ -76,8 +76,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (!sourceName.equals(this.name)) {
             StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
-            streamsGraphNode.addChildNode(repartitionNode);
-            builder.maybeAddNodeForOptimizationMetadata(repartitionNode);
+            builder.addGraphNode(this.streamsGraphNode, repartitionNode);
             parentNode = repartitionNode;
         }
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
@@ -91,8 +90,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
-        parentNode.addChildNode(statefulProcessorNode);
-        builder.maybeAddNodeForOptimizationMetadata(statefulProcessorNode);
+        builder.addGraphNode(parentNode, statefulProcessorNode);
 
         return new KTableImpl<>(builder,
                                 aggFunctionName,

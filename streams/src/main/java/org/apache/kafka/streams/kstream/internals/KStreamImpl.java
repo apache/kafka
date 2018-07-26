@@ -299,8 +299,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             ProcessorNode<K, V> branchChildNode = new ProcessorNode<>(childNames[i],
                                                                       innerProcessorParameters,
                                                                       repartitionRequired);
-            branchNode.addChildNode(branchChildNode);
-            builder.maybeAddNodeForOptimizationMetadata(branchChildNode);
+
+            builder.addGraphNode(branchNode, branchChildNode);
             branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired, branchChildNode);
         }
 
@@ -829,8 +829,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             ProcessorParameters thisWindowStreamProcessorParams = new ProcessorParameters(thisWindowedStream, thisWindowStreamName);
             ProcessorNode<K1, V1> thisWindowedStreamsNode = new ProcessorNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
-            thisStreamsGraphNode.addChildNode(thisWindowedStreamsNode);
-            builder.maybeAddNodeForOptimizationMetadata(thisWindowedStreamsNode);
+            builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
 
 
 
@@ -841,8 +840,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             ProcessorParameters otherWindowStreamProcessorParams = new ProcessorParameters(otherWindowedStream, otherWindowStreamName);
             ProcessorNode<K1, V2> otherWindowedStreamsNode = new ProcessorNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
-            otherStreamsGraphNode.addChildNode(otherWindowedStreamsNode);
-            builder.maybeAddNodeForOptimizationMetadata(otherWindowedStreamsNode);
+            builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
 
 
 

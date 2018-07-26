@@ -71,9 +71,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
                                                                          topics,
                                                                          consumed);
-
-        root.addChildNode(streamSourceNode);
-        maybeAddNodeForOptimizationMetadata(streamSourceNode);
+        addGraphNode(root, streamSourceNode);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
@@ -85,8 +83,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
                                                                                 topicPattern,
                                                                                 consumed);
-        root.addChildNode(streamPatternSourceNode);
-        maybeAddNodeForOptimizationMetadata(streamPatternSourceNode);
+
+        addGraphNode(root, streamPatternSourceNode);
 
         return new KStreamImpl<>(this,
                                  name,
@@ -117,8 +115,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .withTopic(topic)
                                                                                .build();
 
-        root.addChildNode(tableSourceNode);
-        maybeAddNodeForOptimizationMetadata(tableSourceNode);
+        addGraphNode(root, tableSourceNode);
 
         return new KTableImpl<>(this,
                                 name,
@@ -154,8 +151,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .isGlobalKTable(true)
                                                                                                     .build();
 
-        root.addChildNode(tableSourceNode);
-        maybeAddNodeForOptimizationMetadata(tableSourceNode);
+        addGraphNode(root, tableSourceNode);
 
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
@@ -208,7 +204,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
-    public void addGraphNode(StreamsGraphNode parent, StreamsGraphNode child) {
+    void addGraphNode(StreamsGraphNode parent, StreamsGraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
         parent.addChildNode(child);

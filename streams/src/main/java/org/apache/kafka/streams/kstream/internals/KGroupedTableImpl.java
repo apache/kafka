@@ -78,14 +78,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
                                                                  sourceName,
                                                                  topic);
-        addGraphNode(repartitionNode);
+
+        // the passed in StreamsGraphNode must be the parent of the repartition node
+        builder.addGraphNode(this.streamsGraphNode, repartitionNode);
 
         StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
                                                                                funcName,
                                                                                aggregateSupplier);
 
-        repartitionNode.addChildNode(statefulProcessorNode);
-        builder.maybeAddNodeForOptimizationMetadata(statefulProcessorNode);
+        // now the repartition node must be the parent of the StateProcessorNode
+        builder.addGraphNode(repartitionNode, statefulProcessorNode);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder,

@@ -139,7 +139,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                               materializedInternal,
                                                               null);
 
-        addGraphNode(tableNode);
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(builder,
                                 name,
@@ -206,7 +206,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                               materializedInternal,
                                                               null);
 
-        addGraphNode(tableNode);
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(builder,
                                 name,
@@ -290,7 +290,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                               materialized,
                                                               stateStoreNames);
 
-        addGraphNode(tableNode);
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(
             builder,
@@ -313,7 +313,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                                      processorParameters,
                                                                      false);
 
-        addGraphNode(toStreamNode);
+        builder.addGraphNode(this.streamsGraphNode, toStreamNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, false, toStreamNode);
     }
@@ -456,7 +456,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             .withThisJoinSideNodeName(name);
 
         KTableKTableJoinNode kTableKTableJoinNode = kTableJoinNodeBuilder.build();
-        addGraphNode(kTableKTableJoinNode);
+        builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
         return new KTableImpl<>(builder,
                                 joinMergeName,
@@ -487,7 +487,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                                     processorParameters,
                                                                     false);
 
-        addGraphNode(graphNode);
+        builder.addGraphNode(this.streamsGraphNode, graphNode);
 
         this.enableSendingOldValues();
         final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
