@@ -49,7 +49,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     private RequestInformation currentRequest;
     private RequestResult result;
     private final AtomicBoolean shouldClose;
-    private Map<TopicPartition, OffsetInterval> localRangeTokens;
+    private Map<TopicPartition, OffsetRangeToken> localRangeTokens;
+    private ConsumerCoordinator parentCoordinator;
 
     public RebalanceKafkaConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeserializer,
@@ -64,6 +65,19 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         this.result = null;
         this.shouldClose = new AtomicBoolean(false);
         this.pendingRequests = new ArrayBlockingQueue<>(10);
+        this.parentCoordinator = null;
+    }
+
+    public Map<TopicPartition, ArrayList<OffsetInterval>> getOffsetRanges() {
+        return offsetRanges;
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> getConsumed() {
+        return subscriptions.allConsumed();
+    }
+
+    public void setParentCoordinator(ConsumerCoordinator parentCoordinator) {
+        this.parentCoordinator = parentCoordinator;
     }
 
     public void setNewQueue(PriorityBlockingQueue<ConsumerCoordinator.OffsetCommitCompletion> queue) {
@@ -72,13 +86,12 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     public void sendRequest(RequestInformation requestInformation) {
         pendingRequests.add(requestInformation);
-        System.out.println("request information has been added with pendingRequests size: " + pendingRequests.size());
     }
 
     public void addNewOffsets(Map<TopicPartition, OffsetAndMetadata> startOffsets,
                               Map<TopicPartition, Long> endOffsets) {
         final Set<TopicPartition> newPartitions = new HashSet<>();
-        final HashMap<TopicPartition, OffsetInterval> rangeTokens = new HashMap<>();
+        final HashMap<TopicPartition, OffsetRangeToken> rangeTokens = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : startOffsets.entrySet()) {
             if (entry.getValue().offset() == endOffsets.get(entry.getKey())) {
                 continue;
@@ -90,7 +103,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                 newPartitions.add(entry.getKey());
                 offsetRanges.put(entry.getKey(), new ArrayList<>());
             }
-            rangeTokens.put(entry.getKey(), offsetInterval);
+            rangeTokens.put(entry.getKey(), new OffsetRangeToken(offsetInterval, entry.getValue()));
             offsetRanges.get(entry.getKey()).add(offsetInterval);
         }
         super.assign(assignedPartitions);
@@ -135,7 +148,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
         if (localRangeTokens != null) {
-            //do something to get it checkpointed
+            //super.commitAsync(localRangeTokens, null, true);
         }
         if (!terminated()) {
             return super.poll(timeout.toMillis(), true, false);
@@ -145,6 +158,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
 
     @Override
     public void run() {
+        coordinator.setIfChildConsumer();
         while (!shouldClose.get()) {
             if (currentRequest == null) {
                 currentRequest = pendingRequests.poll();
@@ -177,6 +191,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_ASYNC:
+                    coordinator.setParentGeneration(parentCoordinator.generation());
                     super.commitAsyncWithHashCodes(currentRequest.offsets,
                             (OffsetCommitCallback) currentRequest.inputArgument,
                             currentRequest.hashCode1,
@@ -184,12 +199,14 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
                     result = new RequestResult<>(true);
                     break;
                 case COMMIT_SYNC:
-                    super.commitSync((Map<TopicPartition, OffsetAndMetadata>) currentRequest.inputArgument,
+                    coordinator.setParentGeneration(parentCoordinator.generation());
+                    super.commitSync(subscriptions.allConsumed(),
                                      currentRequest.timeout,
                                      true);
                     result = new RequestResult<>(true);
                     break;
                 case COMMITTED:
+                    coordinator.setParentGeneration(parentCoordinator.generation());
                     result = new RequestResult<>(super.committed((TopicPartition) currentRequest.inputArgument,
                                                  currentRequest.timeout,
                                                  true));
@@ -233,7 +250,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    private class OffsetInterval {
+    private static class OffsetInterval {
         public final long startOffset;
         public final long endOffset;
 
@@ -263,15 +280,20 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
         }
     }
 
-    public static OffsetInclusion getRanges(final Map<TopicPartition, OffsetAndMetadata> consumedParentMetadata,
+    public static OffsetInclusion getRanges(final Map<TopicPartition, ArrayList<OffsetInterval>> consumerRanges,
                                             final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit) {
         final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = new HashMap<>();
         final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsToCommit.entrySet()) {
-            if (consumedParentMetadata.containsKey(entry.getKey()) && consumedParentMetadata.get(entry.getKey()).equals(entry.getValue())) {
-                parentConsumerMetadata.put(entry.getKey(), entry.getValue());
+            if (consumerRanges.containsKey(entry.getKey())) {
+                final OffsetInterval interval = consumerRanges.get(entry.getKey()).get(0);
+                if (entry.getValue().offset() > interval.endOffset) {
+                    parentConsumerMetadata.put(entry.getKey(), entry.getValue());
+                } else {
+                    childConsumerMetadata.put(entry.getKey(), entry.getValue());
+                }
             } else {
-                childConsumerMetadata.put(entry.getKey(), entry.getValue());
+                parentConsumerMetadata.put(entry.getKey(), entry.getValue());
             }
         }
         return new OffsetInclusion(parentConsumerMetadata, childConsumerMetadata);

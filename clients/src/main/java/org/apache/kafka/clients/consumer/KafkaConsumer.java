@@ -1187,6 +1187,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         null,
                         new HashMap<>(),
                         new HashMap<>());
+                rebalanceConsumer.setParentCoordinator(coordinator);
                 consumerThread = new Thread(rebalanceConsumer);
             }
             if (coordinator.isRebalancing(false)) {
@@ -1458,7 +1459,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(Duration timeout) {
-        commitSync(subscriptions.allConsumed(), timeout, false);
+        if (rebalanceConsumer != null && consumerThread.isAlive()) {
+            final Map<TopicPartition, OffsetAndMetadata> metadata = rebalanceConsumer.getConsumed();
+            metadata.putAll(subscriptions.allConsumed());
+            commitSync(metadata, timeout, false);
+        } else {
+            commitSync(subscriptions.allConsumed(), timeout, false);
+        }
     }
 
     /**
@@ -1540,7 +1547,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(subscriptions.allConsumed(), offsets);
+                rebalanceConsumer.terminated();
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer.getOffsetRanges(), offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 final RequestInformation requestInformation =
@@ -1590,7 +1598,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        commitAsync(subscriptions.allConsumed(), callback);
+        if (rebalanceConsumer != null && consumerThread.isAlive()) {
+            final Map<TopicPartition, OffsetAndMetadata> metadata = rebalanceConsumer.getConsumed();
+            metadata.putAll(subscriptions.allConsumed());
+            commitAsync(metadata, callback);
+        } else {
+            commitAsync(subscriptions.allConsumed(), callback);
+        }
     }
 
     /**
@@ -1625,7 +1639,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Committing offsets: {}", offsets);
             if (!isChildConsumer && useParallelRebalance) {
                 checkRebalance();
-                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(subscriptions.allConsumed(), offsets);
+                rebalanceConsumer.terminated();
+                final RebalanceKafkaConsumer.OffsetInclusion offsetInclusion = RebalanceKafkaConsumer.getRanges(rebalanceConsumer.getOffsetRanges(), offsets);
                 final HashMap<TopicPartition, OffsetAndMetadata> parentConsumerMetadata = offsetInclusion.getParentConsumerMetadata();
                 final HashMap<TopicPartition, OffsetAndMetadata> childConsumerMetadata = offsetInclusion.getChildConsumerMetadata();
                 final long hashCode1 = parentConsumerMetadata.hashCode();

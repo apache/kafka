@@ -83,10 +83,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private PriorityBlockingQueue<OffsetCommitCompletion> completedOffsetCommits;
 
     private boolean isLeader = false;
+    private boolean isChildConsumer = false;
     private Set<String> joinedSubscription;
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
+    private Generation parentGeneration;
 
 
     // hold onto request&future for committed offset requests to enable async calls.
@@ -156,6 +158,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
         this.pendingAsyncCommits = new AtomicInteger();
+        this.parentGeneration = null;
 
         if (autoCommitEnabled)
             this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
@@ -167,6 +170,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // method will automatically set to false upon retrieving value
     public boolean isRebalancing(boolean value) {
         return rebalanceInProgress.getAndSet(value);
+    }
+
+    public void setIfChildConsumer() {
+        this.isChildConsumer = true;
+    }
+
+    public synchronized void setParentGeneration(Generation generation) {
+        this.parentGeneration = generation;
+    }
+
+    public synchronized Generation getParentGeneration() {
+        return parentGeneration;
     }
 
     public void setNewQueue(PriorityBlockingQueue<OffsetCommitCompletion> queue) {
@@ -845,10 +860,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
-        if (subscriptions.partitionsAutoAssigned())
+        if (subscriptions.partitionsAutoAssigned()) {
             generation = generation();
-        else
+        } else if (isChildConsumer) {
+            final Generation memberGeneration = getParentGeneration();
+            if (memberGeneration == null) {
+                generation = null;
+            } else {
+                generation = new Generation(-2,
+                                            memberGeneration.memberId,
+                                            memberGeneration.protocol);
+            }
+        } else {
             generation = Generation.NO_GENERATION;
+        }
 
         // if the generation is null, we are not part of an active group (and we expect to be).
         // the only thing we can do is fail the commit and let the user rejoin the group in poll()

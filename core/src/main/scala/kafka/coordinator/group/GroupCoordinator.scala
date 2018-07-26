@@ -502,7 +502,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
+      } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID) || (generationId == -2 && group.has(memberId))) {
         // The group is only using Kafka to store offsets.
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
