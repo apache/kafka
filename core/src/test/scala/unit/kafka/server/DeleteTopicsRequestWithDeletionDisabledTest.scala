@@ -46,7 +46,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     val request = new DeleteTopicsRequest.Builder(Set(topic).asJava, 1000).build();
     val response = sendDeleteTopicsRequest(request)
 
-    assertEquals(Errors.TOPIC_DELETION_DISABLED, response.errors.get(topic))
+    assertEquals(Errors.INVALID_REQUEST, response.errors.get(topic))
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
