@@ -217,13 +217,13 @@ public final class Metadata {
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *
-     * @param cluster the cluster containing metadata for topics with valid metadata
+     * @param newCluster the cluster containing metadata for topics with valid metadata
      * @param unavailableTopics topics which are non-existent or have one or more partitions whose
      *        leader is not known
      * @param now current time in milliseconds
      */
-    public synchronized void update(Cluster cluster, Set<String> unavailableTopics, long now) {
-        Objects.requireNonNull(cluster, "cluster should not be null");
+    public synchronized void update(Cluster newCluster, Set<String> unavailableTopics, long now) {
+        Objects.requireNonNull(newCluster, "cluster should not be null");
 
         this.needUpdate = false;
         this.lastRefreshMs = now;
@@ -245,7 +245,7 @@ public final class Metadata {
         }
 
         for (Listener listener: listeners)
-            listener.onMetadataUpdate(cluster, unavailableTopics);
+            listener.onMetadataUpdate(newCluster, unavailableTopics);
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
@@ -253,17 +253,17 @@ public final class Metadata {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = getClusterForCurrentTopics(cluster);
+            this.cluster = getClusterForCurrentTopics(newCluster);
         } else {
-            this.cluster = cluster;
+            this.cluster = newCluster;
         }
 
         // The bootstrap cluster is guaranteed not to have any useful information
-        if (!cluster.isBootstrapConfigured()) {
-            String clusterId = cluster.clusterResource().clusterId();
-            if (clusterId == null ? previousClusterId != null : !clusterId.equals(previousClusterId))
-                log.info("Cluster ID: {}", cluster.clusterResource().clusterId());
-            clusterResourceListeners.onUpdate(cluster.clusterResource());
+        if (!newCluster.isBootstrapConfigured()) {
+            String newClusterId = newCluster.clusterResource().clusterId();
+            if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
+                log.info("Cluster ID: {}", newClusterId);
+            clusterResourceListeners.onUpdate(newCluster.clusterResource());
         }
 
         notifyAll();

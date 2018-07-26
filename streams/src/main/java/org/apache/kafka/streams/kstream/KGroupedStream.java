@@ -131,7 +131,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
-     * Use {@link org.apache.kafka.streams.processor.StateStoreSupplier#name()} to get the store name:
+     * Use {@link org.apache.kafka.streams.processor.StateStore#name()} to get the store name:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * String queryableStoreName = storeSupplier.name();
@@ -154,7 +154,7 @@ public interface KGroupedStream<K, V> {
      * Count the number of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * provided by the given {@code storeSupplier}.
+     * provided by the given {@code materialized}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
@@ -576,7 +576,7 @@ public interface KGroupedStream<K, V> {
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Materialized)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * provided by the given {@code storeSupplier}.
+     * provided by the given {@code materialized}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
@@ -592,7 +592,7 @@ public interface KGroupedStream<K, V> {
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)} can be used to compute aggregate functions like sum, min, or
+     * Thus, {@code reduce(Reducer, Materialized)} can be used to compute aggregate functions like sum, min, or
      * max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to

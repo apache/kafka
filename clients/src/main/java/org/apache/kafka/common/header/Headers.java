@@ -41,7 +41,7 @@ public interface Headers extends Iterable<Header> {
      * Removes all headers for the given key returning if the operation succeeded.
      * 
      * @param key to remove all headers for.
-     * @return this instance of the Headers, once the header is added.
+     * @return this instance of the Headers, once the header is removed.
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
     Headers remove(String key) throws IllegalStateException;

@@ -31,7 +31,7 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
     }
 
     @Override
-    public void init(ProcessorContext context) {
+    public void init(final ProcessorContext context) {
         this.context = context;
     }
 
@@ -46,7 +46,7 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
      */
     @SuppressWarnings("deprecation")
     @Override
-    public void punctuate(long timestamp) {
+    public void punctuate(final long timestamp) {
         // do nothing
     }
 
@@ -67,6 +67,6 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
      * @return the processor context; null only when called prior to {@link #init(ProcessorContext) initialization}.
      */
     protected final ProcessorContext context() {
-        return this.context;
+        return context;
     }
 }

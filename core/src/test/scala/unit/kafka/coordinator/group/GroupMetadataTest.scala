@@ -40,7 +40,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    group = new GroupMetadata("groupId")
+    group = new GroupMetadata("groupId", initialState = Empty)
   }
 
   @Test
@@ -271,25 +271,25 @@ class GroupMetadataTest extends JUnitSuite {
     group.add(member)
 
     assertEquals(0, group.generationId)
-    assertNull(group.protocol)
+    assertNull(group.protocolOrNull)
 
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertEquals("roundrobin", group.protocol)
+    assertEquals("roundrobin", group.protocolOrNull)
   }
 
   @Test
   def testInitNextGenerationEmptyGroup() {
     assertEquals(Empty, group.currentState)
     assertEquals(0, group.generationId)
-    assertNull(group.protocol)
+    assertNull(group.protocolOrNull)
 
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertNull(group.protocol)
+    assertNull(group.protocolOrNull)
   }
 
   @Test

@@ -41,11 +41,12 @@ public class PrintedTest {
 
     private final PrintStream originalSysOut = System.out;
     private final ByteArrayOutputStream sysOut = new ByteArrayOutputStream();
-    private final Printed<String, Integer> sysOutPrinter = Printed.toSysOut();
+    private Printed<String, Integer> sysOutPrinter;
 
     @Before
     public void before() {
         System.setOut(new PrintStream(sysOut));
+        sysOutPrinter = Printed.toSysOut();
     }
 
     @After
@@ -72,7 +73,10 @@ public class PrintedTest {
     @Test
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
         final ProcessorSupplier<String, Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
-        supplier.get().process("good", 2);
+        final Processor<String, Integer> processor = supplier.get();
+
+        processor.process("good", 2);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
     }
 
@@ -83,6 +87,7 @@ public class PrintedTest {
                 .get();
 
         processor.process("hello", 3);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
     }
 
@@ -97,6 +102,7 @@ public class PrintedTest {
                 })).build("processor")
                 .get();
         processor.process("hello", 1);
+        processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
     }
 

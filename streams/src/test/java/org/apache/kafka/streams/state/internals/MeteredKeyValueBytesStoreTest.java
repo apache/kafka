@@ -193,6 +193,20 @@ public class MeteredKeyValueBytesStoreTest {
         EasyMock.verify(inner);
     }
 
+    @Test
+    public void shouldFlushInnerWhenFlushTimeRecords() {
+        inner.flush();
+        EasyMock.expectLastCall().once();
+        init();
+
+        metered.flush();
+
+        final KafkaMetric metric = metric("flush-rate");
+        assertTrue(metric.value() > 0);
+        EasyMock.verify(inner);
+    }
+
+
     private KafkaMetric metric(final MetricName metricName) {
         return this.metrics.metric(metricName);
     }

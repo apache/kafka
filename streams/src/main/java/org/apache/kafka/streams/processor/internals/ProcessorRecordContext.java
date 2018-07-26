@@ -20,7 +20,7 @@ import java.util.Objects;
 
 public class ProcessorRecordContext implements RecordContext {
 
-    private final long timestamp;
+    private long timestamp;
     private final long offset;
     private final String topic;
     private final int partition;
@@ -42,6 +42,10 @@ public class ProcessorRecordContext implements RecordContext {
 
     public long timestamp() {
         return timestamp;
+    }
+
+    public void setTimestamp(final long timestamp) {
+        this.timestamp = timestamp;
     }
 
     @Override

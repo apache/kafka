@@ -76,6 +76,8 @@ public interface TopologyDescription {
          * @return the "global" processor node
          */
         Processor processor();
+
+        int id();
     }
 
     /**

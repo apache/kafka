@@ -26,7 +26,7 @@ import java.util.Map;
  */
 public class Serdes {
 
-    static protected class WrapperSerde<T> implements Serde<T> {
+    static public class WrapperSerde<T> implements Serde<T> {
         final private Serializer<T> serializer;
         final private Deserializer<T> deserializer;
 

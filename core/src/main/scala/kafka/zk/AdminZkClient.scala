@@ -357,9 +357,32 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     * @param configs: The config to change, as properties
     */
   def changeBrokerConfig(brokers: Seq[Int], configs: Properties): Unit = {
-    DynamicConfig.Broker.validate(configs)
-    brokers.foreach { broker => changeEntityConfig(ConfigType.Broker, broker.toString, configs)
+    validateBrokerConfig(configs)
+    brokers.foreach {
+      broker => changeEntityConfig(ConfigType.Broker, broker.toString, configs)
     }
+  }
+
+  /**
+    * Override a broker override or broker default config. These overrides will be persisted between sessions, and will
+    * override any defaults entered in the broker's config files
+    *
+    * @param broker: The broker to apply config changes to or None to update dynamic default configs
+    * @param configs: The config to change, as properties
+    */
+  def changeBrokerConfig(broker: Option[Int], configs: Properties): Unit = {
+    validateBrokerConfig(configs)
+    val entityName = broker.map(_.toString).getOrElse(ConfigEntityName.Default)
+    changeEntityConfig(ConfigType.Broker, broker.map(String.valueOf).getOrElse(ConfigEntityName.Default), configs)
+  }
+
+  /**
+    * Validate dynamic broker configs. Since broker configs may contain custom configs, the validation
+    * only verifies that the provided config does not contain any static configs.
+    * @param configs configs to validate
+    */
+  def validateBrokerConfig(configs: Properties): Unit = {
+    DynamicConfig.Broker.validate(configs)
   }
 
   private def changeEntityConfig(rootEntityType: String, fullSanitizedEntityName: String, configs: Properties) {

@@ -61,7 +61,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
   /* returns a pair of partition id and leader id */
   private def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
-    val partitionToLeader = TestUtils.createTopic(zkUtils, topic, 3, 2, servers)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
     partitionToLeader.collectFirst {
       case (partition, leader) if leader != -1 => (partition, leader)
     }.getOrElse(fail(s"No leader elected for topic $topic"))

@@ -34,6 +34,11 @@ public interface RecordContext {
     long timestamp();
 
     /**
+     * Sets a new timestamp for the output record.
+     */
+    void setTimestamp(final long timestamp);
+
+    /**
      * @return The topic the record was received on
      */
     String topic();

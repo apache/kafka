@@ -29,9 +29,13 @@ package org.apache.kafka.streams.kstream;
  * @param <VR> mapped value type
  * @see KeyValueMapper
  * @see ValueTransformer
+ * @see ValueTransformerWithKey
  * @see KStream#mapValues(ValueMapper)
+ * @see KStream#mapValues(ValueMapperWithKey)
  * @see KStream#flatMapValues(ValueMapper)
+ * @see KStream#flatMapValues(ValueMapperWithKey)
  * @see KTable#mapValues(ValueMapper)
+ * @see KTable#mapValues(ValueMapperWithKey)
  */
 public interface ValueMapper<V, VR> {
 

@@ -56,12 +56,14 @@ public class GlobalStateTaskTest {
     private final String topic2 = "t2";
     private final TopicPartition t1 = new TopicPartition(topic1, 1);
     private final TopicPartition t2 = new TopicPartition(topic2, 1);
-    private final MockSourceNode sourceOne = new MockSourceNode<>(new String[]{topic1},
-                                                            new StringDeserializer(),
-                                                            new StringDeserializer());;
-    private final MockSourceNode sourceTwo = new MockSourceNode<>(new String[]{topic2},
-                                                            new IntegerDeserializer(),
-                                                            new IntegerDeserializer());
+    private final MockSourceNode sourceOne = new MockSourceNode<>(
+        new String[]{topic1},
+        new StringDeserializer(),
+        new StringDeserializer());
+    private final MockSourceNode sourceTwo = new MockSourceNode<>(
+        new String[]{topic2},
+        new IntegerDeserializer(),
+        new IntegerDeserializer());
     private final MockProcessorNode processorOne = new MockProcessorNode<>(-1);
     private final MockProcessorNode processorTwo = new MockProcessorNode<>(-1);
 
@@ -81,10 +83,11 @@ public class GlobalStateTaskTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", topic1);
         storeToTopic.put("t2-store", topic2);
-        topology = ProcessorTopology.with(Utils.mkList(sourceOne, sourceTwo, processorOne, processorTwo),
-                                          sourceByTopics,
-                                          Collections.<StateStore>emptyList(),
-                                          storeToTopic);
+        topology = ProcessorTopology.with(
+            Utils.mkList(sourceOne, sourceTwo, processorOne, processorTwo),
+            sourceByTopics,
+            Collections.<StateStore>emptyList(),
+            storeToTopic);
 
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
@@ -134,17 +137,18 @@ public class GlobalStateTaskTest {
     private void maybeDeserialize(final GlobalStateUpdateTask globalStateTask,
                                   final byte[] key,
                                   final byte[] recordValue,
-                                  boolean failExpected) {
-        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(topic2, 1, 1,
-                0L, TimestampType.CREATE_TIME, 0L, 0, 0,
-                key, recordValue);
+                                  final boolean failExpected) {
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+            topic2, 1, 1, 0L, TimestampType.CREATE_TIME,
+            0L, 0, 0, key, recordValue
+        );
         globalStateTask.initialize();
         try {
             globalStateTask.update(record);
             if (failExpected) {
                 fail("Should have failed to deserialize.");
             }
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             if (!failExpected) {
                 fail("Shouldn't have failed to deserialize.");
             }
@@ -153,7 +157,7 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = new LongSerializer().serialize(topic2, 1L);
         final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
         maybeDeserialize(globalStateTask, key, recordValue, true);
@@ -161,14 +165,14 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() {
         final byte[] key = new IntegerSerializer().serialize(topic2, 1);
         final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
         maybeDeserialize(globalStateTask, key, recordValue, true);
     }
 
     @Test
-    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
+    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
             topology,
             context,
@@ -182,7 +186,7 @@ public class GlobalStateTaskTest {
     }
 
     @Test
-    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
             topology,
             context,

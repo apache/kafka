@@ -64,7 +64,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
-      createTopic(zkUtils, topic, Map(0 -> Seq(0, 1)), servers = brokers)
+      createTopic(zkClient, topic, Map(0 -> Seq(0, 1)), servers = brokers)
     }
 
     // When we send four messages
@@ -214,7 +214,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.getBrokerEndPoint(from.config.interBrokerListenerName)
+    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
     new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 

@@ -76,9 +76,10 @@ class TrogdorTest(Test):
         self.set_up_trogdor(3)
         spec = NetworkPartitionFaultSpec(0, TaskSpec.MAX_DURATION_MS,
                                             [[self.agent_nodes[0]], self.agent_nodes[1:]])
-        assert 2 == len(spec.partitions)
-        assert [self.agent_nodes[0].name] == spec.partitions[0]
-        assert [self.agent_nodes[1].name, self.agent_nodes[2].name] == spec.partitions[1]
+        partitions = spec.message["partitions"]
+        assert 2 == len(partitions)
+        assert [self.agent_nodes[0].name] == partitions[0]
+        assert [self.agent_nodes[1].name, self.agent_nodes[2].name] == partitions[1]
         self.trogdor.create_task("partition0", spec)
         def verify_nodes_partitioned():
             if node_is_reachable(self.agent_nodes[0], self.agent_nodes[1]):

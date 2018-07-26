@@ -144,6 +144,7 @@ final class ClusterConnectionStates {
     public void ready(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.READY;
+        nodeState.authenticationException = null;
         resetReconnectBackoff(nodeState);
     }
 

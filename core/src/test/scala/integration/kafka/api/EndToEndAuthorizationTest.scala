@@ -61,6 +61,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
+    AclCommand.main(topicBrokerReadAclArgs)
   }
 
   val numRecords = 1
@@ -156,12 +157,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @Before
   override def setUp() {
     super.setUp()
-    AclCommand.main(topicBrokerReadAclArgs)
     servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
     }
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
+    createTopic(topic, 1, 3)
   }
 
   override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {

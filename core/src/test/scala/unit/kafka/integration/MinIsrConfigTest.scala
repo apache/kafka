@@ -31,7 +31,7 @@ class MinIsrConfigTest extends KafkaServerTestHarness {
 
   @Test
   def testDefaultKafkaConfig() {
-    assert(servers.head.getLogManager().defaultConfig.minInSyncReplicas == 5)
+    assert(servers.head.getLogManager().initialDefaultConfig.minInSyncReplicas == 5)
   }
 
 }

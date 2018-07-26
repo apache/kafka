@@ -20,6 +20,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -517,6 +518,30 @@ public class AbstractCoordinatorTest {
         assertEquals(1, coordinator.onJoinCompleteInvokes);
 
         awaitFirstHeartbeat(heartbeatReceived);
+    }
+
+    @Test
+    public void testEnsureCoordinatorReadyWithinBlackoutPeriodAfterAuthenticationFailure() {
+        setupCoordinator(RETRY_BACKOFF_MS);
+
+        mockClient.authenticationFailed(node, 300);
+
+        try {
+            coordinator.ensureCoordinatorReady();
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        mockTime.sleep(30); // wait less than the blackout period
+        assertTrue(mockClient.connectionFailed(node));
+
+        try {
+            coordinator.ensureCoordinatorReady();
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
     }
 
     private AtomicBoolean prepareFirstHeartbeat() {

@@ -92,7 +92,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Bytes bytesKey = Bytes.wrap(serdes.rawKey(key));
+        final Bytes bytesKey = keyBytes(key);
         return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKey,
                                                                         earliestSessionEndTime,
                                                                         latestSessionStartTime),
@@ -109,8 +109,8 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
         Objects.requireNonNull(keyTo, "keyTo cannot be null");
-        final Bytes bytesKeyFrom = Bytes.wrap(serdes.rawKey(keyFrom));
-        final Bytes bytesKeyTo = Bytes.wrap(serdes.rawKey(keyTo));
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKeyFrom,
                                                                         bytesKeyTo,
                                                                         earliestSessionEndTime,
@@ -126,7 +126,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         final long startNs = time.nanoseconds();
         try {
-            final Bytes key = Bytes.wrap(serdes.rawKey(sessionKey.key()));
+            final Bytes key = keyBytes(sessionKey.key());
             inner.remove(new Windowed<>(key, sessionKey.window()));
         } finally {
             this.metrics.recordLatency(removeTime, startNs, time.nanoseconds());
@@ -138,11 +138,15 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         long startNs = time.nanoseconds();
         try {
-            final Bytes key = Bytes.wrap(serdes.rawKey(sessionKey.key()));
+            final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
     }
 
     @Override

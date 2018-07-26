@@ -80,7 +80,8 @@ class ReplicaStateMachine(config: KafkaConfig,
    * in zookeeper
    */
   private def initializeReplicaState() {
-    controllerContext.partitionReplicaAssignment.foreach { case (partition, replicas) =>
+    controllerContext.allPartitions.foreach { partition =>
+      val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(partition, replicaId)
         if (controllerContext.isReplicaOnline(replicaId, partition))
@@ -181,7 +182,7 @@ class ReplicaStateMachine(config: KafkaConfig,
             case NewReplica =>
               val assignment = controllerContext.partitionReplicaAssignment(partition)
               if (!assignment.contains(replicaId)) {
-                controllerContext.partitionReplicaAssignment.put(partition, assignment :+ replicaId)
+                controllerContext.updatePartitionReplicaAssignment(partition, assignment :+ replicaId)
               }
             case _ =>
               controllerContext.partitionLeadershipInfo.get(partition) match {
@@ -201,8 +202,10 @@ class ReplicaStateMachine(config: KafkaConfig,
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId), replica.topicPartition,
             deletePartition = false, (_, _) => ())
         }
-        val replicasToRemoveFromIsr = validReplicas.filter(replica => controllerContext.partitionLeadershipInfo.contains(replica.topicPartition))
-        val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasToRemoveFromIsr.map(_.topicPartition))
+        val (replicasWithLeadershipInfo, replicasWithoutLeadershipInfo) = validReplicas.partition { replica =>
+          controllerContext.partitionLeadershipInfo.contains(replica.topicPartition)
+        }
+        val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
         updatedLeaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
           if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
             val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
@@ -213,6 +216,11 @@ class ReplicaStateMachine(config: KafkaConfig,
           }
           val replica = PartitionAndReplica(partition, replicaId)
           logSuccessfulTransition(replicaId, partition, replicaState(replica), OfflineReplica)
+          replicaState.put(replica, OfflineReplica)
+        }
+
+        replicasWithoutLeadershipInfo.foreach { replica =>
+          logSuccessfulTransition(replicaId, replica.topicPartition, replicaState(replica), OfflineReplica)
           replicaState.put(replica, OfflineReplica)
         }
       case ReplicaDeletionStarted =>
@@ -237,7 +245,7 @@ class ReplicaStateMachine(config: KafkaConfig,
       case NonExistentReplica =>
         validReplicas.foreach { replica =>
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(replica.topicPartition)
-          controllerContext.partitionReplicaAssignment.put(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
+          controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
           logSuccessfulTransition(replicaId, replica.topicPartition, replicaState(replica), NonExistentReplica)
           replicaState.remove(replica)
         }

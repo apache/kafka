@@ -448,10 +448,10 @@ public class Topology {
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
-    public synchronized Topology addSink(final String name,
-                                         final String topic,
-                                         final StreamPartitioner partitioner,
-                                         final String... parentNames) {
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final String topic,
+                                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, null, null, partitioner, parentNames);
         return this;
     }
@@ -476,11 +476,11 @@ public class Topology {
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
-    public synchronized Topology addSink(final String name,
-                                         final String topic,
-                                         final Serializer keySerializer,
-                                         final Serializer valueSerializer,
-                                         final String... parentNames) {
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final String topic,
+                                                final Serializer<K> keySerializer,
+                                                final Serializer<V> valueSerializer,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, keySerializer, valueSerializer, null, parentNames);
         return this;
     }

@@ -274,7 +274,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Now invoke the fast leader change bug
     (0 until 5).foreach { i =>
-      val leaderId = zkUtils.getLeaderForPartition(topic, 0).get
+      val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
       val leader = brokers.filter(_.config.brokerId == leaderId)(0)
       val follower = brokers.filter(_.config.brokerId != leaderId)(0)
 
@@ -379,13 +379,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def leader(): KafkaServer = {
     assertEquals(2, brokers.size)
-    val leaderId = zkUtils.getLeaderForPartition(topic, 0).get
+    val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
     brokers.filter(_.config.brokerId == leaderId)(0)
   }
 
   private def follower(): KafkaServer = {
     assertEquals(2, brokers.size)
-    val leader = zkUtils.getLeaderForPartition(topic, 0).get
+    val leader = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
     brokers.filter(_.config.brokerId != leader)(0)
   }
 

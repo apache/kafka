@@ -50,6 +50,7 @@ public class FileStreamSourceTask extends SourceTask {
     private char[] buffer = new char[1024];
     private int offset = 0;
     private String topic = null;
+    private int batchSize = FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE;
 
     private Long streamOffset;
 
@@ -67,9 +68,10 @@ public class FileStreamSourceTask extends SourceTask {
             streamOffset = null;
             reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
+        // Missing topic or parsing error is not possible because we've parsed the config in the
+        // Connector
         topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
-        if (topic == null)
-            throw new ConnectException("FileStreamSourceTask config missing topic setting");
+        batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
     }
 
     @Override
@@ -146,6 +148,10 @@ public class FileStreamSourceTask extends SourceTask {
                                 records = new ArrayList<>();
                             records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, null,
                                     null, null, VALUE_SCHEMA, line, System.currentTimeMillis()));
+
+                            if (records.size() >= batchSize) {
+                                return records;
+                            }
                         }
                     } while (line != null);
                 }

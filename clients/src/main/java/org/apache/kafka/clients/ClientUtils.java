@@ -35,8 +35,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
-public class ClientUtils {
+public final class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
+
+    private ClientUtils() {}
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<>();

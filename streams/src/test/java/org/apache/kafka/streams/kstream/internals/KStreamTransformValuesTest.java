@@ -24,14 +24,17 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.fail;
 
 public class KStreamTransformValuesTest {
@@ -86,22 +89,82 @@ public class KStreamTransformValuesTest {
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, expectedKey * 10);
         }
-
-        assertEquals(4, processor.processed.size());
-
         String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
-        }
+        assertArrayEquals(expected, processor.processed.toArray());
     }
 
     @Test
+    public void testTransformWithKey() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        ValueTransformerWithKeySupplier<Integer, Number, Integer> valueTransformerSupplier =
+                new ValueTransformerWithKeySupplier<Integer, Number, Integer>() {
+            public ValueTransformerWithKey<Integer, Number, Integer> get() {
+                return new ValueTransformerWithKey<Integer, Number, Integer>() {
+                    private int total = 0;
+                    @Override
+                    public void init(final ProcessorContext context) {
+
+                    }
+                    @Override
+                    public Integer transform(final Integer readOnlyKey, final Number value) {
+                        total += value.intValue() + readOnlyKey;
+                        return total;
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+        };
+
+        final int[] expectedKeys = {1, 10, 100, 1000};
+
+        KStream<Integer, Integer> stream;
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
+        stream.transformValues(valueTransformerSupplier).process(processor);
+
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
+        }
+        String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
+
+        assertArrayEquals(expected, processor.processed.toArray());
+    }
+
+
+    @Test
     public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
-        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerSupplier<Integer, Integer>() {
+        final BadValueTransformer badValueTransformer = new BadValueTransformer();
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new InternalValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
             @Override
-            public ValueTransformer<Integer, Integer> get() {
-                return new BadValueTransformer();
+            public InternalValueTransformerWithKey<Integer, Integer, Integer> get() {
+                return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
+                    @Override
+                    public Integer punctuate(long timestamp) {
+                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
+                    }
+
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        badValueTransformer.init(context);
+                    }
+
+                    @Override
+                    public Integer transform(final Integer readOnlyKey, final Integer value) {
+                        return badValueTransformer.transform(readOnlyKey, value);
+                    }
+
+                    @Override
+                    public void close() {
+                        badValueTransformer.close();
+                    }
+                };
             }
         });
 
@@ -130,6 +193,13 @@ public class KStreamTransformValuesTest {
         }
 
         try {
+            transformValueProcessor.process(null, 3);
+            fail("should not allow call to context.forward() within ValueTransformer");
+        } catch (final StreamsException e) {
+            // expected
+        }
+
+        try {
             transformValueProcessor.punctuate(0);
             fail("should not allow ValueTransformer#puntuate() to return not-null value");
         } catch (final StreamsException e) {
@@ -137,31 +207,29 @@ public class KStreamTransformValuesTest {
         }
     }
 
-    private static final class BadValueTransformer implements ValueTransformer<Integer, Integer> {
+    private static final class BadValueTransformer implements ValueTransformerWithKey<Integer, Integer, Integer> {
         private ProcessorContext context;
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             this.context = context;
         }
 
         @Override
-        public Integer transform(Integer value) {
+        public Integer transform(final Integer key, final Integer value) {
             if (value == 0) {
                 context.forward(null, null);
             }
             if (value == 1) {
-                context.forward(null, null, null);
+                context.forward(null, null, (String) null);
             }
             if (value == 2) {
                 context.forward(null, null, 0);
             }
+            if (value == 3) {
+                context.forward(null, null, To.all());
+            }
             throw new RuntimeException("Should never happen in this test");
-        }
-
-        @Override
-        public Integer punctuate(long timestamp) {
-            return 1; // any not-null falue
         }
 
         @Override

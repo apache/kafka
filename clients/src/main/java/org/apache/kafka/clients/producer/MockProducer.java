@@ -77,7 +77,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * @param cluster The cluster holding metadata for this producer
      * @param autoComplete If true automatically complete all requests successfully and execute the callback. Otherwise
      *        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
-     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the @{link
+     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the {@link
      *        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
      * @param partitioner The partition strategy
      * @param keySerializer The serializer for key that implements {@link Serializer}.

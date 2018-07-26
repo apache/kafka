@@ -27,7 +27,7 @@ class LRUCacheEntry implements RecordContext {
     private final long offset;
     private final String topic;
     private final int partition;
-    private final long timestamp;
+    private long timestamp;
 
     private long sizeBytes;
     private boolean isDirty;
@@ -61,6 +61,11 @@ class LRUCacheEntry implements RecordContext {
     @Override
     public long timestamp() {
         return timestamp;
+    }
+
+    @Override
+    public void setTimestamp(final long timestamp) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

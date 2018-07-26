@@ -230,7 +230,7 @@ public interface SessionWindowedKStream<K, V> {
      * <p>
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, SessionWindows, StateStoreSupplier)} can be used to compute aggregate functions like
+     * Thus, {@code reduce(Reducer, Materialized)} can be used to compute aggregate functions like
      * sum, min, or max.
      * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to

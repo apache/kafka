@@ -47,12 +47,16 @@ public class SyncGroupResponse extends AbstractResponse {
     /**
      * Possible error codes:
      *
-     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR (16)
      * ILLEGAL_GENERATION (22)
      * UNKNOWN_MEMBER_ID (25)
      * REBALANCE_IN_PROGRESS (27)
      * GROUP_AUTHORIZATION_FAILED (30)
+     *
+     * NOTE: Currently the coordinator returns REBALANCE_IN_PROGRESS while the coordinator is
+     * loading. On the next protocol bump, we should consider using COORDINATOR_LOAD_IN_PROGRESS
+     * to be consistent with the other APIs.
      */
 
     private final Errors error;

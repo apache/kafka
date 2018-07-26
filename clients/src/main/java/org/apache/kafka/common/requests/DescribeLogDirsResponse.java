@@ -192,6 +192,17 @@ public class DescribeLogDirsResponse extends AbstractResponse {
             this.error = error;
             this.replicaInfos = replicaInfos;
         }
+
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            builder.append("(error=")
+                    .append(error)
+                    .append(", replicas=")
+                    .append(replicaInfos)
+                    .append(")");
+            return builder.toString();
+        }
     }
 
     static public class ReplicaInfo {

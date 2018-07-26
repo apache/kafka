@@ -18,18 +18,20 @@
 
 <script id="content-template" type="text/x-handlebars-template">
 
-  <h1>Run Streams Demo Application</h1>
-  <div class="sub-nav-sticky">
-      <div class="sticky-top">
-        <div style="height:35px">
-          <a href="/{{version}}/documentation/streams/">Introduction</a>
-          <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
-          <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
-          <a class="active-menu-item" href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
-          <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+  <h1>Run Kafka Streams Demo Application</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
         </div>
-      </div>
-  </div> 
+    </div>
 <p>
   This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka and
   ZooKeeper, feel free to skip the first two steps.
@@ -217,7 +219,7 @@ This message will be processed by the Wordcount application and the following ou
 </p>
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
@@ -250,7 +252,7 @@ hello kafka streams
 In your other terminal in which the console consumer is running, you will observe that the WordCount application wrote new output data:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
@@ -285,7 +287,7 @@ join kafka summit
 The <b>streams-wordcount-output</b> topic will subsequently show the corresponding updated word counts (see last three lines):
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
     --formatter kafka.tools.DefaultMessageFormatter \
@@ -354,7 +356,7 @@ Looking beyond the scope of this concrete example, what Kafka Streams is doing h
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Streams</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
         </ul>
         <div class="p-content"></div>
     </div>

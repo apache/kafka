@@ -20,6 +20,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -30,6 +32,10 @@ import org.junit.Test;
 
 import java.util.Random;
 
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
@@ -37,6 +43,33 @@ public class AbstractStreamTest {
     private final String topicName = "topic";
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
+
+    @Test
+    public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
+        final ValueTransformerSupplier vts = createMock(ValueTransformerSupplier.class);
+        expect(vts.get()).andReturn(null).times(3);
+        final InternalValueTransformerWithKeySupplier ivtwks =
+            AbstractStream.toInternalValueTransformerSupplier(vts);
+        replay(vts);
+        ivtwks.get();
+        ivtwks.get();
+        ivtwks.get();
+        verify(vts);
+    }
+
+    @Test
+    public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
+        final ValueTransformerWithKeySupplier vtwks =
+            createMock(ValueTransformerWithKeySupplier.class);
+        expect(vtwks.get()).andReturn(null).times(3);
+        final InternalValueTransformerWithKeySupplier ivtwks =
+            AbstractStream.toInternalValueTransformerSupplier(vtwks);
+        replay(vtwks);
+        ivtwks.get();
+        ivtwks.get();
+        ivtwks.get();
+        verify(vtwks);
+    }
 
     @Test
     public void testShouldBeExtensible() {

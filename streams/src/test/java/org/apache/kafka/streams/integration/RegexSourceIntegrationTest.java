@@ -145,7 +145,7 @@ public class RegexSourceIntegrationTest {
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         final List<String> assignedTopics = new ArrayList<>();
-        streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
+        streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                 return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
@@ -185,8 +185,6 @@ public class RegexSourceIntegrationTest {
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
         final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-B");
 
-        final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
-
         CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -196,7 +194,7 @@ public class RegexSourceIntegrationTest {
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
         final List<String> assignedTopics = new ArrayList<>();
-        streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
+        streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                 return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
@@ -333,9 +331,8 @@ public class RegexSourceIntegrationTest {
 
             final List<String> leaderAssignment = new ArrayList<>();
             final List<String> followerAssignment = new ArrayList<>();
-            StreamsConfig config = new StreamsConfig(streamsConfiguration);
 
-            partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), config, new DefaultKafkaClientSupplier() {
+            partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
@@ -347,7 +344,7 @@ public class RegexSourceIntegrationTest {
 
                 }
             });
-            partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), config, new DefaultKafkaClientSupplier() {
+            partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {

@@ -23,27 +23,14 @@ class ProduceBenchWorkloadSpec(TaskSpec):
                  target_messages_per_sec, max_messages, producer_conf,
                  total_topics, active_topics):
         super(ProduceBenchWorkloadSpec, self).__init__(start_ms, duration_ms)
-        self.producer_node = producer_node
-        self.bootstrap_servers = bootstrap_servers
-        self.target_messages_per_sec = target_messages_per_sec
-        self.max_messages = max_messages
-        self.producer_conf = producer_conf
-        self.total_topics = total_topics
-        self.active_topics = active_topics
-
-    def message(self):
-        return {
-            "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
-            "startMs": self.start_ms,
-            "durationMs": self.duration_ms,
-            "producerNode": self.producer_node,
-            "bootstrapServers": self.bootstrap_servers,
-            "targetMessagesPerSec": self.target_messages_per_sec,
-            "maxMessages": self.max_messages,
-            "producerConf": self.producer_conf,
-            "totalTopics": self.total_topics,
-            "activeTopics": self.active_topics,
-        }
+        self.message["class"] = "org.apache.kafka.trogdor.workload.ProduceBenchSpec"
+        self.message["producerNode"] = producer_node
+        self.message["bootstrapServers"] = bootstrap_servers
+        self.message["targetMessagesPerSec"] = target_messages_per_sec
+        self.message["maxMessages"] = max_messages
+        self.message["producerConf"] = producer_conf
+        self.message["totalTopics"] = total_topics
+        self.message["activeTopics"] = active_topics
 
 
 class ProduceBenchWorkloadService(Service):

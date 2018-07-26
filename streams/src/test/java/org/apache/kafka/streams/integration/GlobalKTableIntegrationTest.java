@@ -34,7 +34,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -85,17 +84,15 @@ public class GlobalKTableIntegrationTest {
             return value1 + "+" + value2;
         }
     };
+    private final String globalStore = "globalStore";
+    private final Map<String, String> results = new HashMap<>();
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    private String globalOne;
-    private String inputStream;
-    private String inputTable;
-    private final String globalStore = "globalStore";
+    private String globalTableTopic;
+    private String streamTopic;
     private GlobalKTable<Long, String> globalTable;
     private KStream<String, Long> stream;
-    private KTable<String, Long> table;
-    final Map<String, String> results = new HashMap<>();
     private ForeachAction<String, String> foreachAction;
 
     @Before
@@ -104,7 +101,7 @@ public class GlobalKTableIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalOne-table-test-" + testNo;
+        final String applicationId = "globalTableTopic-table-test-" + testNo;
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
                 .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -113,13 +110,12 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        globalTable = builder.globalTable(globalOne, Consumed.with(Serdes.Long(), Serdes.String()),
+        globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
                                           Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
                                                   .withKeySerde(Serdes.Long())
                                                   .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
-        stream = builder.stream(inputStream, stringLongConsumed);
-        table = builder.table(inputTable, stringLongConsumed);
+        stream = builder.stream(streamTopic, stringLongConsumed);
         foreachAction = new ForeachAction<String, String>() {
             @Override
             public void apply(final String key, final String value) {
@@ -142,7 +138,7 @@ public class GlobalKTableIntegrationTest {
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
         startStreams();
-        produceTopicValues(inputStream);
+        produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("a", "1+A");
@@ -169,7 +165,7 @@ public class GlobalKTableIntegrationTest {
                 return "J".equals(replicatedStore.get(5L));
             }
         }, 30000, "waiting for data in replicated store");
-        produceTopicValues(inputStream);
+        produceTopicValues(streamTopic);
 
         expected.put("a", "1+F");
         expected.put("b", "2+G");
@@ -191,7 +187,7 @@ public class GlobalKTableIntegrationTest {
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
         startStreams();
-        produceTopicValues(inputStream);
+        produceTopicValues(streamTopic);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("a", "1+A");
@@ -218,7 +214,7 @@ public class GlobalKTableIntegrationTest {
             }
         }, 30000, "waiting for data in replicated store");
 
-        produceTopicValues(inputStream);
+        produceTopicValues(streamTopic);
 
         expected.put("a", "1+F");
         expected.put("b", "2+G");
@@ -267,11 +263,10 @@ public class GlobalKTableIntegrationTest {
     }
 
     private void createTopics() throws InterruptedException {
-        inputStream = "input-stream-" + testNo;
-        inputTable = "input-table-" + testNo;
-        globalOne = "globalOne-" + testNo;
-        CLUSTER.createTopics(inputStream, inputTable);
-        CLUSTER.createTopic(globalOne, 2, 1);
+        streamTopic = "stream-" + testNo;
+        globalTableTopic = "globalTable-" + testNo;
+        CLUSTER.createTopics(streamTopic);
+        CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
 
     private void startStreams() {
@@ -307,7 +302,7 @@ public class GlobalKTableIntegrationTest {
             properties.put(ProducerConfig.RETRIES_CONFIG, 1);
         }
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalOne,
+                globalTableTopic,
                 Arrays.asList(
                         new KeyValue<>(1L, "A"),
                         new KeyValue<>(2L, "B"),
@@ -324,7 +319,7 @@ public class GlobalKTableIntegrationTest {
 
     private void produceGlobalTableValues() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalOne,
+                globalTableTopic,
                 Arrays.asList(
                         new KeyValue<>(1L, "F"),
                         new KeyValue<>(2L, "G"),
@@ -338,6 +333,4 @@ public class GlobalKTableIntegrationTest {
                         new Properties()),
                 mockTime);
     }
-
-
 }

@@ -93,6 +93,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.rejoinRequested = false;
     }
 
+    @Override
     public void requestRejoin() {
         rejoinRequested = true;
     }
@@ -315,12 +316,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.connectors().size();
                 }
             };
 
             Measurable numTasks = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.tasks().size();
                 }

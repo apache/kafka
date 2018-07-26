@@ -53,11 +53,11 @@ public class KTableSourceTest {
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(stringSerde, intSerde));
+        final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(stringSerde, intSerde));
 
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
         driver.setUp(builder, stateDir);
@@ -77,14 +77,14 @@ public class KTableSourceTest {
     public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-        KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
         driver.setUp(builder, stateDir);
-        KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+        final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
 
         driver.process(topic1, "A", "01");
@@ -121,11 +121,11 @@ public class KTableSourceTest {
     public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
         builder.build().addProcessor("proc1", proc1, table1.name);
 
@@ -159,15 +159,15 @@ public class KTableSourceTest {
     public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         table1.enableSendingOldValues();
 
         assertTrue(table1.sendingOldValueEnabled());
 
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
         builder.build().addProcessor("proc1", proc1, table1.name);
 

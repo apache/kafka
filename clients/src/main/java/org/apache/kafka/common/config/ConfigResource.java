@@ -61,6 +61,14 @@ public final class ConfigResource {
         return name;
     }
 
+    /**
+     * Returns true if this is the default resource of a resource type.
+     * Resource name is empty for the default resource.
+     */
+    public boolean isDefault() {
+        return name.isEmpty();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o)
@@ -82,6 +90,6 @@ public final class ConfigResource {
 
     @Override
     public String toString() {
-        return "ConfigResource{type=" + type + ", name='" + name + "'}";
+        return "ConfigResource(type=" + type + ", name='" + name + "')";
     }
 }

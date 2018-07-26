@@ -41,7 +41,8 @@ class RecordDeserializer {
 
     /**
      * @throws StreamsException if a deserialization error occurs and the deserialization callback returns
-     * {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL} or throws an exception itself
+     *                          {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL}
+     *                          or throws an exception itself
      */
     @SuppressWarnings("deprecation")
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
@@ -64,9 +65,10 @@ class RecordDeserializer {
             try {
                 response = deserializationExceptionHandler.handle(processorContext, rawRecord, deserializationException);
             } catch (final Exception fatalUserException) {
-                log.error("Deserialization error callback failed after deserialization error for record {}",
-                          rawRecord,
-                          deserializationException);
+                log.error(
+                    "Deserialization error callback failed after deserialization error for record {}",
+                    rawRecord,
+                    deserializationException);
                 throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
             }
 
@@ -77,7 +79,7 @@ class RecordDeserializer {
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                     deserializationException);
             } else {
-                sourceNode.nodeMetrics.sourceNodeSkippedDueToDeserializationError.record();
+                sourceNode.sourceNodeSkippedDueToDeserializationErrorSensor().record();
             }
         }
         return null;

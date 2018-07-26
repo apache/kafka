@@ -313,6 +313,8 @@ abstract class WorkerTask implements Runnable {
             metricGroup = connectMetrics.group(registry.taskGroupName(),
                     registry.connectorTagName(), id.connector(),
                     registry.taskTagName(), Integer.toString(id.task()));
+            // prevent collisions by removing any previously created metrics in this group.
+            metricGroup.close();
 
             metricGroup.addValueMetric(registry.taskStatus, new LiteralSupplier<String>() {
                 @Override

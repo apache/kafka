@@ -1,0 +1,129 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="../../js/templateData.js" --></script>
+
+<script id="content-template" type="text/x-handlebars-template">
+  <!-- h1>Developer Guide for Kafka Streams</h1 -->
+  <div class="sub-nav-sticky">
+    <div class="sticky-top">
+      <!-- div style="height:35px">
+        <a href="/{{version}}/documentation/streams/">Introduction</a>
+        <a class="active-menu-item" href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+        <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+        <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+        <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+      </div -->
+    </div>
+  </div>
+
+  <div class="section" id="managing-streams-application-topics">
+    <span id="streams-developer-guide-topics"></span><h1>Managing Streams Application Topics<a class="headerlink" href="#managing-streams-application-topics" title="Permalink to this headline"></a></h1>
+    <p>A Kafka Streams application continuously reads from Kafka topics, processes the read data, and then
+      writes the processing results back into Kafka topics.  The application may also auto-create other Kafka topics in the
+      Kafka brokers, for example state store changelogs topics.  This section describes the differences these topic types and
+      how to manage the topics and your applications.</p>
+    <p>Kafka Streams distinguishes between <a class="reference internal" href="#streams-developer-guide-topics-user"><span class="std std-ref">user topics</span></a> and
+      <a class="reference internal" href="#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
+    <div class="section" id="user-topics">
+      <span id="streams-developer-guide-topics-user"></span><h2>User topics<a class="headerlink" href="#user-topics" title="Permalink to this headline"></a></h2>
+      <p>User topics exist externally to an application and are read from or written to by the application, including:</p>
+      <dl class="docutils">
+        <dt>Input topics</dt>
+        <dd>Topics that are specified via source processors in the application&#8217;s topology; e.g. via <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code>, <code class="docutils literal"><span class="pre">StreamsBuilder#table()</span></code> and <code class="docutils literal"><span class="pre">Topology#addSource()</span></code>.</dd>
+        <dt>Output topics</dt>
+        <dd>Topics that are specified via sink processors in the application&#8217;s topology; e.g. via
+          <code class="docutils literal"><span class="pre">KStream#to()</span></code>, <code class="docutils literal"><span class="pre">KTable.to()</span></code> and <code class="docutils literal"><span class="pre">Topology#addSink()</span></code>.</dd>
+        <dt>Intermediate topics</dt>
+        <dd>Topics that are both input and output topics of the application&#8217;s topology; e.g. via
+          <code class="docutils literal"><span class="pre">KStream#through()</span></code>.</dd>
+      </dl>
+      <p>User topics must be created and manually managed ahead of time (e.g., via the
+        <a class="reference internal" href="../../kafka/post-deployment.html#kafka-operations-admin"><span class="std std-ref">topic tools</span></a>).  If user topics are shared among multiple applications for reading and
+        writing, the application users must coordinate topic management. If user topics are centrally managed, then application
+        users then would not need to manage topics themselves but simply obtain access to them.</p>
+      <div class="admonition note">
+        <p class="first admonition-title">Note</p>
+        <p>You should not use the auto-create topic feature on the brokers to create user topics, because:</p>
+        <ul class="last simple">
+          <li>Auto-creation of topics may be disabled in your Kafka cluster.</li>
+          <li>Auto-creation automatically applies the default topic settings such as the replicaton factor. These default settings might not be what you want for certain output topics (e.g., <code class="docutils literal"><span class="pre">auto.create.topics.enable=true</span></code> in the <a class="reference external" href="http://kafka.apache.org/0100/documentation.html#brokerconfigs">Kafka broker configuration</a>).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="section" id="internal-topics">
+      <span id="streams-developer-guide-topics-internal"></span><h2>Internal topics<a class="headerlink" href="#internal-topics" title="Permalink to this headline"></a></h2>
+      <p>Internal topics are used internally by the Kafka Streams application while executing, for example the
+        changelog topics for state stores. These topics are created by the application and are only used by that stream application.</p>
+      <p>If security is enabled on the Kafka brokers, you must grant the underlying clients admin permissions so that they can
+        create internal topics set. For more information, see <a class="reference internal" href="security.html#streams-developer-guide-security"><span class="std std-ref">Streams Security</span></a>.</p>
+      <div class="admonition note">
+        <p class="first admonition-title">Note</p>
+        <p class="last">The internal topics follow the naming convention <code class="docutils literal"><span class="pre">&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</span></code>, but this convention
+          is not guaranteed for future releases.</p>
+</div>
+</div>
+</div>
+
+
+               </div>
+              </div>
+  <div class="pagination">
+    <a href="/{{version}}/documentation/streams/developer-guide/running-app" class="pagination__btn pagination__btn__prev">Previous</a>
+    <a href="/{{version}}/documentation/streams/developer-guide/security" class="pagination__btn pagination__btn__next">Next</a>
+  </div>
+</script>
+
+<!--#include virtual="../../../includes/_header.htm" -->
+<!--#include virtual="../../../includes/_top.htm" -->
+<div class="content documentation documentation--current">
+  <!--#include virtual="../../../includes/_nav.htm" -->
+  <div class="right">
+    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+    <ul class="breadcrumbs">
+      <li><a href="/documentation">Documentation</a></li>
+      <li><a href="/documentation/streams">Kafka Streams</a></li>
+      <li><a href="/documentation/streams/developer-guide/">Developer Guide</a></li>
+    </ul>
+    <div class="p-content"></div>
+  </div>
+</div>
+<!--#include virtual="../../../includes/_footer.htm" -->
+<script>
+    $(function() {
+        // Show selected style on nav item
+        $('.b-nav__streams').addClass('selected');
+
+        //sticky secondary nav
+        var $navbar = $(".sub-nav-sticky"),
+            y_pos = $navbar.offset().top,
+            height = $navbar.height();
+
+        $(window).scroll(function() {
+            var scrollTop = $(window).scrollTop();
+
+            if (scrollTop > y_pos - height) {
+                $navbar.addClass("navbar-fixed")
+            } else if (scrollTop <= y_pos) {
+                $navbar.removeClass("navbar-fixed")
+            }
+        });
+
+        // Display docs subnav items
+        $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+    });
+</script>

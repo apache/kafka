@@ -313,9 +313,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     /**
      * determine if the current assignment is a balanced one
      *
+     * @param currentAssignment: the assignment whose balance needs to be checked
      * @param sortedCurrentSubscriptions: an ascending sorted set of consumers based on how many topic partitions are already assigned to them
      * @param allSubscriptions: a mapping of all consumers to all potential topic partitions that can be assigned to them
-     * @return
+     * @return true if the given assignment is balanced; false otherwise
      */
     private boolean isBalanced(Map<String, List<TopicPartition>> currentAssignment,
                                TreeSet<String> sortedCurrentSubscriptions,

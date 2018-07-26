@@ -18,23 +18,24 @@ package kafka.zk
 
 import java.util.Properties
 
-
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
+import kafka.common.KafkaException
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
-import kafka.utils._
+import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
-import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
@@ -49,7 +50,8 @@ import scala.collection.{Seq, mutable}
  * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
  * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends Logging with KafkaMetricsGroup {
+class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
+  Logging with KafkaMetricsGroup {
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -58,6 +60,9 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   private val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
 
   import KafkaZkClient._
+
+  // Only for testing
+  private[kafka] def currentZooKeeper: ZooKeeper = zooKeeperClient.currentZooKeeper
 
   /**
    * Create a sequential persistent path. That is, the znode will not be automatically deleted upon client's disconnect
@@ -75,11 +80,18 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
-    val brokerIdPath = brokerInfo.path()
-    checkedEphemeralCreate(brokerIdPath, brokerInfo.encode())
-    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.id, brokerIdPath, brokerInfo.endpoints()))
+    val path = brokerInfo.path
+    checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
 
+  def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
+    val brokerIdPath = brokerInfo.path
+    val setDataRequest = SetDataRequest(brokerIdPath, brokerInfo.toJsonBytes, ZkVersion.NoVersion)
+    val response = retryRequestUntilConnected(setDataRequest)
+    response.maybeThrow()
+    info("Updated broker %d at path %s with addresses: %s".format(brokerInfo.broker.id, brokerIdPath, brokerInfo.broker.endPoints))
+  }
 
   /**
    * Gets topic partition states for the given partitions.
@@ -274,10 +286,11 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @throws KeeperException if there is an error while setting or creating the znode
    */
   def createConfigChangeNotification(sanitizedEntityPath: String): Unit = {
+    makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     val path = ConfigEntityChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, ConfigEntityChangeNotificationSequenceZNode.encode(sanitizedEntityPath), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
+    createResponse.maybeThrow()
   }
 
   /**
@@ -292,13 +305,27 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
       val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
       getDataResponse.resultCode match {
         case Code.OK =>
-          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data))
+          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
     }
   }
 
+  /**
+    * Get a broker from ZK
+    * @return an optional Broker
+    */
+  def getBroker(brokerId: Int): Option[Broker] = {
+    val getDataRequest = GetDataRequest(BrokerIdZNode.path(brokerId))
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK =>
+        Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
 
   /**
    * Gets the list of sorted broker Ids
@@ -399,7 +426,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   def deleteLogDirEventNotifications(): Unit = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(LogDirEventNotificationZNode.path))
     if (getChildrenResponse.resultCode == Code.OK) {
-      deleteLogDirEventNotifications(getChildrenResponse.children)
+      deleteLogDirEventNotifications(getChildrenResponse.children.map(LogDirEventNotificationSequenceZNode.sequenceNumber))
     } else if (getChildrenResponse.resultCode != Code.NONODE) {
       getChildrenResponse.maybeThrow
     }
@@ -439,7 +466,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @param topics the topics whose partitions we wish to get the assignments for.
    * @return the partition assignment for each partition from the given topics.
    */
-  def getPartitionAssignmentForTopics(topics: Set[String]):  Map[String, Map[Int, Seq[Int]]] = {
+  def getPartitionAssignmentForTopics(topics: Set[String]): Map[String, Map[Int, Seq[Int]]] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
@@ -489,6 +516,21 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   def getReplicasForPartition(topicPartition: TopicPartition): Seq[Int] = {
     val topicData = getReplicaAssignmentForTopics(Set(topicPartition.topic))
     topicData.getOrElse(topicPartition, Seq.empty)
+  }
+
+  /**
+   * Gets all partitions in the cluster
+   * @return all partitions in the cluster
+   */
+  def getAllPartitions(): Set[TopicPartition] = {
+    val topics = getChildren(TopicsZNode.path)
+    if (topics == null) Set.empty
+    else {
+      topics.flatMap { topic =>
+        // The partitions path may not exist if the topic is in the process of being deleted
+        getChildren(TopicPartitionsZNode.path(topic)).map(_.toInt).map(new TopicPartition(topic, _))
+      }.toSet
+    }
   }
 
   /**
@@ -624,11 +666,17 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * Returns all reassignments.
    * @return the reassignments for each partition.
    */
-  def getPartitionReassignment: Map[TopicPartition, Seq[Int]] = {
+  def getPartitionReassignment: collection.Map[TopicPartition, Seq[Int]] = {
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case  Code.OK => ReassignPartitionsZNode.decode(getDataResponse.data)
+      case Code.OK =>
+        ReassignPartitionsZNode.decode(getDataResponse.data) match {
+          case Left(e) =>
+            logger.warn(s"Ignoring partition reassignment due to invalid json: ${e.getMessage}", e)
+            Map.empty[TopicPartition, Seq[Int]]
+          case Right(assignments) => assignments
+        }
       case Code.NONODE => Map.empty
       case _ => throw getDataResponse.resultException.get
     }
@@ -667,13 +715,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   /**
    * Creates the partition reassignment znode with the given reassignment.
    * @param reassignment the reassignment to set on the reassignment znode.
-   * @throws KeeperException if there is an error while setting or creating the znode
+   * @throws KeeperException if there is an error while creating the znode
    */
   def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
-    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
-      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
+    createRecursive(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment))
   }
 
   /**
@@ -727,15 +772,28 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
 
   /**
    * Gets the leader for a given partition
-   * @param partition
+   * @param partition The partition for which we want to get leader.
    * @return optional integer if the leader exists and None otherwise.
    */
-  def getLeaderForPartition(partition: TopicPartition): Option[Int] = {
-    val leaderIsrEpoch = getTopicPartitionState(partition)
-    if (leaderIsrEpoch.isDefined)
-      Option(leaderIsrEpoch.get.leaderAndIsr.leader)
-    else
-      None
+  def getLeaderForPartition(partition: TopicPartition): Option[Int] =
+    getTopicPartitionState(partition).map(_.leaderAndIsr.leader)
+
+  /**
+   * Gets the in-sync replicas (ISR) for a specific topicPartition
+   * @param partition The partition for which we want to get ISR.
+   * @return optional ISR if exists and None otherwise
+   */
+  def getInSyncReplicasForPartition(partition: TopicPartition): Option[Seq[Int]] =
+    getTopicPartitionState(partition).map(_.leaderAndIsr.isr)
+
+
+  /**
+   * Gets the leader epoch for a specific topicPartition
+   * @param partition The partition for which we want to get the leader epoch
+   * @return optional integer if the leader exists and None otherwise
+   */
+  def getEpochForPartition(partition: TopicPartition): Option[Int] = {
+    getTopicPartitionState(partition).map(_.leaderAndIsr.leaderEpoch)
   }
 
   /**
@@ -791,6 +849,15 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
       DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
     }
     retryRequestsUntilConnected(deleteRequests)
+  }
+
+  /**
+   * Creates preferred replica election znode with partitions undergoing election
+   * @param partitions
+   * @throws KeeperException if there is an error while creating the znode
+   */
+  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit  = {
+    createRecursive(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions))
   }
 
   /**
@@ -1049,6 +1116,78 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
+   * Creates the required zk nodes for Delegation Token storage
+   */
+  def createDelegationTokenPaths(): Unit = {
+    createRecursive(DelegationTokenChangeNotificationZNode.path, throwIfPathExists = false)
+    createRecursive(DelegationTokensZNode.path, throwIfPathExists = false)
+  }
+
+  /**
+   * Creates Delegation Token change notification message
+   * @param tokenId token Id
+   */
+  def createTokenChangeNotification(tokenId: String): Unit = {
+    val path = DelegationTokenChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, DelegationTokenChangeNotificationSequenceZNode.encode(tokenId), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.resultException.foreach(e => throw e)
+  }
+
+  /**
+   * Sets or creates token info znode with the given token details depending on whether it already
+   * exists or not.
+   *
+   * @param token the token to set on the token znode
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def setOrCreateDelegationToken(token: DelegationToken): Unit = {
+
+    def set(tokenData: Array[Byte]): SetDataResponse = {
+      val setDataRequest = SetDataRequest(DelegationTokenInfoZNode.path(token.tokenInfo().tokenId()), tokenData, ZkVersion.NoVersion)
+      retryRequestUntilConnected(setDataRequest)
+    }
+
+    def create(tokenData: Array[Byte]): CreateResponse = {
+      val path = DelegationTokenInfoZNode.path(token.tokenInfo().tokenId())
+      val createRequest = CreateRequest(path, tokenData, acls(path), CreateMode.PERSISTENT)
+      retryRequestUntilConnected(createRequest)
+    }
+
+    val tokenInfo = DelegationTokenInfoZNode.encode(token)
+    val setDataResponse = set(tokenInfo)
+    setDataResponse.resultCode match {
+      case Code.NONODE =>
+        val createDataResponse = create(tokenInfo)
+        createDataResponse.maybeThrow
+      case _ => setDataResponse.maybeThrow
+    }
+  }
+
+  /**
+   * Gets the Delegation Token Info
+   * @return optional TokenInfo that is Some if the token znode exists and can be parsed and None otherwise.
+   */
+  def getDelegationTokenInfo(delegationTokenId: String): Option[TokenInformation] = {
+    val getDataRequest = GetDataRequest(DelegationTokenInfoZNode.path(delegationTokenId))
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK => DelegationTokenInfoZNode.decode(getDataResponse.data)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+  /**
+   * Deletes the given Delegation token node
+   * @param delegationTokenId
+   * @return delete status
+   */
+  def deleteDelegationToken(delegationTokenId: String): Boolean = {
+    deleteRecursive(DelegationTokenInfoZNode.path(delegationTokenId))
+  }
+
+  /**
    * This registers a ZNodeChangeHandler and attempts to register a watcher with an ExistsRequest, which allows data
    * watcher registrations on paths which might not even exist.
    *
@@ -1153,6 +1292,67 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     }
   }
 
+  /**
+    * Get the cluster id.
+    * @return optional cluster id in String.
+    */
+  def getClusterId: Option[String] = {
+    val getDataRequest = GetDataRequest(ClusterIdZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK => Some(ClusterIdZNode.fromJson(getDataResponse.data))
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+  /**
+    * Create the cluster Id. If the cluster id already exists, return the current cluster id.
+    * @return  cluster id
+    */
+  def createOrGetClusterId(proposedClusterId: String): String = {
+    try {
+      createRecursive(ClusterIdZNode.path, ClusterIdZNode.toJson(proposedClusterId))
+      proposedClusterId
+    } catch {
+      case e: NodeExistsException => getClusterId.getOrElse(
+        throw new KafkaException("Failed to get cluster id from Zookeeper. This can happen if /cluster/id is deleted from Zookeeper."))
+    }
+  }
+
+  /**
+    * Generate a broker id by updating the broker sequence id path in ZK and return the version of the path.
+    * The version is incremented by one on every update starting from 1.
+    * @return sequence number as the broker id
+    */
+  def generateBrokerSequenceId(): Int = {
+    val setDataRequest = SetDataRequest(BrokerSequenceIdZNode.path, Array.empty[Byte], -1)
+    val setDataResponse = retryRequestUntilConnected(setDataRequest)
+    setDataResponse.resultCode match {
+      case Code.OK => setDataResponse.stat.getVersion
+      case Code.NONODE =>
+        // maker sure the path exists
+        createRecursive(BrokerSequenceIdZNode.path, Array.empty[Byte], throwIfPathExists = false)
+        generateBrokerSequenceId()
+      case _ => throw setDataResponse.resultException.get
+    }
+  }
+
+  /**
+    * Pre-create top level paths in ZK if needed.
+    */
+  def createTopLevelPaths(): Unit = {
+    ZkData.PersistentZkPaths.foreach(makeSurePersistentPathExists(_))
+  }
+
+  /**
+    * Make sure a persistent path exists in ZK.
+    * @param path
+    */
+  def makeSurePersistentPathExists(path: String): Unit = {
+    createRecursive(path, data = null, throwIfPathExists = false)
+  }
+
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {
     val setDataRequest = SetDataRequest(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition),
       ConsumerOffset.encode(offset), ZkVersion.NoVersion)
@@ -1170,7 +1370,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @return true if path gets deleted successfully, false if root path doesn't exist
    * @throws KeeperException if there is an error while deleting the znodes
    */
-  private[zk] def deleteRecursive(path: String): Boolean = {
+  def deleteRecursive(path: String): Boolean = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     getChildrenResponse.resultCode match {
       case Code.OK =>
@@ -1185,7 +1385,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     }
   }
 
-  private[zk] def pathExists(path: String): Boolean = {
+  def pathExists(path: String): Boolean = {
     val existsRequest = ExistsRequest(path)
     val existsResponse = retryRequestUntilConnected(existsRequest)
     existsResponse.resultCode match {
@@ -1225,7 +1425,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     } else if (createResponse.resultCode == Code.NONODE) {
       createRecursive0(parentPath(path))
       createResponse = retryRequestUntilConnected(createRequest)
-      createResponse.maybeThrow
+      if (throwIfPathExists || createResponse.resultCode != Code.NODEEXISTS)
+        createResponse.maybeThrow
     } else if (createResponse.resultCode != Code.NODEEXISTS)
       createResponse.maybeThrow
 
@@ -1254,10 +1455,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     retryRequestsUntilConnected(getDataRequests)
   }
 
-  private def acls(path: String): Seq[ACL] = {
-    import scala.collection.JavaConverters._
-    ZkUtils.defaultAcls(isSecure, path).asScala
-  }
+  private def acls(path: String): Seq[ACL] = ZkData.defaultAcls(isSecure, path)
 
   private def retryRequestUntilConnected[Req <: AsyncRequest](request: Req): Req#Response = {
     retryRequestsUntilConnected(Seq(request)).head
@@ -1347,4 +1545,22 @@ object KafkaZkClient {
   case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicPartition, LeaderAndIsr],
                                       partitionsToRetry: Seq[TopicPartition],
                                       failedPartitions: Map[TopicPartition, Exception])
+
+  /**
+   * Create an instance of this class with the provided parameters.
+   *
+   * The metric group and type are preserved by default for compatibility with previous versions.
+   */
+  def apply(connectString: String,
+            isSecure: Boolean,
+            sessionTimeoutMs: Int,
+            connectionTimeoutMs: Int,
+            maxInFlightRequests: Int,
+            time: Time,
+            metricGroup: String = "kafka.server",
+            metricType: String = "SessionExpireListener") = {
+    val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
+      time, metricGroup, metricType)
+    new KafkaZkClient(zooKeeperClient, isSecure, time)
+  }
 }

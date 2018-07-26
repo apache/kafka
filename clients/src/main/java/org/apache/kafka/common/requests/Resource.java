@@ -55,6 +55,6 @@ public final class Resource {
 
     @Override
     public String toString() {
-        return "Resource(type=" + type + ", name='" + name + "'}";
+        return "Resource(type=" + type + ", name='" + name + "')";
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
@@ -34,7 +35,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String TOPICS_DEFAULT = "";
     private static final String TOPICS_DISPLAY = "Topics";
 
-    private static final String TOPICS_REGEX_CONFIG = SinkTask.TOPICS_REGEX_CONFIG;
+    public static final String TOPICS_REGEX_CONFIG = SinkTask.TOPICS_REGEX_CONFIG;
     private static final String TOPICS_REGEX_DOC = "Regular expression giving topics to consume. " +
         "Under the hood, the regex is compiled to a <code>java.util.regex.Pattern</code>. " +
         "Only one of " + TOPICS_CONFIG + " or " + TOPICS_REGEX_CONFIG + " should be specified.";
@@ -52,4 +53,34 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public SinkConnectorConfig(Plugins plugins, Map<String, String> props) {
         super(plugins, config, props);
     }
+
+    /**
+     * Throw an exception if the passed-in properties do not constitute a valid sink.
+     * @param props sink configuration properties
+     */
+    public static void validate(Map<String, String> props) {
+        final boolean hasTopicsConfig = hasTopicsConfig(props);
+        final boolean hasTopicsRegexConfig = hasTopicsRegexConfig(props);
+
+        if (hasTopicsConfig && hasTopicsRegexConfig) {
+            throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
+                " are mutually exclusive options, but both are set.");
+        }
+
+        if (!hasTopicsConfig && !hasTopicsRegexConfig) {
+            throw new ConfigException("Must configure one of " +
+                SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
+        }
+    }
+
+    public static boolean hasTopicsConfig(Map<String, String> props) {
+        String topicsStr = props.get(TOPICS_CONFIG);
+        return topicsStr != null && !topicsStr.trim().isEmpty();
+    }
+
+    public static boolean hasTopicsRegexConfig(Map<String, String> props) {
+        String topicsRegexStr = props.get(TOPICS_REGEX_CONFIG);
+        return topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
+    }
+
 }

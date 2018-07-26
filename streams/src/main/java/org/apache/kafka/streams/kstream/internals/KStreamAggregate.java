@@ -32,7 +32,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamAggregate(final String storeName, final Initializer<T> initializer, final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -55,7 +55,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
@@ -63,21 +63,22 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
 
         @Override
-        public void process(K key, V value) {
-            if (key == null)
+        public void process(final K key, final V value) {
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
                 return;
+            }
 
             T oldAgg = store.get(key);
 
-            if (oldAgg == null)
+            if (oldAgg == null) {
                 oldAgg = initializer.apply();
+            }
 
             T newAgg = oldAgg;
 
             // try to add the new value
-            if (value != null) {
-                newAgg = aggregator.apply(key, value, newAgg);
-            }
+            newAgg = aggregator.apply(key, value, newAgg);
 
             // update the store with the new value
             store.put(key, newAgg);
@@ -107,12 +108,12 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(K key) {
+        public T get(final K key) {
             return store.get(key);
         }
     }

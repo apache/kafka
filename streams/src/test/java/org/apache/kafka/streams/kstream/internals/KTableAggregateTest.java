@@ -35,7 +35,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -73,7 +73,7 @@ public class KTableAggregateTest {
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
                                                        stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -121,7 +121,7 @@ public class KTableAggregateTest {
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
                                                        stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -235,7 +235,7 @@ public class KTableAggregateTest {
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
         builder.table(input, consumed)
-                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerialzied)
+                .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
                 .count("count")
                 .toStream()
                 .process(proc);
@@ -250,7 +250,7 @@ public class KTableAggregateTest {
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
         builder.table(input, consumed)
-            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerialzied)
+            .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
             .count()
             .toStream()
             .process(proc);
@@ -265,7 +265,7 @@ public class KTableAggregateTest {
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
         builder.table(input, consumed)
-            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerialzied)
+            .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
             .count("count")
             .toStream()
             .process(proc);

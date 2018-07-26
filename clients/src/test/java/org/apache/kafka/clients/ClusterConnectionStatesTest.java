@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -141,8 +142,9 @@ public class ClusterConnectionStatesTest {
         time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
 
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        connectionStates.ready(nodeId1);
+        assertNull(connectionStates.authenticationException(nodeId1));
     }
-
 
     @Test
     public void testRemoveNode() {

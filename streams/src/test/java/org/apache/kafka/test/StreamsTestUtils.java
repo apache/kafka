@@ -39,7 +39,7 @@ public class StreamsTestUtils {
                                               final String valueSerdeClassName,
                                               final Properties additional) {
 
-        Properties streamsConfiguration = new Properties();
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         streamsConfiguration.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");

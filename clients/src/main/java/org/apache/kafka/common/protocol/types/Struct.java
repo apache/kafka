@@ -105,6 +105,12 @@ public class Struct {
         return alternative;
     }
 
+    public Short getOrElse(Field.Int16 field, short alternative) {
+        if (hasField(field.name))
+            return getShort(field.name);
+        return alternative;
+    }
+
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
@@ -289,7 +295,11 @@ public class Struct {
     }
 
     public Struct setIfExists(Field def, Object value) {
-        BoundField field = this.schema.get(def.name);
+        return setIfExists(def.name, value);
+    }
+
+    public Struct setIfExists(String fieldName, Object value) {
+        BoundField field = this.schema.get(fieldName);
         if (field != null)
             this.values[field.index] = value;
         return this;

@@ -102,7 +102,7 @@ public class DeleteAclsResult {
      */
     public KafkaFuture<Collection<AclBinding>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
-            new KafkaFuture.Function<Void, Collection<AclBinding>>() {
+            new KafkaFuture.BaseFunction<Void, Collection<AclBinding>>() {
                 @Override
                 public Collection<AclBinding> apply(Void v) {
                     List<AclBinding> acls = new ArrayList<>();

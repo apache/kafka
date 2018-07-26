@@ -52,7 +52,10 @@ public class PunctuationQueue {
 
                 if (!sched.isCancelled()) {
                     processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
-                    pq.add(sched.next(timestamp));
+                    // sched can be cancelled from within the punctuator
+                    if (!sched.isCancelled()) {
+                        pq.add(sched.next(timestamp));
+                    }
                     punctuated = true;
                 }
 

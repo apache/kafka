@@ -25,7 +25,6 @@ import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -52,14 +51,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Utils {
+public final class Utils {
+
+    private Utils() {}
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
@@ -301,11 +304,22 @@ public class Utils {
      * Look up the class by name and instantiate it.
      * @param klass class name
      * @param base super class of the class to be instantiated
-     * @param <T>
+     * @param <T> the type of the base class
      * @return the new instance
      */
     public static <T> T newInstance(String klass, Class<T> base) throws ClassNotFoundException {
-        return Utils.newInstance(Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base));
+        return Utils.newInstance(loadClass(klass, base));
+    }
+
+    /**
+     * Look up a class by name.
+     * @param klass class name
+     * @param base super class of the class for verification
+     * @param <T> the type of the base class
+     * @return the new class
+     */
+    public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
+        return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
     }
 
     /**
@@ -430,7 +444,7 @@ public class Utils {
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
-            return "" + bytes;
+            return String.valueOf(bytes);
         }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
@@ -441,7 +455,7 @@ public class Utils {
             return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
         } catch (IndexOutOfBoundsException e) {
             //huge number?
-            return "" + asDouble;
+            return String.valueOf(asDouble);
         }
     }
 
@@ -462,6 +476,7 @@ public class Utils {
      * @return The string representation.
      */
     public static <T> String join(Collection<T> list, String separator) {
+        Objects.requireNonNull(list);
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {
@@ -490,11 +505,17 @@ public class Utils {
      * Read a properties file from the given path
      * @param filename The path of the file to read
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
-            props.load(propStream);
+
+        if (filename != null) {
+            try (InputStream propStream = new FileInputStream(filename)) {
+                props.load(propStream);
+            }
+        } else {
+            System.out.println("Did not load any properties since the property file is not specified");
         }
+
         return props;
     }
 
@@ -606,6 +627,65 @@ public class Utils {
     @SafeVarargs
     public static <T> List<T> mkList(T... elems) {
         return Arrays.asList(elems);
+    }
+
+    /**
+     * Creates a map entry (for use with {@link Utils#mkMap(java.util.Map.Entry[])})
+     *
+     * @param k   The key
+     * @param v   The value
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An entry
+     */
+    public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
+        return new Map.Entry<K, V>() {
+            @Override
+            public K getKey() {
+                return k;
+            }
+
+            @Override
+            public V getValue() {
+                return v;
+            }
+
+            @Override
+            public V setValue(final V value) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    /**
+     * Creates a map from a sequence of entries
+     *
+     * @param entries The entries to map
+     * @param <K>     The key type
+     * @param <V>     The value type
+     * @return A map
+     */
+    @SafeVarargs
+    public static <K, V> Map<K, V> mkMap(final Map.Entry<K, V>... entries) {
+        final LinkedHashMap<K, V> result = new LinkedHashMap<>();
+        for (final Map.Entry<K, V> entry : entries) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkProperties(final Map<String, String> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, String> entry : properties.entrySet()) {
+            result.setProperty(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     /**

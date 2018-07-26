@@ -73,7 +73,7 @@ public class TopicConfig {
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
-        "their data.";
+        "their data. If set to -1, no time limit is applied.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC = "<p>The largest record batch size allowed by Kafka. If this " +

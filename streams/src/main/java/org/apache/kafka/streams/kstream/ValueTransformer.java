@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.To;
 
 /**
  * The {@code ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).
@@ -40,7 +41,9 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @param <V>  value type
  * @param <VR> transformed value type
  * @see ValueTransformerSupplier
+ * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
+ * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  */
 public interface ValueTransformer<V, VR> {
@@ -56,9 +59,8 @@ public interface ValueTransformer<V, VR> {
      * Note that {@link ProcessorContext} is updated in the background with the current record's meta data.
      * Thus, it only contains valid record meta data when accessed within {@link #transform(Object)}.
      * <p>
-     * Note that using {@link ProcessorContext#forward(Object, Object)},
-     * {@link ProcessorContext#forward(Object, Object, int)}, or
-     * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within any method of
+     * Note that using {@link ProcessorContext#forward(Object, Object)} or
+     * {@link ProcessorContext#forward(Object, Object, To)} is not allowed within any method of
      * {@code ValueTransformer} and will result in an {@link StreamsException exception}.
      *
      * @param context the context
@@ -73,9 +75,8 @@ public interface ValueTransformer<V, VR> {
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
      * <p>
-     * Note, that using {@link ProcessorContext#forward(Object, Object)},
-     * {@link ProcessorContext#forward(Object, Object, int)}, and
-     * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within {@code transform} and
+     * Note, that using {@link ProcessorContext#forward(Object, Object)} or
+     * {@link ProcessorContext#forward(Object, Object, To)} is not allowed within {@code transform} and
      * will result in an {@link StreamsException exception}.
      *
      * @param value the value to be transformed
@@ -88,9 +89,8 @@ public interface ValueTransformer<V, VR> {
      * the context during {@link #init(ProcessorContext) initialization}.
      * <p>
      * It is not possible to return any new output records within {@code punctuate}.
-     * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
-     * or {@link ProcessorContext#forward(Object, Object, String)} will result in an
-     * {@link StreamsException exception}.
+     * Using {@link ProcessorContext#forward(Object, Object)} or {@link ProcessorContext#forward(Object, Object, To)}
+     * will result in an {@link StreamsException exception}.
      * Furthermore, {@code punctuate} must return {@code null}.
      * <p>
      * Note, that {@code punctuate} is called base on <it>stream time</it> (i.e., time progress with regard to
@@ -109,8 +109,8 @@ public interface ValueTransformer<V, VR> {
      * Close this processor and clean up any resources.
      * <p>
      * It is not possible to return any new output records within {@code close()}.
-     * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
-     * or {@link ProcessorContext#forward(Object, Object, String)} will result in an {@link StreamsException exception}.
+     * Using {@link ProcessorContext#forward(Object, Object)} or {@link ProcessorContext#forward(Object, Object, To)}
+     * will result in an {@link StreamsException exception}.
      */
     void close();
 

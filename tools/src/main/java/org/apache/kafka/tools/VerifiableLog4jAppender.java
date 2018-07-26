@@ -204,6 +204,9 @@ public class VerifiableLog4jAppender {
                 props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", res.getString("kerb5ConfPath"));
             }
             props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+            // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
+            // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
+            props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
 
             if (configFile != null) {
                 try {

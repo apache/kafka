@@ -22,12 +22,13 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 
 public class KStreamMapValuesTest {
 
@@ -61,13 +62,37 @@ public class KStreamMapValuesTest {
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, Integer.toString(expectedKey));
         }
-
-        assertEquals(4, processor.processed.size());
-
         String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
 
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
-        }
+        assertArrayEquals(expected, processor.processed.toArray());
     }
+
+    @Test
+    public void testMapValuesWithKeys() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        ValueMapperWithKey<Integer, CharSequence, Integer> mapper =
+                new ValueMapperWithKey<Integer, CharSequence, Integer>() {
+            @Override
+            public Integer apply(final Integer readOnlyKey, final CharSequence value) {
+                return value.length() + readOnlyKey;
+            }
+        };
+
+        final int[] expectedKeys = {1, 10, 100, 1000};
+
+        KStream<Integer, String> stream;
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(intSerde, stringSerde));
+        stream.mapValues(mapper).process(processor);
+
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, Integer.toString(expectedKey));
+        }
+        String[] expected = {"1:2", "10:12", "100:103", "1000:1004"};
+
+        assertArrayEquals(expected, processor.processed.toArray());
+    }
+
 }

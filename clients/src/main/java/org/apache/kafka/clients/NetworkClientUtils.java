@@ -26,7 +26,9 @@ import java.util.List;
 /**
  * Provides additional utilities for {@link NetworkClient} (e.g. to implement blocking behaviour).
  */
-public class NetworkClientUtils {
+public final class NetworkClientUtils {
+
+    private NetworkClientUtils() {}
 
     /**
      * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending

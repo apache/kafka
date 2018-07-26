@@ -64,13 +64,36 @@ public abstract class Type {
     }
 
     /**
+     * A Type that can return its description for documentation purposes.
+     */
+    public static abstract class DocumentedType extends Type {
+
+        /**
+         * Short name of the type to identify it in documentation;
+         * @return the name of the type
+         */
+        public abstract String typeName();
+
+        /**
+         * Documentation of the Type.
+         *
+         * @return details about valid values, representation
+         */
+        public abstract String documentation();
+
+        @Override
+        public String toString() {
+            return typeName();
+        }
+    }
+    /**
      * The Boolean type represents a boolean value in a byte by using
      * the value of 0 to represent false, and 1 to represent true.
      *
      * If for some reason a value that is not 0 or 1 is read,
      * then any non-zero value will return true.
      */
-    public static final Type BOOLEAN = new Type() {
+    public static final DocumentedType BOOLEAN = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             if ((Boolean) o)
@@ -91,7 +114,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "BOOLEAN";
         }
 
@@ -102,9 +125,16 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Boolean.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a boolean value in a byte. " +
+                    "Values 0 and 1 are used to represent false and true respectively. " +
+                    "When reading a boolean value, any non-zero value is considered true.";
+        }
     };
 
-    public static final Type INT8 = new Type() {
+    public static final DocumentedType INT8 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.put((Byte) o);
@@ -121,7 +151,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT8";
         }
 
@@ -132,9 +162,14 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Byte.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>7</sup> and 2<sup>7</sup>-1 inclusive.";
+        }
     };
 
-    public static final Type INT16 = new Type() {
+    public static final DocumentedType INT16 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putShort((Short) o);
@@ -151,7 +186,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT16";
         }
 
@@ -162,9 +197,15 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Short.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>15</sup> and 2<sup>15</sup>-1 inclusive. " +
+                    "The values are encoded using two bytes in network byte order (big-endian).";
+        }
     };
 
-    public static final Type INT32 = new Type() {
+    public static final DocumentedType INT32 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putInt((Integer) o);
@@ -181,7 +222,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT32";
         }
 
@@ -192,9 +233,15 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not an Integer.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
+                    "The values are encoded using four bytes in network byte order (big-endian).";
+        }
     };
 
-    public static final Type UNSIGNED_INT32 = new Type() {
+    public static final DocumentedType UNSIGNED_INT32 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeUnsignedInt(buffer, (long) o);
@@ -211,7 +258,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "UINT32";
         }
 
@@ -222,9 +269,15 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Long.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between 0 and 2<sup>32</sup>-1 inclusive. " +
+                    "The values are encoded using four bytes in network byte order (big-endian).";
+        }
     };
 
-    public static final Type INT64 = new Type() {
+    public static final DocumentedType INT64 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putLong((Long) o);
@@ -241,7 +294,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT64";
         }
 
@@ -252,9 +305,15 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Long.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
+                    "The values are encoded using eight bytes in network byte order (big-endian).";
+        }
     };
 
-    public static final Type STRING = new Type() {
+    public static final DocumentedType STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             byte[] bytes = Utils.utf8((String) o);
@@ -282,7 +341,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "STRING";
         }
 
@@ -293,9 +352,16 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a String.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N is given as an " + INT16 +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "Length must not be negative.";
+        }
     };
 
-    public static final Type NULLABLE_STRING = new Type() {
+    public static final DocumentedType NULLABLE_STRING = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -336,7 +402,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "NULLABLE_STRING";
         }
 
@@ -350,9 +416,16 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a String.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters or null. For non-null strings, first the length N is given as an " + INT16 +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "A null value is encoded with length of -1 and there are no following bytes.";
+        }
     };
 
-    public static final Type BYTES = new Type() {
+    public static final DocumentedType BYTES = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteBuffer arg = (ByteBuffer) o;
@@ -383,7 +456,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "BYTES";
         }
 
@@ -394,9 +467,15 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
+                    ". Then N bytes follow.";
+        }
     };
 
-    public static final Type NULLABLE_BYTES = new Type() {
+    public static final DocumentedType NULLABLE_BYTES = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -440,7 +519,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "NULLABLE_BYTES";
         }
 
@@ -454,9 +533,15 @@ public abstract class Type {
 
             throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
+                    ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
+        }
     };
 
-    public static final Type RECORDS = new Type() {
+    public static final DocumentedType RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -486,7 +571,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "RECORDS";
         }
 
@@ -500,9 +585,16 @@ public abstract class Type {
 
             throw new SchemaException(item + " is not an instance of " + Records.class.getName());
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
     };
 
-    public static final Type VARINT = new Type() {
+    public static final DocumentedType VARINT = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeVarint((Integer) o, buffer);
@@ -520,7 +612,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not an integer");
         }
 
-        public String toString() {
+        public String typeName() {
             return "VARINT";
         }
 
@@ -528,9 +620,16 @@ public abstract class Type {
         public int sizeOf(Object o) {
             return ByteUtils.sizeOfVarint((Integer) o);
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
+                    "Encoding follows the variable-length zig-zag encoding from " +
+                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+        }
     };
 
-    public static final Type VARLONG = new Type() {
+    public static final DocumentedType VARLONG = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeVarlong((Long) o, buffer);
@@ -548,7 +647,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not a long");
         }
 
-        public String toString() {
+        public String typeName() {
             return "VARLONG";
         }
 
@@ -556,6 +655,43 @@ public abstract class Type {
         public int sizeOf(Object o) {
             return ByteUtils.sizeOfVarlong((Long) o);
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
+                    "Encoding follows the variable-length zig-zag encoding from " +
+                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+        }
     };
 
+    private static String toHtml() {
+
+        DocumentedType[] types = {
+            BOOLEAN, INT8, INT16, INT32, INT64,
+            UNSIGNED_INT32, VARINT, VARLONG,
+            STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
+            RECORDS, new ArrayOf(STRING)};
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Type</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (DocumentedType type : types) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(type.typeName());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(type.documentation());
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
+    }
 }

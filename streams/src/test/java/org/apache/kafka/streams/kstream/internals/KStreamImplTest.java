@@ -36,11 +36,14 @@ import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.junit.Before;
@@ -50,6 +53,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -283,7 +287,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValues() {
-        testStream.mapValues(null);
+        testStream.mapValues((ValueMapper) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMapValuesWithKey() {
+        testStream.mapValues((ValueMapperWithKey) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -303,7 +312,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnFlatMapValues() {
-        testStream.flatMapValues(null);
+        testStream.flatMapValues((ValueMapper) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnFlatMapValuesWithKey() {
+        testStream.flatMapValues((ValueMapperWithKey) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -333,7 +347,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTransformSupplierOnTransformValues() {
-        testStream.transformValues(null);
+        testStream.transformValues((ValueTransformerSupplier) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTransformSupplierOnTransformValuesWithKey() {
+        testStream.transformValues((ValueTransformerWithKeySupplier) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -379,7 +398,7 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTableOnJoinWithGlobalTable() {
         testStream.join((GlobalKTable) null,
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.<String, String>selectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
@@ -393,14 +412,14 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
         testStream.join(builder.globalTable("global", stringConsumed),
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.<String, String>selectValueMapper(),
                         null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() {
         testStream.leftJoin((GlobalKTable) null,
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.<String, String>selectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
@@ -414,7 +433,7 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
         testStream.leftJoin(builder.globalTable("global", stringConsumed),
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.<String, String>selectValueMapper(),
                         null);
     }
 
@@ -523,5 +542,50 @@ public class KStreamImplTest {
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        pattern2Source.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-3", "A", "aa");
+        driver.process("topic-4", "B", "bb");
+        driver.process("topic-5", "C", "cc");
+        driver.process("topic-6", "D", "dd");
+        driver.process("topic-7", "E", "ee");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+                processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+        final String topic3 = "topic-without-pattern";
+
+        final KStream<String, String> pattern2Source1 = builder.stream(Pattern.compile("topic-\\d"));
+        final KStream<String, String> pattern2Source2 = builder.stream(Pattern.compile("topic-[A-Z]"));
+        final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> merged = pattern2Source1.merge(pattern2Source2).merge(source3);
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        merged.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-3", "A", "aa");
+        driver.process("topic-4", "B", "bb");
+        driver.process("topic-A", "C", "cc");
+        driver.process("topic-Z", "D", "dd");
+        driver.process(topic3, "E", "ee");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+                processorSupplier.processed);
     }
 }

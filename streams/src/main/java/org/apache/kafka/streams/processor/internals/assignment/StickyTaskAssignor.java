@@ -20,10 +20,13 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -106,16 +109,15 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         }
 
         // assign any remaining unassigned tasks
-        for (final TaskId taskId : unassigned) {
+        List<TaskId> sortedTasks = new ArrayList<>(unassigned);
+        Collections.sort(sortedTasks);
+        for (final TaskId taskId : sortedTasks) {
             allocateTaskWithClientCandidates(taskId, clients.keySet(), true);
         }
-
     }
 
-
-
     private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
-        final ClientState client = findClient(taskId, clientsWithin);
+        final ClientState client = findClient(taskId, clientsWithin, active);
         taskPairs.addPairs(taskId, client.assignedTasks());
         client.assign(taskId, active);
     }
@@ -137,7 +139,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     }
 
 
-    private ClientState findClient(final TaskId taskId, final Set<ID> clientsWithin) {
+    private ClientState findClient(final TaskId taskId, final Set<ID> clientsWithin, boolean active) {
 
         // optimize the case where there is only 1 id to search within.
         if (clientsWithin.size() == 1) {
@@ -146,14 +148,14 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
         final ClientState previous = findClientsWithPreviousAssignedTask(taskId, clientsWithin);
         if (previous == null) {
-            return leastLoaded(taskId, clientsWithin);
+            return leastLoaded(taskId, clientsWithin, active);
         }
 
         if (shouldBalanceLoad(previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
             if (standby == null
                     || shouldBalanceLoad(standby)) {
-                return leastLoaded(taskId, clientsWithin);
+                return leastLoaded(taskId, clientsWithin, active);
             }
             return standby;
         }
@@ -190,20 +192,21 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
         }
         final HashSet<ID> constrainTo = new HashSet<>(ids);
         constrainTo.retainAll(clientsWithin);
-        return leastLoaded(taskId, constrainTo);
+        return leastLoaded(taskId, constrainTo, false);
     }
 
-    private ClientState leastLoaded(final TaskId taskId, final Set<ID> clientIds) {
-        final ClientState leastLoaded = findLeastLoaded(taskId, clientIds, true);
+    private ClientState leastLoaded(final TaskId taskId, final Set<ID> clientIds, final boolean active) {
+        final ClientState leastLoaded = findLeastLoaded(taskId, clientIds, true, active);
         if (leastLoaded == null) {
-            return findLeastLoaded(taskId, clientIds, false);
+            return findLeastLoaded(taskId, clientIds, false, active);
         }
         return leastLoaded;
     }
 
     private ClientState findLeastLoaded(final TaskId taskId,
-                                                final Set<ID> clientIds,
-                                                boolean checkTaskPairs) {
+                                        final Set<ID> clientIds,
+                                        final boolean checkTaskPairs,
+                                        final boolean active) {
         ClientState leastLoaded = null;
         for (final ID id : clientIds) {
             final ClientState client = clients.get(id);
@@ -214,7 +217,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             if (leastLoaded == null || client.hasMoreAvailableCapacityThan(leastLoaded)) {
                 if (!checkTaskPairs) {
                     leastLoaded = client;
-                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks())) {
+                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), active)) {
                     leastLoaded = client;
                 }
             }
@@ -257,12 +260,17 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             this.pairs = new HashSet<>(maxPairs);
         }
 
-        boolean hasNewPair(final TaskId task1, final Set<TaskId> taskIds) {
+        boolean hasNewPair(final TaskId task1,
+                           final Set<TaskId> taskIds,
+                           final boolean active) {
             if (pairs.size() == maxPairs) {
                 return false;
             }
             for (final TaskId taskId : taskIds) {
-                if (!pairs.contains(pair(task1, taskId))) {
+                if (!active && !pairs.contains(pair(task1, taskId))) {
+                    return true;
+                }
+                if (!pairs.contains(pair(task1, taskId)) && task1.topicGroupId != taskId.topicGroupId) {
                     return true;
                 }
             }

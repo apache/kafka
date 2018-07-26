@@ -66,7 +66,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false);
     }
 
@@ -81,7 +81,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    public void shouldLogPuts() throws Exception {
+    public void shouldLogPuts() {
         inner.put(bytesKey, value1, 0);
         EasyMock.expectLastCall();
 
@@ -89,12 +89,12 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 0)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)));
         EasyMock.verify(inner);
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetching() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetching() {
         EasyMock.expect(inner.fetch(bytesKey, 0, 10)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
 
         init();
@@ -104,7 +104,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetchingRange() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock.expect(inner.fetch(bytesKey, bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
@@ -123,8 +123,8 @@ public class ChangeLoggingWindowBytesStoreTest {
         store.put(bytesKey, value1);
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 1)));
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 2)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)));
 
         EasyMock.verify(inner);
     }

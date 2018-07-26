@@ -98,6 +98,13 @@ public class NewTopic {
         return this;
     }
 
+    /**
+     * The configuration for the new topic or null if no configs ever specified.
+     */
+    public Map<String, String> configs() {
+        return configs;
+    }
+
     TopicDetails convertToTopicDetails() {
         if (replicasAssignments != null) {
             if (configs != null) {

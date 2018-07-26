@@ -44,7 +44,7 @@ import org.apache.kafka.common.TopicPartition;
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
- * This callback will execute in the user thread as part of the {@link Consumer#poll(long) poll(long)} call whenever partition assignment changes.
+ * This callback will only execute in the user thread as part of the {@link Consumer#poll(long) poll(long)} call whenever partition assignment changes.
  * <p>
  * It is guaranteed that all consumer processes will invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} prior to
  * any process invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}. So if offsets or other state is saved in the
@@ -103,7 +103,7 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
      * partition re-assignment. This method will be called after an offset re-assignment completes and before the
-     * consumer starts fetching data.
+     * consumer starts fetching data, and only as the result of a {@link Consumer#poll(long) poll(long)} call.
      * <p>
      * It is guaranteed that all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its

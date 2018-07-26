@@ -17,6 +17,9 @@
 
 package org.apache.kafka.trogdor.common;
 
+import org.apache.kafka.trogdor.agent.Agent;
+import org.apache.kafka.trogdor.coordinator.Coordinator;
+
 import java.util.Set;
 
 /**
@@ -34,11 +37,11 @@ public interface Node {
         }
 
         public static int getTrogdorAgentPort(Node node) {
-            return getIntConfig(node, Platform.Config.TROGDOR_AGENT_PORT, 0);
+            return getIntConfig(node, Platform.Config.TROGDOR_AGENT_PORT, Agent.DEFAULT_PORT);
         }
 
         public static int getTrogdorCoordinatorPort(Node node) {
-            return getIntConfig(node, Platform.Config.TROGDOR_COORDINATOR_PORT, 0);
+            return getIntConfig(node, Platform.Config.TROGDOR_COORDINATOR_PORT, Coordinator.DEFAULT_PORT);
         }
     }
 
