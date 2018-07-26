@@ -1221,7 +1221,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         while (result == null && condition) {
             try {
                 Thread.sleep(retryBackoffMs);
-            } catch (InterruptedException exc) { }
+            } catch (InterruptedException exc) {
+                Thread.currentThread().interrupt();
+            }
             elapsed = time.milliseconds() - now;
             condition = remainingTimeAtLeastZero(timeoutMs, elapsed) != 0;
         }
@@ -1246,6 +1248,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return new ConsumerRecords<>(map);
     }
 
+    /**
+     * A subroutine of poll() to help process records.
+     *
+     * @param timeoutMs           the amount of time spent blocking for a particular time
+     * @param checkRebalanceStart the start time of when the checkRebalance method() was called
+     * @param records             the records which is to be processed (after being fetched from broker)
+     * @return records that has been fetched from broker
+     */
     private ConsumerRecords<K, V> processRecords(final long timeoutMs,
                                                  final long checkRebalanceStart,
                                                  final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
