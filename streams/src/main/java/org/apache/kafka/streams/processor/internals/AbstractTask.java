@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -71,6 +72,14 @@ public abstract class AbstractTask implements Task {
         this.id = id;
         this.id.setNumberOfStateStores(topology.stateStores().size());
         this.id.setNumberOfInputPartitions(partitions.size());
+        this.id.setBeginningOffset(consumer.beginningOffsets(partitions));
+        final Map<TopicPartition, Long> lastCommittedOffsets = new HashMap<>();
+        for (final TopicPartition partition : partitions) {
+            final OffsetAndMetadata offsetAndMetadata = consumer.committed(partition);
+            lastCommittedOffsets.put(partition, offsetAndMetadata == null ? 0 : offsetAndMetadata.offset());
+        }
+        this.id.setLastCommittedOffset(lastCommittedOffsets);
+        this.id.setEndOffsets(consumer.endOffsets(partitions));
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
