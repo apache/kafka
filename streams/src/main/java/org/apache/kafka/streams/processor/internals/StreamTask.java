@@ -71,8 +71,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final Producer<byte[], byte[]> producer;
     private final int maxBufferedSize;
 
+
     private boolean commitRequested = false;
-    private boolean commitOffsetNeeded = false;
     private boolean transactionInFlight = false;
     private int waits = WAIT_ON_PARTIAL_INPUT;
     private final Time time;
@@ -294,6 +294,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    public boolean allSourcePartitionsBuffered() {
+        return partitionGroup.allPartitionsBuffered();
+    }
+
     /**
      * Process one record.
      *
@@ -324,7 +328,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
-            commitOffsetNeeded = true;
+            commitNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
@@ -416,12 +420,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             stateMgr.checkpoint(activeTaskCheckpointableOffsets());
         }
 
-        commitOffsets(startNewTransaction);
+        final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final long offset = entry.getValue() + 1;
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+            stateMgr.putOffsetLimit(partition, offset);
+        }
 
+        try {
+            if (eosEnabled) {
+                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                producer.commitTransaction();
+                transactionInFlight = false;
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                    transactionInFlight = true;
+                }
+            } else {
+                consumer.commitSync(consumedOffsetsAndMetadata);
+            }
+        } catch (final CommitFailedException | ProducerFencedException fatal) {
+            throw new TaskMigratedException(this, fatal);
+        }
+
+        commitNeeded = false;
         commitRequested = false;
-
-        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
-    }
+        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);    }
 
     @Override
     protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
@@ -440,43 +465,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             recordCollector.flush();
         } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
-        }
-    }
-
-    /**
-     * @throws TaskMigratedException if committing offsets failed (non-EOS)
-     *                               or if the task producer got fenced (EOS)
-     */
-    private void commitOffsets(final boolean startNewTransaction) {
-        try {
-            if (commitOffsetNeeded) {
-                log.trace("Committing offsets");
-                final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                    final TopicPartition partition = entry.getKey();
-                    final long offset = entry.getValue() + 1;
-                    consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-                    stateMgr.putOffsetLimit(partition, offset);
-                }
-
-                if (eosEnabled) {
-                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                } else {
-                    consumer.commitSync(consumedOffsetsAndMetadata);
-                }
-                commitOffsetNeeded = false;
-            }
-
-            if (eosEnabled) {
-                producer.commitTransaction();
-                transactionInFlight = false;
-                if (startNewTransaction) {
-                    producer.beginTransaction();
-                    transactionInFlight = true;
-                }
-            }
-        } catch (final CommitFailedException | ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         }
     }
@@ -750,7 +738,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (timestamp == RecordQueue.NOT_KNOWN) {
             return false;
         } else {
-            return streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
+            final boolean punctuated = streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
+
+            if (punctuated) {
+                commitNeeded = true;
+                return true;
+            } else {
+                return false;
+            }
         }
     }
 
@@ -764,7 +759,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public boolean maybePunctuateSystemTime() {
         final long timestamp = time.milliseconds();
 
-        return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
+        final boolean punctuated = systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
+
+        if (punctuated) {
+            commitNeeded = true;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -777,7 +779,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Whether or not a request has been made to commit the current state
      */
-    boolean commitNeeded() {
+    boolean commitRequested() {
         return commitRequested;
     }
 

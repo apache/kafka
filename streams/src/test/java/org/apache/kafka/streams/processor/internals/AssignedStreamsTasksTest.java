@@ -253,6 +253,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCommitRunningTasks() {
         mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -266,6 +267,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnCommitIfTaskMigratedException() {
         mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
@@ -285,6 +287,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldThrowExceptionOnCommitWhenNotCommitFailedOrProducerFenced() {
         mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new RuntimeException(""));
         EasyMock.replay(t1);
@@ -303,6 +306,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCommitRunningTasksIfNeeded() {
         mockTaskInitialization();
+        EasyMock.expect(t1.commitRequested()).andReturn(true);
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall();
@@ -317,6 +321,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnMaybeCommitIfTaskMigratedException() {
         mockTaskInitialization();
+        EasyMock.expect(t1.commitRequested()).andReturn(true);
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
@@ -373,6 +378,7 @@ public class AssignedStreamsTasksTest {
         mockTaskInitialization();
         EasyMock.expect(t1.isProcessable()).andReturn(true);
         EasyMock.expect(t1.process()).andReturn(true).once();
+        EasyMock.expect(t1.allSourcePartitionsBuffered()).andReturn(true);
         EasyMock.replay(t1);
 
         addAndInitTask();

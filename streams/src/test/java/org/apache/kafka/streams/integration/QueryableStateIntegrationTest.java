@@ -483,7 +483,7 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
-        final Set<KeyValue<String, Long>> batch1 = new HashSet<>(
+        final Set<KeyValue<String, Long>> produceBatch = new HashSet<>(
             Arrays.asList(
                 new KeyValue<>(keys[0], 1L),
                 new KeyValue<>(keys[1], 1L),
@@ -491,11 +491,11 @@ public class QueryableStateIntegrationTest {
                 new KeyValue<>(keys[3], 5L),
                 new KeyValue<>(keys[4], 2L))
         );
-        final Set<KeyValue<String, Long>> expectedBatch1 = new HashSet<>(Collections.singleton(new KeyValue<>(keys[4], 2L)));
+        final Set<KeyValue<String, Long>> expectedBatch = new HashSet<>(Collections.singleton(new KeyValue<>(keys[4], 2L)));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,
-            batch1,
+            produceBatch,
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
@@ -523,21 +523,21 @@ public class QueryableStateIntegrationTest {
         final ReadOnlyKeyValueStore<String, Long>
             myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.<String, Long>keyValueStore());
 
-        for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertEquals(myFilterStore.get(expectedEntry.key), expectedEntry.value);
+        for (final KeyValue<String, Long> expectedEntry : expectedBatch) {
+            assertEquals(expectedEntry.value, myFilterStore.get(expectedEntry.key));
         }
-        for (final KeyValue<String, Long> batchEntry : batch1) {
-            if (!expectedBatch1.contains(batchEntry)) {
+        for (final KeyValue<String, Long> batchEntry : produceBatch) {
+            if (!expectedBatch.contains(batchEntry)) {
                 assertNull(myFilterStore.get(batchEntry.key));
             }
         }
 
-        for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
+        for (final KeyValue<String, Long> expectedEntry : expectedBatch) {
             assertNull(myFilterNotStore.get(expectedEntry.key));
         }
-        for (final KeyValue<String, Long> batchEntry : batch1) {
-            if (!expectedBatch1.contains(batchEntry)) {
-                assertEquals(myFilterNotStore.get(batchEntry.key), batchEntry.value);
+        for (final KeyValue<String, Long> batchEntry : produceBatch) {
+            if (!expectedBatch.contains(batchEntry)) {
+                assertEquals(batchEntry.value, myFilterNotStore.get(batchEntry.key));
             }
         }
     }

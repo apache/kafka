@@ -33,7 +33,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private final Logger log;
     private final TaskAction<StreamTask> maybeCommitAction;
     private Map<TaskId, StreamTask> processable = Collections.emptyMap();
-    private int committed = 0;
 
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
@@ -48,7 +47,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
             @Override
             public void apply(final StreamTask task) {
-                if (task.commitNeeded()) {
+                if (task.commitRequested() && task.commitNeeded()) {
                     committed++;
                     task.commit();
                     log.debug("Committed active task {} per user request in", task.id());
@@ -94,17 +93,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    boolean hasProcessableTasks() {
-        return !processable.isEmpty();
-    }
-
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     int process() {
         int processed = 0;
 
-        for (final StreamTask task : processable.values()) {
+        for (Iterator<StreamTask> iter = processable.values().iterator(); iter.hasNext(); ) {
+            StreamTask task = iter.next();
             try {
                 if (task.process()) {
                     processed++;
@@ -121,6 +117,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
                 throw e;
+            }
+
+            if (!task.allSourcePartitionsBuffered()) {
+                iter.remove();
             }
         }
 

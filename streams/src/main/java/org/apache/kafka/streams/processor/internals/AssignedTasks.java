@@ -45,6 +45,9 @@ abstract class AssignedTasks<T extends Task> {
     private final Map<TaskId, T> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
+
+    protected int committed = 0;
+
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
     private final Map<TopicPartition, T> runningByPartition = new HashMap<>();
@@ -64,7 +67,10 @@ abstract class AssignedTasks<T extends Task> {
 
             @Override
             public void apply(final T task) {
-                task.commit();
+                if (task.commitNeeded()) {
+                    committed++;
+                    task.commit();
+                }
             }
         };
     }
@@ -349,8 +355,9 @@ abstract class AssignedTasks<T extends Task> {
      *                               or if the task producer got fenced (EOS)
      */
     int commit() {
+        committed = 0;
         applyToRunningTasks(commitAction);
-        return running.size();
+        return committed;
     }
 
     void applyToRunningTasks(final TaskAction<T> action) {

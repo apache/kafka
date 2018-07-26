@@ -846,7 +846,8 @@ public class StreamThread extends Thread {
             addRecordsToTasks(records);
         }
 
-        if (taskManager.hasActiveProcessableTasks()) {
+        if (state == State.RUNNING) {
+            taskManager.updateProcessableTasks();
 
             /*
              * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
@@ -857,28 +858,28 @@ public class StreamThread extends Thread {
              *  5. If one of the above happens, half the value of N.
              */
             long totalProcessed;
+            long timeSinceLastPoll;
 
             do {
                 totalProcessed = processAndMaybeCommit();
+                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
-                if (now - lastPollMs >= maxPollTimeMs) {
+                if (timeSinceLastPoll / 2 >= maxPollTimeMs) {
                     break;
-                } else if (maybeCommit() || maybePunctuate()) {
+                } else if (maybePunctuate() || maybeCommit()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                 } else {
                     numIterations++;
                 }
+            } while (totalProcessed > 0 && timeSinceLastPoll < maxPollTimeMs);
 
-                log.warn("Completed one iteration of {} rounds, with {} records processed.", numIterations, totalProcessed);
-                if (log.isTraceEnabled()) {
-                    log.trace("Completed one iteration of {} rounds, with {} records processed.", numIterations, totalProcessed);
-                }
+            // even if there is not data to process in this iteration, still need to check if commit / punctuate is needed
+            maybePunctuate();
 
-            } while (totalProcessed > 0 && now - lastPollMs < maxPollTimeMs);
+            maybeCommit();
 
+            maybeUpdateStandbyTasks();
         }
-
-        maybeUpdateStandbyTasks(now);
     }
 
     /**
@@ -971,8 +972,6 @@ public class StreamThread extends Thread {
 
             task.addRecords(partition, records.records(partition));
         }
-
-        taskManager.updateProcessableTasks();
     }
 
     /**
@@ -985,29 +984,25 @@ public class StreamThread extends Thread {
      */
     private long processAndMaybeCommit() {
         long totalProcessed = 0;
-        long totalCommitTimeSpent = 0;
 
         for (int i = 0; i < numIterations; i++) {
             int processed = taskManager.process();
-            totalProcessed += processed;
 
-            // commit any tasks that have requested a commit
-            final int committed = taskManager.maybeCommitActiveTasks();
-            if (committed > 0) {
-                final long commitTimeSpent = computeLatency();
-                totalCommitTimeSpent += commitTimeSpent;
-                streamsMetrics.commitTimeSensor.record(commitTimeSpent / (double) committed, now);
-            }
+            if (processed > 0) {
+                totalProcessed += processed;
+                streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
 
-            // if there is no records to be processed, exit immediately
-            if (processed == 0) {
+                taskManager.updateProcessableTasks();
+
+                // commit any tasks that have requested a commit
+                final int committed = taskManager.maybeCommitActiveTasks();
+                if (committed > 0) {
+                    streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
+                }
+            } else {
+                // if there is no records to be processed, exit immediately
                 break;
             }
-        }
-
-        if (totalProcessed > 0) {
-            final long processLatency = computeLatency();
-            streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, now);
         }
 
         return totalProcessed;
@@ -1034,15 +1029,18 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     boolean maybeCommit() {
+        int committed = taskManager.maybeCommitActiveTasks();
+        if (committed > 0) {
+            streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
+        }
+
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.warn("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
-                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                         taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            final int committed = taskManager.commitAll();
+            committed = taskManager.commitAll();
             if (committed > 0) {
                 final long previous = now;
 
@@ -1051,8 +1049,6 @@ public class StreamThread extends Thread {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();
 
-                log.warn("Committed all active tasks {} and standby tasks {} in {}ms",
-                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - previous);
                 if (log.isDebugEnabled()) {
                     log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
                             taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - previous);
@@ -1069,7 +1065,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void maybeUpdateStandbyTasks(final long now) {
+    private void maybeUpdateStandbyTasks() {
         if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
