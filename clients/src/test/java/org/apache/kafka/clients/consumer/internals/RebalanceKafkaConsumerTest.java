@@ -72,23 +72,6 @@ public class RebalanceKafkaConsumerTest {
     }
 
     @Test
-    public void testConsumerClose() {
-        final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        final Thread consumerThread = new Thread(consumer);
-        consumerThread.start();
-
-        // wait for a tenth of a second to ensure thread has properly started.
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException exc) { }
-
-        consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
-        waitForRequestResult();
-        assertFalse(consumerThread.isAlive());
-        requestResult = null;
-    }
-
-    @Test
     public void testConsumerPoll() {
         final RebalanceKafkaConsumer<byte[], byte[]> consumer = newConsumer();
         final Thread consumerThread = new Thread(consumer);
@@ -106,11 +89,9 @@ public class RebalanceKafkaConsumerTest {
                                                     RebalanceKafkaConsumer.ConsumerRequest.POLL,
                                                     null,
                                                     callback));
-        System.out.println("Results request has been sent");
         waitForPollResult(results);
         assertTrue(((ConsumerRecords) results.get(0).value).count() == 0);
 
-        System.out.println("close request has being sent");
         consumer.close(Duration.ofMillis(1000), new MockTaskCompletionCallback());
         waitForRequestResult();
         assertFalse(consumerThread.isAlive());
@@ -119,17 +100,14 @@ public class RebalanceKafkaConsumerTest {
 
     private void waitForPollResult(ArrayList<RebalanceKafkaConsumer.RequestResult> results) {
         while (results.size() == 0) {
-            System.out.println("Iterating ...");
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException exc) { }
         }
-        System.out.println("Finishing with results");
     }
 
     private void waitForRequestResult() {
         while (requestResult == null) {
-            System.out.println("Starting our wait for requestResult");
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException exc) { }

@@ -160,9 +160,8 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
     public void run() {
         coordinator.setIfChildConsumer();
         while (!shouldClose.get()) {
-            if (currentRequest == null) {
+            while (currentRequest == null) {
                 currentRequest = pendingRequests.poll();
-                continue;
             }
 
             // Cases which have no return value will have their result be marked as a boolean value: true.
@@ -221,7 +220,7 @@ public class RebalanceKafkaConsumer<K, V> extends KafkaConsumer implements Runna
             if (currentRequest.callback != null) {
                 currentRequest.callback.onTaskComplete(result);
             }
-            currentRequest = pendingRequests.poll();
+            currentRequest = null;
         }
     }
 
