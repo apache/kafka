@@ -1525,15 +1525,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!controller.isActive || !config.deleteTopicEnable) {
-      val error = if (!controller.isActive) Errors.NOT_CONTROLLER else Errors.INVALID_REQUEST
+    if (!controller.isActive) {
       val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, error)
+        (topic, Errors.NOT_CONTROLLER)
       }.toMap
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
+      val error = if(request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
       val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, Errors.TOPIC_DELETION_DISABLED)
+        (topic, error)
       }.toMap
       sendResponseCallback(results)
     } else {
