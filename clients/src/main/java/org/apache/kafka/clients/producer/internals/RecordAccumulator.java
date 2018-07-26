@@ -284,10 +284,6 @@ public final class RecordAccumulator {
         }
     }
 
-    public Set<TopicPartition> getTopicPartitions() {
-        return this.batches.keySet();
-    }
-
     /**
      * Get a list of batches which have been sitting in the accumulator too long and need to be expired.
      */
