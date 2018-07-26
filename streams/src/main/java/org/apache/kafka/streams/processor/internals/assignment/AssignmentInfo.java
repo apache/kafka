@@ -220,13 +220,6 @@ public class AssignmentInfo {
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out, 4);
         encodePartitionsByHost(out);
-    }
-
-    private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        out.writeInt(4);
-        out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
         out.writeInt(errCode);
     }
 
@@ -342,11 +335,6 @@ public class AssignmentInfo {
         decodeActiveTasks(assignmentInfo, in, 4);
         decodeStandbyTasks(assignmentInfo, in, 4);
         decodeGlobalAssignmentData(assignmentInfo, in);
-    }
-
-    private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
-                                              final DataInputStream in) throws IOException {
-        decodeVersionThreeData(assignmentInfo, in);
         assignmentInfo.errCode = in.readInt();
     }
 
