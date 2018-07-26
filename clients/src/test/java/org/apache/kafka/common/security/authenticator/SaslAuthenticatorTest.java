@@ -830,7 +830,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, TestPlainLoginModule.class.getName(),
-                Collections.<String, Object>emptyMap());
+                Collections.emptyMap());
         server = createEchoServer(securityProtocol);
 
         // Connection should succeed using login callback override that sets correct username/password
@@ -854,7 +854,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, TestPlainLoginModule.class.getName(),
-                Collections.<String, Object>emptyMap());
+                Collections.emptyMap());
         jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         String prefix = listenerName.saslMechanismConfigPrefix("PLAIN");
@@ -996,7 +996,7 @@ public class SaslAuthenticatorTest {
                 TestJaasConfig.jaasConfigProperty("PLAIN", serverOptions));
         TestJaasConfig staticJaasConfig = new TestJaasConfig();
         staticJaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(),
-                Collections.<String, Object>emptyMap());
+                Collections.emptyMap());
         staticJaasConfig.setClientOptions("PLAIN", "user1", "user1-secret");
         Configuration.setConfiguration(staticJaasConfig);
         server = createEchoServer(securityProtocol);
@@ -1544,7 +1544,7 @@ public class SaslAuthenticatorTest {
         }
 
         @Override
-        protected boolean authenticate(String username, char[] password) throws IOException {
+        protected boolean authenticate(String username, char[] password) {
             if (!configured)
                 throw new IllegalStateException("Server callback handler not configured");
             return USERNAME.equals(username) && new String(password).equals(PASSWORD);
@@ -1594,7 +1594,7 @@ public class SaslAuthenticatorTest {
         }
 
         @Override
-        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
             if (!configured)
                 throw new IllegalStateException("Client callback handler not configured");
             for (Callback callback : callbacks) {
@@ -1665,7 +1665,7 @@ public class SaslAuthenticatorTest {
         }
 
         @Override
-        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        public void handle(Callback[] callbacks) {
             if (!configured)
                 throw new IllegalStateException("Login callback handler not configured");
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +49,7 @@ public class ScramServerCallbackHandler implements AuthenticateCallbackHandler {
     }
 
     @Override
-    public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+    public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
         String username = null;
         for (Callback callback : callbacks) {
             if (callback instanceof NameCallback)

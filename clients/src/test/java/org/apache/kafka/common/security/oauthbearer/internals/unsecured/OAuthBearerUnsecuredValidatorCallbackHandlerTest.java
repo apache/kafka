@@ -73,7 +73,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     }
 
     @Test
-    public void validToken() throws IOException, UnsupportedCallbackException {
+    public void validToken() {
         for (final boolean includeOptionalIssuedAtClaim : new boolean[] {true, false}) {
             String claimsJson = "{" + PRINCIPAL_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT)
                     + (includeOptionalIssuedAtClaim ? comma(ISSUED_AT_CLAIM_TEXT) : "") + "}";
@@ -101,7 +101,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     }
 
     @Test
-    public void includesRequiredScope() throws IOException, UnsupportedCallbackException {
+    public void includesRequiredScope() {
         String claimsJson = "{" + SUB_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT) + comma(SCOPE_CLAIM_TEXT) + "}";
         Object validationResult = validationResult(UNSECURED_JWT_HEADER_JSON, claimsJson,
                 MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE);
@@ -124,7 +124,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
 
     private static void confirmFailsValidation(String headerJson, String claimsJson,
             Map<String, String> moduleOptionsMap, String optionalFailureScope) throws OAuthBearerConfigException,
-            OAuthBearerIllegalTokenException, IOException, UnsupportedCallbackException {
+            OAuthBearerIllegalTokenException {
         Object validationResultObj = validationResult(headerJson, claimsJson, moduleOptionsMap);
         assertTrue(validationResultObj instanceof OAuthBearerValidatorCallback);
         OAuthBearerValidatorCallback callback = (OAuthBearerValidatorCallback) validationResultObj;
@@ -159,7 +159,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
         config.createOrUpdateEntry("KafkaClient", "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule",
                 (Map) options);
         OAuthBearerUnsecuredValidatorCallbackHandler callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
-        callbackHandler.configure(Collections.<String, Object>emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+        callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }

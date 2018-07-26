@@ -58,7 +58,7 @@ public class OAuthBearerSaslClient implements SaslClient {
 
     enum State {
         SEND_CLIENT_FIRST_MESSAGE, RECEIVE_SERVER_FIRST_MESSAGE, RECEIVE_SERVER_MESSAGE_AFTER_FAILURE, COMPLETE, FAILED
-    };
+    }
 
     private State state;
 
@@ -127,14 +127,14 @@ public class OAuthBearerSaslClient implements SaslClient {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
@@ -148,7 +148,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
     }
 
     private void setState(State state) {
@@ -173,7 +173,7 @@ public class OAuthBearerSaslClient implements SaslClient {
     public static class OAuthBearerSaslClientFactory implements SaslClientFactory {
         @Override
         public SaslClient createSaslClient(String[] mechanisms, String authorizationId, String protocol,
-                String serverName, Map<String, ?> props, CallbackHandler callbackHandler) throws SaslException {
+                String serverName, Map<String, ?> props, CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
             for (String mechanism : mechanisms) {
                 for (int i = 0; i < mechanismNamesCompatibleWithPolicy.length; i++) {

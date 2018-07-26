@@ -74,14 +74,10 @@ public final class TopicPartitionReplica implements Serializable {
             return false;
         if (brokerId != other.brokerId)
             return false;
-        if (topic == null) {
-            if (other.topic != null) {
-                return false;
-            }
-        } else if (!topic.equals(other.topic)) {
-            return false;
-        }
-        return true;
+        if (topic == null)
+            return other.topic == null;
+        else
+            return topic.equals(other.topic);
     }
 
     @Override

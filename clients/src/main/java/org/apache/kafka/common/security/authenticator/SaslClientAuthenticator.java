@@ -113,7 +113,7 @@ public class SaslClientAuthenticator implements Authenticator {
                                    String host,
                                    String mechanism,
                                    boolean handshakeRequestEnable,
-                                   TransportLayer transportLayer) throws IOException {
+                                   TransportLayer transportLayer) {
         this.node = node;
         this.subject = subject;
         this.callbackHandler = callbackHandler;
@@ -144,13 +144,11 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private SaslClient createSaslClient() {
         try {
-            return Subject.doAs(subject, new PrivilegedExceptionAction<SaslClient>() {
-                public SaslClient run() throws SaslException {
-                    String[] mechs = {mechanism};
-                    LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
-                        clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
-                    return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
-                }
+            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
+                String[] mechs = {mechanism};
+                LOG.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
+                    clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
+                return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
             });
         } catch (PrivilegedActionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
@@ -354,11 +352,7 @@ public class SaslClientAuthenticator implements Authenticator {
             if (isInitial && !saslClient.hasInitialResponse())
                 return saslToken;
             else
-                return Subject.doAs(subject, new PrivilegedExceptionAction<byte[]>() {
-                    public byte[] run() throws SaslException {
-                        return saslClient.evaluateChallenge(saslToken);
-                    }
-                });
+                return Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
         } catch (PrivilegedActionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             KerberosError kerberosError = KerberosError.fromException(e);

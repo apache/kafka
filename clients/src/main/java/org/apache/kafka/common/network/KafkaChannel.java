@@ -48,7 +48,7 @@ public class KafkaChannel {
         MUTED_AND_RESPONSE_PENDING,
         MUTED_AND_THROTTLED,
         MUTED_AND_THROTTLED_AND_RESPONSE_PENDING
-    };
+    }
 
     /** Socket server events that will change the mute state:
      * <ul>
@@ -72,7 +72,7 @@ public class KafkaChannel {
         RESPONSE_SENT,
         THROTTLE_STARTED,
         THROTTLE_ENDED
-    };
+    }
 
     private final String id;
     private final TransportLayer transportLayer;
@@ -90,7 +90,7 @@ public class KafkaChannel {
     private ChannelMuteState muteState;
     private ChannelState state;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
+    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;

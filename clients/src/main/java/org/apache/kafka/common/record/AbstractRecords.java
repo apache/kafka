@@ -25,12 +25,7 @@ import java.util.Iterator;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<Record> records = new Iterable<Record>() {
-        @Override
-        public Iterator<Record> iterator() {
-            return recordsIterator();
-        }
-    };
+    private final Iterable<Record> records = this::recordsIterator;
 
     @Override
     public boolean hasMatchingMagic(byte magic) {

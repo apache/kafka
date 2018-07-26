@@ -120,12 +120,12 @@ public class CreateTopicsRequest extends AbstractRequest {
         public TopicDetails(int partitions,
                             short replicationFactor,
                             Map<String, String> configs) {
-            this(partitions, replicationFactor, Collections.<Integer, List<Integer>>emptyMap(), configs);
+            this(partitions, replicationFactor, Collections.emptyMap(), configs);
         }
 
         public TopicDetails(int partitions,
                             short replicationFactor) {
-            this(partitions, replicationFactor, Collections.<String, String>emptyMap());
+            this(partitions, replicationFactor, Collections.emptyMap());
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments,
@@ -134,7 +134,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments) {
-            this(replicasAssignments, Collections.<String, String>emptyMap());
+            this(replicasAssignments, Collections.emptyMap());
         }
 
         @Override

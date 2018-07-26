@@ -132,12 +132,10 @@ public final class MetricName {
                 return false;
         } else if (!name.equals(other.name))
             return false;
-        if (tags == null) {
-            if (other.tags != null)
-                return false;
-        } else if (!tags.equals(other.tags))
-            return false;
-        return true;
+        if (tags == null)
+            return other.tags == null;
+        else
+            return tags.equals(other.tags);
     }
 
     @Override
