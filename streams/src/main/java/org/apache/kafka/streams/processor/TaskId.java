@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 
 import java.io.DataInputStream;
@@ -113,12 +112,12 @@ public class TaskId implements Comparable<TaskId> {
             final int offsetsSize = in.readInt();
             for (int i = 0; i < offsetsSize; i++) {
                 final int topicLength = in.readInt();
-                String topicName = "";
+                StringBuffer topicName = new StringBuffer();
                 for (int j = 0; j < topicLength; j++) {
-                    topicName += in.readChar();
+                    topicName.append(in.readChar());
                 }
                 final int partitionId = in.readInt();
-                final TopicPartition partition = new TopicPartition(topicName, partitionId);
+                final TopicPartition partition = new TopicPartition(topicName.substring(0), partitionId);
                 taskId.addBeginningOffset(partition, in.readInt());
                 taskId.addLastCommittedOffset(partition, in.readInt());
                 taskId.addEndOffset(partition, in.readInt());
@@ -157,18 +156,42 @@ public class TaskId implements Comparable<TaskId> {
             final int offsetsSize = buf.getInt();
             for (int i = 0; i < offsetsSize; i++) {
                 final int topicLength = buf.getInt();
-                String topicName = "";
+                StringBuffer topicName = new StringBuffer();
                 for (int j = 0; j < topicLength; j++) {
-                    topicName += buf.getChar();
+                    topicName.append(buf.getChar());
                 }
                 final int partitionId = buf.getInt();
-                final TopicPartition partition = new TopicPartition(topicName, partitionId);
+                final TopicPartition partition = new TopicPartition(topicName.substring(0), partitionId);
                 result.addBeginningOffset(partition, buf.getInt());
                 result.addLastCommittedOffset(partition, buf.getInt());
                 result.addEndOffset(partition, buf.getInt());
             }
         }
         return result;
+    }
+
+    public boolean mapsEqual(TaskId other) {
+        for (final Map.Entry<TopicPartition, Long> entry : other.beginningOffsets().entrySet()) {
+            if (!beginningOffsets.containsKey(entry.getKey())) {
+                return false;
+            }
+            if (!beginningOffsets.get(entry.getKey()).equals(entry.getValue())) {
+                return false;
+            }
+            if (!endOffsets.containsKey(entry.getKey())) {
+                return false;
+            }
+            if (!endOffsets.get(entry.getKey()).equals(other.endOffsets().get(entry.getKey()))) {
+                return false;
+            }
+            if (!lastCommittedOffsets.containsKey(entry.getKey())) {
+                return false;
+            }
+            if (!lastCommittedOffsets.get(entry.getKey()).equals(other.lastCommittedOffset().get(entry.getKey()))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -180,7 +203,7 @@ public class TaskId implements Comparable<TaskId> {
             TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition && 
                    other.numberOfInputPartitions == this.numberOfInputPartitions &&
-                   other.numberOfStateStores == this.numberOfStateStores;
+                   other.numberOfStateStores == this.numberOfStateStores && mapsEqual(other);
         } else {
             return false;
         }
@@ -218,19 +241,25 @@ public class TaskId implements Comparable<TaskId> {
         this.numberOfInputPartitions = numberOfInputPartitions;
     }
 
-    public Map<TopicPartition, Long> beginningOffsets() { return beginningOffsets; }
+    public Map<TopicPartition, Long> beginningOffsets() {
+        return beginningOffsets;
+    }
 
     public void setBeginningOffset(final Map<TopicPartition, Long> beginningOffsets) {
         this.beginningOffsets = beginningOffsets;
     }
 
-    public Map<TopicPartition, Long> lastCommittedOffset() { return lastCommittedOffsets; }
+    public Map<TopicPartition, Long> lastCommittedOffset() {
+        return lastCommittedOffsets;
+    }
 
     public void setLastCommittedOffset(final Map<TopicPartition, Long> lastCommittedOffsets) {
         this.lastCommittedOffsets = lastCommittedOffsets;
     }
 
-    public Map<TopicPartition, Long> endOffsets() { return endOffsets; }
+    public Map<TopicPartition, Long> endOffsets() {
+        return endOffsets;
+    }
 
     public void setEndOffsets(final Map<TopicPartition, Long> endOffsets) {
         this.endOffsets = endOffsets;
@@ -255,7 +284,7 @@ public class TaskId implements Comparable<TaskId> {
         initialBase += beginningOffsets.size() << 2;
         // adds how long each string will be
         for (final TopicPartition partition : beginningOffsets.keySet()) {
-            initialBase += partition.topic().length() * 2;
+            initialBase += partition.topic().length();
         }
         // beginningOffset, lastCommittedOffset, endOffset (all type long)
         initialBase += beginningOffsets.size() * 3 * 8;

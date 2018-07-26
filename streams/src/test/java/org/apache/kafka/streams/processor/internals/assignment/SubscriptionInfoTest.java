@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
@@ -36,6 +37,8 @@ public class SubscriptionInfoTest {
     private final Set<TaskId> standbyTasks = new HashSet<>(Arrays.asList(
         new TaskId(1, 1),
         new TaskId(2, 0)));
+    private final TopicPartition tp = new TopicPartition("topic", 1);
+    private final TopicPartition tp2 = new TopicPartition("topic-x", 2);
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
 
@@ -78,6 +81,13 @@ public class SubscriptionInfoTest {
 
     @Test
     public void shouldEncodeAndDecodeVersion4() {
+        final TaskId[] activeTaskArr = activeTasks.toArray(new TaskId[activeTasks.size()]);
+        activeTaskArr[0].addBeginningOffset(tp, 0);
+        activeTaskArr[0].addLastCommittedOffset(tp, 3);
+        activeTaskArr[0].addEndOffset(tp, 10);
+        activeTaskArr[0].addBeginningOffset(tp2, 1);
+        activeTaskArr[0].addLastCommittedOffset(tp2, 6);
+        activeTaskArr[0].addEndOffset(tp2, 7);
         final SubscriptionInfo info = new SubscriptionInfo(4, processId, activeTasks, standbyTasks, "localhost:80");
         final SubscriptionInfo expectedInfo = new SubscriptionInfo(4, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
