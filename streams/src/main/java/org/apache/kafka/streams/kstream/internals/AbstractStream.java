@@ -61,11 +61,6 @@ public abstract class AbstractStream<K> {
         this.streamsGraphNode = streamsGraphNode;
     }
 
-    protected void addGraphNode(final StreamsGraphNode newNode) {
-        streamsGraphNode.addChildNode(newNode);
-        builder.maybeAddNodeForOptimizationMetadata(newNode);
-    }
-
     // This method allows to expose the InternalTopologyBuilder instance
     // to subclasses that extend AbstractStream class.
     protected InternalTopologyBuilder internalTopologyBuilder() {

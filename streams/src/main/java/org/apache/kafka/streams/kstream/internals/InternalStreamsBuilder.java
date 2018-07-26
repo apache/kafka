@@ -208,6 +208,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
+    public void addGraphNode(StreamsGraphNode parent, StreamsGraphNode child) {
+        Objects.requireNonNull(parent, "parent node can't be null");
+        Objects.requireNonNull(child, "child node can't be null");
+        parent.addChildNode(child);
+        maybeAddNodeForOptimizationMetadata(child);
+    }
+
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
         node.setInternalStreamsBuilder(this);
