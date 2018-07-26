@@ -671,7 +671,7 @@ public class StreamThreadTest {
             new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return producer.commitCount() == 2;
+                    return producer.commitCount() == 1;
                 }
             },
             "StreamsThread did not commit transaction.");

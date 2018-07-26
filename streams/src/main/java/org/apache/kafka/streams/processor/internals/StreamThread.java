@@ -859,7 +859,7 @@ public class StreamThread extends Thread {
             long totalProcessed;
 
             do {
-                totalProcessed = process();
+                totalProcessed = processAndMaybeCommit();
 
                 if (now - lastPollMs >= maxPollTimeMs) {
                     break;
@@ -983,8 +983,9 @@ public class StreamThread extends Thread {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    private long process() {
+    private long processAndMaybeCommit() {
         long totalProcessed = 0;
+        long totalCommitTimeSpent = 0;
 
         for (int i = 0; i < numIterations; i++) {
             int processed = taskManager.process();
@@ -993,7 +994,9 @@ public class StreamThread extends Thread {
             // commit any tasks that have requested a commit
             final int committed = taskManager.maybeCommitActiveTasks();
             if (committed > 0) {
-                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
+                final long commitTimeSpent = computeLatency();
+                totalCommitTimeSpent += commitTimeSpent;
+                streamsMetrics.commitTimeSensor.record(commitTimeSpent / (double) committed, now);
             }
 
             // if there is no records to be processed, exit immediately
