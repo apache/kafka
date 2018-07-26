@@ -278,6 +278,10 @@ public class TaskManager {
         }
     }
 
+    void updateProcessableTasks() {
+        active.update();
+    }
+
     AdminClient getAdminClient() {
         return adminClient;
     }
@@ -332,8 +336,8 @@ public class TaskManager {
         return false;
     }
 
-    boolean hasActiveRunningTasks() {
-        return active.hasRunningTasks();
+    boolean hasActiveProcessableTasks() {
+        return active.hasProcessableTasks();
     }
 
     boolean hasStandbyRunningTasks() {

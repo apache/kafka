@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -69,7 +70,6 @@ import static java.util.Collections.singleton;
 
 public class StreamThread extends Thread {
 
-    private final static int UNLIMITED_RECORDS = -1;
     private final static AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -561,18 +561,21 @@ public class StreamThread extends Thread {
     }
 
     private final Time time;
-    private final Duration pollTime;
-    private final long commitTimeMs;
-    private final Object stateLock;
     private final Logger log;
     private final String logPrefix;
+    private final Object stateLock;
+    private final Duration pollTime;
+    private final long commitTimeMs;
+    private final int maxPollTimeMs;
+    private final String originalReset;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
     private final AtomicInteger assignmentErrorCode;
 
+    private long now;
+    private long lastPollMs;
     private long lastCommitMs;
-    private long timerStartedMs;
-    private final String originalReset;
+    private int numIterations;
     private Throwable rebalanceException = null;
     private boolean processStandbyRecords = false;
     private volatile State state = State.CREATED;
@@ -718,9 +721,19 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId"))
+                .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
+        this.numIterations = 1;
+
         updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    private static final class InternalConsumerConfig extends ConsumerConfig {
+        private InternalConsumerConfig(final Map<String, Object> props) {
+            super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
+        }
     }
 
     /**
@@ -764,12 +777,11 @@ public class StreamThread extends Thread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     private void runLoop() {
-        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
 
         while (isRunning()) {
             try {
-                recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
+                runOnce();
                 if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
                     enforceRebalance();
@@ -798,12 +810,10 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     // Visible for testing
-    long runOnce(final long recordsProcessedBeforeCommit) {
-        long processedBeforeCommit = recordsProcessedBeforeCommit;
-
+    void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
 
-        timerStartedMs = time.milliseconds();
+        now = time.milliseconds();
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -832,27 +842,43 @@ public class StreamThread extends Thread {
         }
 
         if (records != null && !records.isEmpty()) {
-            streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
+            streamsMetrics.pollTimeSensor.record(computeLatency(), now);
             addRecordsToTasks(records);
         }
 
-        if (taskManager.hasActiveRunningTasks()) {
-            final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
-            if (totalProcessed > 0) {
-                final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, timerStartedMs);
-                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(
-                        recordsProcessedBeforeCommit,
-                        totalProcessed,
-                        processLatency,
-                        commitTimeMs);
-            }
+        if (taskManager.hasActiveProcessableTasks()) {
+
+            /*
+             * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
+             *  1. If it is time to commit, do it;
+             *  2. If it is time to punctuate, do it;
+             *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
+             *  4. If none of the the above happens, increment N.
+             *  5. If one of the above happens, half the value of N.
+             */
+            long totalProcessed;
+
+            do {
+                totalProcessed = process();
+
+                if (now - lastPollMs >= maxPollTimeMs) {
+                    break;
+                } else if (maybeCommit() || maybePunctuate()) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else {
+                    numIterations++;
+                }
+
+                log.warn("Completed one iteration of {} rounds, with {} records processed.", numIterations, totalProcessed);
+                if (log.isTraceEnabled()) {
+                    log.trace("Completed one iteration of {} rounds, with {} records processed.", numIterations, totalProcessed);
+                }
+
+            } while (totalProcessed > 0 && now - lastPollMs < maxPollTimeMs);
+
         }
 
-        punctuate();
-        maybeCommit(timerStartedMs);
-        maybeUpdateStandbyTasks(timerStartedMs);
-        return processedBeforeCommit;
+        maybeUpdateStandbyTasks(now);
     }
 
     /**
@@ -864,6 +890,8 @@ public class StreamThread extends Thread {
      */
     private ConsumerRecords<byte[], byte[]> pollRequests(final Duration pollTime) {
         ConsumerRecords<byte[], byte[]> records = null;
+
+        this.lastPollMs = now;
 
         try {
             records = consumer.poll(pollTime);
@@ -943,88 +971,57 @@ public class StreamThread extends Thread {
 
             task.addRecords(partition, records.records(partition));
         }
+
+        taskManager.updateProcessableTasks();
     }
 
     /**
      * Schedule the records processing by selecting which record is processed next. Commits may
      * happen as records are processed.
      *
-     * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
-     *                                     if UNLIMITED_RECORDS, then commit is never called
      * @return Number of records processed since last commit.
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    private long processAndMaybeCommit(final long recordsProcessedBeforeCommit) {
+    private long process() {
+        long totalProcessed = 0;
 
-        long processed;
-        long totalProcessedSinceLastMaybeCommit = 0;
-        // Round-robin scheduling by taking one record from each task repeatedly
-        // until no task has any records left
-        do {
-            processed = taskManager.process();
-            if (processed > 0) {
-                streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, timerStartedMs);
-            }
-            totalProcessedSinceLastMaybeCommit += processed;
+        for (int i = 0; i < numIterations; i++) {
+            int processed = taskManager.process();
+            totalProcessed += processed;
 
-            punctuate();
-
-            if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
-                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
-                totalProcessedSinceLastMaybeCommit = 0;
-                maybeCommit(timerStartedMs);
-            }
             // commit any tasks that have requested a commit
             final int committed = taskManager.maybeCommitActiveTasks();
             if (committed > 0) {
-                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
             }
-        } while (processed != 0);
 
-        return totalProcessedSinceLastMaybeCommit;
+            // if there is no records to be processed, exit immediately
+            if (processed == 0) {
+                break;
+            }
+        }
+
+        if (totalProcessed > 0) {
+            final long processLatency = computeLatency();
+            streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, now);
+        }
+
+        return totalProcessed;
     }
 
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private void punctuate() {
+    private boolean maybePunctuate() {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
-            streamsMetrics.punctuateTimeSensor.record(computeLatency() / (double) punctuated, timerStartedMs);
-        }
-    }
+            streamsMetrics.punctuateTimeSensor.record(computeLatency() / (double) punctuated, now);
 
-    /**
-     * Adjust the number of records that should be processed by scheduler. This avoids
-     * scenarios where the processing time is higher than the commit time.
-     *
-     * @param prevRecordsProcessedBeforeCommit Previous number of records processed by scheduler.
-     * @param totalProcessed                   Total number of records processed in this last round.
-     * @param processLatency                   Total processing latency in ms processed in this last round.
-     * @param commitTime                       Desired commit time in ms.
-     * @return An adjusted number of records to be processed in the next round.
-     */
-    private long adjustRecordsProcessedBeforeCommit(final long prevRecordsProcessedBeforeCommit, final long totalProcessed,
-                                                    final long processLatency, final long commitTime) {
-        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
-        // check if process latency larger than commit latency
-        // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
-        // we will never process all records again. This might be an issue if the initial measurement
-        // was off due to a slow start.
-        if (processLatency > 0 && processLatency > commitTime) {
-            // push down
-            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
-                processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
-        } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
-            // push up
-            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("processing latency {} < commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
-                processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
+            return true;
+        } else {
+            return false;
         }
-
-        return recordsProcessedBeforeCommit;
     }
 
     /**
@@ -1033,28 +1030,39 @@ public class StreamThread extends Thread {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    void maybeCommit(final long now) {
+    boolean maybeCommit() {
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
+            log.warn("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
+                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
-                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
+                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
             final int committed = taskManager.commitAll();
             if (committed > 0) {
-                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+                final long previous = now;
+
+                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();
-            }
-            if (log.isDebugEnabled()) {
-                log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), timerStartedMs - now);
+
+                log.warn("Committed all active tasks {} and standby tasks {} in {}ms",
+                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - previous);
+                if (log.isDebugEnabled()) {
+                    log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
+                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - previous);
+                }
             }
 
             lastCommitMs = now;
 
             processStandbyRecords = true;
+
+            return committed > 0;
+        } else {
+            return false;
         }
     }
 
@@ -1087,7 +1095,9 @@ public class StreamThread extends Thread {
 
                     standbyRecords = remainingStandbyRecords;
 
-                    log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
+                    }
                 }
                 processStandbyRecords = false;
             }
@@ -1147,10 +1157,10 @@ public class StreamThread extends Thread {
      * @return latency
      */
     private long computeLatency() {
-        final long previousTimeMs = timerStartedMs;
-        timerStartedMs = time.milliseconds();
+        final long previous = now;
+        now = time.milliseconds();
 
-        return Math.max(timerStartedMs - previousTimeMs, 0);
+        return Math.max(now - previous, 0);
     }
 
     /**
@@ -1249,6 +1259,10 @@ public class StreamThread extends Thread {
     }
 
     // the following are for testing only
+    void setNow(final long now) {
+        this.now = now;
+    }
+
     TaskManager taskManager() {
         return taskManager;
     }

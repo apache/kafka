@@ -499,7 +499,7 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    ConsumerConfig(Map<?, ?> props, boolean doLog) {
+    protected ConsumerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
     }
 

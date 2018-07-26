@@ -177,7 +177,7 @@ public class StreamThreadTest {
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce(-1);
+        thread.runOnce();
         assertEquals(thread.state(), StreamThread.State.RUNNING);
         Assert.assertEquals(4, stateListener.numChanges);
         Assert.assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
@@ -307,9 +307,11 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
 
         EasyMock.verify(taskManager);
     }
@@ -341,9 +343,11 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
 
         EasyMock.verify(taskManager);
     }
@@ -376,9 +380,11 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
         mockTime.sleep(commitInterval + 1);
-        thread.maybeCommit(mockTime.milliseconds());
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
 
         EasyMock.verify(taskManager);
     }
@@ -456,7 +462,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(beginOffsets);
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         assertEquals(thread.tasks().size(), clientSupplier.producers.size());
         assertSame(clientSupplier.consumer, thread.consumer);
@@ -645,7 +651,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        thread.runOnce(-1);
+        thread.runOnce();
         assertThat(thread.tasks().size(), equalTo(1));
         final MockProducer producer = clientSupplier.producers.get(0);
 
@@ -656,7 +662,7 @@ public class StreamThreadTest {
 
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 0, new byte[0], new byte[0]));
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1);
-        thread.runOnce(-1);
+        thread.runOnce();
         assertThat(producer.history().size(), equalTo(1));
 
         assertFalse(producer.transactionCommitted());
@@ -674,7 +680,7 @@ public class StreamThreadTest {
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 0, new byte[0], new byte[0]));
         try {
-            thread.runOnce(-1);
+            thread.runOnce();
             fail("Should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) { /* ignore */ }
         TestUtils.waitForCondition(
@@ -713,7 +719,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         assertThat(thread.tasks().size(), equalTo(1));
 
@@ -721,7 +727,7 @@ public class StreamThreadTest {
         clientSupplier.producers.get(0).fenceProducer();
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         try {
-            thread.runOnce(-1);
+            thread.runOnce();
             fail("Should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) { /* ignore */ }
 
@@ -772,7 +778,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
@@ -816,7 +822,7 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
@@ -881,7 +887,7 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         final StandbyTask standbyTask1 = thread.taskManager().standbyTask(partition1);
         final StandbyTask standbyTask2 = thread.taskManager().standbyTask(partition2);
@@ -947,7 +953,7 @@ public class StreamThreadTest {
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         assertEquals(0, punctuatedStreamTime.size());
         assertEquals(0, punctuatedWallClockTime.size());
@@ -957,14 +963,14 @@ public class StreamThreadTest {
             clientSupplier.consumer.addRecord(new ConsumerRecord<>(topic1, 1, i, i * 100L, TimestampType.CREATE_TIME, ConsumerRecord.NULL_CHECKSUM, ("K" + i).getBytes().length, ("V" + i).getBytes().length, ("K" + i).getBytes(), ("V" + i).getBytes()));
         }
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         assertEquals(1, punctuatedStreamTime.size());
         assertEquals(1, punctuatedWallClockTime.size());
 
         mockTime.sleep(100L);
 
-        thread.runOnce(-1);
+        thread.runOnce();
 
         // we should skip stream time punctuation, only trigger wall-clock time punctuation
         assertEquals(1, punctuatedStreamTime.size());
@@ -1155,7 +1161,7 @@ public class StreamThreadTest {
         mockConsumer.assign(Collections.singleton(t1p1));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce(-1);
+        thread.runOnce();
 
         final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
         final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
@@ -1165,7 +1171,7 @@ public class StreamThreadTest {
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], "I am not an integer.".getBytes()));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], "I am not an integer.".getBytes()));
-        thread.runOnce(-1);
+        thread.runOnce();
         assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
         assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
@@ -1199,7 +1205,7 @@ public class StreamThreadTest {
         mockConsumer.assign(Collections.singleton(t1p1));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce(-1);
+        thread.runOnce();
 
         final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
         final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
@@ -1209,7 +1215,7 @@ public class StreamThreadTest {
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        thread.runOnce(-1);
+        thread.runOnce();
         assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
         assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
@@ -1217,13 +1223,13 @@ public class StreamThreadTest {
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        thread.runOnce(-1);
+        thread.runOnce();
         assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
         assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        thread.runOnce(-1);
+        thread.runOnce();
         assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
         assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 

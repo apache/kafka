@@ -344,6 +344,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
+        assignedTasks.update();
 
         try {
             assignedTasks.process();
@@ -360,6 +361,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.isProcessable()).andReturn(false);
         EasyMock.replay(t1);
         addAndInitTask();
+        assignedTasks.update();
 
         assertThat(assignedTasks.process(), equalTo(0));
 
@@ -374,6 +376,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.replay(t1);
 
         addAndInitTask();
+        assignedTasks.update();
 
         assertThat(assignedTasks.process(), equalTo(1));
 

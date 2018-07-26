@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Logger log;
     private final TaskAction<StreamTask> maybeCommitAction;
+    private Map<TaskId, StreamTask> processable = Collections.emptyMap();
     private int committed = 0;
 
     AssignedStreamsTasks(final LogContext logContext) {
@@ -84,15 +86,23 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     /**
+     * Update the list of processable tasks
+     */
+    void update() {
+        processable = running.entrySet().stream()
+                .filter(entry -> entry.getValue().isProcessable())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    boolean hasProcessableTasks() {
+        return !processable.isEmpty();
+    }
+
+    /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     int process() {
         int processed = 0;
-
-        // only iterate over tasks who has data in all its input topic partitions
-        final Map<TaskId, StreamTask> processable = running.entrySet().stream()
-                .filter(entry -> entry.getValue().isProcessable())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         for (final StreamTask task : processable.values()) {
             try {
