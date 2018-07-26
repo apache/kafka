@@ -22,7 +22,7 @@ import kafka.common.KafkaException
 import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
@@ -42,9 +42,10 @@ import scala.util.{Failure, Success, Try}
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
-  * and configurations.  This client is deprecated, and will be replaced by KafkaAdminClient.
-  * @see KafkaAdminClient
+  * and configurations. This client is deprecated, and will be replaced by org.apache.kafka.clients.admin.AdminClient.
   */
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
                   val retryBackoffMs: Long,
@@ -364,6 +365,8 @@ class CompositeFuture[T](time: Time,
   }
 }
 
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 object AdminClient {
   val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
   val DefaultRequestTimeoutMs = 5000
@@ -460,7 +463,7 @@ object AdminClient {
       metadata,
       time,
       retryBackoffMs,
-      requestTimeoutMs.toLong,
+      requestTimeoutMs,
       Integer.MAX_VALUE)
 
     new AdminClient(

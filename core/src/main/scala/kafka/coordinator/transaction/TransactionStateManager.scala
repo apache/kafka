@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
@@ -30,7 +29,7 @@ import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
@@ -313,8 +312,8 @@ class TransactionStateManager(brokerId: Int,
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
                 buffer.clear()
-                val bufferRead = fileRecords.readInto(buffer, 0)
-                MemoryRecords.readableRecords(bufferRead)
+                fileRecords.readInto(buffer, 0)
+                MemoryRecords.readableRecords(buffer)
             }
 
             memRecords.batches.asScala.foreach { batch =>

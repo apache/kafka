@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -57,13 +56,15 @@ public class LazyDownConversionRecords implements BaseRecords {
         // need to make sure that we are able to accommodate one full batch of down-converted messages. The way we achieve
         // this is by having sizeInBytes method factor in the size of the first down-converted batch and return at least
         // its size.
-        AbstractIterator<? extends RecordBatch> it = records.batchIterator();
+        java.util.Iterator<ConvertedRecords> it = iterator(0);
         if (it.hasNext()) {
-            firstConvertedBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, time);
+            firstConvertedBatch = it.next();
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
+            // If there are no messages we got after down-conversion, make sure we are able to send at least an overflow
+            // message to the consumer. Typically, the consumer would need to increase the fetch size in such cases.
             firstConvertedBatch = null;
-            sizeInBytes = 0;
+            sizeInBytes = LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH;
         }
     }
 
@@ -148,21 +149,28 @@ public class LazyDownConversionRecords implements BaseRecords {
                 return convertedBatch;
             }
 
-            if (!batchIterator.hasNext())
-                return allDone();
+            while (batchIterator.hasNext()) {
+                List<RecordBatch> batches = new ArrayList<>();
+                boolean isFirstBatch = true;
+                long sizeSoFar = 0;
 
-            // Figure out batches we should down-convert based on the size constraints
-            List<RecordBatch> batches = new ArrayList<>();
-            boolean isFirstBatch = true;
-            long sizeSoFar = 0;
-            while (batchIterator.hasNext() &&
-                    (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= maximumReadSize)) {
-                RecordBatch currentBatch = batchIterator.next();
-                batches.add(currentBatch);
-                sizeSoFar += currentBatch.sizeInBytes();
-                isFirstBatch = false;
+                // Figure out batches we should down-convert based on the size constraints
+                while (batchIterator.hasNext() &&
+                        (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= maximumReadSize)) {
+                    RecordBatch currentBatch = batchIterator.next();
+                    batches.add(currentBatch);
+                    sizeSoFar += currentBatch.sizeInBytes();
+                    isFirstBatch = false;
+                }
+                ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+                // During conversion, it is possible that we drop certain batches because they do not have an equivalent
+                // representation in the message format we want to convert to. For example, V0 and V1 message formats
+                // have no notion of transaction markers which were introduced in V2 so they get dropped during conversion.
+                // We return converted records only when we have at least one valid batch of messages after conversion.
+                if (convertedRecords.records().sizeInBytes() > 0)
+                    return convertedRecords;
             }
-            return RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+            return allDone();
         }
     }
 }

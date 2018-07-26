@@ -73,7 +73,7 @@
               files="RequestResponseTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest.java"/>
+              files="MemoryRecordsTest|MetricsTest"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"

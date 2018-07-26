@@ -137,7 +137,7 @@ public class InternalStreamsBuilderTest {
         assertEquals(storeName, topology.stateStores().get(0).name());
 
         assertEquals(1, topology.storeToChangelogTopic().size());
-        assertEquals("topic2", topology.storeToChangelogTopic().get(storeName));
+        assertEquals("app-id-prefix-STATE-STORE-0000000000-changelog", topology.storeToChangelogTopic().get(storeName));
         assertNull(table1.queryableStoreName());
     }
     

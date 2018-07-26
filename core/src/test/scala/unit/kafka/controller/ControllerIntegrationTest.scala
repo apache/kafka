@@ -17,6 +17,8 @@
 
 package kafka.controller
 
+import java.util.concurrent.LinkedBlockingQueue
+
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
@@ -24,10 +26,11 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.zk.{PreferredReplicaElectionZNode, ZooKeeperTestHarness}
 import org.junit.{After, Before, Test}
-import org.junit.Assert.assertTrue
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -291,6 +294,51 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), KafkaController.InitialControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
     }, "failed to get expected partition state after entire isr went offline")
+  }
+
+  @Test
+  def testControlledShutdown() {
+    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
+    val topic = "test"
+    val partition = 1
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
+
+    val controllerId = zkClient.getControllerId.get
+    val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+    val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
+    val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
+    controller.controlledShutdown(2, controlledShutdownCallback)
+    var partitionsRemaining = resultQueue.take().get
+    var activeServers = servers.filter(s => s.config.brokerId != 2)
+    // wait for the update metadata request to trickle to the brokers
+    TestUtils.waitUntilTrue(() =>
+      activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
+      "Topic test not created after timeout")
+    assertEquals(0, partitionsRemaining.size)
+    var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    var leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
+    assertEquals(0, leaderAfterShutdown)
+    assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
+    assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
+
+    controller.controlledShutdown(1, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(0, partitionsRemaining.size)
+    activeServers = servers.filter(s => s.config.brokerId == 0)
+    partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
+    assertEquals(0, leaderAfterShutdown)
+
+    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    controller.controlledShutdown(0, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader doesn't change since all the replicas are shut down
+    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
   }
 
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,

@@ -118,6 +118,10 @@ public class AdminMetadataManager {
         public void requestUpdate() {
             AdminMetadataManager.this.requestUpdate();
         }
+
+        @Override
+        public void close() {
+        }
     }
 
     /**

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -32,12 +33,14 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 import org.junit.runners.Parameterized.Parameter;
+import org.rocksdb.WriteBatch;
 
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
@@ -46,14 +49,15 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
-import static org.apache.kafka.streams.state.internals.Segments.segmentInterval;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -65,6 +69,7 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 1000;
+    private final long segmentInterval = 60_000;
     private final int numSegments = 3;
     private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
@@ -102,7 +107,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                 retention,
-                numSegments,
+                segmentInterval,
                 schema);
 
         stateDir = TestUtils.tempDirectory();
@@ -163,7 +168,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldRollSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
@@ -186,7 +191,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -206,7 +211,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFetchAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -225,7 +230,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleDateFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -237,14 +242,14 @@ public class RocksDBSegmentedBytesStoreTest {
         final Long segmentId = Long.parseLong(nameParts[1]);
         final SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmm");
         formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
-        final String formatted = formatter.format(new Date(segmentId * segmentInterval(retention, numSegments)));
+        final String formatted = formatter.format(new Date(segmentId * segmentInterval));
         final File parent = new File(stateDir, storeName);
         final File oldStyleName = new File(parent, nameParts[0] + "-" + formatted);
         assertTrue(new File(parent, firstSegmentName).renameTo(oldStyleName));
 
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                 retention,
-                numSegments,
+                segmentInterval,
                 schema);
 
         bytesStore.init(context, bytesStore);
@@ -256,7 +261,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleColonFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -271,7 +276,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                 retention,
-                numSegments,
+                segmentInterval,
                 schema);
 
         bytesStore.init(context, bytesStore);
@@ -289,6 +294,67 @@ public class RocksDBSegmentedBytesStoreTest {
         bytesStore.close();
         bytesStore.init(context, bytesStore);
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
+    }
+
+    @Test
+    public void shouldCreateWriteBatches() {
+        final String key = "a";
+        final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
+        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
+        final Map<Segment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
+        assertEquals(2, writeBatchMap.size());
+        for (final WriteBatch batch: writeBatchMap.values()) {
+            assertEquals(1, batch.count());
+        }
+    }
+
+    @Test
+    public void shouldRestoreToByteStore() {
+        // 0 segments initially.
+        assertEquals(0, bytesStore.getSegments().size());
+        final String key = "a";
+        final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
+        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
+        bytesStore.restoreAllInternal(records);
+
+        // 2 segments are created during restoration.
+        assertEquals(2, bytesStore.getSegments().size());
+
+        // Bulk loading is enabled during recovery.
+        for (final Segment segment: bytesStore.getSegments()) {
+            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+        }
+
+        final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 100L));
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        assertEquals(expected, results);
+    }
+
+    @Test
+    public void shouldRespectBulkLoadOptionsDuringInit() {
+        bytesStore.init(context, bytesStore);
+        final String key = "a";
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
+        assertEquals(2, bytesStore.getSegments().size());
+
+        final StateRestoreListener restoreListener = context.getRestoreListener(bytesStore.name());
+
+        restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
+
+        for (final Segment segment: bytesStore.getSegments()) {
+            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+        }
+
+        restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
+        for (final Segment segment: bytesStore.getSegments()) {
+            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
+        }
     }
 
     private Set<String> segmentDirs() {

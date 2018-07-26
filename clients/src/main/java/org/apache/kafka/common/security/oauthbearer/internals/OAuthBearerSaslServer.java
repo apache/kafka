@@ -21,8 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -48,13 +46,9 @@ import org.slf4j.LoggerFactory;
  * for example).
  */
 public class OAuthBearerSaslServer implements SaslServer {
-    private static final String INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE = "Invalid OAUTHBEARER client first message";
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerSaslServer.class);
     private static final String NEGOTIATED_PROPERTY_KEY_TOKEN = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token";
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
-    private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
-    private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
-            String.format("n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)", SASLNAME));
 
     private final AuthenticateCallbackHandler callbackHandler;
 
@@ -90,24 +84,14 @@ public class OAuthBearerSaslServer implements SaslServer {
             throw new SaslAuthenticationException(errorMessage);
         }
         errorMessage = null;
-        String responseMsg = new String(response, StandardCharsets.UTF_8);
-        Matcher matcher = CLIENT_INITIAL_RESPONSE_PATTERN.matcher(responseMsg);
-        if (!matcher.matches()) {
-            if (log.isDebugEnabled())
-                log.debug(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
-            throw new SaslException(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
+        OAuthBearerClientInitialResponse clientResponse;
+        try {
+            clientResponse = new OAuthBearerClientInitialResponse(response);
+        } catch (SaslException e) {
+            log.debug(e.getMessage());
+            throw e;
         }
-        String authzid = matcher.group("authzid");
-        String authorizationId = authzid != null ? authzid : "";
-        if (!"bearer".equalsIgnoreCase(matcher.group("scheme"))) {
-            String msg = String.format("Invalid scheme in OAUTHBEARER client first message: %s",
-                    matcher.group("scheme"));
-            if (log.isDebugEnabled())
-                log.debug(msg);
-            throw new SaslException(msg);
-        }
-        String tokenValue = matcher.group("token");
-        return process(tokenValue, authorizationId);
+        return process(clientResponse.tokenValue(), clientResponse.authorizationId());
     }
 
     @Override

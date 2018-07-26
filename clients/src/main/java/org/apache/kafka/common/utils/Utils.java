@@ -24,7 +24,6 @@ import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -41,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
@@ -109,6 +109,17 @@ public final class Utils {
      */
     public static String utf8(ByteBuffer buffer, int length) {
         return utf8(buffer, 0, length);
+    }
+
+    /**
+     * Read a UTF8 string from the current position till the end of a byte buffer. The position of the byte buffer is
+     * not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer) {
+        return utf8(buffer, buffer.remaining());
     }
 
     /**
@@ -501,6 +512,19 @@ public final class Utils {
         return bld.toString();
     }
 
+    public static Map<String, String> parseMap(String mapStr, String keyValueSeparator, String elementSeparator) {
+        Map<String, String> map = new HashMap<>();
+
+        if (!mapStr.isEmpty()) {
+            String[] attrvals = mapStr.split(elementSeparator);
+            for (String attrval : attrvals) {
+                String[] array = attrval.split(keyValueSeparator, 2);
+                map.put(array[0], array[1]);
+            }
+        }
+        return map;
+    }
+
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
@@ -509,7 +533,7 @@ public final class Utils {
         Properties props = new Properties();
 
         if (filename != null) {
-            try (InputStream propStream = new FileInputStream(filename)) {
+            try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
                 props.load(propStream);
             }
         } else {
@@ -579,8 +603,7 @@ public final class Utils {
     public static String readFileAsString(String path, Charset charset) throws IOException {
         if (charset == null) charset = Charset.defaultCharset();
 
-        try (FileInputStream stream = new FileInputStream(new File(path))) {
-            FileChannel fc = stream.getChannel();
+        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
             MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
             return charset.decode(bb).toString();
         }

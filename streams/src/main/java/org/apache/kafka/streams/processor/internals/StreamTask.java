@@ -189,7 +189,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        processorContext = processorContextImpl;
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -209,6 +210,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
+        processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
 
@@ -380,7 +382,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         flushState();
 
         if (!eosEnabled) {
-            stateMgr.checkpoint(recordCollectorOffsets());
+            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
         }
 
         commitOffsets(startNewTransaction);
@@ -391,8 +393,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return recordCollector.offsets();
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
+        final Map<TopicPartition, Long> checkpointableOffsets = recordCollector.offsets();
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
+        return checkpointableOffsets;
     }
 
     @Override
@@ -424,19 +431,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                 if (eosEnabled) {
                     producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                    producer.commitTransaction();
-                    transactionInFlight = false;
-                    if (startNewTransaction) {
-                        producer.beginTransaction();
-                        transactionInFlight = true;
-                    }
                 } else {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 }
                 commitOffsetNeeded = false;
-            } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+            }
+
+            if (eosEnabled) {
                 producer.commitTransaction();
                 transactionInFlight = false;
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                    transactionInFlight = true;
+                }
             }
         } catch (final CommitFailedException | ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
@@ -628,7 +635,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param partition the partition
      * @param records   the records
      */
-    @SuppressWarnings("unchecked")
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
@@ -710,7 +716,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
-        if (timestamp == TimestampTracker.NOT_KNOWN) {
+        if (timestamp == RecordQueue.NOT_KNOWN) {
             return false;
         } else {
             return streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);

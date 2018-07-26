@@ -66,9 +66,9 @@ class StreamsBrokerCompatibility(Test):
 
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             processor.start()
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: Cannot create a v0 FindCoordinator request because we require features supported only in 1 or later.',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
                                timeout_sec=60,
-                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: Cannot create a v0 FindCoordinator request because we require features supported only in 1 or later.' error message " + str(processor.node.account))
+                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException' error message " + str(processor.node.account))
 
         self.kafka.stop()
 

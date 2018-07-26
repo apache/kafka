@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -42,7 +44,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -234,9 +235,8 @@ public class KafkaStreamsTest {
         assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
     }
 
-    @Ignore // this test cannot pass as long as GST blocks KS.start()
     @Test
-    public void testGlobalThreadCloseWithoutConnectingToBroker() {
+    public void globalThreadShouldTimeoutWhenBrokerConnectionCannotBeEstablished() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
@@ -244,16 +244,21 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
 
+        props.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 200);
+
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.start();
-        streams.close();
+        try {
+            streams.start();
+            fail("expected start() to time out and throw an exception.");
+        } catch (final StreamsException expected) {
+            // This is a result of not being able to connect to the broker.
+        }
         // There's nothing to assert... We're testing that this operation actually completes.
     }
 
-    @Ignore // this test cannot pass until we implement KIP-266
     @Test
     public void testLocalThreadCloseWithoutConnectingToBroker() {
         final Properties props = new Properties();

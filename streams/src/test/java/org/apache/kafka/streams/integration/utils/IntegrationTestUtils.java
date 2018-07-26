@@ -37,6 +37,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import scala.Option;
@@ -44,6 +46,7 @@ import scala.Option;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -59,6 +62,32 @@ public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
     public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
+
+    /*
+     * Records state transition for StreamThread
+     */
+    public static class StateListenerStub implements StreamThread.StateListener {
+        boolean runningToRevokedSeen = false;
+        boolean revokedToPendingShutdownSeen = false;
+        @Override
+        public void onChange(final Thread thread,
+                             final ThreadStateTransitionValidator newState,
+                             final ThreadStateTransitionValidator oldState) {
+            if (oldState == StreamThread.State.RUNNING && newState == StreamThread.State.PARTITIONS_REVOKED) {
+                runningToRevokedSeen = true;
+            } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
+                revokedToPendingShutdownSeen = true;
+            }
+        }
+
+        public boolean revokedToPendingShutdownSeen() {
+            return revokedToPendingShutdownSeen;
+        }
+
+        public boolean runningToRevokedSeen() {
+            return runningToRevokedSeen;
+        }
+    }
 
     /**
      * Removes local state stores.  Useful to reset state in-between integration test runs.
@@ -179,16 +208,38 @@ public class IntegrationTestUtils {
             producer.flush();
         }
     }
+    
+    public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                                final Collection<KeyValue<K, V>> records,
+                                                                                final Properties producerConfig,
+                                                                                final Long timestamp)
+        throws ExecutionException, InterruptedException {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            producer.initTransactions();
+            for (final KeyValue<K, V> record : records) {
+                producer.beginTransaction();
+                final Future<RecordMetadata> f = producer
+                        .send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                f.get();
+                producer.abortTransaction();
+            }
+        }    
+    }
 
-    public static <V> void produceValuesSynchronously(
-        final String topic, final Collection<V> records, final Properties producerConfig, final Time time)
+    public static <V> void produceValuesSynchronously(final String topic,
+                                                      final Collection<V> records,
+                                                      final Properties producerConfig,
+                                                      final Time time)
         throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
-    public static <V> void produceValuesSynchronously(
-        final String topic, final Collection<V> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
-        throws ExecutionException, InterruptedException {
+    public static <V> void produceValuesSynchronously(final String topic,
+                                                      final Collection<V> records,
+                                                      final Properties producerConfig,
+                                                      final Time time,
+                                                      final boolean enableTransactions)
+            throws ExecutionException, InterruptedException {
         final Collection<KeyValue<Object, V>> keyedRecords = new ArrayList<>();
         for (final V value : records) {
             final KeyValue<Object, V> kv = new KeyValue<>(null, value);
@@ -240,10 +291,9 @@ public class IntegrationTestUtils {
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
                                                                                   final String topic,
                                                                                   final int expectedNumRecords) throws InterruptedException {
-
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
-
+    
     /**
      * Wait until enough data (key-value records) has been consumed.
      *
@@ -464,7 +514,7 @@ public class IntegrationTestUtils {
         while (totalPollTimeMs < waitTime &&
             continueConsuming(consumerRecords.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+            final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {
                 consumerRecords.add(record);

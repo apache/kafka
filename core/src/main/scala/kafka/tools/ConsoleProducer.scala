@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets
 import joptsimple._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -228,7 +229,6 @@ object ConsoleProducer {
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
-    /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)

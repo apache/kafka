@@ -69,8 +69,8 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
 
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
-    For example, to run the Muckrake test simple_consumer_shell_test, you would run:
-        ./tests/docker/ducker-ak test ./tests/kafkatest/test/core/simple_consumer_shell_test.py
+    For example, to run the system test produce_bench_test, you would run:
+        ./tests/docker/ducker-ak test ./tests/kafkatest/test/core/produce_bench_test.py
 
 ssh [node-name|user-name@node-name] [command]
     Log in to a running ducker container.  If node-name is not given, it prints

@@ -24,11 +24,13 @@ import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Test}
+
 import scala.collection.JavaConverters._
 
 /**
@@ -78,7 +80,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
+    val assignment = Map(
       0 -> Seq(100, 106), //Throttled
       1 -> Seq(101, 106), //Throttled
       2 -> Seq(102, 106), //Throttled
@@ -87,7 +89,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       5 -> Seq(105, 107), //Throttled
       6 -> Seq(100, 106), //Not Throttled
       7 -> Seq(101, 107) //Not Throttled
-    ))
+    )
+    TestUtils.createTopic(zkClient, topic, assignment, brokers)
 
     val msg = msg100KB
     val msgCount = 100
@@ -111,7 +114,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -176,7 +179,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val config: Properties = createBrokerConfig(100, zkConnect)
     config.put("log.segment.bytes", (1024 * 1024).toString)
     brokers = Seq(createServer(fromProps(config)))
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
 
     //Write 20MBs and throttle at 5MB/s
     val msg = msg100KB
@@ -207,7 +210,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    producer = createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }

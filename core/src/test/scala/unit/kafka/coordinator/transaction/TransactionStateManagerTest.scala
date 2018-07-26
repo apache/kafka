@@ -585,9 +585,16 @@ class TransactionStateManagerTest {
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None),
       EasyMock.eq(true), EasyMock.eq(IsolationLevel.READ_UNCOMMITTED)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
-    EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
-      .andReturn(records.buffer)
 
+    val bufferCapture = EasyMock.newCapture[ByteBuffer]
+    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
+    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
+      override def answer: Unit = {
+        val buffer = bufferCapture.getValue
+        buffer.put(records.buffer.duplicate)
+        buffer.flip()
+      }
+    })
     EasyMock.replay(logMock, fileRecordsMock, replicaManager)
   }
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
+
 import java.util.Map;
 
 /**

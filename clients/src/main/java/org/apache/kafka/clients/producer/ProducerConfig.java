@@ -152,7 +152,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
     /**
-     * <code>metrics.log.level</code>
+     * <code>metrics.recording.level</code>
      */
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 

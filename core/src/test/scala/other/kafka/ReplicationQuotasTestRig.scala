@@ -17,9 +17,10 @@
 
 package other.kafka
 
-import java.io.{File, FileOutputStream, PrintWriter}
-import javax.imageio.ImageIO
+import java.io.{File, PrintWriter}
+import java.nio.file.{Files, StandardOpenOption}
 
+import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import org.apache.kafka.common.TopicPartition
@@ -126,7 +127,7 @@ object ReplicationQuotasTestRig {
       createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
-      val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
+      val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
       (0 until config.msgsPerPartition).foreach { x =>
         (0 until config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
@@ -310,7 +311,7 @@ object ReplicationQuotasTestRig {
     }
 
     def append(message: String): Unit = {
-      val stream = new FileOutputStream(log, true)
+      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.APPEND)
       new PrintWriter(stream) {
         append(message)
         close

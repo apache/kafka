@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,11 +80,13 @@ public class ConfigTransformer {
 
         // Collect the variables from the given configs that need transformation
         for (Map.Entry<String, String> config : configs.entrySet()) {
-            List<ConfigVariable> vars = getVars(config.getKey(), config.getValue(), DEFAULT_PATTERN);
-            for (ConfigVariable var : vars) {
-                Map<String, Set<String>> keysByPath = keysByProvider.computeIfAbsent(var.providerName, k -> new HashMap<>());
-                Set<String> keys = keysByPath.computeIfAbsent(var.path, k -> new HashSet<>());
-                keys.add(var.variable);
+            if (config.getValue() != null) {
+                List<ConfigVariable> vars = getVars(config.getKey(), config.getValue(), DEFAULT_PATTERN);
+                for (ConfigVariable var : vars) {
+                    Map<String, Set<String>> keysByPath = keysByProvider.computeIfAbsent(var.providerName, k -> new HashMap<>());
+                    Set<String> keys = keysByPath.computeIfAbsent(var.path, k -> new HashSet<>());
+                    keys.add(var.variable);
+                }
             }
         }
 
@@ -128,6 +133,9 @@ public class ConfigTransformer {
     private static String replace(Map<String, Map<String, Map<String, String>>> lookupsByProvider,
                                   String value,
                                   Pattern pattern) {
+        if (value == null) {
+            return null;
+        }
         Matcher matcher = pattern.matcher(value);
         StringBuilder builder = new StringBuilder();
         int i = 0;

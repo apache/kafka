@@ -255,18 +255,8 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
     @Override
     public void init(ProcessorContext context) {
         this.context = context;
-        context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                flushStore();
-            }
-        });
-        context.schedule(10000, PunctuationType.STREAM_TIME, new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                flushStore();
-            }
-        });
+        context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, time -&gt; flushStore());
+        context.schedule(10000, PunctuationType.STREAM_TIME, time -&gt; flushStore());
         store = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("aggStore");
     }
 
@@ -285,9 +275,6 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
             context.forward(next.key, next.value);
         }
     }
-
-    @Override
-    public void punctuate(long timestamp) {} // deprecated; not used
 
     @Override
     public void close() {}
@@ -407,12 +394,8 @@ punctuator.punctuate(/*timestamp*/ 0L);
         </div>
     </div>
     <div class="pagination">
-        <div class="pagination">
-            <a href="/{{version}}/documentation/streams/developer-guide/datatypes"
-               class="pagination__btn pagination__btn__prev">Previous</a>
-            <a href="/{{version}}/documentation/streams/developer-guide/interactive-queries"
-               class="pagination__btn pagination__btn__next">Next</a>
-        </div>
+        <a href="/{{version}}/documentation/streams/developer-guide/datatypes" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide/interactive-queries" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
 

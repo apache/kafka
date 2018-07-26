@@ -17,20 +17,21 @@
 package kafka.server
 
 import kafka.zk.ZooKeeperTestHarness
-import kafka.consumer.SimpleConsumer
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.api.FetchRequestBuilder
-import kafka.message.ByteBufferMessageSet
 import java.io.File
 
 import kafka.log.LogManager
+import kafka.zookeeper.ZooKeeperClientTimeoutException
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
+import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -51,11 +52,19 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   def testCleanShutdown() {
 
     def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
-      TestUtils.createNewProducer(
+      TestUtils.createProducer(
         TestUtils.getBrokerListStrFromServers(Seq(server)),
         retries = 5,
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
+      )
+
+    def createConsumer(server: KafkaServer): KafkaConsumer[Integer, String] =
+      TestUtils.createConsumer(
+        TestUtils.getBrokerListStrFromServers(Seq(server)),
+        securityProtocol = SecurityProtocol.PLAINTEXT,
+        keyDeserializer = new IntegerDeserializer,
+        valueDeserializer = new StringDeserializer
       )
 
     var server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
@@ -85,25 +94,17 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
 
     producer = createProducer(server)
-    val consumer = new SimpleConsumer(host, TestUtils.boundPort(server), 1000000, 64*1024, "")
+    val consumer = createConsumer(server)
+    consumer.subscribe(Seq(topic).asJava)
 
-    var fetchedMessage: ByteBufferMessageSet = null
-    while (fetchedMessage == null || fetchedMessage.validBytes == 0) {
-      val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).maxWait(0).build())
-      fetchedMessage = fetched.messageSet(topic, 0)
-    }
-    assertEquals(sent1, fetchedMessage.map(m => TestUtils.readString(m.message.payload)))
-    val newOffset = fetchedMessage.last.nextOffset
+    val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
+    assertEquals(sent1, consumerRecords.map(_.value))
 
     // send some more messages
     sent2.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
 
-    fetchedMessage = null
-    while (fetchedMessage == null || fetchedMessage.validBytes == 0) {
-      val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
-      fetchedMessage = fetched.messageSet(topic, 0)
-    }
-    assertEquals(sent2, fetchedMessage.map(m => TestUtils.readString(m.message.payload)))
+    val consumerRecords2 = TestUtils.consumeRecords(consumer, sent2.size)
+    assertEquals(sent2, consumerRecords2.map(_.value))
 
     consumer.close()
     producer.close()
@@ -128,9 +129,10 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   @Test
   def testCleanShutdownAfterFailedStartup() {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
-    newProps.setProperty("zookeeper.connect", "some.invalid.hostname.foo.bar.local:65535")
+    newProps.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
+    newProps.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    verifyCleanShutdownAfterFailedStartup[IllegalArgumentException](newConfig)
+    verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException](newConfig)
   }
 
   @Test
@@ -175,23 +177,17 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   def verifyNonDaemonThreadsStatus() {
-    assertEquals(0, Thread.getAllStackTraces.keySet().toArray
-      .map{ _.asInstanceOf[Thread] }
+    assertEquals(0, Thread.getAllStackTraces.keySet.toArray
+      .map(_.asInstanceOf[Thread])
       .count(isNonDaemonKafkaThread))
   }
 
   @Test
   def testConsecutiveShutdown(){
     val server = new KafkaServer(config)
-    try {
-      server.startup()
-      server.shutdown()
-      server.awaitShutdown()
-      server.shutdown()
-      assertTrue(true)
-    }
-    catch{
-      case _: Throwable => fail()
-    }
+    server.startup()
+    server.shutdown()
+    server.awaitShutdown()
+    server.shutdown()
   }
 }

@@ -17,11 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
@@ -62,12 +64,11 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     private final int throttleTimeMs;
-    private final Map<Resource, ApiError> errors;
+    private final Map<ConfigResource, ApiError> errors;
 
-    public AlterConfigsResponse(int throttleTimeMs, Map<Resource, ApiError> errors) {
+    public AlterConfigsResponse(int throttleTimeMs, Map<ConfigResource, ApiError> errors) {
         this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
-
+        this.errors = Objects.requireNonNull(errors, "errors");
     }
 
     public AlterConfigsResponse(Struct struct) {
@@ -77,13 +78,13 @@ public class AlterConfigsResponse extends AbstractResponse {
         for (Object resourceObj : resourcesArray) {
             Struct resourceStruct = (Struct) resourceObj;
             ApiError error = new ApiError(resourceStruct);
-            ResourceType resourceType = ResourceType.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
+            ConfigResource.Type resourceType = ConfigResource.Type.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
             String resourceName = resourceStruct.getString(RESOURCE_NAME_KEY_NAME);
-            errors.put(new Resource(resourceType, resourceName), error);
+            errors.put(new ConfigResource(resourceType, resourceName), error);
         }
     }
 
-    public Map<Resource, ApiError> errors() {
+    public Map<ConfigResource, ApiError> errors() {
         return errors;
     }
 
@@ -102,9 +103,9 @@ public class AlterConfigsResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> resourceStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<Resource, ApiError> entry : errors.entrySet()) {
+        for (Map.Entry<ConfigResource, ApiError> entry : errors.entrySet()) {
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
-            Resource resource = entry.getKey();
+            ConfigResource resource = entry.getKey();
             entry.getValue().write(resourceStruct);
             resourceStruct.set(RESOURCE_TYPE_KEY_NAME, resource.type().id());
             resourceStruct.set(RESOURCE_NAME_KEY_NAME, resource.name());

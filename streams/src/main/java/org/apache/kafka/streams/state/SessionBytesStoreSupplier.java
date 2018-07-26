@@ -35,4 +35,11 @@ public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<By
      * @return segmentInterval in milliseconds
      */
     long segmentIntervalMs();
+
+    /**
+     * The time period for which the {@link SessionStore} will retain historic data.
+     *
+     * @return retentionPeriod
+     */
+    long retentionPeriod();
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.config.ConfigProvider;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
 
@@ -39,6 +39,7 @@ public class WorkerConfigTransformer {
     }
 
     public Map<String, String> transform(String connectorName, Map<String, String> configs) {
+        if (configs == null) return null;
         ConfigTransformerResult result = configTransformer.transform(configs);
         scheduleReload(connectorName, result.ttls());
         return result.data();

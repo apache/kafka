@@ -17,10 +17,10 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -43,7 +43,7 @@ public class CreateAclsResponse extends AbstractResponse {
                     ERROR_MESSAGE))));
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * The version number is bumped to indicate that, on quota violation, brokers send out responses before throttling.
      */
     private static final Schema CREATE_ACLS_RESPONSE_V1 = CREATE_ACLS_RESPONSE_V0;
 

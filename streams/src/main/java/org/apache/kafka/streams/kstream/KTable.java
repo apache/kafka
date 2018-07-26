@@ -70,7 +70,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate.
+     * predicate, with default serializers, deserializers, and state store.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -92,7 +92,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate.
+     * predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -130,7 +131,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate.
+     * given predicate, with default serializers, deserializers, and state store.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -152,7 +153,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate.
+     * given predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -190,7 +192,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -224,7 +226,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -259,7 +261,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -303,7 +307,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -384,8 +390,8 @@ public interface KTable<K, V> {
     <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
-     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
-     * (with possibly new type).
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possibly a new type), with default serializers, deserializers, and state store.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -457,8 +463,9 @@ public interface KTable<K, V> {
                                        final String... stateStoreNames);
 
     /**
-     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
-     * (with possibly new type).
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possibly a new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
@@ -598,7 +605,8 @@ public interface KTable<K, V> {
                                            final Serialized<KR, VR> serialized);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
+     * with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
      * of the join.
@@ -672,7 +680,9 @@ public interface KTable<K, V> {
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
+     * with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
      * of the join.
@@ -751,7 +761,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join.
+     * non-windowed left equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
@@ -833,7 +843,8 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join.
+     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
@@ -919,7 +930,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join.
+     * non-windowed outer equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).
@@ -1000,7 +1011,8 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join.
+     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).

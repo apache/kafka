@@ -24,11 +24,12 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Map;
 
@@ -62,10 +63,12 @@ public class FileStreamSinkTask extends SinkTask {
             outputStream = System.out;
         } else {
             try {
-                outputStream = new PrintStream(new FileOutputStream(filename, true), false,
+                outputStream = new PrintStream(
+                    Files.newOutputStream(Paths.get(filename), StandardOpenOption.CREATE, StandardOpenOption.APPEND),
+                    false,
                     StandardCharsets.UTF_8.name());
-            } catch (FileNotFoundException | UnsupportedEncodingException e) {
-                throw new ConnectException("Couldn't find or create file for FileStreamSinkTask", e);
+            } catch (IOException e) {
+                throw new ConnectException("Couldn't find or create file '" + filename + "' for FileStreamSinkTask", e);
             }
         }
     }

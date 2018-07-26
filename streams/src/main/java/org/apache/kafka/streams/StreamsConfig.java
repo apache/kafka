@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -32,10 +32,10 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -201,6 +201,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
+
+    /**
+     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for disabling topology optimization
+     */
+    public static final String NO_OPTIMIZATION = "none";
+
+    /**
+     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for enabling topology optimization
+     */
+    public static final String OPTIMIZE = "all";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -434,6 +444,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
+    /** {@code topology.optimization} */
+    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
+    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
+
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
@@ -534,6 +548,12 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(TOPOLOGY_OPTIMIZATION,
+                    Type.STRING,
+                    NO_OPTIMIZATION,
+                    in(NO_OPTIMIZATION, OPTIMIZE),
+                    Importance.MEDIUM,
+                    TOPOLOGY_OPTIMIZATION_DOC)
 
             // LOW
 
@@ -707,7 +727,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static class InternalConfig {
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
-        public static final String VERSION_PROBING_FLAG = "__version.probing.flag__";
+        public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
     }
 
     /**
@@ -810,7 +830,12 @@ public class StreamsConfig extends AbstractConfig {
      * @param props properties that specify Kafka Streams and internal consumer/producer configuration
      */
     public StreamsConfig(final Map<?, ?> props) {
-        super(CONFIG, props);
+        this(props, true);
+    }
+
+    protected StreamsConfig(final Map<?, ?> props,
+                            final boolean doLog) {
+        super(CONFIG, props, doLog);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
     }
 
@@ -907,7 +932,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs to the {@link KafkaConsumer main consumer}.
      * Properties using the prefix {@link #MAIN_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #MAIN_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #MAIN_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #MAIN_CONSUMER_PREFIX}, main consumer will share the general consumer configs
@@ -975,7 +1000,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs for the {@link KafkaConsumer restore-consumer}.
      * Properties using the prefix {@link #RESTORE_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #RESTORE_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #RESTORE_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #RESTORE_CONSUMER_PREFIX}, restore consumer will share the general consumer configs
@@ -1007,7 +1032,7 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs for the {@link KafkaConsumer global consumer}.
      * Properties using the prefix {@link #GLOBAL_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
-     * (read the override precedence ordering in {@link #GLOBAL_CONSUMER_PREFIX)
+     * (read the override precedence ordering in {@link #GLOBAL_CONSUMER_PREFIX}
      * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
      * version as we only support reading/writing from/to the same Kafka Cluster.
      * If not specified by {@link #GLOBAL_CONSUMER_PREFIX}, global consumer will share the general consumer configs

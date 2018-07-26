@@ -16,30 +16,44 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
-
+    private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
     private final String name;
     private final Segments segments;
     private final KeySchema keySchema;
-    private ProcessorContext context;
+    private InternalProcessorContext context;
     private volatile boolean open;
+    private Set<Segment> bulkLoadSegments;
 
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
-                               final int numSegments,
+                               final long segmentInterval,
                                final KeySchema keySchema) {
         this.name = name;
         this.keySchema = keySchema;
-        this.segments = new Segments(name, retention, numSegments);
+        this.segments = new Segments(name, retention, segmentInterval);
     }
 
     @Override
@@ -97,8 +111,10 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void put(final Bytes key, final byte[] value) {
         final long segmentId = segments.segmentId(keySchema.segmentTimestamp(key));
-        final Segment segment = segments.getOrCreateSegment(segmentId, context);
-        if (segment != null) {
+        final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+        if (segment == null) {
+            LOG.debug("Skipping record for expired segment.");
+        } else {
             segment.put(key, value);
         }
     }
@@ -119,21 +135,17 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void init(ProcessorContext context, StateStore root) {
-        this.context = context;
+        this.context = (InternalProcessorContext) context;
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
 
-        segments.openExisting(context);
+        segments.openExisting(this.context);
+
+        bulkLoadSegments = new HashSet<>(segments.allSegments());
 
         // register and possibly restore the state from the logs
-        context.register(root, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                put(Bytes.wrap(key), value);
-            }
-        });
+        context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
 
-        flush();
         open = true;
     }
 
@@ -158,4 +170,84 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         return open;
     }
 
+    // Visible for testing
+    List<Segment> getSegments() {
+        return segments.allSegments();
+    }
+
+    // Visible for testing
+    void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
+        try {
+            final Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
+            for (final Map.Entry<Segment, WriteBatch> entry : writeBatchMap.entrySet()) {
+                final Segment segment = entry.getKey();
+                final WriteBatch batch = entry.getValue();
+                segment.write(batch);
+            }
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
+        }
+    }
+
+    // Visible for testing
+    Map<Segment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
+        final Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final KeyValue<byte[], byte[]> record : records) {
+            final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
+            final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+            if (segment != null) {
+                // This handles the case that state store is moved to a new client and does not
+                // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
+                // will only close the database and open it again with bulk loading enabled.
+                if (!bulkLoadSegments.contains(segment)) {
+                    segment.toggleDbForBulkLoading(true);
+                    // If the store does not exist yet, the getOrCreateSegmentIfLive will call openDB that
+                    // makes the open flag for the newly created store.
+                    // if the store does exist already, then toggleDbForBulkLoading will make sure that
+                    // the store is already open here.
+                    bulkLoadSegments = new HashSet<>(segments.allSegments());
+                }
+                try {
+                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+                    if (record.value == null) {
+                        batch.remove(record.key);
+                    } else {
+                        batch.put(record.key, record.value);
+                    }
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
+                }
+            }
+        }
+        return writeBatchMap;
+    }
+
+    private void toggleForBulkLoading(final boolean prepareForBulkload) {
+        for (final Segment segment: segments.allSegments()) {
+            segment.toggleDbForBulkLoading(prepareForBulkload);
+        }
+    }
+
+    private class RocksDBSegmentsBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+
+        @Override
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+            restoreAllInternal(records);
+        }
+
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
+            toggleForBulkLoading(true);
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+            toggleForBulkLoading(false);
+        }
+    }
 }

@@ -31,8 +31,10 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
-import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLKeyException;
 import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLProtocolException;
+import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -64,6 +66,7 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer netReadBuffer;
     private ByteBuffer netWriteBuffer;
     private ByteBuffer appReadBuffer;
+    private boolean hasBytesBuffered;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
@@ -174,7 +177,7 @@ public class SslTransportLayer implements TransportLayer {
                 flush(netWriteBuffer);
             }
         } catch (IOException ie) {
-            log.warn("Failed to send SSL Close message", ie);
+            log.debug("Failed to send SSL Close message", ie);
         } finally {
             socketChannel.socket().close();
             socketChannel.close();
@@ -254,17 +257,17 @@ public class SslTransportLayer implements TransportLayer {
 
             doHandshake();
         } catch (SSLException e) {
-            handshakeFailure(e, true);
+            maybeProcessHandshakeFailure(e, true, null);
         } catch (IOException e) {
             maybeThrowSslAuthenticationException();
 
             // this exception could be due to a write. If there is data available to unwrap,
-            // process the data so that any SSLExceptions are reported
+            // process the data so that any SSL handshake exceptions are reported
             if (handshakeStatus == HandshakeStatus.NEED_UNWRAP && netReadBuffer.position() > 0) {
                 try {
                     handshakeUnwrap(false);
                 } catch (SSLException e1) {
-                    handshakeFailure(e1, false);
+                    maybeProcessHandshakeFailure(e1, false, e);
                 }
             }
             // If we get here, this is not a handshake failure, throw the original IOException
@@ -503,13 +506,17 @@ public class SslTransportLayer implements TransportLayer {
             read = readFromAppBuffer(dst);
         }
 
+        boolean readFromNetwork = false;
         boolean isClosed = false;
         // Each loop reads at most once from the socket.
         while (dst.remaining() > 0) {
             int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
-            if (netReadBuffer.remaining() > 0)
+            if (netReadBuffer.remaining() > 0) {
                 netread = readFromSocketChannel();
+                if (netread > 0)
+                    readFromNetwork = true;
+            }
 
             while (netReadBuffer.position() > 0) {
                 netReadBuffer.flip();
@@ -563,6 +570,7 @@ public class SslTransportLayer implements TransportLayer {
             if (netread <= 0 || isClosed)
                 break;
         }
+        updateBytesBuffered(readFromNetwork || read > 0);
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
         // on a subsequent poll.
         return read;
@@ -793,6 +801,11 @@ public class SslTransportLayer implements TransportLayer {
         return netReadBuffer;
     }
 
+    // Visibility for testing
+    protected ByteBuffer appReadBuffer() {
+        return appReadBuffer;
+    }
+
     /**
      * SSL exceptions are propagated as authentication failures so that clients can avoid
      * retries and report the failure. If `flush` is true, exceptions are propagated after
@@ -813,6 +826,32 @@ public class SslTransportLayer implements TransportLayer {
             throw handshakeException;
     }
 
+    // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
+    // SSLPeerUnverifiedException or SSLKeyException if the cause is known. These exceptions indicate
+    // authentication failures (e.g. configuration errors) which should not be retried. But the SSL engine
+    // may also throw exceptions using the base class SSLException in a few cases:
+    //   a) If there are no matching ciphers or TLS version or the private key is invalid, client will be
+    //      unable to process the server message and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
+    //   b) If server closes the connection gracefully during handshake, client may receive close_notify
+    //      and and an SSLException is thrown:
+    //      javax.net.ssl.SSLException: Received close_notify during handshake
+    // We want to handle a) as a non-retriable SslAuthenticationException and b) as a retriable IOException.
+    // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception
+    // when we are not sure, we will treat only the first exception string as a handshake exception.
+    private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
+        if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||
+                sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException ||
+                sslException.getMessage().contains("Unrecognized SSL message"))
+            handshakeFailure(sslException, flush);
+        else if (ioException == null)
+            throw sslException;
+        else {
+            log.debug("SSLException while unwrapping data after IOException, original IOException will be propagated", sslException);
+            throw ioException;
+        }
+    }
+
     // If handshake has already failed, throw the authentication exception.
     private void maybeThrowSslAuthenticationException() {
         if (handshakeException != null)
@@ -826,12 +865,22 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public boolean hasBytesBuffered() {
-        return netReadBuffer.position() != 0 || appReadBuffer.position() != 0;
+        return hasBytesBuffered;
+    }
+
+    // Update `hasBytesBuffered` status. If any bytes were read from the network or
+    // if data was returned from read, `hasBytesBuffered` is set to true if any buffered
+    // data is still remaining. If not, `hasBytesBuffered` is set to false since no progress
+    // can be made until more data is available to read from the network.
+    private void updateBytesBuffered(boolean madeProgress) {
+        if (madeProgress)
+            hasBytesBuffered = netReadBuffer.position() != 0 || appReadBuffer.position() != 0;
+        else
+            hasBytesBuffered = false;
     }
 
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, this);
     }
-
 }

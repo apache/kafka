@@ -29,6 +29,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,12 +50,14 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
-    private Map<TopicPartition, Long> updatedEndOffsets = new HashMap<>();
+    private final Duration pollTime;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
+                                final Duration pollTime,
                                 final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.restoreConsumer = restoreConsumer;
+        this.pollTime = pollTime;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
     }
@@ -69,9 +72,6 @@ public class StoreChangelogReader implements ChangelogReader {
     public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
-            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
-            remainingPartitions.removeAll(updatedEndOffsets.keySet());
-            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
         }
 
         if (needsRestoring.isEmpty()) {
@@ -80,16 +80,16 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
-            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
+            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(pollTime);
             final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
             while (iterator.hasNext()) {
                 final TopicPartition partition = iterator.next();
                 final StateRestorer restorer = stateRestorers.get(partition);
-                final long pos = processNext(records.records(partition), restorer, updatedEndOffsets.get(partition));
+                final long pos = processNext(records.records(partition), restorer, endOffsets.get(partition));
                 restorer.setRestoredOffset(pos);
-                if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
+                if (restorer.hasCompleted(pos, endOffsets.get(partition))) {
                     restorer.restoreDone();
-                    updatedEndOffsets.remove(partition);
+                    endOffsets.remove(partition);
                     iterator.remove();
                 }
             }
@@ -120,8 +120,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
         refreshChangelogInfo();
 
-        Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
-        for (Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
+        final Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
+        for (final Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
             final TopicPartition topicPartition = entry.getKey();
             if (hasPartition(topicPartition)) {
                 initializable.put(entry.getKey(), entry.getValue());
@@ -253,7 +253,7 @@ public class StoreChangelogReader implements ChangelogReader {
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
-        int numberRecords = records.size();
+        final int numberRecords = records.size();
         int numberRestored = 0;
         long lastRestoredOffset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -299,6 +299,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 return true;
             }
         }
+
         return false;
     }
 }

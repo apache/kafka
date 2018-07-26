@@ -21,7 +21,6 @@ import java.util.Properties
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.common.KafkaException
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -30,7 +29,8 @@ import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
@@ -79,13 +79,24 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     createResponse.name
   }
 
-  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
+  def registerBroker(brokerInfo: BrokerInfo): Unit = {
     val path = brokerInfo.path
     checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
 
-  def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
+  /**
+   * Registers a given broker in zookeeper as the controller.
+   * @param controllerId the id of the broker that is to be registered as the controller.
+   * @param timestamp the timestamp of the controller election.
+   * @throws KeeperException if an error is returned by ZooKeeper.
+   */
+  def registerController(controllerId: Int, timestamp: Long): Unit = {
+    val path = ControllerZNode.path
+    checkedEphemeralCreate(path, ControllerZNode.encode(controllerId, timestamp))
+  }
+
+  def updateBrokerInfo(brokerInfo: BrokerInfo): Unit = {
     val brokerIdPath = brokerInfo.path
     val setDataRequest = SetDataRequest(brokerIdPath, brokerInfo.toJsonBytes, ZkVersion.NoVersion)
     val response = retryRequestUntilConnected(setDataRequest)
@@ -246,6 +257,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   /**
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
+   *
+   * If this is method is called concurrently, the last writer wins. In cases where we update configs and then
+   * partition assignment (i.e. create topic), it's possible for one thread to set this and the other to set the
+   * partition assignment. As such, the recommendation is to never call create topic for the same topic with different
+   * configs/partition assignment concurrently.
+   *
    * @param rootEntityType entity type
    * @param sanitizedEntityName entity name
    * @throws KeeperException if there is an error while setting or creating the znode
@@ -257,16 +274,19 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       retryRequestUntilConnected(setDataRequest)
     }
 
-    def create(configData: Array[Byte]) = {
+    def createOrSet(configData: Array[Byte]): Unit = {
       val path = ConfigEntityZNode.path(rootEntityType, sanitizedEntityName)
-      createRecursive(path, ConfigEntityZNode.encode(config))
+      try createRecursive(path, ConfigEntityZNode.encode(config))
+      catch {
+        case _: NodeExistsException => set(configData).maybeThrow
+      }
     }
 
     val configData = ConfigEntityZNode.encode(config)
 
     val setDataResponse = set(configData)
     setDataResponse.resultCode match {
-      case Code.NONODE => create(configData)
+      case Code.NONODE => createOrSet(configData)
       case _ => setDataResponse.maybeThrow
     }
   }
@@ -940,12 +960,15 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   //Acl management methods
 
   /**
-   * Creates the required zk nodes for Acl storage
+   * Creates the required zk nodes for Acl storage and Acl change storage.
    */
   def createAclPaths(): Unit = {
-    createRecursive(AclZNode.path, throwIfPathExists = false)
-    createRecursive(AclChangeNotificationZNode.path, throwIfPathExists = false)
-    ResourceType.values.foreach(resource => createRecursive(ResourceTypeZNode.path(resource.name), throwIfPathExists = false))
+    ZkAclStore.stores.foreach(store => {
+      createRecursive(store.aclPath, throwIfPathExists = false)
+      ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
+    })
+
+    ZkAclChangeStore.stores.foreach(store => createRecursive(store.aclChangePath, throwIfPathExists = false))
   }
 
   /**
@@ -1002,12 +1025,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Creates Acl change notification message
-   * @param resourceName resource name
+   * Creates an Acl change notification message.
+   * @param resource resource pattern that has changed
    */
-  def createAclChangeNotification(resourceName: String): Unit = {
-    val path = AclChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+  def createAclChangeNotification(resource: Resource): Unit = {
+    val aclChange = ZkAclStore(resource.patternType).changeStore.createChangeNode(resource)
+    val createRequest = CreateRequest(aclChange.path, aclChange.bytes, acls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
   }
@@ -1030,21 +1053,25 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
-    if (getChildrenResponse.resultCode == Code.OK) {
-      deleteAclChangeNotifications(getChildrenResponse.children)
-    } else if (getChildrenResponse.resultCode != Code.NONODE) {
-      getChildrenResponse.maybeThrow
-    }
+    ZkAclChangeStore.stores.foreach(store => {
+      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
+      if (getChildrenResponse.resultCode == Code.OK) {
+        deleteAclChangeNotifications(store.aclChangePath, getChildrenResponse.children)
+      } else if (getChildrenResponse.resultCode != Code.NONODE) {
+        getChildrenResponse.maybeThrow
+      }
+    })
   }
 
   /**
-   * Deletes the Acl change notifications associated with the given sequence nodes
-   * @param sequenceNodes
-   */
-  private def deleteAclChangeNotifications(sequenceNodes: Seq[String]): Unit = {
+    * Deletes the Acl change notifications associated with the given sequence nodes
+    *
+    * @param aclChangePath the root path
+    * @param sequenceNodes the name of the node to delete.
+    */
+  private def deleteAclChangeNotifications(aclChangePath: String, sequenceNodes: Seq[String]): Unit = {
     val deleteRequests = sequenceNodes.map { sequenceNode =>
-      DeleteRequest(AclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
+      DeleteRequest(s"$aclChangePath/$sequenceNode", ZkVersion.NoVersion)
     }
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
@@ -1056,20 +1083,22 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Gets the resource types
+   * Gets the resource types, for which ACLs are stored, for the supplied resource pattern type.
+   * @param patternType The resource pattern type to retrieve the names for.
    * @return list of resource type names
    */
-  def getResourceTypes(): Seq[String] = {
-    getChildren(AclZNode.path)
+  def getResourceTypes(patternType: PatternType): Seq[String] = {
+    getChildren(ZkAclStore(patternType).aclPath)
   }
 
   /**
-   * Gets the resource names for a give resource type
-   * @param resourceType
+   * Gets the resource names, for which ACLs are stored, for a given resource type and pattern type
+   * @param patternType The resource pattern type to retrieve the names for.
+   * @param resourceType Resource type to retrieve the names for.
    * @return list of resource names
    */
-  def getResourceNames(resourceType: String): Seq[String] = {
-    getChildren(ResourceTypeZNode.path(resourceType))
+  def getResourceNames(patternType: PatternType, resourceType: ResourceType): Seq[String] = {
+    getChildren(ZkAclStore(patternType).path(resourceType))
   }
 
   /**
@@ -1491,7 +1520,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     responses
   }
 
-  def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {
+  private def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {
     val checkedEphemeral = new CheckedEphemeral(path, data)
     info(s"Creating $path (is it secure? $isSecure)")
     val code = checkedEphemeral.create()
