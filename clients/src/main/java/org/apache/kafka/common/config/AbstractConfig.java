@@ -65,7 +65,7 @@ public class AbstractConfig {
             this.values.put(update.getKey(), update.getValue());
         }
         definition.parse(this.values);
-        this.used = Collections.synchronizedSet(new HashSet<String>());
+        this.used = Collections.synchronizedSet(new HashSet<>());
         this.definition = definition;
         if (doLog)
             logAll();
