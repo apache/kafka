@@ -20,7 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,14 +46,14 @@ public class CopartitionedTopicsValidatorTest {
         partitions.put(new TopicPartition("second", 1), new PartitionInfo("second", 1, null, null, null));
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test(expected = TopologyException.class)
     public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
         validator.validate(Collections.singleton("topic"),
                            Collections.<String, StreamsPartitionAssignor.InternalTopicMetadata>emptyMap(),
                            cluster);
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test(expected = TopologyException.class)
     public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         partitions.remove(new TopicPartition("second", 0));
         validator.validate(Utils.mkSet("first", "second"),

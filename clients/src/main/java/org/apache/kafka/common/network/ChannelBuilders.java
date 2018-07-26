@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
@@ -131,7 +131,7 @@ public class ChannelBuilders {
                         tokenCache);
                 break;
             case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder();
+                channelBuilder = new PlaintextChannelBuilder(listenerName);
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected securityProtocol " + securityProtocol);

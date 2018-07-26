@@ -76,9 +76,14 @@ public class OffsetFetchResponse extends AbstractResponse {
             new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
             ERROR_CODE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema OFFSET_FETCH_RESPONSE_V4 = OFFSET_FETCH_RESPONSE_V3;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2,
-            OFFSET_FETCH_RESPONSE_V3};
+            OFFSET_FETCH_RESPONSE_V3, OFFSET_FETCH_RESPONSE_V4};
     }
 
     public static final long INVALID_OFFSET = -1L;
@@ -179,6 +184,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -233,5 +239,10 @@ public class OffsetFetchResponse extends AbstractResponse {
             struct.set(ERROR_CODE, this.error.code());
 
         return struct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 4;
     }
 }

@@ -205,7 +205,7 @@ class LogSegment private[log] (val log: FileRecords,
   def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
            minOneMessage: Boolean = false): FetchDataInfo = {
     if (maxSize < 0)
-      throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
+      throw new IllegalArgumentException(s"Invalid max size $maxSize for log read from segment $log")
 
     val logSize = log.sizeInBytes // this may change, need to save a consistent copy
     val startOffsetAndSize = translateOffset(startOffset)

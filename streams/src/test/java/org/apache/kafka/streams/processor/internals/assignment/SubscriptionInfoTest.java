@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -73,6 +74,21 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info = new SubscriptionInfo(3, processId, activeTasks, standbyTasks, "localhost:80");
         final SubscriptionInfo expectedInfo = new SubscriptionInfo(3, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldAllowToDecodeFutureSupportedVersion() {
+        final SubscriptionInfo info = SubscriptionInfo.decode(encodeFutureVersion());
+        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.version());
+        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.latestSupportedVersion());
+    }
+
+    private ByteBuffer encodeFutureVersion() {
+        final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
+                                                   + 4 /* supported version */);
+        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
+        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
+        return buf;
     }
 
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -60,7 +60,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class RocksDBWindowStoreTest {
@@ -79,11 +78,18 @@ public class RocksDBWindowStoreTest {
     private final ThreadCache cache = new ThreadCache(new LogContext("TestCache "), DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
 
     private final Producer<byte[], byte[]> producer = new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
-    private final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTestTask", new LogContext("RocksDBWindowStoreTestTask "), new DefaultProductionExceptionHandler()) {
+    private final RecordCollector recordCollector = new RecordCollectorImpl(
+        producer,
+        "RocksDBWindowStoreTestTask",
+        new LogContext("RocksDBWindowStoreTestTask "),
+        new DefaultProductionExceptionHandler(),
+        new Metrics().sensor("skipped-records")
+    ) {
         @Override
         public <K1, V1> void send(final String topic,
                                   final K1 key,
                                   final V1 value,
+                                  final Headers headers,
                                   final Integer partition,
                                   final Long timestamp,
                                   final Serializer<K1> keySerializer,
@@ -120,7 +126,6 @@ public class RocksDBWindowStoreTest {
 
     @After
     public void closeStore() {
-        context.close();
         if (windowStore != null) {
             windowStore.close();
         }
@@ -155,7 +160,7 @@ public class RocksDBWindowStoreTest {
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
-        return new ProcessorRecordContext(time, 0, 0, "topic");
+        return new ProcessorRecordContext(time, 0, 0, "topic", null);
     }
 
     @Test
@@ -740,7 +745,7 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() {
+    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext() {
         windowStore = createWindowStore(context);
         context.setRecordContext(createRecordContext(0));
         windowStore.put(1, "one", 1L);
@@ -750,20 +755,9 @@ public class RocksDBWindowStoreTest {
         final WindowStoreIterator<String> iterator = windowStore.fetch(1, 1L, 3L);
         assertTrue(iterator.hasNext());
         windowStore.close();
-        try {
-            //noinspection ResultOfMethodCallIgnored
-            iterator.hasNext();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
-            // ok
-        }
 
-        try {
-            iterator.next();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
-            // ok
-        }
+        assertFalse(iterator.hasNext());
+
     }
 
     @Test

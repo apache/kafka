@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
@@ -33,7 +33,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final StateManager stateMgr,
-                                      final StreamsMetrics metrics,
+                                      final StreamsMetricsImpl metrics,
                                       final ThreadCache cache) {
         super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
@@ -93,16 +93,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      */
     @Override
     public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
-        throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
-    }
-
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @SuppressWarnings("deprecation")
-    @Override
-    public void schedule(long interval) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 

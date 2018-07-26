@@ -20,14 +20,16 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -43,8 +45,9 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableMapValuesTest {
 
-    final private Serde<String> stringSerde = Serdes.String();
+    private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+    private final Produced<String, String> produced = Produced.with(stringSerde, stringSerde);
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
@@ -54,7 +57,7 @@ public class KTableMapValuesTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> proc2) {
+    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> supplier) {
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
@@ -62,47 +65,47 @@ public class KTableMapValuesTest {
         driver.process(topic1, "C", "3");
         driver.process(topic1, "D", "4");
         driver.flushState();
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
             public Integer apply(CharSequence value) {
                 return value.charAt(0) - 48;
             }
         });
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
 
-        doTestKTable(builder, topic1, proc2);
+        doTestKTable(builder, topic1, supplier);
     }
 
     @Test
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
             public Integer apply(CharSequence value) {
                 return value.charAt(0) - 48;
             }
         }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
 
-        doTestKTable(builder, topic1, proc2);
+        doTestKTable(builder, topic1, supplier);
     }
 
     private void doTestValueGetter(final StreamsBuilder builder,
@@ -111,19 +114,19 @@ public class KTableMapValuesTest {
                                    final KTableImpl<String, String, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
                                    final KTableImpl<String, String, String> table4) {
-        KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
-        KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
-        KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+        final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
-        KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+        final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
         getter2.init(driver.context());
-        KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+        final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
         getter3.init(driver.context());
-        KTableValueGetter<String, String> getter4 = getterSupplier4.get();
+        final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
         getter4.init(driver.context());
 
         driver.process(topic1, "A", "01");
@@ -208,73 +211,71 @@ public class KTableMapValuesTest {
 
     @Test
     public void testValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String storeName2 = "storeName2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
                         return new Integer(value);
                     }
                 });
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
+        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
                 new Predicate<String, Integer>() {
                     @Override
                     public boolean test(String key, Integer value) {
                         return (value % 2) == 0;
                     }
                 });
-        KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                table1.through(stringSerde, stringSerde, topic2, storeName2);
+        table1.toStream().to(topic2, produced);
+        final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         doTestValueGetter(builder, topic1, table1, table2, table3, table4);
     }
 
     @Test
     public void testQueryableValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String storeName2 = "storeName2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
             new ValueMapper<String, Integer>() {
                 @Override
                 public Integer apply(String value) {
                     return new Integer(value);
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyMapName").withValueSerde(Serdes.Integer()));
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
+        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
             new Predicate<String, Integer>() {
                 @Override
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyFilterName").withValueSerde(Serdes.Integer()));
-        KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-            table1.through(stringSerde, stringSerde, topic2, storeName2);
+        table1.toStream().to(topic2, produced);
+        final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         doTestValueGetter(builder, topic1, table1, table2, table3, table4);
     }
 
     @Test
     public void testNotSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
@@ -282,11 +283,14 @@ public class KTableMapValuesTest {
                     }
                 });
 
-        MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", supplier, table2.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+
         assertFalse(table1.sendingOldValueEnabled());
         assertFalse(table2.sendingOldValueEnabled());
 
@@ -316,13 +320,13 @@ public class KTableMapValuesTest {
 
     @Test
     public void testSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
@@ -332,11 +336,14 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues();
 
-        MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", supplier, table2.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+
         assertTrue(table1.sendingOldValueEnabled());
         assertTrue(table2.sendingOldValueEnabled());
 

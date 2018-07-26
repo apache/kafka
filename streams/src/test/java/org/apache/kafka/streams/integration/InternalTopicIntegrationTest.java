@@ -46,6 +46,7 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -55,6 +56,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -115,11 +117,13 @@ public class InternalTopicIntegrationTest {
                 DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE,
                 Time.SYSTEM, "testMetricGroup", "testMetricType")) {
             final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            final Map<String, Properties> topicConfigs = scala.collection.JavaConversions.mapAsJavaMap(adminZkClient.getAllTopicConfigs());
+            final Map<String, Properties> topicConfigs =
+                JavaConverters.mapAsJavaMapConverter(adminZkClient.getAllTopicConfigs()).asJava();
 
             for (Map.Entry<String, Properties> topicConfig : topicConfigs.entrySet()) {
-                if (topicConfig.getKey().equals(changelog))
+                if (topicConfig.getKey().equals(changelog)) {
                     return topicConfig.getValue();
+                }
             }
 
             return new Properties();
@@ -157,6 +161,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 5000);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -164,7 +169,7 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-Counts-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(4, repartitionProps.size());
+        assertEquals(5, repartitionProps.size());
     }
 
     @Test
@@ -201,6 +206,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 5000);
         streams.close();
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows"));
         final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
@@ -213,6 +219,6 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(4, repartitionProps.size());
+        assertEquals(5, repartitionProps.size());
     }
 }

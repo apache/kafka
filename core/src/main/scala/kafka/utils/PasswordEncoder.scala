@@ -19,13 +19,13 @@ package kafka.utils
 import java.nio.charset.StandardCharsets
 import java.security.{AlgorithmParameters, NoSuchAlgorithmException, SecureRandom}
 import java.security.spec.AlgorithmParameterSpec
+import java.util.Base64
+
 import javax.crypto.{Cipher, SecretKeyFactory}
 import javax.crypto.spec._
-
 import kafka.utils.PasswordEncoder._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.utils.Base64
 
 import scala.collection.Map
 
@@ -129,9 +129,9 @@ class PasswordEncoder(secret: Password,
     new SecretKeySpec(keyFactory.generateSecret(keySpec).getEncoded, algorithm)
   }
 
-  private def base64Encode(bytes: Array[Byte]): String = Base64.encoder.encodeToString(bytes)
+  private def base64Encode(bytes: Array[Byte]): String = Base64.getEncoder.encodeToString(bytes)
 
-  private[utils] def base64Decode(encoded: String): Array[Byte] = Base64.decoder.decode(encoded)
+  private[utils] def base64Decode(encoded: String): Array[Byte] = Base64.getDecoder.decode(encoded)
 
   private def cipherParamsInstance(cipherAlgorithm: String): CipherParamsEncoder = {
     val aesPattern = "AES/(.*)/.*".r

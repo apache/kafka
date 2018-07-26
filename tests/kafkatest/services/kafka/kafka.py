@@ -30,7 +30,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
@@ -584,8 +584,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             command_config = "--command-config " + command_config
 
         if new_consumer:
-            cmd = "%s --new-consumer --bootstrap-server %s %s --list" % \
+            new_consumer_opt = ""
+            if node.version <= LATEST_0_10_0:
+                new_consumer_opt = "--new-consumer"
+            cmd = "%s %s --bootstrap-server %s %s --list" % \
                   (consumer_group_script,
+                   new_consumer_opt,
                    self.bootstrap_servers(self.security_protocol),
                    command_config)
         else:
@@ -611,8 +615,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             command_config = "--command-config " + command_config
 
         if new_consumer:
-            cmd = "%s --new-consumer --bootstrap-server %s %s --group %s --describe" % \
-                  (consumer_group_script, self.bootstrap_servers(self.security_protocol), command_config, group)
+            new_consumer_opt = ""
+            if node.version <= LATEST_0_10_0:
+                new_consumer_opt = "--new-consumer"
+            cmd = "%s %s --bootstrap-server %s %s --group %s --describe" % \
+                  (consumer_group_script,
+                   new_consumer_opt,
+                   self.bootstrap_servers(self.security_protocol),
+                   command_config, group)
         else:
             cmd = "%s --zookeeper %s %s --group %s --describe" % \
                   (consumer_group_script, self.zk_connect_setting(), command_config, group)

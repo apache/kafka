@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Test;
@@ -49,15 +50,17 @@ public class PartitionGroupTest {
         new MockSourceNode<>(topics, intDeserializer, intDeserializer),
         timestampExtractor,
         new LogAndContinueExceptionHandler(),
-        null,
-        logContext);
+        new InternalMockProcessorContext(),
+        logContext
+    );
     private final RecordQueue queue2 = new RecordQueue(
         partition2,
         new MockSourceNode<>(topics, intDeserializer, intDeserializer),
         timestampExtractor,
         new LogAndContinueExceptionHandler(),
-        null,
-        logContext);
+        new InternalMockProcessorContext(),
+        logContext
+    );
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);

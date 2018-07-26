@@ -127,7 +127,7 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * Produces a string representation containing useful information about a StreamTask.
+     * Produces a string representation containing useful information about a Task.
      * This is useful in debugging scenarios.
      *
      * @return A string representation of the StreamTask instance.
@@ -138,15 +138,15 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
+     * Produces a string representation containing useful information about a Task starting with the given indent.
      * This is useful in debugging scenarios.
      *
-     * @return A string representation of the StreamTask instance.
+     * @return A string representation of the Task instance.
      */
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder();
         sb.append(indent);
-        sb.append("StreamsTask taskId: ");
+        sb.append("TaskId: ");
         sb.append(id);
         sb.append("\n");
 

@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -97,7 +99,7 @@ import java.util.Set;
  *
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
- * {@link ProcessorContext#register(StateStore, boolean, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
+ * {@link ProcessorContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
  * the persisted contents of a store are properly restored from the flushed entries when the store instance is started.
  * <p>
  * To do this, create an instance of this driver component, {@link #addEntryToRestoreLog(Object, Object) add entries} that will be
@@ -186,11 +188,18 @@ public class KeyValueStoreTestDriver<K, V> {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
-        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver", new LogContext("KeyValueStoreTestDriver "), new DefaultProductionExceptionHandler()) {
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            producer,
+            "KeyValueStoreTestDriver",
+            new LogContext("KeyValueStoreTestDriver "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
+        ) {
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
                                       final V1 value,
+                                      final Headers headers,
                                       final Integer partition,
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
@@ -207,6 +216,7 @@ public class KeyValueStoreTestDriver<K, V> {
             public <K1, V1> void send(final String topic,
                                       final K1 key,
                                       final V1 value,
+                                      final Headers headers,
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer,

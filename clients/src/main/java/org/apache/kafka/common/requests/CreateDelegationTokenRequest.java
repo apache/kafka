@@ -44,6 +44,11 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
                     "Max lifetime period for token in milli seconds. if value is -1, then max lifetime" +
                         "  will default to a server side config value."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TOKEN_CREATE_REQUEST_V1 = TOKEN_CREATE_REQUEST_V0;
+
     private final List<KafkaPrincipal> renewers;
     private final long maxLifeTime;
 
@@ -73,7 +78,7 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{TOKEN_CREATE_REQUEST_V0};
+        return new Schema[]{TOKEN_CREATE_REQUEST_V0, TOKEN_CREATE_REQUEST_V1};
     }
 
     @Override

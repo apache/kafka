@@ -687,7 +687,7 @@ public class ProcessorStateManagerTest {
 
         stateManager.reinitializeStateStoresForPartitions(changelogPartitions, new NoOpProcessorContext() {
             @Override
-            public void register(final StateStore store, final boolean deprecatedAndIgnoredLoggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
                 stateManager.register(store, stateRestoreCallback);
             }
         });

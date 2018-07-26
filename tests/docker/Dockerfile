@@ -32,7 +32,7 @@ LABEL ducker.creator=$ducker_creator
 
 # Update Linux and install necessary utilities.
 RUN apt update && apt install -y sudo netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python-pip python-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev && apt-get -y clean
-RUN pip install -U pip setuptools && pip install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 && pip install --upgrade ducktape==0.7.1
+RUN pip install -U pip==9.0.3 setuptools && pip install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 && pip install --upgrade ducktape==0.7.1
 
 # Set up ssh
 COPY ./ssh-config /root/.ssh/config

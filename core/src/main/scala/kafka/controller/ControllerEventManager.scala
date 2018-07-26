@@ -20,9 +20,11 @@ package kafka.controller
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.metrics.KafkaTimer
+import com.yammer.metrics.core.Gauge
+import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
+import org.apache.kafka.common.utils.Time
 
 import scala.collection._
 
@@ -30,12 +32,25 @@ object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
 }
 class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
-                             eventProcessedListener: ControllerEvent => Unit) {
+                             eventProcessedListener: ControllerEvent => Unit) extends KafkaMetricsGroup {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[ControllerEvent]
   private val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
+  private val time = Time.SYSTEM
+
+  private val eventQueueTimeHist = newHistogram("EventQueueTimeMs")
+
+  newGauge(
+    "EventQueueSize",
+    new Gauge[Int] {
+      def value: Int = {
+        queue.size()
+      }
+    }
+  )
+
 
   def state: ControllerState = _state
 
@@ -52,7 +67,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
 
   def clearAndPut(event: ControllerEvent): Unit = inLock(putLock) {
     queue.clear()
-    queue.put(event)
+    put(event)
   }
 
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
@@ -63,6 +78,8 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
         case KafkaController.ShutdownEventThread => initiateShutdown()
         case controllerEvent =>
           _state = controllerEvent.state
+
+          eventQueueTimeHist.update(time.milliseconds() - controllerEvent.enqueueTimeMs)
 
           try {
             rateAndTimeMetrics(state).time {

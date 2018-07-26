@@ -121,6 +121,10 @@ object ZooKeeperTestHarness {
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
     }
-    assertTrue(s"Found unexpected threads during $context, allThreads=$threads", noUnexpected)
+    assertTrue(
+      s"Found unexpected threads during $context, allThreads=$threads, " +
+        s"unexpected=${threads.filterNot(t => unexpectedThreadNames.forall(s => !t.contains(s)))}",
+      noUnexpected
+    )
   }
 }

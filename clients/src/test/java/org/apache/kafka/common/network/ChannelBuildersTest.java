@@ -24,6 +24,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
@@ -38,7 +39,6 @@ import static org.junit.Assert.assertTrue;
 public class ChannelBuildersTest {
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testCreateOldPrincipalBuilder() throws Exception {
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
         Authenticator authenticator = EasyMock.mock(Authenticator.class);
@@ -51,7 +51,7 @@ public class ChannelBuildersTest {
         assertTrue(OldPrincipalBuilder.configured);
 
         // test delegation
-        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost()));
+        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(OldPrincipalBuilder.PRINCIPAL_NAME, principal.getName());
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
     }

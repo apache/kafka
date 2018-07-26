@@ -23,7 +23,6 @@ import javax.crypto.SecretKeyFactory
 import kafka.server.Defaults
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.utils.Java
 import org.junit.Assert._
 import org.junit.Test
 
@@ -109,11 +108,9 @@ class PasswordEncoderTest {
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/OFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
-    if (Java.IS_JAVA8_COMPATIBLE) {
-      verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/PKCS5Padding", keyLength = 128)
-      verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
-      verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
-    }
+    verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/PKCS5Padding", keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
   }
 
   private def verifyEncodedPassword(encoder: PasswordEncoder, password: String, encoded: String): Unit = {

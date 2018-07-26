@@ -50,8 +50,13 @@ public class CreatePartitionsResponse extends AbstractResponse {
                     )), "Per topic results for the create partitions request")
     );
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_PARTITIONS_RESPONSE_V1 = CREATE_PARTITIONS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_PARTITIONS_RESPONSE_V0};
+        return new Schema[]{CREATE_PARTITIONS_RESPONSE_V0, CREATE_PARTITIONS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -100,6 +105,7 @@ public class CreatePartitionsResponse extends AbstractResponse {
         return apiErrorCounts(errors);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -108,4 +114,8 @@ public class CreatePartitionsResponse extends AbstractResponse {
         return new CreatePartitionsResponse(ApiKeys.CREATE_PARTITIONS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }
