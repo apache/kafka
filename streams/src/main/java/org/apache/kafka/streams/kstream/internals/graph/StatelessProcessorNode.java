@@ -68,6 +68,10 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         return new ArrayList<>(multipleParentNames);
     }
 
+    public ProcessorParameters<K, V> getProcessorParameters() {
+        return processorParameters;
+    }
+
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr

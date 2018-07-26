@@ -18,6 +18,9 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 
+import java.time.Duration;
+import java.util.Objects;
+
 /**
  * The {@code Joined} class represents optional params that can be passed to
  * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations.
@@ -27,6 +30,7 @@ public class Joined<K, V, VO> {
     private Serde<K> keySerde;
     private Serde<V> valueSerde;
     private Serde<VO> otherValueSerde;
+    private Duration retention;
 
     private Joined(final Serde<K> keySerde,
                    final Serde<V> valueSerde,
@@ -132,6 +136,20 @@ public class Joined<K, V, VO> {
         return this;
     }
 
+    /**
+     * Configure the retention time for events in the join.
+     * Events are only considered for joining while they are retained.
+     *
+     * @param retention
+     * @return
+     */
+    public Joined<K, V, VO> withRetention(final Duration retention) {
+        Objects.requireNonNull( retention, "Retention must not be null");
+        ApiUtils.validateMillisecondDuration(retention, "Retention must be expressible in milliseconds");
+        this.retention = retention;
+        return this;
+    }
+
     public Serde<K> keySerde() {
         return keySerde;
     }
@@ -142,5 +160,9 @@ public class Joined<K, V, VO> {
 
     public Serde<VO> otherValueSerde() {
         return otherValueSerde;
+    }
+
+    public Duration retention() {
+        return retention;
     }
 }

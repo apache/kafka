@@ -52,6 +52,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         this.aggregator = aggregator;
     }
 
+    public Windows<W> getWindows() {
+        return windows;
+    }
+
     @Override
     public Processor<K, V> get() {
         return new KStreamWindowAggregateProcessor();
@@ -83,8 +87,6 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @Override
         public void process(final K key, final V value) {
-            // if the key is null, we do not need proceed aggregating the record
-            // the record with the table
             if (key == null) {
                 log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
@@ -96,14 +98,15 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // first get the matching windows
             final long timestamp = context().timestamp();
-            final long expiryTime = internalProcessorContext.streamTime() - windows.maintainMs();
+            final long closeTime = internalProcessorContext.streamTime() - windows.grace().toMillis();
 
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final Long windowStart = entry.getKey();
-                if (windowStart > expiryTime) {
+                final long windowEnd = entry.getValue().end();
+                if (windowEnd > closeTime) {
                     T oldAgg = windowStore.fetch(key, windowStart);
 
                     if (oldAgg == null) {
@@ -116,10 +119,12 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                     windowStore.put(key, newAgg, windowStart);
                     tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
                 } else {
-                    log.warn(
-                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{}] expiration=[{}]",
-                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, expiryTime
+                    // TODO downgrade this to debug
+                    log.error(
+                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
+                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );
+                    // TODO: use a different metric
                     metrics.skippedRecordsSensor().record();
                 }
             }

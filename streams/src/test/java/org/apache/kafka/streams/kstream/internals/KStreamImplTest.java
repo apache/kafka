@@ -19,11 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
@@ -57,6 +57,7 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -256,13 +257,13 @@ public class KStreamImplTest {
                                 return KeyValue.pair(value, value);
                             }
                         });
-        stream.join(kStream,
-                    valueJoiner,
-                    JoinWindows.of(windowSize).until(3 * windowSize),
-                    Joined.with(Serdes.String(),
-                                Serdes.String(),
-                                Serdes.String()))
-                .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+        stream.join(
+            kStream,
+            valueJoiner,
+            JoinWindows.of(windowSize),
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withRetention(ofMillis(3 * windowSize))
+        )
+            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 

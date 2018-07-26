@@ -68,6 +68,7 @@ public class KStreamWindowReduceTest {
         }
     }
 
+    @Deprecated // testing deprecated functionality (behavior of until)
     @Test
     public void shouldLogAndMeterOnExpiredEvent() {
 

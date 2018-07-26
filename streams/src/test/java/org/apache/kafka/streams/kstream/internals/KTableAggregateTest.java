@@ -195,7 +195,7 @@ public class KTableAggregateTest {
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
-                "2:0+2", 
+                "2:0+2",
                   //noop
                 "2:0+2-2", "4:0+4",
                   //noop
@@ -286,7 +286,7 @@ public class KTableAggregateTest {
             "green:2"
             ), proc.processed);
     }
-    
+
     @Test
     public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -308,11 +308,11 @@ public class KTableAggregateTest {
                         return "";
                     }
                 }, new Aggregator<String, String, String>() {
-                    
+
                     @Override
                     public String apply(String aggKey, String value, String aggregate) {
                         return aggregate + value;
-                    } 
+                    }
                 }, new Aggregator<String, String, String>() {
 
                     @Override

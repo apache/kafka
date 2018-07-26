@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -58,6 +59,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
         this.sessionMerger = sessionMerger;
     }
 
+    public SessionWindows getWindows() {
+        return windows;
+    }
+
     @Override
     public Processor<K, V> get() {
         return new KStreamSessionWindowAggregateProcessor();
@@ -73,11 +78,13 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
         private SessionStore<K, T> store;
         private TupleForwarder<Windowed<K>, T> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private InternalProcessorContext internalProcessorContext;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            internalProcessorContext = (InternalProcessorContext) context;
             metrics = (StreamsMetricsImpl) context.metrics();
             store = (SessionStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
@@ -95,6 +102,8 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 metrics.skippedRecordsSensor().record();
                 return;
             }
+
+            final long closeTime = internalProcessorContext.streamTime() - windows.grace().toMillis();
 
             final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, T>> merged = new ArrayList<>();
@@ -114,11 +123,23 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                     merged.add(next);
                     agg = sessionMerger.apply(key, agg, next.value);
                     mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+
+                    // TODO these are a temporary hack. It's possible to do this much better.
+                    if (mergedWindow.end() <= closeTime) {
+                        // TODO log and metric
+                        System.out.println("dropping " + key + "," + value + "," + context().timestamp() + " " + mergedWindow.end() + "," + closeTime);
+                        return;
+                    }
                 }
             }
 
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
+            if (mergedWindow.end() <= closeTime) {
+                // TODO log and metric
+                System.out.println("dropping " + key + "," + value + "," + context().timestamp() + " " + mergedWindow.end() + "," + closeTime);
+                return;
+            }
             if (!mergedWindow.equals(newSessionWindow)) {
                 for (final KeyValue<Windowed<K>, T> session : merged) {
                     store.remove(session.key);
@@ -148,7 +169,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
             @Override
             public String[] storeNames() {
-                return new String[]{storeName};
+                return new String[] {storeName};
             }
         };
     }

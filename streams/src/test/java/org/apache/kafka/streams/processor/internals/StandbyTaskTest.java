@@ -231,8 +231,8 @@ public class StandbyTaskTest {
         new InternalStreamsBuilder(internalTopologyBuilder)
             .stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
-            .windowedBy(TimeWindows.of(60_000).until(120_000))
-            .count(Materialized.as(storeName));
+            .windowedBy(TimeWindows.of(60_000))
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(Duration.ofMinutes(2)));
 
         final StandbyTask task = new StandbyTask(
             taskId,

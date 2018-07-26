@@ -208,7 +208,7 @@ public class IntegrationTestUtils {
             producer.flush();
         }
     }
-    
+
     public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                                 final Collection<KeyValue<K, V>> records,
                                                                                 final Properties producerConfig,
@@ -219,11 +219,11 @@ public class IntegrationTestUtils {
             for (final KeyValue<K, V> record : records) {
                 producer.beginTransaction();
                 final Future<RecordMetadata> f = producer
-                        .send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                    .send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
                 f.get();
                 producer.abortTransaction();
             }
-        }    
+        }
     }
 
     public static <V> void produceValuesSynchronously(final String topic,
@@ -239,7 +239,7 @@ public class IntegrationTestUtils {
                                                       final Properties producerConfig,
                                                       final Time time,
                                                       final boolean enableTransactions)
-            throws ExecutionException, InterruptedException {
+        throws ExecutionException, InterruptedException {
         final Collection<KeyValue<Object, V>> keyedRecords = new ArrayList<>();
         for (final V value : records) {
             final KeyValue<Object, V> kv = new KeyValue<>(null, value);
@@ -260,8 +260,20 @@ public class IntegrationTestUtils {
     public static void waitForCompletion(final KafkaStreams streams,
                                          final int expectedPartitions,
                                          final int timeoutMilliseconds) {
+        waitForCompletion(streams, 100, expectedPartitions, timeoutMilliseconds);
+    }
+
+    public static void waitForCompletion(final KafkaStreams streams,
+                                         final int pollIntervalMs,
+                                         final int expectedPartitions,
+                                         final int timeoutMilliseconds) {
         final long start = System.currentTimeMillis();
         while (true) {
+            try {
+                Thread.sleep(pollIntervalMs);
+            } catch (final InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             int lagMetrics = 0;
             double totalLag = 0.0;
             for (final Metric metric : streams.metrics().values()) {
@@ -293,7 +305,7 @@ public class IntegrationTestUtils {
                                                                                   final int expectedNumRecords) throws InterruptedException {
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
-    
+
     /**
      * Wait until enough data (key-value records) has been consumed.
      *
@@ -407,7 +419,7 @@ public class IntegrationTestUtils {
                 for (final KafkaServer server : servers) {
                     final MetadataCache metadataCache = server.apis().metadataCache();
                     final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
-                            metadataCache.getPartitionInfo(topic, partition);
+                        metadataCache.getPartitionInfo(topic, partition);
                     if (partitionInfo.isEmpty()) {
                         return false;
                     }
@@ -432,7 +444,7 @@ public class IntegrationTestUtils {
      * @return The values retrieved via the consumer.
      */
     public static <V> List<V> readValues(final String topic, final Properties consumerConfig,
-        final long waitTime, final int maxMessages) {
+                                         final long waitTime, final int maxMessages) {
         final List<V> returnList;
         try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
             returnList = readValues(topic, consumer, waitTime, maxMessages);
@@ -451,7 +463,7 @@ public class IntegrationTestUtils {
      * @return The KeyValue elements retrieved via the consumer
      */
     public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
-        final Properties consumerConfig, final long waitTime, final int maxMessages) {
+                                                            final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final List<KeyValue<K, V>> consumedValues;
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);

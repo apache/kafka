@@ -17,8 +17,12 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
+import java.time.Duration;
 import java.util.Map;
+
+import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
 
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and window
@@ -39,7 +43,34 @@ public abstract class Windows<W extends Window> {
     private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
 
+    private Duration grace;
+
     protected Windows() {}
+
+    /**
+     * Reject late events that arrive more than {@code afterWindowEnd}
+     * after the end of its window.
+     *
+     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
+    public Windows<W> grace(final Duration afterWindowEnd) {
+        if (afterWindowEnd.isNegative()) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
+        grace = validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds");
+
+        return this;
+    }
+
+    /**
+     * Return the window grace period (the time to admit
+     * late-arriving events after the end of the window.
+     */
+    public Duration grace() {
+        return grace != null ? grace : Duration.ofMillis(maintainMs() - size());
+    }
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
@@ -48,8 +79,11 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
+     * @deprecated since 2.1. Use {@link Joined#retention()} or {@link Materialized#retention}
+     *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     // This should always get overridden to provide the correct return type and thus to avoid a cast
+    @Deprecated
     public Windows<W> until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < 0) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
@@ -73,7 +107,8 @@ public abstract class Windows<W extends Window> {
      *
      * @return the segment interval
      */
-    @SuppressWarnings("deprecation") // The deprecation is on the public visibility of segments. We intend to make the field private later.
+    @SuppressWarnings("deprecation")
+    // The deprecation is on the public visibility of segments. We intend to make the field private later.
     public long segmentInterval() {
         // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
         final long minimumSegmentInterval = 60_000L;

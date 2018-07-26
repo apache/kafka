@@ -56,10 +56,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final boolean repartitionRequired,
                             final StreamsGraphNode streamsGraphNode) {
         super(builder, name, sourceNodes, streamsGraphNode);
-        Objects.requireNonNull(windows, "windows can't be null");
         this.valSerde = valSerde;
         this.keySerde = keySerde;
-        this.windows = windows;
+        this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name, streamsGraphNode);
     }
 
@@ -157,7 +156,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         if (supplier == null) {
             supplier = Stores.persistentWindowStore(
                 materialized.storeName(),
-                windows.maintainMs(),
+                materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs(),
                 windows.size(),
                 false,
                 windows.segmentInterval()
