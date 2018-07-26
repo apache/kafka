@@ -83,7 +83,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
         validateStoreOpen();
         final Bytes binaryKey = SessionKeySerde.toBinary(key, serdes.keySerializer(), topic);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
-                                                      key.window().end(), context.partition(), context.topic());
+                                                      context.timestamp(), context.partition(), context.topic());
         cache.put(cacheName, binaryKey.get(), entry);
     }
 

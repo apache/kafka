@@ -138,7 +138,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
         validateStoreOpen();
         final byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
-                                                      timestamp, context.partition(), context.topic());
+                                                      context.timestamp(), context.partition(), context.topic());
         cache.put(name, binaryKey, entry);
     }
 
