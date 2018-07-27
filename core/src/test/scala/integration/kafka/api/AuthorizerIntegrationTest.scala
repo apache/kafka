@@ -1442,7 +1442,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val transactionalProperties = new Properties()
     transactionalProperties.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 3,
       props = Some(transactionalProperties))
     producers += producer
     producer
@@ -1452,7 +1451,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val idempotentProperties = new Properties()
     idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 3,
       props = Some(idempotentProperties))
     producers += producer
     producer

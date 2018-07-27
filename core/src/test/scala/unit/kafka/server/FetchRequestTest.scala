@@ -70,7 +70,7 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def initProducer(): Unit = {
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
   @Test
@@ -204,8 +204,8 @@ class FetchRequestTest extends BaseRequestTest {
     val propsOverride = new Properties
     propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, lingerMs = Int.MaxValue,
-      keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
+      lingerMs = Int.MaxValue, keySerializer = new StringSerializer,
+      valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>

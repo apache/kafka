@@ -304,7 +304,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testLogCleanerConfig(): Unit = {
-    val (producerThread, consumerThread) = startProduceConsume(0)
+    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
@@ -437,7 +437,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   def testUncleanLeaderElectionEnable(): Unit = {
     val topic = "testtopic2"
     TestUtils.createTopic(zkClient, topic, 1, replicationFactor = 2, servers)
-    val producer = ProducerBuilder().maxRetries(1000).acks(1).build()
+    val producer = ProducerBuilder().acks(1).build()
     val consumer = ConsumerBuilder("unclean-leader-test").enableAutoCommit(false).topic(topic).build()
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
     consumer.commitSync()
@@ -543,7 +543,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     def verifyThreadPoolResize(propName: String, currentSize: => Int, threadPrefix: String, mayReceiveDuplicates: Boolean): Unit = {
       maybeVerifyThreadPoolSize(propName, currentSize, threadPrefix)
       val numRetries = if (mayReceiveDuplicates) 100 else 0
-      val (producerThread, consumerThread) = startProduceConsume(numRetries)
+      val (producerThread, consumerThread) = startProduceConsume(retries = numRetries)
       var threadPoolSize = currentSize
       (1 to 2).foreach { _ =>
         threadPoolSize = reducePoolSize(propName, threadPoolSize, threadPrefix)
@@ -1366,7 +1366,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private case class ProducerBuilder() extends ClientBuilder[KafkaProducer[String, String]] {
-    private var _retries = 0
+    private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
 
@@ -1417,8 +1417,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
   }
 
-  private class ProducerThread(clientId: String, retries: Int) extends
-      ShutdownableThread(clientId, isInterruptible = false) {
+  private class ProducerThread(clientId: String, retries: Int)
+    extends ShutdownableThread(clientId, isInterruptible = false) {
+
     private val producer = ProducerBuilder().maxRetries(retries).clientId(clientId).build()
     val lastSent = new ConcurrentHashMap[Int, Int]()
     @volatile var sent = 0

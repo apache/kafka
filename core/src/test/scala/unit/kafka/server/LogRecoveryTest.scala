@@ -67,7 +67,6 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       producer.close()
     producer = TestUtils.createProducer(
       TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5,
       keySerializer = new IntegerSerializer,
       valueSerializer = new StringSerializer
     )

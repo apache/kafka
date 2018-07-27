@@ -547,7 +547,8 @@ object TestUtils extends Logging {
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
                            bufferSize: Long = 1024L * 1024L,
-                           retries: Int = 0,
+                           retries: Int = Int.MaxValue,
+                           deliveryTimeoutMs: Int = 20000,
                            lingerMs: Int = 0,
                            requestTimeoutMs: Int = 30 * 1000,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
@@ -993,7 +994,7 @@ object TestUtils extends Logging {
                       compressionType: CompressionType = CompressionType.NONE): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = acks)
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -1017,10 +1018,7 @@ object TestUtils extends Logging {
   }
 
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
-    val producer = createProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5
-    )
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers))
     producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
   }
@@ -1277,7 +1275,8 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      deliveryTimeoutMs = Int.MaxValue, acks = -1, props = Some(props))
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
@@ -1285,7 +1284,7 @@ object TestUtils extends Logging {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+      deliveryTimeoutMs = Int.MaxValue, acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
