@@ -446,7 +446,7 @@ public class QueryableStateIntegrationTest {
             final Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
                 verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, true);
+                    expectedCount, windowStoreName, storeName, true);
             }
         } finally {
             producerRunnable.shutdown();
@@ -946,8 +946,8 @@ public class QueryableStateIntegrationTest {
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
-                                      final String storeName,
                                       final String windowStoreName,
+                                      final String storeName,
                                       final boolean failIfKeyNotFound) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             try {
@@ -969,52 +969,50 @@ public class QueryableStateIntegrationTest {
                     if (expectedCount.containsKey(actualCountStateEntry.getKey())) {
                         final Long expectedValue = expectedCount.get(actualCountStateEntry.getKey());
 
-                        actualCountStateEntry.getValue() >= expectedValue;
+                        if (actualCountStateEntry.getValue() < expectedValue)
+                            return false;
                     }
                     // return this for next round of comparisons
                     expectedCount.put(actualCountStateEntry.getKey(), actualCountStateEntry.getValue());
                 }
 
-
-                return ;
+                return true;
+            } catch (Exception e) {
+                return false;
             }
+        },      "Cannot get larger value");
 
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyWindowStore<String, Long> windowStore =
+                        kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
+
+                final Map<String, Long> windowState = new HashMap<>();
+
+                for (final String key : keys) {
+                    final Map<String, Long> map = fetchMap(windowStore, key);
+                    if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
+                        fail("Key in windowed-store not found " + key);
+                    }
+                    windowState.putAll(map);
                 }
-                "Cannot get expected value");
 
+                for (final Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
+                    if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
+                        final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
 
-        final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
+                        if (actualWindowStateEntry.getValue() < expectedValue)
+                            return false;
+                    }
+                    // return this for next round of comparisons
+                    expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
+                }
 
-
-
-
-        final Map<String, Long> windowState = new HashMap<>();
-
-        for (final String key : keys) {
-            final Map<String, Long> map = fetchMap(windowStore, key);
-            if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
-                fail("Key in windowed-store not found " + key);
+                return true;
+            } catch (Exception e) {
+                return false;
             }
-            windowState.putAll(map);
-            final Long value = keyValueStore.get(key);
-            if (value != null) {
-                countState.put(key, value);
-            } else if (failIfKeyNotFound) {
-                fail("Key in key-value-store not found " + key);
-            }
-        }
-
-        for (final Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
-            if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
-                final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
-
-
-            }
-            // return this for next round of comparisons
-            expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
-        }
-
+        },      "Cannot get expected value");
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
