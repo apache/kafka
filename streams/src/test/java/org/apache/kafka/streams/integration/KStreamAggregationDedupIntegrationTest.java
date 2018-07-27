@@ -244,26 +244,32 @@ public class KStreamAggregationDedupIntegrationTest {
 
         startStreams();
 
-        final List<KeyValue<String, Long>> results = receiveMessages(
-            new StringDeserializer(),
-            new LongDeserializer(),
-            5);
-        Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
-            @Override
-            public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
+        TestUtils.waitForCondition(() -> {
+            try {
+                final List<KeyValue<String, Long>> results = receiveMessages(
+                        new StringDeserializer(),
+                        new LongDeserializer(),
+                        5);
+                Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
+                    @Override
+                    public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
+                        return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
+                    }
+                });
+
+                final long window = timestamp / 500 * 500;
+
+                return results.equals(Arrays.asList(
+                        KeyValue.pair("1@" + window, 2L),
+                        KeyValue.pair("2@" + window, 2L),
+                        KeyValue.pair("3@" + window, 2L),
+                        KeyValue.pair("4@" + window, 2L),
+                        KeyValue.pair("5@" + window, 2L)
+                ));
+            } catch (Exception e) {
+                return false;
             }
-        });
-
-        final long window = timestamp / 500 * 500;
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("1@" + window, 2L),
-            KeyValue.pair("2@" + window, 2L),
-            KeyValue.pair("3@" + window, 2L),
-            KeyValue.pair("4@" + window, 2L),
-            KeyValue.pair("5@" + window, 2L)
-        )));
-
+        }, "Cannot get expected result");
     }
 
 
