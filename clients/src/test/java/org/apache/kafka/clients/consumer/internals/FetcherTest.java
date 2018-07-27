@@ -314,7 +314,8 @@ public class FetcherTest {
     public void testFetcherCloseClosesFetchSessionsInBroker() throws Exception {
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
-        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        FetchResponse<MemoryRecords> fetchResponse = fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0);
+        client.prepareResponse(fetchResponse);
         fetcher.sendFetches();
         consumerClient.poll(time.timer(0));
         assertEquals(0, consumerClient.pendingRequestCount(node));
@@ -326,6 +327,8 @@ public class FetcherTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         FetchRequest sessionCloseReq = (FetchRequest) client.requests().peek().requestBuilder().build();
+        assertEquals(fetchResponse.sessionId(), sessionCloseReq.metadata().sessionId());
+        assertTrue(sessionCloseReq.fetchData().isEmpty());
         assertEquals(FetchMetadata.FINAL_EPOCH, sessionCloseReq.metadata().epoch());  // final epoch indicates we want to close the session
     }
 
