@@ -54,7 +54,7 @@ import scala.collection.JavaConverters._
  * Then we compare the final message in both logs for each key. If this final message is not the same for all keys we
  * print an error and exit with exit code 1, otherwise we print the size reduction and exit with exit code 0.
  */
-object TestLogCleaning {
+object LogCompactionTester {
 
   //maximum line size while reading produced/consumed record text file
   private val ReadAheadLimit = 4906

@@ -21,7 +21,7 @@ from ducktape.mark.resource import cluster
 from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.log_compaction_tool import LogCompactionTool
+from kafkatest.services.log_compaction_tester import LogCompactionTester
 
 class LogCompactionTest(Test):
 
@@ -53,7 +53,7 @@ class LogCompactionTest(Test):
         self.kafka.start()
 
     def start_test_log_compaction_tool(self, security_protocol):
-        self.compaction_verifier = LogCompactionTool(self.test_context, self.kafka, security_protocol=security_protocol)
+        self.compaction_verifier = LogCompactionTester(self.test_context, self.kafka, security_protocol=security_protocol)
         self.compaction_verifier.start()
 
     @cluster(num_nodes=4)
@@ -62,5 +62,5 @@ class LogCompactionTest(Test):
         self.start_kafka(security_protocol, security_protocol)
         self.start_test_log_compaction_tool(security_protocol)
 
-        # Verify that compacted data verification completed in TestLogCompactionTool
+        # Verify that compacted data verification completed in LogCompactionTester
         wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=120, err_msg="Timed out waiting to complete compaction")

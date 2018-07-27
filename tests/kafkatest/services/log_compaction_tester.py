@@ -21,10 +21,10 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_L
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
 
-class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
+class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
 
-    OUTPUT_DIR = "/mnt/logcompaction_tool"
-    LOG_PATH = os.path.join(OUTPUT_DIR, "logcompaction_tool_stdout.log")
+    OUTPUT_DIR = "/mnt/logcompaction_tester"
+    LOG_PATH = os.path.join(OUTPUT_DIR, "logcompaction_tester_stdout.log")
     VERIFICATION_STRING = "Data verification is completed"
 
     logs = {
@@ -34,7 +34,7 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
     }
 
     def __init__(self, context, kafka, security_protocol="PLAINTEXT", stop_timeout_sec=30):
-        super(LogCompactionTool, self).__init__(context, 1)
+        super(LogCompactionTester, self).__init__(context, 1)
 
         self.kafka = kafka
         self.security_protocol = security_protocol
@@ -43,14 +43,14 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
         self.log_compaction_completed = False
 
     def _worker(self, idx, node):
-        node.account.ssh("mkdir -p %s" % LogCompactionTool.OUTPUT_DIR)
+        node.account.ssh("mkdir -p %s" % LogCompactionTester.OUTPUT_DIR)
         cmd = self.start_cmd(node)
-        self.logger.info("TestLogCleaning tool %d command: %s" % (idx, cmd))
+        self.logger.info("LogCompactionTester %d command: %s" % (idx, cmd))
         self.security_config.setup_node(node)
         for line in node.account.ssh_capture(cmd):
             self.logger.debug("Checking line:{}".format(line))
 
-            if line.startswith(LogCompactionTool.VERIFICATION_STRING):
+            if line.startswith(LogCompactionTester.VERIFICATION_STRING):
                 self.log_compaction_completed = True
 
     def start_cmd(self, node):
@@ -78,10 +78,10 @@ class LogCompactionTool(KafkaPathResolverMixin, BackgroundThreadService):
     def clean_node(self, node):
         node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False,
                                          allow_fail=True)
-        node.account.ssh("rm -rf %s" % LogCompactionTool.OUTPUT_DIR, allow_fail=False)
+        node.account.ssh("rm -rf %s" % LogCompactionTester.OUTPUT_DIR, allow_fail=False)
 
     def java_class_name(self):
-        return "kafka.tools.TestLogCleaning"
+        return "kafka.tools.LogCompactionTester"
 
     @property
     def is_done(self):
