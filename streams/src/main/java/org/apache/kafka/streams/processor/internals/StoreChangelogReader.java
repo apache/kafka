@@ -71,7 +71,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
-            initialize();
+            initialize(active);
         }
 
         if (needsRestoring.isEmpty()) {
@@ -111,7 +111,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return completed();
     }
 
-    private void initialize() {
+    private void initialize(final RestoringTasks active) {
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new StreamsException("Restore consumer should not be subscribed to any topics (" + restoreConsumer.subscription() + ")");
         }
@@ -165,11 +165,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // set up restorer for those initializable
         if (!initializable.isEmpty()) {
-            startRestoration(initializable);
+            startRestoration(initializable, active);
         }
     }
 
-    private void startRestoration(final Map<TopicPartition, StateRestorer> initialized) {
+    private void startRestoration(final Map<TopicPartition, StateRestorer> initialized,
+                                  final RestoringTasks active) {
         log.debug("Start restoring state stores from changelog topics {}", initialized.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
@@ -186,6 +187,18 @@ public class StoreChangelogReader implements ChangelogReader {
                 restorer.setStartingOffset(restoreConsumer.position(restorer.partition()));
                 restorer.restoreStarted();
             } else {
+                final StreamTask task = active.restoringTaskFor(restorer.partition());
+
+                // If checkpoint does not exist it means the task was not shutdown gracefully before;
+                // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
+                if (task.isEosEnabled()) {
+                    log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
+                            "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), restorer.partition());
+                    task.reinitializeStateStoresForPartitions(Collections.singleton(restorer.partition()));
+                } else {
+                    log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), restorer.partition());
+                }
+
                 restoreConsumer.seekToBeginning(Collections.singletonList(restorer.partition()));
                 needsPositionUpdate.add(restorer);
             }
@@ -280,6 +293,9 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
             restorer.restoreBatchCompleted(lastRestoredOffset, records.size());
+
+            log.trace("Restored from {} to {} with {} records, ending offset is {}, next starting position is {}",
+                    restorer.partition(), restorer.storeName(), records.size(), lastRestoredOffset, nextPosition);
         }
 
         return nextPosition;
