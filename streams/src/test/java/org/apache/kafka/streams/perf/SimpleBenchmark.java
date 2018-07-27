@@ -262,9 +262,6 @@ public class SimpleBenchmark {
         // improve producer throughput
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 128 * 1024);
-
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
     }
 
     private Properties setProduceConsumeProperties(final String clientId) {

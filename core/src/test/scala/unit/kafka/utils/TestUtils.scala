@@ -548,9 +548,9 @@ object TestUtils extends Logging {
                            maxBlockMs: Long = 60 * 1000L,
                            bufferSize: Long = 1024L * 1024L,
                            retries: Int = Int.MaxValue,
-                           deliveryTimeoutMs: Int = 20000,
+                           deliveryTimeoutMs: Int = 30 * 1000,
                            lingerMs: Int = 0,
-                           requestTimeoutMs: Int = 30 * 1000,
+                           requestTimeoutMs: Int = 20 * 1000,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
@@ -564,12 +564,9 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
+    producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
     producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
-
-    // In case of overflow set maximum possible value for deliveryTimeoutMs
-    val deliveryTimeoutMs = if (lingerMs + requestTimeoutMs < 0) Int.MaxValue else lingerMs + requestTimeoutMs
-    producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
 
     /* Only use these if not already set */
     val defaultProps = Map(
@@ -1271,20 +1268,17 @@ object TestUtils extends Logging {
                                   transactionTimeoutMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      deliveryTimeoutMs = Int.MaxValue, acks = -1, props = Some(props))
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, props = Some(props))
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
   def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      deliveryTimeoutMs = Int.MaxValue, acks = -1, props = Some(props))
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
