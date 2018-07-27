@@ -980,32 +980,33 @@ public class QueryableStateIntegrationTest {
             } catch (Exception e) {
                 return false;
             }
-        },      "Cannot get larger value");
+        },      "Cannot get expected value");
 
         TestUtils.waitForCondition(() -> {
             try {
-                final ReadOnlyWindowStore<String, Long> windowStore =
-                        kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
+                final ReadOnlyKeyValueStore<String, Long>
+                        keyValueStore = kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
 
-                final Map<String, Long> windowState = new HashMap<>();
+                final Map<String, Long> countState = new HashMap<>();
 
                 for (final String key : keys) {
-                    final Map<String, Long> map = fetchMap(windowStore, key);
-                    if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
-                        fail("Key in windowed-store not found " + key);
+                    final Long value = keyValueStore.get(key);
+                    if (value != null) {
+                        countState.put(key, value);
+                    } else if (failIfKeyNotFound) {
+                        fail("Key in key-value-store not found " + key);
                     }
-                    windowState.putAll(map);
                 }
 
-                for (final Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
-                    if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
-                        final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
+                for (final Map.Entry<String, Long> actualCountStateEntry : countState.entrySet()) {
+                    if (expectedCount.containsKey(actualCountStateEntry.getKey())) {
+                        final Long expectedValue = expectedCount.get(actualCountStateEntry.getKey());
 
-                        if (actualWindowStateEntry.getValue() < expectedValue)
+                        if (actualCountStateEntry.getValue() < expectedValue)
                             return false;
                     }
                     // return this for next round of comparisons
-                    expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
+                    expectedCount.put(actualCountStateEntry.getKey(), actualCountStateEntry.getValue());
                 }
 
                 return true;
@@ -1013,6 +1014,39 @@ public class QueryableStateIntegrationTest {
                 return false;
             }
         },      "Cannot get expected value");
+
+        final ReadOnlyWindowStore<String, Long> windowStore =
+                kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
+
+
+
+
+        final Map<String, Long> windowState = new HashMap<>();
+
+        for (final String key : keys) {
+            final Map<String, Long> map = fetchMap(windowStore, key);
+            if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
+                fail("Key in windowed-store not found " + key);
+            }
+            windowState.putAll(map);
+            final Long value = keyValueStore.get(key);
+            if (value != null) {
+                countState.put(key, value);
+            } else if (failIfKeyNotFound) {
+                fail("Key in key-value-store not found " + key);
+            }
+        }
+
+        for (final Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
+            if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
+                final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
+
+
+            }
+            // return this for next round of comparisons
+            expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
+        }
+
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
