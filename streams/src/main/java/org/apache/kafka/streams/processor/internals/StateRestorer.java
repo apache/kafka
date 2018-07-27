@@ -55,6 +55,10 @@ public class StateRestorer {
         return partition;
     }
 
+    public String storeName() {
+        return storeName;
+    }
+
     long checkpoint() {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
