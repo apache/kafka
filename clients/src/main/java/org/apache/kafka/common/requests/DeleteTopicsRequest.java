@@ -53,6 +53,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
     /**
      * v3 request is the same that as v2. The response is different based on the request version.
+     * In v3 version a TopicDeletionDisabledException is returned
      */
     private static final Schema DELETE_TOPICS_REQUEST_V3 = DELETE_TOPICS_REQUEST_V2;
 
