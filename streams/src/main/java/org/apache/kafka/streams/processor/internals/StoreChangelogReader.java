@@ -170,7 +170,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 needsInitializing.remove(topicPartition);
             } else {
-                log.warn("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
+                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
                 iter.remove();
             }
         }
@@ -209,7 +209,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 // If checkpoint does not exist it means the task was not shutdown gracefully before;
                 // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
                 if (task.isEosEnabled()) {
-                    log.warn("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
+                    log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
                             "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), partition);
 
                     needsInitializing.remove(partition);
@@ -301,7 +301,7 @@ public class StoreChangelogReader implements ChangelogReader {
             restorer.restore(restoreRecords);
             restorer.restoreBatchCompleted(lastRestoredOffset, records.size());
 
-            log.warn("Restored from {} to {} with {} records, ending offset is {}, next starting position is {}",
+            log.trace("Restored from {} to {} with {} records, ending offset is {}, next starting position is {}",
                     restorer.partition(), restorer.storeName(), records.size(), lastRestoredOffset, nextPosition);
         }
 
