@@ -324,7 +324,7 @@ public class TaskManager {
 
         if (active.allTasksRunning()) {
             Set<TopicPartition> assignment = consumer.assignment();
-            log.trace("Resuming partitions {}", assignment);
+            log.warn("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
             return true;
