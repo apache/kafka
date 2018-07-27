@@ -83,6 +83,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 return; // unnecessary to forward here.
 
             if (queryableName != null) {
+                System.out.println("Putting to " + store.name() + " with " + key + " : " + newValue);
+
                 store.put(key, newValue);
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
