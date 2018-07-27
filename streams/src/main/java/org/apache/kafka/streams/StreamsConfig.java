@@ -727,7 +727,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static class InternalConfig {
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
-        public static final String VERSION_PROBING_FLAG = "__version.probing.flag__";
+        public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
     }
 
     /**
@@ -830,7 +830,12 @@ public class StreamsConfig extends AbstractConfig {
      * @param props properties that specify Kafka Streams and internal consumer/producer configuration
      */
     public StreamsConfig(final Map<?, ?> props) {
-        super(CONFIG, props);
+        this(props, true);
+    }
+
+    protected StreamsConfig(final Map<?, ?> props,
+                            final boolean doLog) {
+        super(CONFIG, props, doLog);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
     }
 

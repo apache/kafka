@@ -58,7 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
@@ -122,7 +122,7 @@ public class StreamsPartitionAssignorTest {
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
         configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configurationMap.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, new AtomicBoolean());
+        configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         return configurationMap;
     }
 
@@ -993,20 +993,9 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
-        final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
-        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
-        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        assertThat(mockInternalTopicManager.readyTopics.isEmpty(), equalTo(true));
 
-        final List<TopicPartition> expectedAssignment = Arrays.asList(
-            new TopicPartition("topic1", 0),
-            new TopicPartition("topic1", 1),
-            new TopicPartition("topic1", 2),
-            new TopicPartition(applicationId + "-count-repartition", 0),
-            new TopicPartition(applicationId + "-count-repartition", 1),
-            new TopicPartition(applicationId + "-count-repartition", 2)
-        );
-        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+        assertThat(assignment.get(client).partitions().isEmpty(), equalTo(true));
     }
 
     @Test
@@ -1109,29 +1098,29 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowKafkaExceptionVersionProbingFlagNotConfigured() {
+    public void shouldThrowKafkaExceptionAssignmentErrorCodeNotConfigured() {
         final Map<String, Object> config = configProps();
-        config.remove(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG);
+        config.remove(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
 
         try {
             partitionAssignor.configure(config);
             fail("Should have thrown KafkaException");
         } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(), equalTo("VersionProbingFlag is not specified"));
+            assertThat(expected.getMessage(), equalTo("assignmentErrorCode is not specified"));
         }
     }
 
     @Test
-    public void shouldThrowKafkaExceptionIfVersionProbingFlagConfigIsNotAtomicBoolean() {
+    public void shouldThrowKafkaExceptionIfVersionProbingFlagConfigIsNotAtomicInteger() {
         final Map<String, Object> config = configProps();
-        config.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, "i am not an AtomicBoolean");
+        config.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, "i am not an AtomicInteger");
 
         try {
             partitionAssignor.configure(config);
             fail("Should have thrown KafkaException");
         } catch (final KafkaException expected) {
             assertThat(expected.getMessage(),
-                equalTo("java.lang.String is not an instance of java.util.concurrent.atomic.AtomicBoolean"));
+                equalTo("java.lang.String is not an instance of java.util.concurrent.atomic.AtomicInteger"));
         }
     }
 

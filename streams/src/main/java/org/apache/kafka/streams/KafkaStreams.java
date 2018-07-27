@@ -136,7 +136,7 @@ public class KafkaStreams {
     private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
-    private final StreamThread[] threads;
+    protected final StreamThread[] threads;
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
@@ -209,7 +209,7 @@ public class KafkaStreams {
     }
 
     private final Object stateLock = new Object();
-    private volatile State state = State.CREATED;
+    protected volatile State state = State.CREATED;
 
     private boolean waitOnState(final State targetState, final long waitMs) {
         long begin = time.milliseconds();

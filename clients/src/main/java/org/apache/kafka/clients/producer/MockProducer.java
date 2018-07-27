@@ -311,9 +311,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
-        if (this.closed) {
-            throw new IllegalStateException("MockProducer is already closed.");
-        }
         this.closed = true;
     }
 
