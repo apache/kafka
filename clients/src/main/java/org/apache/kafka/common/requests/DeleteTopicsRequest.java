@@ -51,6 +51,9 @@ public class DeleteTopicsRequest extends AbstractRequest {
      */
     private static final Schema DELETE_TOPICS_REQUEST_V2 = DELETE_TOPICS_REQUEST_V1;
 
+    /**
+     * v3 request is the same that as v2. The response is different based on the request version.
+     */
     private static final Schema DELETE_TOPICS_REQUEST_V3 = DELETE_TOPICS_REQUEST_V2;
 
     public static Schema[] schemaVersions() {
@@ -123,6 +126,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
                 return new DeleteTopicsResponse(topicErrors);
             case 1:
             case 2:
+            case 3:
                 return new DeleteTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
