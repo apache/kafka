@@ -118,9 +118,9 @@ public class TaskId implements Comparable<TaskId> {
                 }
                 final int partitionId = in.readInt();
                 final TopicPartition partition = new TopicPartition(topicName.substring(0), partitionId);
-                taskId.addBeginningOffset(partition, in.readInt());
-                taskId.addLastCommittedOffset(partition, in.readInt());
-                taskId.addEndOffset(partition, in.readInt());
+                taskId.addBeginningOffset(partition, in.readLong());
+                taskId.addLastCommittedOffset(partition, in.readLong());
+                taskId.addEndOffset(partition, in.readLong());
             }
         }
         return taskId;
@@ -148,7 +148,10 @@ public class TaskId implements Comparable<TaskId> {
         }
     }
 
-    public static TaskId readFrom(ByteBuffer buf, final int version) {
+    public static TaskId readFrom(ByteBuffer buf, final int version, boolean resetPosition) {
+        if (version == 4 && resetPosition) {
+            buf.position(0);
+        }
         final TaskId result = new TaskId(buf.getInt(), buf.getInt());
         if (version == 4) {
             result.setNumberOfStateStores(buf.getInt());
@@ -162,12 +165,28 @@ public class TaskId implements Comparable<TaskId> {
                 }
                 final int partitionId = buf.getInt();
                 final TopicPartition partition = new TopicPartition(topicName.substring(0), partitionId);
-                result.addBeginningOffset(partition, buf.getInt());
-                result.addLastCommittedOffset(partition, buf.getInt());
-                result.addEndOffset(partition, buf.getInt());
+                result.addBeginningOffset(partition, buf.getLong());
+                result.addLastCommittedOffset(partition, buf.getLong());
+                result.addEndOffset(partition, buf.getLong());
             }
         }
         return result;
+    }
+
+    public int getByteBufferLength() {
+        // topicGroupId, partitionId, stateStoreCount, inputPartitionCount, keyCount (type integer)
+        int initialBase = 20;
+        // represents number of characters per string (type integer)
+        initialBase += beginningOffsets.size() * 4;
+        // adds how long each string will be
+        for (final TopicPartition partition : beginningOffsets.keySet()) {
+            initialBase += partition.topic().length() * 2; // character in java is two bytes
+        }
+        // space for partition number
+        initialBase += beginningOffsets.size() * 4;
+        // beginningOffset, lastCommittedOffset, endOffset (all type long)
+        initialBase += beginningOffsets.size() * 3 * 8;
+        return initialBase;
     }
 
     public boolean mapsEqual(TaskId other) {
@@ -275,19 +294,5 @@ public class TaskId implements Comparable<TaskId> {
 
     public void addEndOffset(TopicPartition partition, long endOffset) {
         this.endOffsets.put(partition, endOffset);
-    }
-
-    public int getByteBufferLength() {
-        // topicGroupId, partitionId, stateStoreCount, inputPartitionCount, keyCount (type integer)
-        int initialBase = 20;
-        // represents number of characters per string (type integer)
-        initialBase += beginningOffsets.size() << 2;
-        // adds how long each string will be
-        for (final TopicPartition partition : beginningOffsets.keySet()) {
-            initialBase += partition.topic().length();
-        }
-        // beginningOffset, lastCommittedOffset, endOffset (all type long)
-        initialBase += beginningOffsets.size() * 3 * 8;
-        return initialBase;
     }
 }
