@@ -65,9 +65,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String clientJaasConfPath;
     private String kerb5ConfPath;
 
-    private Integer retries;
-    private Integer requiredNumAcks;
-    private Integer deliveryTimeoutMs;
+    private int retries = Integer.MAX_VALUE;
+    private int requiredNumAcks = 1;
+    private int deliveryTimeoutMs = 120000;
     private boolean syncSend;
     private Producer<byte[], byte[]> producer;
     
@@ -83,7 +83,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.brokerList = brokerList;
     }
 
-    public Integer getRequiredNumAcks() {
+    public int getRequiredNumAcks() {
         return requiredNumAcks;
     }
 
@@ -91,7 +91,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.requiredNumAcks = requiredNumAcks;
     }
 
-    public Integer getRetries() {
+    public int getRetries() {
         return retries;
     }
 
@@ -99,7 +99,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.retries = retries;
     }
 
-    public Integer getDeliveryTimeoutMs() {
+    public int getDeliveryTimeoutMs() {
         return deliveryTimeoutMs;
     }
 
@@ -215,12 +215,11 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             throw new ConfigException("Topic must be specified by the Kafka log4j appender");
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
-        if (requiredNumAcks != null)
-            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
-        if (retries != null)
-            props.put(RETRIES_CONFIG, retries);
-        if (deliveryTimeoutMs != null)
-            props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+
+        props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
+        props.put(RETRIES_CONFIG, retries);
+        props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+
         if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL_CONFIG, securityProtocol);
         }
