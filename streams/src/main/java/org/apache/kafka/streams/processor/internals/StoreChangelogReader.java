@@ -189,10 +189,9 @@ public class StoreChangelogReader implements ChangelogReader {
         assignment.addAll(initialized);
         restoreConsumer.assign(assignment);
 
-        final Iterator<TopicPartition> iterator = initialized.iterator();
+        final List<StateRestorer> needsPositionUpdate = new ArrayList<>();
 
-        while (iterator.hasNext()) {
-            final TopicPartition partition = iterator.next();
+        for (final TopicPartition partition : initialized) {
             final StateRestorer restorer = stateRestorers.get(partition);
             if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
                 restoreConsumer.seek(partition, restorer.checkpoint());
@@ -203,22 +202,34 @@ public class StoreChangelogReader implements ChangelogReader {
                 restorer.restoreStarted();
             } else {
                 restoreConsumer.seekToBeginning(Collections.singletonList(partition));
+                needsPositionUpdate.add(restorer);
+            }
+        }
 
-                // If checkpoint does not exist it means the task was not shutdown gracefully before;
-                // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
-                final StreamTask task = active.restoringTaskFor(partition);
-                if (task.isEosEnabled()) {
-                    log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
-                            "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), partition);
+        for (final StateRestorer restorer : needsPositionUpdate) {
+            final TopicPartition partition = restorer.partition();
 
-                    needsInitializing.remove(partition);
-                    iterator.remove();
-                    restorer.setCheckpointOffset(restoreConsumer.position(partition));
+            // If checkpoint does not exist it means the task was not shutdown gracefully before;
+            // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
+            final StreamTask task = active.restoringTaskFor(partition);
+            if (task.isEosEnabled()) {
+                log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
+                        "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), partition);
 
-                    task.reinitializeStateStoresForPartitions(Collections.singleton(partition));
-                } else {
-                    log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), partition);
-                }
+                needsInitializing.remove(partition);
+                initialized.remove(partition);
+                restorer.setCheckpointOffset(restoreConsumer.position(partition));
+
+                task.reinitializeStateStoresForPartitions(Collections.singleton(partition));
+            } else {
+                log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), partition);
+
+                final long position = restoreConsumer.position(restorer.partition());
+                logRestoreOffsets(restorer.partition(),
+                        position,
+                        endOffsets.get(restorer.partition()));
+                restorer.setStartingOffset(position);
+                restorer.restoreStarted();
             }
         }
 
