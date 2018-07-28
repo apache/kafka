@@ -162,6 +162,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    public boolean isEosEnabled() {
+        return eosEnabled;
+    }
+
     @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
