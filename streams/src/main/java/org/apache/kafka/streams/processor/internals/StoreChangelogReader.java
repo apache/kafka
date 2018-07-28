@@ -202,12 +202,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 restorer.setStartingOffset(restoreConsumer.position(partition));
                 restorer.restoreStarted();
             } else {
-                final StreamTask task = active.restoringTaskFor(partition);
-
                 restoreConsumer.seekToBeginning(Collections.singletonList(partition));
 
                 // If checkpoint does not exist it means the task was not shutdown gracefully before;
                 // and in this case if EOS is turned on we should wipe out the state and re-initialize the task
+                final StreamTask task = active.restoringTaskFor(partition);
                 if (task.isEosEnabled()) {
                     log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
                             "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), partition);
