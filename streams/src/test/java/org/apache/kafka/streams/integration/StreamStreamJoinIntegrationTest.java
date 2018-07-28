@@ -79,7 +79,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+        leftStream.join(rightStream, valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -109,7 +109,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
                 .join(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
                                  .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
-                       valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+                       valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -136,7 +136,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.leftJoin(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+        leftStream.leftJoin(rightStream, valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -166,7 +166,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
                 .leftJoin(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
                                      .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+                        valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -193,7 +193,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.outerJoin(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+        leftStream.outerJoin(rightStream, valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -223,7 +223,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
                 .outerJoin(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
                                 .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+                        valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -254,8 +254,8 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                         "D-c-b", "D-c-c", "D-c-d", "D-d-a", "D-d-b", "D-d-c", "D-d-d")
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000))
-                .join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+        leftStream.join(rightStream, valueJoiner, JoinWindows.of(1000))
+                .join(rightStream, valueJoiner, JoinWindows.of(1000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
