@@ -34,6 +34,10 @@ public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
         return mockProducer;
     }
 
+    void setKafkaProducer(MockProducer<byte[], byte[]> producer) {
+        this.mockProducer = producer;
+    }
+
     @Override
     protected void append(LoggingEvent event) {
         if (super.getProducer() == null) {

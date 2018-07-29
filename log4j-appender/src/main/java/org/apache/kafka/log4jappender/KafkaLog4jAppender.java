@@ -281,14 +281,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
         Future<RecordMetadata> response = producer.send(
-                new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
         if (syncSend) {
             try {
                 response.get();
             } catch (InterruptedException | ExecutionException ex) {
-                LogLog.debug("Exception while getting response", ex);
                 if (!ignoreExceptions)
                     throw new RuntimeException(ex);
+                LogLog.debug("Exception while getting response", ex);
             }
         }
     }

@@ -17,17 +17,21 @@
 package org.apache.kafka.log4jappender;
 
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
+import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
 
 public class KafkaLog4jAppenderTest {
 
@@ -83,7 +87,7 @@ public class KafkaLog4jAppenderTest {
         }
 
         Assert.assertEquals(
-                5, (getMockkafkaLog4jAppender()).getHistory().size());
+            5, (getMockKafkaLog4jAppender()).getHistory().size());
     }
 
     @Test(expected = RuntimeException.class)
@@ -92,8 +96,9 @@ public class KafkaLog4jAppenderTest {
         props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
         PropertyConfigurator.configure(props);
 
-        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockkafkaLog4jAppender();
-        generateMockProducerResponse(mockKafkaLog4jAppender, true);
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        replaceProducerWithMocked(mockKafkaLog4jAppender, false);
+
         logger.error(getMessage(0));
     }
 
@@ -103,12 +108,10 @@ public class KafkaLog4jAppenderTest {
         props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
         PropertyConfigurator.configure(props);
 
-        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockkafkaLog4jAppender();
-        generateMockProducerResponse(mockKafkaLog4jAppender, false);
-        logger.error(getMessage(0));
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        replaceProducerWithMocked(mockKafkaLog4jAppender, true);
 
-        Assert.assertEquals(
-                1, mockKafkaLog4jAppender.getHistory().size());
+        logger.error(getMessage(0));
     }
 
     @Test
@@ -119,33 +122,35 @@ public class KafkaLog4jAppenderTest {
         logger.error(getMessage(0));
     }
 
-    private MockKafkaLog4jAppender getMockkafkaLog4jAppender() {
-        return (MockKafkaLog4jAppender) Logger.getRootLogger().getAppender("KAFKA");
-    }
-
-    private void generateMockProducerResponse(final MockKafkaLog4jAppender mockKafkaLog4jAppender,
-                                              final boolean error) {
-        MockProducer<byte[], byte[]> kafkaProducer =
-                (MockProducer<byte[], byte[]>) mockKafkaLog4jAppender.getKafkaProducer(null);
-        new Thread(() -> {
-            try {
-                Thread.sleep(300);
-                if (error)
-                    kafkaProducer.errorNext(new TimeoutException());
-                else
-                    kafkaProducer.completeNext();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }).start();
-    }
-
     @Test(expected = RuntimeException.class)
     public void testLog4jAppendsWithRealProducerConfigWithSyncSendAndNotIgnoringExceptionsShouldThrowException() {
         Properties props = getLog4jConfigWithRealProducer(false);
         PropertyConfigurator.configure(props);
 
         logger.error(getMessage(0));
+    }
+
+    private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
+        @SuppressWarnings("unchecked")
+        MockProducer<byte[], byte[]> producer = EasyMock.niceMock(MockProducer.class);
+        @SuppressWarnings("unchecked")
+        Future<RecordMetadata> futureMock = EasyMock.niceMock(Future.class);
+        try {
+            if (!success)
+                EasyMock.expect(futureMock.get())
+                    .andThrow(new ExecutionException("simulated timeout", new TimeoutException()));
+        } catch (InterruptedException | ExecutionException e) {
+            // just mocking
+        }
+        EasyMock.expect(producer.send(EasyMock.anyObject())).andReturn(futureMock);
+        EasyMock.replay(producer, futureMock);
+        // reconfiguring mock appender
+        mockKafkaLog4jAppender.setKafkaProducer(producer);
+        mockKafkaLog4jAppender.activateOptions();
+    }
+
+    private MockKafkaLog4jAppender getMockKafkaLog4jAppender() {
+        return (MockKafkaLog4jAppender) Logger.getRootLogger().getAppender("KAFKA");
     }
 
     private byte[] getMessage(int i) {
