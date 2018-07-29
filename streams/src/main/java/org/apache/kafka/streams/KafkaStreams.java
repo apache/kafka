@@ -831,6 +831,7 @@ public class KafkaStreams {
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
+
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
 
         if (!setState(State.PENDING_SHUTDOWN)) {
