@@ -32,20 +32,20 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
+public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final Initializer<Agg> initializer;
+    private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
     KStreamWindowAggregate(final Windows<W> windows,
                            final String storeName,
-                           final Initializer<T> initializer,
-                           final Aggregator<? super K, ? super V, T> aggregator) {
+                           final Initializer<Agg> initializer,
+                           final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -64,8 +64,8 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private WindowStore<K, T> windowStore;
-        private TupleForwarder<Windowed<K>, T> tupleForwarder;
+        private WindowStore<K, Agg> windowStore;
+        private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
 
@@ -77,7 +77,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             metrics = (StreamsMetricsImpl) context.metrics();
 
-            windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+            windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
@@ -104,13 +104,13 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final Long windowStart = entry.getKey();
                 if (windowStart > expiryTime) {
-                    T oldAgg = windowStore.fetch(key, windowStart);
+                    Agg oldAgg = windowStore.fetch(key, windowStart);
 
                     if (oldAgg == null) {
                         oldAgg = initializer.apply();
                     }
 
-                    final T newAgg = aggregator.apply(key, value, oldAgg);
+                    final Agg newAgg = aggregator.apply(key, value, oldAgg);
 
                     // update the store with the new value
                     windowStore.put(key, newAgg, windowStart);
@@ -127,34 +127,34 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     }
 
     @Override
-    public KTableValueGetterSupplier<Windowed<K>, T> view() {
+    public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
 
-        return new KTableValueGetterSupplier<Windowed<K>, T>() {
+        return new KTableValueGetterSupplier<Windowed<K>, Agg>() {
 
-            public KTableValueGetter<Windowed<K>, T> get() {
+            public KTableValueGetter<Windowed<K>, Agg> get() {
                 return new KStreamWindowAggregateValueGetter();
             }
 
             @Override
             public String[] storeNames() {
-                return new String[]{storeName};
+                return new String[] {storeName};
             }
         };
     }
 
-    private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, T> {
+    private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
 
-        private WindowStore<K, T> windowStore;
+        private WindowStore<K, Agg> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+            windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public T get(final Windowed<K> windowedKey) {
+        public Agg get(final Windowed<K> windowedKey) {
             final K key = windowedKey.key();
             final W window = (W) windowedKey.window();
 

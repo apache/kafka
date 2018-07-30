@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
@@ -26,7 +26,7 @@ import java.util.Arrays;
 public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<? extends StateStore> storeBuilder;
     private final String maybeRepartitionedSourceName;
 
 
@@ -34,11 +34,13 @@ public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
                                  final ProcessorParameters processorParameters,
                                  final String[] storeNames,
                                  final String maybeRepartitionedSourceName,
-                                 final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
+                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
                                  final boolean repartitionRequired) {
-        super(nodeName,
-              processorParameters,
-              repartitionRequired);
+        super(
+            nodeName,
+            processorParameters,
+            repartitionRequired
+        );
 
         this.storeNames = storeNames;
         this.storeBuilder = materializedKTableStoreBuilder;
@@ -67,7 +69,7 @@ public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private boolean repartitionRequired;
         private String maybeRepartitionedSourceName;
         private String[] storeNames;
-        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+        private StoreBuilder<? extends StateStore> storeBuilder;
 
         private StatefulProcessorNodeBuilder() {
         }
@@ -92,24 +94,24 @@ public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
             return this;
         }
 
-        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<? extends StateStore> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        public StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(String maybeRepartitionedSourceName) {
+        public StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(final String maybeRepartitionedSourceName) {
             this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
             return this;
         }
 
         public StatefulProcessorNode<K, V> build() {
             return new StatefulProcessorNode<>(nodeName,
-                                               processorSupplier,
-                                               storeNames,
-                                               maybeRepartitionedSourceName,
-                                               storeBuilder,
-                                               repartitionRequired);
-
+                processorSupplier,
+                storeNames,
+                maybeRepartitionedSourceName,
+                storeBuilder,
+                repartitionRequired
+            );
         }
     }
 }
