@@ -95,7 +95,7 @@ public class NetworkTestUtils {
                 break;
             }
             if (mockTime != null)
-                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 100);
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 150);
         }
         assertTrue("Channel was not closed by timeout", closed);
         ChannelState finalState = selector.disconnected().get(node);

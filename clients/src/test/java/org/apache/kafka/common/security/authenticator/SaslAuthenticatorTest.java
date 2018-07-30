@@ -16,6 +16,31 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -37,6 +62,8 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -49,48 +76,23 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
-import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
+import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
+
 import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
-import javax.security.auth.login.LoginContext;
-import javax.security.auth.login.LoginException;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -160,6 +162,22 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
         server.verifyAuthenticationMetrics(1, 0);
+    }
+
+    /**
+     * Tests that SASL/PLAIN clients with invalid username fail authentication.
+     */
+    @Test
+    public void testInvalidUsernameSaslPlain() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        jaasConfig.setClientOptions("PLAIN", "invaliduser", TestJaasConfig.PASSWORD);
+
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
+                "Authentication failed: Invalid username or password");
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -281,6 +299,25 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, mechanism);
             createAndCheckClientConnection(securityProtocol, "node-" + mechanism);
         }
+    }
+
+    /**
+     * Tests that SASL/SCRAM clients fail authentication if password is invalid.
+     */
+    @Test
+    public void testInvalidPasswordSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+        Map<String, Object> options = new HashMap<>();
+        options.put("username", TestJaasConfig.USERNAME);
+        options.put("password", "invalidpassword");
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
+
+        String node = "0";
+        server = createEchoServer(securityProtocol);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
+        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -1099,6 +1136,16 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
         selector = null;
+    }
+
+    private void createAndCheckClientAuthenticationFailure(SecurityProtocol securityProtocol, String node,
+            String mechanism, String expectedErrorMessage) throws Exception {
+        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
+        Exception exception = finalState.exception();
+        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
+        if (expectedErrorMessage == null)
+            expectedErrorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + mechanism;
+        assertEquals(expectedErrorMessage, exception.getMessage());
     }
 
     private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)

@@ -79,7 +79,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
-public class SaslAuthenticatorFailureTest {
+public class SaslAuthenticatorFailureDelayTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     private static MockTime time = new MockTime();
 
@@ -95,7 +95,7 @@ public class SaslAuthenticatorFailureTest {
     private final int failedAuthenticationDelayMs;
     private long startTimeMs;
 
-    public SaslAuthenticatorFailureTest(int failedAuthenticationDelayMs) {
+    public SaslAuthenticatorFailureDelayTest(int failedAuthenticationDelayMs) {
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
     }
 
@@ -143,41 +143,6 @@ public class SaslAuthenticatorFailureTest {
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
                 "Authentication failed: Invalid username or password");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that SASL/PLAIN clients with invalid username fail authentication.
-     */
-    @Test
-    public void testInvalidUsernameSaslPlain() throws Exception {
-        String node = "0";
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        jaasConfig.setClientOptions("PLAIN", "invaliduser", TestJaasConfig.PASSWORD);
-
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that SASL/SCRAM clients fail authentication if password is invalid.
-     */
-    @Test
-    public void testInvalidPasswordSaslScram() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
-        Map<String, Object> options = new HashMap<>();
-        options.put("username", TestJaasConfig.USERNAME);
-        options.put("password", "invalidpassword");
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
-
-        String node = "0";
-        server = createEchoServer(securityProtocol);
-        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
