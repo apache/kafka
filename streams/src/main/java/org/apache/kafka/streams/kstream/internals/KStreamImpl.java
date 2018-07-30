@@ -177,9 +177,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(kStreamMap, name);
 
-        return  new ProcessorNode<>(name,
-                                    processorParameters,
-                                    repartitionRequired);
+        return new ProcessorNode<>(
+            name,
+            processorParameters,
+            repartitionRequired
+        );
 
     }
 

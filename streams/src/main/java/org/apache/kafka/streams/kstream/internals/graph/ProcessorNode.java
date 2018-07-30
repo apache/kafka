@@ -43,17 +43,18 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
                          final ProcessorParameters processorParameters,
                          final boolean repartitionRequired) {
 
-        super(nodeName,
-              repartitionRequired);
+        super(nodeName, repartitionRequired);
 
         this.processorParameters = processorParameters;
     }
 
     public ProcessorNode(final String nodeName,
                          final ProcessorParameters processorParameters) {
-        this(nodeName,
-             processorParameters,
-             false);
+        this(
+            nodeName,
+            processorParameters,
+            false
+        );
     }
 
     public ProcessorNode(final String nodeName,
@@ -61,9 +62,11 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
                          final boolean repartitionRequired,
                          final List<String> parentNames) {
 
-        this(nodeName,
-             processorParameters,
-             repartitionRequired);
+        this(
+            nodeName,
+            processorParameters,
+            repartitionRequired
+        );
 
         this.parentNames = new ArrayList<>(parentNames);
     }

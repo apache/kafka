@@ -34,13 +34,15 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
                                final String sinkName,
                                final String repartitionTopic) {
 
-        super(nodeName,
-              sourceName,
-              processorParameters,
-              keySerde,
-              valueSerde,
-              sinkName,
-              repartitionTopic);
+        super(
+            nodeName,
+            sourceName,
+            processorParameters,
+            keySerde,
+            valueSerde,
+            sinkName,
+            repartitionTopic
+        );
 
     }
 
@@ -64,27 +66,31 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 
-
-
         topologyBuilder.addInternalTopic(repartitionTopic);
 
-        topologyBuilder.addProcessor(processorParameters.processorName(),
-                                     processorParameters.processorSupplier(),
-                                     parentNode().nodeName());
+        topologyBuilder.addProcessor(
+            processorParameters.processorName(),
+            processorParameters.processorSupplier(),
+            parentNode().nodeName()
+        );
 
-        topologyBuilder.addSink(sinkName,
-                                repartitionTopic,
-                                keySerializer,
-                                getValueSerializer(),
-                                null,
-                                processorParameters.processorName());
+        topologyBuilder.addSink(
+            sinkName,
+            repartitionTopic,
+            keySerializer,
+            getValueSerializer(),
+            null,
+            processorParameters.processorName()
+        );
 
-        topologyBuilder.addSource(null,
-                                  sourceName,
-                                  new FailOnInvalidTimestamp(),
-                                  keyDeserializer,
-                                  getValueDeserializer(),
-                                  repartitionTopic);
+        topologyBuilder.addSource(
+            null,
+            sourceName,
+            new FailOnInvalidTimestamp(),
+            keyDeserializer,
+            getValueDeserializer(),
+            repartitionTopic
+        );
 
     }
 
@@ -144,13 +150,14 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
 
         public OptimizableRepartitionNode<K, V> build() {
 
-            return new OptimizableRepartitionNode<>(nodeName,
-                                                    sourceName,
-                                                    processorParameters,
-                                                    keySerde,
-                                                    valueSerde,
-                                                    sinkName,
-                                                    repartitionTopic
+            return new OptimizableRepartitionNode<>(
+                nodeName,
+                sourceName,
+                processorParameters,
+                keySerde,
+                valueSerde,
+                sinkName,
+                repartitionTopic
             );
 
         }
