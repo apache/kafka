@@ -58,6 +58,16 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         return isGlobalKTable;
     }
 
+    @Override
+    public String toString() {
+        return "TableSourceNode{" +
+               "storeBuilder=" + storeBuilder +
+               ", processorParameters=" + processorParameters +
+               ", sourceName='" + sourceName + '\'' +
+               ", isGlobalKTable=" + isGlobalKTable +
+               "} " + super.toString();
+    }
+
     public static <K, V, S extends StateStore> TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder() {
         return new TableSourceNodeBuilder<>();
     }

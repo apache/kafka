@@ -63,6 +63,16 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     }
 
 
+    @Override
+    public String toString() {
+        return "StreamStreamJoinNode{" +
+               "thisWindowedStreamProcessorParameters=" + thisWindowedStreamProcessorParameters +
+               ", otherWindowedStreamProcessorParameters=" + otherWindowedStreamProcessorParameters +
+               ", thisWindowStoreBuilder=" + thisWindowStoreBuilder +
+               ", otherWindowStoreBuilder=" + otherWindowStoreBuilder +
+               ", joined=" + joined +
+               "} " + super.toString();
+    }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {

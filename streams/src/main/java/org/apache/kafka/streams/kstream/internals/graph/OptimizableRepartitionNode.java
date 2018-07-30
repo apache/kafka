@@ -54,9 +54,13 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
         return  valueSerde != null ? valueSerde.deserializer() : null;
     }
 
+    @Override
+    public String toString() {
+        return "OptimizableRepartitionNode{} " + super.toString();
+    }
 
     @Override
-    public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 

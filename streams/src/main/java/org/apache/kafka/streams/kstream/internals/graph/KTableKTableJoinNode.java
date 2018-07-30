@@ -24,6 +24,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Arrays;
+
 /**
  * Too much specific information to generalize so the KTable-KTable join requires a specific node.
  */
@@ -86,6 +88,15 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
             topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "KTableKTableJoinNode{" +
+               "joinThisStoreNames=" + Arrays.toString(joinThisStoreNames) +
+               ", joinOtherStoreNames=" + Arrays.toString(joinOtherStoreNames) +
+               ", materializedInternal=" + materializedInternal +
+               "} " + super.toString();
     }
 
     public static <K, V, V1, V2, VR> KTableKTableJoinNodeBuilder<K, V1, V2, VR> kTableKTableJoinNodeBuilder() {

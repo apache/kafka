@@ -22,6 +22,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Arrays;
+
 public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
 
     private final String[] storeNames;
@@ -41,6 +43,13 @@ public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
         this.storeBuilder = materializedKTableStoreBuilder;
     }
 
+    @Override
+    public String toString() {
+        return "StatefulProcessorNode{" +
+               "storeNames=" + Arrays.toString(storeNames) +
+               ", storeBuilder=" + storeBuilder +
+               "} " + super.toString();
+    }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {

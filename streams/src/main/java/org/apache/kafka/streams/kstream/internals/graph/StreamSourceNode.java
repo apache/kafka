@@ -75,6 +75,15 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
+    public String toString() {
+        return "StreamSourceNode{" +
+               "topicNames=" + topicNames +
+               ", topicPattern=" + topicPattern +
+               ", consumedInternal=" + consumedInternal +
+               "} " + super.toString();
+    }
+
+    @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
         if (topicPattern != null) {

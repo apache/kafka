@@ -73,8 +73,18 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
+    public String toString() {
+        return "ProcessorNode{" +
+               "processorParameters=" + processorParameters +
+               ", parentNames=" + parentNames +
+               "} " + super.toString();
+    }
+
+    @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
+        // merge operation passes in multiple parent names
+        // so if it's empty add the parent node name
         if (parentNames.isEmpty()) {
             parentNames.add(parentNode().nodeName());
         }

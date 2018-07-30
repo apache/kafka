@@ -24,6 +24,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Arrays;
+
 public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
 
     private final MaterializedInternal<K, V, S> materializedInternal;
@@ -42,6 +44,14 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
         this.storeNames = storeNames != null ? storeNames : new String[]{};
     }
 
+    @Override
+    public String toString() {
+        return "TableProcessorNode{" +
+               "materializedInternal=" + materializedInternal +
+               ", processorParameters=" + processorParameters +
+               ", storeNames=" + Arrays.toString(storeNames) +
+               "} " + super.toString();
+    }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {

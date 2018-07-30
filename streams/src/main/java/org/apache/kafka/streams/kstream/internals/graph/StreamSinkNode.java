@@ -41,6 +41,15 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
         this.producedInternal = producedInternal;
     }
 
+
+    @Override
+    public String toString() {
+        return "StreamSinkNode{" +
+               "topicNameExtractor=" + topicNameExtractor +
+               ", producedInternal=" + producedInternal +
+               "} " + super.toString();
+    }
+
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final Serializer<K> keySerializer = producedInternal.keySerde() == null ? null : producedInternal.keySerde().serializer();

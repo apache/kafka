@@ -20,6 +20,8 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Arrays;
+
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
@@ -41,6 +43,15 @@ public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
         this.storeNames = storeNames;
         this.processorParameters = processorParameters;
         this.otherJoinSideNodeName = otherJoinSideNodeName;
+    }
+
+    @Override
+    public String toString() {
+        return "StreamTableJoinNode{" +
+               "storeNames=" + Arrays.toString(storeNames) +
+               ", processorParameters=" + processorParameters +
+               ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
+               "} " + super.toString();
     }
 
     @Override

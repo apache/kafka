@@ -58,6 +58,10 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
         return new ChangedDeserializer<>(valueDeserializer);
     }
 
+    @Override
+    public String toString() {
+        return "GroupedTableOperationRepartitionNode{} " + super.toString();
+    }
 
     @Override
     public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
