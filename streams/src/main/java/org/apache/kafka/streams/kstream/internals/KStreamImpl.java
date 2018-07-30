@@ -171,17 +171,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = builder.newProcessorName(KEY_SELECT_NAME);
 
 
-        KStreamMap kStreamMap = new KStreamMap<>(
+        KStreamMap<K, V, K1, V> kStreamMap = new KStreamMap<>(
             (KeyValueMapper<K, V, KeyValue<K1, V>>) (key, value) -> new KeyValue<>(mapper.apply(key, value), value));
 
 
-        ProcessorParameters<K1, V> processorParameters = new ProcessorParameters<>(kStreamMap, name);
+        ProcessorParameters<K, V> processorParameters = new ProcessorParameters<K, V>(kStreamMap, name);
 
         builder.internalTopologyBuilder.addProcessor(name, kStreamMap, this.name);
 
-        return  new StatelessProcessorNode<>(name,
-                                             processorParameters,
-                                             repartitionRequired);
+        return new StatelessProcessorNode<>(
+            name,
+            processorParameters,
+            repartitionRequired
+        );
 
     }
 

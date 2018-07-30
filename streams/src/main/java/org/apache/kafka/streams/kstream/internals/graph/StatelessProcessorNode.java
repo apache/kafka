@@ -41,19 +41,18 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
 
     public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired) {
+                                  final ProcessorParameters<K, V> processorParameters,
+                                  final boolean repartitionRequired) {
 
-        super(nodeName,
-              repartitionRequired);
+        super(nodeName, repartitionRequired);
 
         this.processorParameters = processorParameters;
     }
 
     public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired,
-                           final List<String> multipleParentNames) {
+                                  final ProcessorParameters<K, V> processorParameters,
+                                  final boolean repartitionRequired,
+                                  final List<String> multipleParentNames) {
 
         this(nodeName, processorParameters, repartitionRequired);
 
