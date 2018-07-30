@@ -452,7 +452,7 @@
                  and producers are configured with <code class="docutils literal"><span class="pre">retries=Integer.MAX_VALUE</span></code>, <code class="docutils literal"><span class="pre">enable.idempotence=true</span></code>,
                  and <code class="docutils literal"><span class="pre">max.in.flight.requests.per.connection=1</span></code> per default.
                  Note that by default exactly-once processing requires a cluster of at least three brokers what is the recommended setting for production.
-                 For development you can change this, by adjusting broker setting <code class="docutils literal"><span class="pre">transaction.state.log.replication.factor</span></code> to the number of broker you want to use.
+                 For development you can change this, by adjusting broker setting <code class="docutils literal"><span class="pre">transaction.state.log.replication.factor</span></code> and <code class="docutils literal"><span class="pre">transaction.state.log.min.isr</span></code> to the number of broker you want to use.
                  For more details see <a href="../core-concepts#streams_processing_guarantee">Processing Guarantees</a>.
             </div></blockquote>
         </div>
