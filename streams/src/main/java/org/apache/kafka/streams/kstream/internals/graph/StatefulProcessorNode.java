@@ -17,9 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
@@ -27,17 +28,19 @@ import java.util.Arrays;
 public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<? extends StateStore> storeBuilder;
 
 
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters processorParameters,
                                  final String[] storeNames,
-                                 final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
+                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
                                  final boolean repartitionRequired) {
-        super(nodeName,
-              processorParameters,
-              repartitionRequired);
+        super(
+            nodeName,
+            processorParameters,
+            repartitionRequired
+        );
 
         this.storeNames = storeNames;
         this.storeBuilder = materializedKTableStoreBuilder;
@@ -78,7 +81,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
         private String nodeName;
         private boolean repartitionRequired;
         private String[] storeNames;
-        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+        private StoreBuilder<? extends StateStore> storeBuilder;
 
         private StatefulProcessorNodeBuilder() {
         }
@@ -103,17 +106,19 @@ public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
             return this;
         }
 
-        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<? extends StateStore> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
         public StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(nodeName,
-                                               processorSupplier,
-                                               storeNames,
-                                               storeBuilder,
-                                               repartitionRequired);
+            return new StatefulProcessorNode<>(
+                nodeName,
+                processorSupplier,
+                storeNames,
+                storeBuilder,
+                repartitionRequired
+            );
 
         }
     }
