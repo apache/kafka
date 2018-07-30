@@ -67,7 +67,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
+        final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
                                                                          topics,
                                                                          consumed);
         addGraphNode(root, streamSourceNode);
@@ -79,7 +79,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
+        final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
                                                                                 topicPattern,
                                                                                 consumed);
 
@@ -104,9 +104,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeBuilder.name());
         final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        TableSourceNode.TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
+        final TableSourceNode.TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
 
-        TableSourceNode<K, V, S> tableSourceNode = tableSourceNodeBuilder.withNodeName(name)
+        final TableSourceNode<K, V, S> tableSourceNode = tableSourceNodeBuilder.withNodeName(name)
                                                                                .withSourceName(source)
                                                                                .withStoreBuilder(storeBuilder)
                                                                                .withConsumedInternal(consumed)
@@ -142,7 +142,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final ProcessorParameters processorParameters = new ProcessorParameters(tableSource, processorName);
 
-        TableSourceNode<K, V, S> tableSourceNode = TableSourceNode.tableSourceNodeBuilder().withStoreBuilder(storeBuilder)
+        final TableSourceNode<K, V, S> tableSourceNode = TableSourceNode.tableSourceNodeBuilder().withStoreBuilder(storeBuilder)
                                                                                                     .withSourceName(sourceName)
                                                                                                     .withConsumedInternal(consumed)
                                                                                                     .withTopic(topic)
