@@ -217,7 +217,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
     members.put(member.memberId, member)
-    member.supportedProtocols.foreach(p => supportedProtocols(p._1) += 1)
+    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.awaitingJoinCallback = callback
     if (member.awaitingJoinCallback != null)
       awaitingJoinCallbackMembers += 1;
@@ -226,7 +226,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def remove(memberId: String) {
     val member = members.remove(memberId)
     if (member.nonEmpty) {
-      member.get.supportedProtocols.foreach(p => supportedProtocols(p._1) -= 1)
+      member.get.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
       if (member.get.awaitingJoinCallback != null)
         awaitingJoinCallbackMembers -= 1
     }
@@ -295,8 +295,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
                    callback: JoinCallback) = {
-    member.supportedProtocols.foreach(p => supportedProtocols(p._1) -= 1)
-    protocols.foreach(p => supportedProtocols(p._1) += 1)
+    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
+    protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.supportedProtocols = protocols
 
     if (callback != null && member.awaitingJoinCallback == null) {
