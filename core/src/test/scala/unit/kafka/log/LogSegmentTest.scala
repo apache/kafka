@@ -40,12 +40,7 @@ class LogSegmentTest {
                     indexIntervalBytes: Int = 10,
                     maxSegmentMs: Int = Int.MaxValue,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(Log.logFile(logDir, offset))
-    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
-    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = maxSegmentMs,
-      maxSegmentBytes = Int.MaxValue, time)
+    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, maxSegmentMs, time)
     segments += seg
     seg
   }

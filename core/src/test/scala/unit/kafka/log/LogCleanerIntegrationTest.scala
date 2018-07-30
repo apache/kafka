@@ -17,9 +17,11 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{File, PrintWriter}
 import java.util.Properties
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_11_0_IV0
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
 import kafka.server.KafkaConfig
@@ -35,6 +37,7 @@ import org.junit.runners.Parameterized.Parameters
 
 import scala.Seq
 import scala.collection._
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.util.Random
 
 /**
@@ -226,6 +229,60 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
 
     checkLogAfterAppendingDups(log, startSize, appends)
+  }
+
+  @Test(timeout = 60000)
+  def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics() {
+    val largeMessageKey = 20
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val maxMessageSize = largeMessageSet.sizeInBytes
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
+
+    def breakPartitionLog(tp: TopicPartition): Unit = {
+      val log = cleaner.logs.get(tp)
+      writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+
+      val partitionFile = log.logSegments.last.log.file()
+      val writer = new PrintWriter(partitionFile)
+      writer.write("jogeajgoea")
+      writer.close()
+
+      writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+    }
+
+    def getGauge[T](metricName: String, metricScope: String): Gauge[T] = {
+      Metrics.defaultRegistry.allMetrics.asScala
+        .filterKeys(k => {
+          k.getName.endsWith(metricName) && k.getScope.endsWith(metricScope)
+        })
+        .headOption
+        .getOrElse { fail(s"Unable to find metric $metricName") }
+        .asInstanceOf[(Any, Gauge[Any])]
+        ._2
+        .asInstanceOf[Gauge[T]]
+    }
+
+    breakPartitionLog(topicPartitions(0))
+    breakPartitionLog(topicPartitions(1))
+
+    cleaner.startup()
+
+    val log = cleaner.logs.get(topicPartitions(0))
+    val log2 = cleaner.logs.get(topicPartitions(1))
+    val uncleanableDirectory = log.dir.getParent
+    val uncleanablePartitionsCountGauge = getGauge[Int]("uncleanable-partitions-count", uncleanableDirectory)
+    val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
+
+    TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 55000L)
+    val expectedTotalUncleanableBytes = LogCleaner.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
+      LogCleaner.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
+    TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
+      s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
+
+    val uncleanablePartitions = cleaner.cleanerManager.uncleanablePartitions(uncleanableDirectory)
+    assertTrue(uncleanablePartitions.contains(topicPartitions(0)))
+    assertTrue(uncleanablePartitions.contains(topicPartitions(1)))
+    assertFalse(uncleanablePartitions.contains(topicPartitions(2)))
   }
 
   @Test
