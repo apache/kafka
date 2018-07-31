@@ -25,17 +25,17 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
+public class StatefulStatelessProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final String[] storeNames;
     private final StoreBuilder<? extends StateStore> storeBuilder;
 
 
-    public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters processorParameters,
-                                 final String[] storeNames,
-                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
-                                 final boolean repartitionRequired) {
+    public StatefulStatelessProcessorNode(final String nodeName,
+                                          final ProcessorParameters processorParameters,
+                                          final String[] storeNames,
+                                          final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
+                                          final boolean repartitionRequired) {
         super(
             nodeName,
             processorParameters,
@@ -111,8 +111,8 @@ public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
             return this;
         }
 
-        public StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(
+        public StatefulStatelessProcessorNode<K, V> build() {
+            return new StatefulStatelessProcessorNode<>(
                 nodeName,
                 processorSupplier,
                 storeNames,

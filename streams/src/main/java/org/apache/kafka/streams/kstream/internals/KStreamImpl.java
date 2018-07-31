@@ -37,9 +37,9 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
-import org.apache.kafka.streams.kstream.internals.graph.ProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulStatelessProcessorNode;
+import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
@@ -129,9 +129,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFilter<>(predicate, false), name);
-        final ProcessorNode<K, V> filterProcessorNode = new ProcessorNode<>(name,
-                                                                      processorParameters,
-                                                                      repartitionRequired);
+        final StatelessProcessorNode<K, V> filterProcessorNode = new StatelessProcessorNode<>(name,
+                                                                                              processorParameters,
+                                                                                              repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, filterProcessorNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, filterProcessorNode);
@@ -145,9 +145,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFilter<>(predicate, true), name);
 
 
-        final ProcessorNode<K, V> filterNotProcessorNode = new ProcessorNode<>(name,
-                                                                         processorParameters,
-                                                                         repartitionRequired);
+        final StatelessProcessorNode<K, V> filterNotProcessorNode = new StatelessProcessorNode<>(name,
+                                                                                                 processorParameters,
+                                                                                                 repartitionRequired);
 
         builder.addGraphNode(this.streamsGraphNode, filterNotProcessorNode);
 
@@ -159,7 +159,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
 
 
-        final  ProcessorNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper);
+        final StatelessProcessorNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper);
 
         selectKeyProcessorNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, selectKeyProcessorNode);
@@ -167,7 +167,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
 
-    private <K1> ProcessorNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
+    private <K1> StatelessProcessorNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         final String name = builder.newProcessorName(KEY_SELECT_NAME);
 
 
@@ -177,7 +177,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(kStreamMap, name);
 
-        return new ProcessorNode<>(
+        return new StatelessProcessorNode<>(
             name,
             processorParameters,
             repartitionRequired
@@ -192,9 +192,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamMap<>(mapper), name);
 
-        final ProcessorNode<K1, V1> mapProcessorNode = new ProcessorNode<>(name,
-                                                                     processorParameters,
-                                                                     true);
+        final StatelessProcessorNode<K1, V1> mapProcessorNode = new StatelessProcessorNode<>(name,
+                                                                                             processorParameters,
+                                                                                             true);
 
         mapProcessorNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, mapProcessorNode);
@@ -216,9 +216,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamMapValues<>(mapper), name);
 
 
-        final ProcessorNode<K, V> mapValuesProcessorNode = new ProcessorNode<>(name,
-                                                                         processorParameters,
-                                                                         repartitionRequired);
+        final StatelessProcessorNode<K, V> mapValuesProcessorNode = new StatelessProcessorNode<>(name,
+                                                                                                 processorParameters,
+                                                                                                 repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, mapValuesProcessorNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, mapValuesProcessorNode);
@@ -233,9 +233,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(printedInternal.build(this.name), name);
 
 
-        final ProcessorNode<K, V> printNode = new ProcessorNode<>(name,
-                                                            processorParameters,
-                                                            false);
+        final StatelessProcessorNode<K, V> printNode = new StatelessProcessorNode<>(name,
+                                                                                    processorParameters,
+                                                                                    false);
         builder.addGraphNode(this.streamsGraphNode, printNode);
     }
 
@@ -248,9 +248,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
 
 
-        final ProcessorNode<K1, V1> flatMapNode = new ProcessorNode<>(name,
-                                                                processorParameters,
-                                                                true);
+        final StatelessProcessorNode<K1, V1> flatMapNode = new StatelessProcessorNode<>(name,
+                                                                                        processorParameters,
+                                                                                        true);
         flatMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, flatMapNode);
@@ -271,9 +271,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFlatMapValues<>(mapper), name);
 
 
-        final ProcessorNode<K, VR> flatMapValuesNode = new ProcessorNode<>(name,
-                                                                     processorParameters,
-                                                                     repartitionRequired);
+        final StatelessProcessorNode<K, VR> flatMapValuesNode = new StatelessProcessorNode<>(name,
+                                                                                             processorParameters,
+                                                                                             repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, flatMapValuesNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, flatMapValuesNode);
@@ -299,9 +299,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamBranch(predicates.clone(), childNames), branchName);
 
-        final ProcessorNode<K, V> branchNode = new ProcessorNode<>(branchName,
-                                                             processorParameters,
-                                                             false);
+        final StatelessProcessorNode<K, V> branchNode = new StatelessProcessorNode<>(branchName,
+                                                                                     processorParameters,
+                                                                                     false);
         builder.addGraphNode(this.streamsGraphNode, branchNode);
 
         final KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
@@ -309,9 +309,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         for (int i = 0; i < predicates.length; i++) {
             final ProcessorParameters innerProcessorParameters = new ProcessorParameters<>(new KStreamPassThrough<K, V>(), childNames[i]);
 
-            final ProcessorNode<K, V> branchChildNode = new ProcessorNode<>(childNames[i],
-                                                                      innerProcessorParameters,
-                                                                      repartitionRequired);
+            final StatelessProcessorNode<K, V> branchChildNode = new StatelessProcessorNode<>(childNames[i],
+                                                                                              innerProcessorParameters,
+                                                                                              repartitionRequired);
 
             builder.addGraphNode(branchNode, branchChildNode);
             branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired, branchChildNode);
@@ -340,10 +340,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamPassThrough<>(), name);
 
 
-        final ProcessorNode<K, V> mergeNode = new ProcessorNode<>(name,
-                                                            processorParameters,
-                                                            requireRepartitioning,
-                                                            Arrays.asList(parentNames));
+        final StatelessProcessorNode<K, V> mergeNode = new StatelessProcessorNode<>(name,
+                                                                                    processorParameters,
+                                                                                    requireRepartitioning,
+                                                                                    Arrays.asList(parentNames));
 
         builder.addGraphNode(this.streamsGraphNode, mergeNode);
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning, mergeNode);
@@ -375,9 +375,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         );
 
 
-        final ProcessorNode<K, V> foreachNode = new ProcessorNode<>(name,
-                                                              processorParameters,
-                                                              repartitionRequired);
+        final StatelessProcessorNode<K, V> foreachNode = new StatelessProcessorNode<>(name,
+                                                                                      processorParameters,
+                                                                                      repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, foreachNode);
     }
 
@@ -391,7 +391,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             name
         );
 
-        final ProcessorNode<K, V> peekNode = new ProcessorNode<>(
+        final StatelessProcessorNode<K, V> peekNode = new StatelessProcessorNode<>(
             name,
             processorParameters,
             repartitionRequired
@@ -453,11 +453,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamTransform<>(transformerSupplier), name);
 
 
-        final StatefulProcessorNode<K1, V1> transformNode = new StatefulProcessorNode<>(name,
-                                                                                  processorParameters,
-                                                                                  stateStoreNames,
-                                                                                  null,
-                                                                                  true);
+        final StatefulStatelessProcessorNode<K1, V1> transformNode = new StatefulStatelessProcessorNode<>(name,
+                                                                                                          processorParameters,
+                                                                                                          stateStoreNames,
+                                                                                                          null,
+                                                                                                          true);
         transformNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, transformNode);
 
@@ -488,11 +488,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamTransformValues<>(valueTransformerWithKeySupplier), name);
 
-        final StatefulProcessorNode<K, VR> transformNode = new StatefulProcessorNode<>(name,
-                                                                                 processorParameters,
-                                                                                 stateStoreNames,
-                                                                                 null,
-                                                                                 repartitionRequired);
+        final StatefulStatelessProcessorNode<K, VR> transformNode = new StatefulStatelessProcessorNode<>(name,
+                                                                                                         processorParameters,
+                                                                                                         stateStoreNames,
+                                                                                                         null,
+                                                                                                         repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, transformNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, transformNode);
@@ -506,11 +506,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final String name = builder.newProcessorName(PROCESSOR_NAME);
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StatefulProcessorNode<K, V> processNode = new StatefulProcessorNode<>(name,
-                                                                                processorParameters,
-                                                                                stateStoreNames,
-                                                                                null,
-                                                                                repartitionRequired);
+        final StatefulStatelessProcessorNode<K, V> processNode = new StatefulStatelessProcessorNode<>(name,
+                                                                                                      processorParameters,
+                                                                                                      stateStoreNames,
+                                                                                                      null,
+                                                                                                      repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, processNode);
     }
 
@@ -788,7 +788,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
-        final ProcessorNode<K, V> selectKeyMapNode = internalSelectKey(selector);
+        final StatelessProcessorNode<K, V> selectKeyMapNode = internalSelectKey(selector);
         selectKeyMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
@@ -882,7 +882,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             );
 
             final ProcessorParameters thisWindowStreamProcessorParams = new ProcessorParameters(thisWindowedStream, thisWindowStreamName);
-            final ProcessorNode<K1, V1> thisWindowedStreamsNode = new ProcessorNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
+            final StatelessProcessorNode<K1, V1> thisWindowedStreamsNode = new StatelessProcessorNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
             builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
 
             final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(
@@ -892,7 +892,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             );
 
             final ProcessorParameters otherWindowStreamProcessorParams = new ProcessorParameters(otherWindowedStream, otherWindowStreamName);
-            final ProcessorNode<K1, V2> otherWindowedStreamsNode = new ProcessorNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
+            final StatelessProcessorNode<K1, V2> otherWindowedStreamsNode = new StatelessProcessorNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
             builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
 
             final KStreamKStreamJoin<K1, R, ? super V1, ? super V2> joinThis = new KStreamKStreamJoin<>(

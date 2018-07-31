@@ -27,7 +27,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulStatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -82,9 +82,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.streamsGraphNode, repartitionNode);
 
-        StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
-                                                                               funcName,
-                                                                               aggregateSupplier);
+        StatefulStatelessProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
+                                                                                        funcName,
+                                                                                        aggregateSupplier);
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionNode, statefulProcessorNode);
@@ -100,13 +100,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @SuppressWarnings("unchecked")
-    private <T> StatefulProcessorNode getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
-                                                               final String functionName,
-                                                               final ProcessorSupplier aggregateSupplier) {
+    private <T> StatefulStatelessProcessorNode getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
+                                                                        final String functionName,
+                                                                        final ProcessorSupplier aggregateSupplier) {
 
         ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
 
-        return StatefulProcessorNode.statefulProcessorNodeBuilder()
+        return StatefulStatelessProcessorNode.statefulProcessorNodeBuilder()
             .withNodeName(functionName)
             .withProcessorParameters(aggregateFunctionProcessorParams)
             .withStoreBuilder(new KeyValueStoreMaterializer(materialized).materialize()).build();

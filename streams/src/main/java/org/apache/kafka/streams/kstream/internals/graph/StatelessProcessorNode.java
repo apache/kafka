@@ -27,7 +27,7 @@ import java.util.List;
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  */
-public class ProcessorNode<K, V> extends StreamsGraphNode {
+public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
@@ -39,17 +39,17 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
     private List<String> parentNames = new ArrayList<>();
 
 
-    public ProcessorNode(final String nodeName,
-                         final ProcessorParameters processorParameters,
-                         final boolean repartitionRequired) {
+    public StatelessProcessorNode(final String nodeName,
+                                  final ProcessorParameters processorParameters,
+                                  final boolean repartitionRequired) {
 
         super(nodeName, repartitionRequired);
 
         this.processorParameters = processorParameters;
     }
 
-    public ProcessorNode(final String nodeName,
-                         final ProcessorParameters processorParameters) {
+    public StatelessProcessorNode(final String nodeName,
+                                  final ProcessorParameters processorParameters) {
         this(
             nodeName,
             processorParameters,
@@ -57,10 +57,10 @@ public class ProcessorNode<K, V> extends StreamsGraphNode {
         );
     }
 
-    public ProcessorNode(final String nodeName,
-                         final ProcessorParameters processorParameters,
-                         final boolean repartitionRequired,
-                         final List<String> parentNames) {
+    public StatelessProcessorNode(final String nodeName,
+                                  final ProcessorParameters processorParameters,
+                                  final boolean repartitionRequired,
+                                  final List<String> parentNames) {
 
         this(
             nodeName,
