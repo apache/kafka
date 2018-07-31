@@ -370,6 +370,15 @@
       <allow pkg="org.powermock" />
     </subpackage>
 
+    <subpackage name="kafka">
+      <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <!-- for tests -->
+      <allow pkg="org.easymock" />
+      <allow pkg="org.powermock" />
+    </subpackage>
+
+
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
