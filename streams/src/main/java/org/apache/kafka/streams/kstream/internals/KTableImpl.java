@@ -529,13 +529,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorNode<K1, V1> graphNode = new ProcessorNode<>(
+        final ProcessorNode<K1, V1> groupByMapNode = new ProcessorNode<>(
             selectName,
             processorParameters,
             false
         );
 
-        builder.addGraphNode(this.streamsGraphNode, graphNode);
+        builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
         this.enableSendingOldValues();
         final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
@@ -545,7 +545,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             this.name,
             serializedInternal.keySerde(),
             serializedInternal.valueSerde(),
-            graphNode
+            groupByMapNode
         );
     }
 

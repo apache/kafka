@@ -31,8 +31,8 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
     private final ProducedInternal<K, V> producedInternal;
 
     public StreamSinkNode(final String nodeName,
-                   final TopicNameExtractor<K, V> topicNameExtractor,
-                   final ProducedInternal<K, V> producedInternal) {
+                          final TopicNameExtractor<K, V> topicNameExtractor,
+                          final ProducedInternal<K, V> producedInternal) {
 
         super(nodeName,
               false);

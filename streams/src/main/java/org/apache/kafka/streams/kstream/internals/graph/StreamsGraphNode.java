@@ -21,13 +21,13 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Set;
 
 public abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
-    private final LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
     private boolean keyChangingOperation;
@@ -49,7 +49,7 @@ public abstract class StreamsGraphNode {
         this.parentNode = parentNode;
     }
 
-    public Set<StreamsGraphNode> children() {
+    public Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 

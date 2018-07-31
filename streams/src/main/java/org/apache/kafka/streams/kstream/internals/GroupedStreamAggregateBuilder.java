@@ -79,7 +79,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (!sourceName.equals(this.name)) {
             StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
-            builder.addGraphNode(this.streamsGraphNode, repartitionNode);
+            builder.addGraphNode(parentNode, repartitionNode);
             parentNode = repartitionNode;
         }
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();

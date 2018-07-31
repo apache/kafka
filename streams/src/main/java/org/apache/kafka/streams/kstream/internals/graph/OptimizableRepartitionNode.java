@@ -58,7 +58,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
 
     @Override
     public String toString() {
-        return "OptimizableRepartitionNode{} " + super.toString();
+        return "OptimizableRepartitionNode{ " + super.toString() + " }";
     }
 
     @Override

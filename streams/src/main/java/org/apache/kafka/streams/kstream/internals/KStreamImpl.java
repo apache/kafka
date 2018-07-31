@@ -506,12 +506,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final String name = builder.newProcessorName(PROCESSOR_NAME);
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StatefulProcessorNode<K, V> transformNode = new StatefulProcessorNode<>(name,
+        final StatefulProcessorNode<K, V> processNode = new StatefulProcessorNode<>(name,
                                                                                 processorParameters,
                                                                                 stateStoreNames,
                                                                                 null,
                                                                                 repartitionRequired);
-        builder.addGraphNode(this.streamsGraphNode, transformNode);
+        builder.addGraphNode(this.streamsGraphNode, processNode);
     }
 
     @Override
@@ -788,18 +788,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
-        final ProcessorNode<K, V> graphNode = internalSelectKey(selector);
-        graphNode.keyChangingOperation(true);
+        final ProcessorNode<K, V> selectKeyMapNode = internalSelectKey(selector);
+        selectKeyMapNode.keyChangingOperation(true);
 
-        builder.addGraphNode(this.streamsGraphNode, graphNode);
+        builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
         return new KGroupedStreamImpl<>(
             builder,
-            graphNode.nodeName(),
+            selectKeyMapNode.nodeName(),
             sourceNodes,
             serializedInternal.keySerde(),
             serializedInternal.valueSerde(),
             true,
-            graphNode
+            selectKeyMapNode
         );
 
     }
@@ -843,14 +843,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         private final boolean leftOuter;
         private final boolean rightOuter;
-        private final StreamsGraphNode graphNode;
+        private final StreamsGraphNode parentGraphNode;
 
         KStreamImplJoin(final boolean leftOuter,
                         final boolean rightOuter,
-                        final StreamsGraphNode graphNode) {
+                        final StreamsGraphNode parentGraphNode) {
             this.leftOuter = leftOuter;
             this.rightOuter = rightOuter;
-            this.graphNode = graphNode;
+            this.parentGraphNode = parentGraphNode;
         }
 
         @SuppressWarnings("unchecked")
@@ -931,7 +931,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             final StreamsGraphNode joinGraphNode = joinBuilder.build();
 
-            builder.addGraphNode(this.graphNode, joinGraphNode);
+            builder.addGraphNode(this.parentGraphNode, joinGraphNode);
 
             final Set<String> allSourceNodes = new HashSet<>(((AbstractStream<K>) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
