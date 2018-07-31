@@ -53,8 +53,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ConnectStressWorker implements TaskWorker {
-    private static final Logger log = LoggerFactory.getLogger(ConnectStressWorker.class);
+public class ConnectionStressWorker implements TaskWorker {
+    private static final Logger log = LoggerFactory.getLogger(ConnectionStressWorker.class);
 
     private static final int THROTTLE_PERIOD_MS = 100;
 
@@ -62,7 +62,7 @@ public class ConnectStressWorker implements TaskWorker {
 
     private final String id;
 
-    private final ConnectStressSpec spec;
+    private final ConnectionStressSpec spec;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -82,7 +82,7 @@ public class ConnectStressWorker implements TaskWorker {
 
     private ExecutorService workerExecutor;
 
-    public ConnectStressWorker(String id, ConnectStressSpec spec) {
+    public ConnectionStressWorker(String id, ConnectionStressSpec spec) {
         this.id = id;
         this.spec = spec;
     }
@@ -91,9 +91,9 @@ public class ConnectStressWorker implements TaskWorker {
     public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
-            throw new IllegalStateException("ConnectStressWorker is already running.");
+            throw new IllegalStateException("ConnectionStressWorker is already running.");
         }
-        log.info("{}: Activating ConnectStressWorker with {}", id, spec);
+        log.info("{}: Activating ConnectionStressWorker with {}", id, spec);
         this.doneFuture = doneFuture;
         this.status = status;
         this.totalConnections = 0;
@@ -133,7 +133,7 @@ public class ConnectStressWorker implements TaskWorker {
                     throttle.increment();
                     long lastNow = throttle.lastNow();
                     boolean success = attemptConnection(conf, updater);
-                    synchronized (ConnectStressWorker.this) {
+                    synchronized (ConnectionStressWorker.this) {
                         totalConnections++;
                         if (!success) {
                             totalFailedConnections++;
@@ -164,7 +164,7 @@ public class ConnectStressWorker implements TaskWorker {
                             metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
                             try (NetworkClient client = new NetworkClient(selector,
                                     updater,
-                                    "ConnectStressWorker",
+                                    "ConnectionStressWorker",
                                     1,
                                     1000,
                                     1000,
@@ -220,9 +220,9 @@ public class ConnectStressWorker implements TaskWorker {
     @Override
     public void stop(Platform platform) throws Exception {
         if (!running.compareAndSet(true, false)) {
-            throw new IllegalStateException("ConnectStressWorker is not running.");
+            throw new IllegalStateException("ConnectionStressWorker is not running.");
         }
-        log.info("{}: Deactivating ConnectStressWorker.", id);
+        log.info("{}: Deactivating ConnectionStressWorker.", id);
         doneFuture.complete("");
         workerExecutor.shutdownNow();
         workerExecutor.awaitTermination(1, TimeUnit.DAYS);

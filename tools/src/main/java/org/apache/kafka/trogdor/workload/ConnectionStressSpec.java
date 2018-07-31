@@ -32,7 +32,7 @@ import java.util.Set;
  * The specification for a task which connects and disconnects many times a
  * second to stress the broker.
  */
-public class ConnectStressSpec extends TaskSpec {
+public class ConnectionStressSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final Map<String, String> commonClientConf;
@@ -40,7 +40,7 @@ public class ConnectStressSpec extends TaskSpec {
     private final int numThreads;
 
     @JsonCreator
-    public ConnectStressSpec(@JsonProperty("startMs") long startMs,
+    public ConnectionStressSpec(@JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs,
             @JsonProperty("clientNode") String clientNode,
             @JsonProperty("bootstrapServers") String bootstrapServers,
@@ -91,6 +91,6 @@ public class ConnectStressSpec extends TaskSpec {
 
     @Override
     public TaskWorker newTaskWorker(String id) {
-        return new ConnectStressWorker(id, this);
+        return new ConnectionStressWorker(id, this);
     }
 }
