@@ -58,7 +58,7 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
         final boolean shouldMaterialize = materializedInternal != null && materializedInternal.isQueryable();
         final String processorName = processorParameters.processorName();
 
-        topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNode().nodeName());
+        topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
         if (storeNames.length > 0) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);

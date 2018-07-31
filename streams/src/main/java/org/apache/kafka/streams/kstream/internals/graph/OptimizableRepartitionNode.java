@@ -71,7 +71,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
         topologyBuilder.addProcessor(
             processorParameters.processorName(),
             processorParameters.processorSupplier(),
-            parentNode().nodeName()
+            parentNodeNames()
         );
 
         topologyBuilder.addSink(

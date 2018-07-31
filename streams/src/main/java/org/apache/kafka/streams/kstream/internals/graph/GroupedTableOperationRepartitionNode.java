@@ -88,7 +88,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             keySerializer,
             getValueSerializer(),
             null,
-            parentNode().nodeName()
+            parentNodeNames()
         );
 
         topologyBuilder.addSource(

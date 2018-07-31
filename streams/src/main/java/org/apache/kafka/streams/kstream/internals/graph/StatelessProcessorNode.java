@@ -19,9 +19,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Used to represent any type of stateless operation:
  *
@@ -30,14 +27,6 @@ import java.util.List;
 public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
-
-    // some processors need to register multiple parent names with
-    // the InternalTopologyBuilder KStream#merge for example.
-    // There is only one parent graph node but the name of each KStream merged needs
-    // to get registered with InternalStreamsBuilder
-
-    private List<String> parentNames = new ArrayList<>();
-
 
     public StatelessProcessorNode(final String nodeName,
                                   final ProcessorParameters processorParameters,
@@ -57,20 +46,6 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         );
     }
 
-    public StatelessProcessorNode(final String nodeName,
-                                  final ProcessorParameters processorParameters,
-                                  final boolean repartitionRequired,
-                                  final List<String> parentNames) {
-
-        this(
-            nodeName,
-            processorParameters,
-            repartitionRequired
-        );
-
-        this.parentNames = new ArrayList<>(parentNames);
-    }
-
     public ProcessorParameters processorParameters() {
         return processorParameters;
     }
@@ -79,18 +54,12 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     public String toString() {
         return "ProcessorNode{" +
                "processorParameters=" + processorParameters +
-               ", parentNames=" + parentNames +
                "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
-        // merge operation passes in multiple parent names
-        // so if it's empty add the parent node name
-        if (parentNames.isEmpty()) {
-            parentNames.add(parentNode().nodeName());
-        }
-        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNames.toArray(new String[]{}));
+        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
     }
 }

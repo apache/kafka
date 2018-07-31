@@ -25,22 +25,20 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class StatefulStatelessProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
+public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final String[] storeNames;
     private final StoreBuilder<? extends StateStore> storeBuilder;
 
 
-    public StatefulStatelessProcessorNode(final String nodeName,
-                                          final ProcessorParameters processorParameters,
-                                          final String[] storeNames,
-                                          final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
-                                          final boolean repartitionRequired) {
-        super(
-            nodeName,
+    public StatefulProcessorNode(final String nodeName,
+                                 final ProcessorParameters processorParameters,
+                                 final String[] storeNames,
+                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
+                                 final boolean repartitionRequired) {
+        super(nodeName,
             processorParameters,
-            repartitionRequired
-        );
+            repartitionRequired);
 
         this.storeNames = storeNames;
         this.storeBuilder = materializedKTableStoreBuilder;
@@ -60,7 +58,7 @@ public class StatefulStatelessProcessorNode<K, V> extends StatelessProcessorNode
         final String processorName = processorParameters().processorName();
         final ProcessorSupplier processorSupplier = processorParameters().processorSupplier();
 
-        topologyBuilder.addProcessor(processorName, processorSupplier, parentNode().nodeName());
+        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 
         if (storeNames != null && storeNames.length > 0) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
@@ -111,8 +109,8 @@ public class StatefulStatelessProcessorNode<K, V> extends StatelessProcessorNode
             return this;
         }
 
-        public StatefulStatelessProcessorNode<K, V> build() {
-            return new StatefulStatelessProcessorNode<>(
+        public StatefulProcessorNode<K, V> build() {
+            return new StatefulProcessorNode<>(
                 nodeName,
                 processorSupplier,
                 storeNames,

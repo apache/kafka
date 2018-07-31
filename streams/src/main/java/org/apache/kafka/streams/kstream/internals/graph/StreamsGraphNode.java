@@ -21,13 +21,14 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
 public abstract class StreamsGraphNode {
 
-    private StreamsGraphNode parentNode;
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final Collection<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
     private boolean keyChangingOperation;
@@ -41,12 +42,21 @@ public abstract class StreamsGraphNode {
         this.repartitionRequired = repartitionRequired;
     }
 
-    public StreamsGraphNode parentNode() {
-        return parentNode;
+    public Collection<StreamsGraphNode> parentNodes() {
+        return parentNodes;
     }
 
-    public void setParentNode(final StreamsGraphNode parentNode) {
-        this.parentNode = parentNode;
+    public String[] parentNodeNames() {
+        String[] parentNames = new String[parentNodes.size()];
+        int index = 0;
+        for (StreamsGraphNode parentNode : parentNodes) {
+            parentNames[index++] = parentNode.nodeName();
+        }
+        return parentNames;
+    }
+
+    public void addParentNode(final StreamsGraphNode parentNode) {
+        parentNodes.add(parentNode);
     }
 
     public Collection<StreamsGraphNode> children() {
@@ -55,7 +65,7 @@ public abstract class StreamsGraphNode {
 
     public void addChildNode(final StreamsGraphNode childNode) {
         this.childNodes.add(childNode);
-        childNode.setParentNode(this);
+        childNode.addParentNode(this);
     }
 
     public String nodeName() {
@@ -102,10 +112,10 @@ public abstract class StreamsGraphNode {
 
     @Override
     public String toString() {
-        String parentName = parentNode != null ? parentNode.nodeName : "null";
+        String[] parentNames = parentNodeNames();
         return "StreamsGraphNode{" +
                "nodeName='" + nodeName + '\'' +
                ", id=" + id +
-               " parentNode=" + parentName + '}';
+               " parentNodes=" + Arrays.toString(parentNames) + '}';
     }
 }
