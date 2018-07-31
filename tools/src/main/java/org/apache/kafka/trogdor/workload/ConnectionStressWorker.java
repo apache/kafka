@@ -131,19 +131,19 @@ public class ConnectionStressWorker implements TaskWorker {
                         break;
                     }
                     throttle.increment();
-                    long lastNow = throttle.lastNow();
+                    long lastTimeMs = throttle.lastTimeMs();
                     boolean success = attemptConnection(conf, updater);
                     synchronized (ConnectionStressWorker.this) {
                         totalConnections++;
                         if (!success) {
                             totalFailedConnections++;
                         }
-                        if (lastNow > nextReportTime) {
+                        if (lastTimeMs > nextReportTime) {
                             status.update(JsonUtil.JSON_SERDE.valueToTree(
                                 new StatusData(totalConnections,
                                     totalFailedConnections,
-                                    (totalConnections * 1000.0) / (lastNow - startTimeMs))));
-                            nextReportTime = lastNow + REPORT_INTERVAL_MS;
+                                    (totalConnections * 1000.0) / (lastTimeMs - startTimeMs))));
+                            nextReportTime = lastTimeMs + REPORT_INTERVAL_MS;
                         }
                     }
                 }
