@@ -68,8 +68,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
         final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
-                                                                         topics,
-                                                                         consumed);
+                                                                              topics,
+                                                                              consumed);
         addGraphNode(root, streamSourceNode);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
@@ -80,8 +80,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
         final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
-                                                                                topicPattern,
-                                                                                consumed);
+                                                                                      topicPattern,
+                                                                                      consumed);
 
         addGraphNode(root, streamPatternSourceNode);
 
@@ -97,7 +97,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                            final ConsumedInternal<K, V> consumed,
                                                            final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
 
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        final StoreBuilder<S> storeBuilder = (StoreBuilder<S>) new KeyValueStoreMaterializer<>(materialized).materialize();
 
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
@@ -129,8 +129,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     @SuppressWarnings("unchecked")
     public <K, V, S extends StateStore> GlobalKTable<K, V> globalTable(final String topic,
-                                                 final ConsumedInternal<K, V> consumed,
-                                                 final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                                                                       final ConsumedInternal<K, V> consumed,
+                                                                       final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         // explicitly disable logging for global stores
@@ -143,16 +143,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final ProcessorParameters processorParameters = new ProcessorParameters(tableSource, processorName);
 
         final TableSourceNode<K, V, S> tableSourceNode = TableSourceNode.tableSourceNodeBuilder().withStoreBuilder(storeBuilder)
-                                                                                                    .withSourceName(sourceName)
-                                                                                                    .withConsumedInternal(consumed)
-                                                                                                    .withTopic(topic)
-                                                                                                    .withProcessorParameters(processorParameters)
-                                                                                                    .isGlobalKTable(true)
-                                                                                                    .build();
+                                                                                                 .withSourceName(sourceName)
+                                                                                                 .withConsumedInternal(consumed)
+                                                                                                 .withTopic(topic)
+                                                                                                 .withProcessorParameters(processorParameters)
+                                                                                                 .isGlobalKTable(true)
+                                                                                                 .build();
 
         addGraphNode(root, tableSourceNode);
 
-        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
+        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeBuilder.name()), materialized.isQueryable());
     }
 
     @Override
@@ -212,7 +212,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
-        node.setInternalStreamsBuilder(this);
     }
 
     public void buildAndOptimizeTopology() {

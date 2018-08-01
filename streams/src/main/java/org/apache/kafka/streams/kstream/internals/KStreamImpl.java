@@ -431,7 +431,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @SuppressWarnings("unchecked")
-    private <KInner> void to(final TopicNameExtractor<K, V> topicExtractor, final ProducedInternal<K, V> produced) {
+    private void to(final TopicNameExtractor<K, V> topicExtractor, final ProducedInternal<K, V> produced) {
         final String name = builder.newProcessorName(SINK_NAME);
 
         final StreamSinkNode<K, V> sinkNode = new StreamSinkNode<>(
@@ -603,8 +603,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
 
-        return new KStreamImpl<>(builder, repartitionedSourceName, Collections
-            .singleton(repartitionedSourceName), false, optimizableRepartitionNode);
+        return new KStreamImpl<>(builder, repartitionedSourceName, Collections.singleton(repartitionedSourceName), false, optimizableRepartitionNode);
     }
 
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
@@ -620,10 +619,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String sourceName = builder.newProcessorName(SOURCE_NAME);
 
-        final Predicate<K1, V1> nullKeyPredicate = (k, v) -> k != null;
+        final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(
-            new KStreamFilter<>(nullKeyPredicate, false),
+            new KStreamFilter<>(notNullKeyPredicate, false),
             nullKeyFilterProcessorName
         );
 

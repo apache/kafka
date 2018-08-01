@@ -228,7 +228,7 @@ public class StandbyTaskTest {
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
-        InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
         builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
             .windowedBy(TimeWindows.of(60_000).until(120_000))
@@ -325,7 +325,7 @@ public class StandbyTaskTest {
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
-        InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
         builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
             .count(Materialized.as(storeName));

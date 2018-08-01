@@ -40,7 +40,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
                     final String sourceName,
                     final String topic,
                     final ConsumedInternal<K, V> consumedInternal,
-                    final StoreBuilder storeBuilder,
+                    final StoreBuilder<S> storeBuilder,
                     final ProcessorParameters<K, V> processorParameters,
                     final boolean isGlobalKTable) {
 
@@ -74,7 +74,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = getTopicNames().get(0);
+        final String topicName = getTopicNames().iterator().next();
 
         if (isGlobalKTable) {
             topologyBuilder.addGlobalStore((StoreBuilder<KeyValueStore>) storeBuilder,
@@ -107,7 +107,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         private String sourceName;
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
-        private StoreBuilder storeBuilder;
+        private StoreBuilder<S> storeBuilder;
         private ProcessorParameters<K, V> processorParameters;
         private boolean isGlobalKTable = false;
 
@@ -124,7 +124,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withStoreBuilder(final StoreBuilder storeBuilder) {
+        public TableSourceNodeBuilder<K, V, S> withStoreBuilder(final StoreBuilder<S> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }

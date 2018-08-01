@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -33,7 +32,6 @@ public abstract class StreamsGraphNode {
     private boolean repartitionRequired;
     private boolean keyChangingOperation;
     private Integer id;
-    private InternalStreamsBuilder internalStreamsBuilder;
     private boolean hasWrittenToTopology = false;
 
     public StreamsGraphNode(final String nodeName,
@@ -90,14 +88,6 @@ public abstract class StreamsGraphNode {
 
     public Integer id() {
         return this.id;
-    }
-
-    public void setInternalStreamsBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
-        this.internalStreamsBuilder = internalStreamsBuilder;
-    }
-
-    public InternalStreamsBuilder internalStreamsBuilder() {
-        return internalStreamsBuilder;
     }
 
     public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);

@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.regex.Pattern;
 
 public class StreamSourceNode<K, V> extends StreamsGraphNode {
@@ -54,7 +53,7 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public List<String> getTopicNames() {
+    public Collection<String> getTopicNames() {
         return new ArrayList<>(topicNames);
     }
 
