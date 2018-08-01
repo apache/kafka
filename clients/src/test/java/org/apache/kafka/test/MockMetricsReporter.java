@@ -50,6 +50,6 @@ public class MockMetricsReporter implements MetricsReporter {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);;
+        clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
     }
 }
