@@ -1679,7 +1679,7 @@ public class KafkaConsumerTest {
     }
 
     private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets) {
-        return listOffsetsResponse(offsets, Collections.<TopicPartition, Errors>emptyMap());
+        return listOffsetsResponse(offsets, Collections.emptyMap());
     }
 
     private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> partitionOffsets,
@@ -1818,7 +1818,7 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED);
 
-        return new KafkaConsumer<String, String>(
+        return new KafkaConsumer<>(
                 loggerFactory,
                 clientId,
                 consumerCoordinator,

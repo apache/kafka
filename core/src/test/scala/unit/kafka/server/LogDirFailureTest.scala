@@ -24,9 +24,8 @@ import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
-
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
@@ -47,8 +46,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private val partitionNum = 12
 
   this.logDirCount = 3
-  this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
-  this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
@@ -57,6 +54,16 @@ class LogDirFailureTest extends IntegrationTestHarness {
     super.setUp()
     createTopic(topic, partitionNum, serverCount)
   }
+
+  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+    TestUtils.createProducer(brokerList,
+      retries = 0,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(producerConfig))
+  }
+
 
   @Test
   def testIOExceptionDuringLogRoll() {
@@ -175,7 +182,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
           case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
           case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
         }
-      case e: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${e.toString}")
     }
 
     // Wait for producer to update metadata for the partition

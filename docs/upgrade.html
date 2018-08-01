@@ -30,6 +30,15 @@
         offset retention period (or the one set by broker) has passed since their last commit.</li>
     <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
         This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.</li>
+    <li>The default value for the producer's <code>retries</code> config was changed to <code>Integer.MAX_VALUE</code>, as we introduced <code>delivery.timeout.ms</code>
+        in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-91+Provide+Intuitive+User+Timeouts+in+The+Producer">KIP-91</a>,
+        which sets an upper bound on the total time between sending a record and receiving acknowledgement from the broker. By default,
+        the delivery timeout is set to 2 minutes.
+    </li>
+    <li>By default, MirrorMaker now overrides <code>delivery.timeout.ms</code> to <code>Integer.MAX_VALUE</code> when
+        configuring the producer. If you have overridden the value of <code>retries</code> in order to fail faster,
+        you will instead need to override <code>delivery.timeout.ms</code>.
+    </li>
 </ol>
 
 

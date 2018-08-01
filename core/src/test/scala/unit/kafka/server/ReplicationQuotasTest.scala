@@ -114,7 +114,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -203,14 +203,14 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val throttledTook = System.currentTimeMillis() - start
 
-    assertTrue((s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms"),
+    assertTrue(s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms",
       throttledTook > expectedDuration * 1000 * 0.9)
-    assertTrue((s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
+    assertTrue(s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms",
       throttledTook < expectedDuration * 1000 * 1.5)
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
