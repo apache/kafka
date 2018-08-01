@@ -289,9 +289,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             taskMetrics.taskEnforcedProcessSensor.record();
             waits = WAIT_ON_PARTIAL_INPUT;
             return true;
-        } else {
-            return false;
         }
+
+        return false;
     }
 
     /**
