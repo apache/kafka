@@ -31,8 +31,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -333,7 +333,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             new ProcessorParameters<>(kStreamMapValues, name)
         );
 
-        final StatelessProcessorNode<K, V> toStreamNode = new StatelessProcessorNode<>(
+        final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
             name,
             processorParameters,
             false
@@ -529,7 +529,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final StatelessProcessorNode<K1, V1> groupByMapNode = new StatelessProcessorNode<>(
+        final ProcessorGraphNode<K1, V1> groupByMapNode = new ProcessorGraphNode<>(
             selectName,
             processorParameters,
             false

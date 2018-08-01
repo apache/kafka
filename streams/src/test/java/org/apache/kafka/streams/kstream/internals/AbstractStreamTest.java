@@ -26,8 +26,8 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -104,9 +104,9 @@ public class AbstractStreamTest {
 
         KStream<K, V> randomFilter() {
             String name = builder.newProcessorName("RANDOM-FILTER-");
-            StatelessProcessorNode processorNode = new StatelessProcessorNode(name,
-                                                                              new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
-                                                                              false);
+            ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
+                                                                      new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
+                                                                      false);
             builder.addGraphNode(this.streamsGraphNode, processorNode);
             return new KStreamImpl<>(builder, name, sourceNodes, false, processorNode);
         }

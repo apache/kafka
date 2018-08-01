@@ -24,21 +24,21 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  */
-public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
+public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
-    public StatelessProcessorNode(final String nodeName,
-                                  final ProcessorParameters processorParameters,
-                                  final boolean repartitionRequired) {
+    public ProcessorGraphNode(final String nodeName,
+                              final ProcessorParameters<K, V> processorParameters,
+                              final boolean repartitionRequired) {
 
         super(nodeName, repartitionRequired);
 
         this.processorParameters = processorParameters;
     }
 
-    public StatelessProcessorNode(final String nodeName,
-                                  final ProcessorParameters processorParameters) {
+    public ProcessorGraphNode(final String nodeName,
+                              final ProcessorParameters<K, V> processorParameters) {
         this(
             nodeName,
             processorParameters,

@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
+public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
     private final StoreBuilder<? extends StateStore> storeBuilder;
