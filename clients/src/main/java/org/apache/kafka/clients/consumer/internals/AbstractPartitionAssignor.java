@@ -83,6 +83,10 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions, generation);
 
+        return getAssignments(rawAssignments);
+    }
+
+    protected Map<String, Assignment> getAssignments(Map<String, List<TopicPartition>> rawAssignments) {
         // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())

@@ -353,13 +353,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                                   "following sticky assignment generation " + consumerUserData.generation + ".");
                     } else if (consumerUserData.generation > existingRecord.generation) {
                         // same partition is assigned to two consumers in different rebalances.
-                        // the assignment being processed has higher generation that the one already processed, and takes priority
+                        // the assignment being processed has higher generation than the one already processed, and takes priority
                         updatePrevAssignment(prevAssignment, partition, existingRecord);
                         partitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
                     } else {
                         // else if (consumerUserData.generation < existingRecord.generation)
                         // if the same partition is assigned to two consumers in different rebalances and
-                        // the assignment being processed has lower generation that the one already processed,
+                        // the assignment being processed has lower generation than the one already processed,
                         // it is only considered for updating the previous assignment of the involved topic partition
                         updatePrevAssignment(prevAssignment, partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
                     }
@@ -384,6 +384,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     @Override
     public void onAssignment(Assignment assignment) {
         memberAssignment = assignment.partitions();
+        generation = deserializeTopicPartitionAssignment(assignment.userData()).generation;
     }
 
     @Override
@@ -398,6 +399,15 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     @Override
     public String name() {
         return "sticky";
+    }
+
+    @Override
+    protected Map<String, Assignment> getAssignments(Map<String, List<TopicPartition>> rawAssignments) {
+        Map<String, Assignment> assignments = new HashMap<>();
+        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
+            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue(),
+                    serializeTopicPartitionAssignment(new ConsumerUserData(assignmentEntry.getValue(), generation))));
+        return assignments;
     }
 
     public int generation() {

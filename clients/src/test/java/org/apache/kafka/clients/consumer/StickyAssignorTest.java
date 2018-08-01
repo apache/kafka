@@ -904,7 +904,7 @@ public class StickyAssignorTest {
     private static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
         Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupDataByTopic(partitions).entrySet()) {
+        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
             Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
             topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
