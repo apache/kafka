@@ -532,6 +532,7 @@ public class Worker {
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps);
+            reporter.metrics(errorHandlingMetrics);
             reporters.add(reporter);
         }
 
