@@ -53,6 +53,15 @@ public abstract class StreamsGraphNode {
         return parentNames;
     }
 
+    public boolean allParentsWrittenToTopology() {
+        for (StreamsGraphNode parentNode : parentNodes) {
+            if (!parentNode.hasWrittenToTopology()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public void addParentNode(final StreamsGraphNode parentNode) {
         parentNodes.add(parentNode);
     }

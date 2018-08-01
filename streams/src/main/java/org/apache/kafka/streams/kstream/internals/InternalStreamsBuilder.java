@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -210,6 +211,19 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         maybeAddNodeForOptimizationMetadata(child);
     }
 
+    void addGraphNode(Collection<StreamsGraphNode> parents, StreamsGraphNode child) {
+        Objects.requireNonNull(parents, "parent node can't be null");
+        Objects.requireNonNull(child, "child node can't be null");
+
+        if (parents.isEmpty()) {
+            throw new StreamsException("Parent node collection can't be empty");
+        }
+
+        for (StreamsGraphNode parent : parents) {
+            addGraphNode(parent, child);
+        }
+    }
+
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
     }
@@ -227,7 +241,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
             }
 
-            if (!streamGraphNode.hasWrittenToTopology()) {
+            if (streamGraphNode.allParentsWrittenToTopology() && !streamGraphNode.hasWrittenToTopology()) {
                 streamGraphNode.writeToTopology(internalTopologyBuilder);
                 streamGraphNode.setHasWrittenToTopology(true);
             }
