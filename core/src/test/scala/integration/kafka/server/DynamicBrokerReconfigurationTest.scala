@@ -736,6 +736,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer1 = ProducerBuilder().trustStoreProps(sslProperties1)
       .maxRetries(0)
       .requestTimeoutMs(1000)
+      .deliveryTimeoutMs(1000)
       .bootstrapServers(bootstrap)
       .build()
 
@@ -1369,15 +1370,18 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
+    private var _deliveryTimeoutMs = 30000
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
     def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
     def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
+    def deliveryTimeoutMs(timeoutMs: Int): ProducerBuilder = { _deliveryTimeoutMs= timeoutMs; this }
 
     override def build(): KafkaProducer[String, String] = {
       val producer = TestUtils.createProducer(bootstrapServers,
         acks = _acks,
         requestTimeoutMs = _requestTimeoutMs,
+        deliveryTimeoutMs = _deliveryTimeoutMs,
         retries = _retries,
         securityProtocol = _securityProtocol,
         trustStoreFile = Some(trustStoreFile1),

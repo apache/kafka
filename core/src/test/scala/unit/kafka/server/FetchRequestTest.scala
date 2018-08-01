@@ -263,7 +263,8 @@ class FetchRequestTest extends BaseRequestTest {
     // Increase linger so that we have control over the batches created
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
-      lingerMs = 300 * 1000)
+      lingerMs = 30 * 1000,
+      deliveryTimeoutMs = 60 * 1000)
 
     val topicConfig = Map(LogConfig.MessageFormatVersionProp -> KAFKA_0_11_0_IV2.version)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
