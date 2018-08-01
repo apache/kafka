@@ -45,16 +45,16 @@ public abstract class StreamsGraphNode {
     }
 
     public String[] parentNodeNames() {
-        String[] parentNames = new String[parentNodes.size()];
+        final String[] parentNames = new String[parentNodes.size()];
         int index = 0;
-        for (StreamsGraphNode parentNode : parentNodes) {
+        for (final StreamsGraphNode parentNode : parentNodes) {
             parentNames[index++] = parentNode.nodeName();
         }
         return parentNames;
     }
 
     public boolean allParentsWrittenToTopology() {
-        for (StreamsGraphNode parentNode : parentNodes) {
+        for (final StreamsGraphNode parentNode : parentNodes) {
             if (!parentNode.hasWrittenToTopology()) {
                 return false;
             }
