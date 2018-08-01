@@ -17,15 +17,13 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
-import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
-import kafka.utils.{MockTime, ReplicationUtils, TestUtils, ZkUtils}
+import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper.{CreateResponse, GetDataResponse, ResponseMetadata, ZooKeeperClientException}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
@@ -38,7 +36,6 @@ import scala.collection.mutable
 class PartitionStateMachineTest extends JUnitSuite {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
-  private var mockZkUtils: ZkUtils = null
   private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
   private var mockTopicDeletionManager: TopicDeletionManager = null
   private var partitionState: mutable.Map[TopicPartition, PartitionState] = null
@@ -55,7 +52,6 @@ class PartitionStateMachineTest extends JUnitSuite {
     controllerContext = new ControllerContext
     controllerContext.epoch = controllerEpoch
     mockZkClient = EasyMock.createMock(classOf[KafkaZkClient])
-    mockZkUtils = EasyMock.createMock(classOf[ZkUtils])
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
     mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
     partitionState = mutable.Map.empty[TopicPartition, PartitionState]
@@ -381,6 +377,7 @@ class PartitionStateMachineTest extends JUnitSuite {
 
     EasyMock.expect(mockTopicDeletionManager.isTopicQueuedUpForDeletion(topic)).andReturn(true)
     EasyMock.expectLastCall().anyTimes()
+    EasyMock.replay(mockTopicDeletionManager)
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
