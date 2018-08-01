@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -31,7 +30,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 public class KTableReduceTest {
 
@@ -60,48 +58,6 @@ public class KTableReduceTest {
         assertEquals(singleton("b"), myStore.get("A"));
         reduceProcessor.process("A", new Change<>(null, singleton("b")));
         assertEquals(emptySet(), myStore.get("A"));
-    }
-
-    @Test
-    public void shouldNeverCallReducersWithNullAggregates() {
-        final AbstractProcessorContext context = new InternalMockProcessorContext();
-
-        final Processor<String, Change<Set<String>>> reduceProcessor =
-            new KTableReduce<String, Set<String>>(
-                "myStore",
-                this::unionNotNullArgs,
-                this::differenceNotNullArgs
-            ).get();
-
-
-        final InMemoryKeyValueStore<String, Set<String>> myStore =
-            new InMemoryKeyValueStore<>("myStore", null, null);
-
-        context.register(myStore, null);
-        reduceProcessor.init(context);
-        context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
-
-        myStore.delete("A");
-        reduceProcessor.process("A", new Change<>(null, null));
-
-        myStore.delete("A");
-        try {
-            reduceProcessor.process("A", new Change<>(null, singleton("whoops!")));
-            fail("This is an invalid transition, as the oldValue != null, but the value is missing from the state store.");
-        } catch (final StreamsException e) {
-            //pass
-        }
-
-        myStore.delete("A");
-        try {
-            reduceProcessor.process("A", new Change<>(singleton("doesn't matter"), singleton("whoops!")));
-            System.out.println(myStore.get("A"));
-            fail("This is an invalid transition, as the oldValue != null, but the value is missing from the state store.");
-        } catch (final StreamsException e) {
-            //pass
-        }
-
-        // note that the final transition (not-null, null) is a valid initialization condition.
     }
 
     private Set<String> differenceNotNullArgs(final Set<String> left, final Set<String> right) {
