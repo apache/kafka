@@ -653,7 +653,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
   }
 
   def validatePartition(zkClient: KafkaZkClient, topic: String, topicPartitionReplicas: Map[TopicPartition, Seq[Int]])
-  : Map[TopicPartition, Seq[Int]] = {
+  :Map[TopicPartition, Seq[Int]] = {
     // check if partition exists
     val partitionsOpt = zkClient.getPartitionsForTopics(immutable.Set(topic)).get(topic)
     topicPartitionReplicas.filter { case (topicPartition, _) =>
