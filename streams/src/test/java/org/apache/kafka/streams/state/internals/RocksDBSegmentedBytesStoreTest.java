@@ -38,12 +38,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 import org.rocksdb.WriteBatch;
-
-import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
-
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -52,12 +49,13 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
+import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -68,14 +66,13 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 public class RocksDBSegmentedBytesStoreTest {
 
+    private final long windowSizeForTimeWindow = 500;
     private final long retention = 1000;
-    private final long segmentInterval = 60_000;
-    private final int numSegments = 3;
+    private final long segmentInterval = 60_000L;
     private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
-    private long windowSizeForTimeWindow = 500;
     private final Window[] windows = new Window[4];
 
     @Parameter
@@ -83,7 +80,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Parameters(name = "{0}")
     public static Object[] getKeySchemas() {
-        return new Object[]{new SessionKeySchema(), new WindowKeySchema()};
+        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
     }
 
     @Before
@@ -94,29 +91,32 @@ public class RocksDBSegmentedBytesStoreTest {
             windows[0] = new SessionWindow(10, 10);
             windows[1] = new SessionWindow(500, 1000);
             windows[2] = new SessionWindow(1000, 1500);
-            windows[3] = new SessionWindow(30000, 60000);
+            windows[3] = new SessionWindow(30_000L, 60_000L);
         }
         if (schema instanceof WindowKeySchema) {
 
             windows[0] = timeWindowForSize(10, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1000, windowSizeForTimeWindow);
-            windows[3] = timeWindowForSize(60000, windowSizeForTimeWindow);
+            windows[3] = timeWindowForSize(60_000L, windowSizeForTimeWindow);
         }
 
 
-        bytesStore = new RocksDBSegmentedBytesStore(storeName,
-                retention,
-                segmentInterval,
-                schema);
+        bytesStore = new RocksDBSegmentedBytesStore(
+            storeName,
+            retention,
+            segmentInterval,
+            schema
+        );
 
         stateDir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(
-                stateDir,
-                Serdes.String(),
-                Serdes.Long(),
-                new NoOpRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
         bytesStore.init(context, bytesStore);
     }
 
@@ -134,8 +134,10 @@ public class RocksDBSegmentedBytesStoreTest {
 
         final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500);
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(key, windows[1]), 50L));
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+        );
 
         assertEquals(expected, toList(values));
     }
@@ -147,8 +149,10 @@ public class RocksDBSegmentedBytesStoreTest {
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
         final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999);
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-                KeyValue.pair(new Windowed<>(key, windows[1]), 50L));
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+        );
 
         assertEquals(expected, toList(results));
     }
@@ -181,9 +185,14 @@ public class RocksDBSegmentedBytesStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+        assertEquals(
+            Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
                 KeyValue.pair(new Windowed<>(key, windows[1]), 100L),
-                KeyValue.pair(new Windowed<>(key, windows[2]), 500L)), results);
+                KeyValue.pair(new Windowed<>(key, windows[2]), 500L)
+            ),
+            results
+        );
 
     }
 
@@ -198,13 +207,22 @@ public class RocksDBSegmentedBytesStoreTest {
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1)), segmentDirs());
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(0),
+                segments.segmentName(1)
+            ),
+            segmentDirs()
+        );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+        assertEquals(
+            Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
                 KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-        ), results);
+            ),
+            results
+        );
 
     }
 
@@ -218,18 +236,27 @@ public class RocksDBSegmentedBytesStoreTest {
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1)), segmentDirs());
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(0),
+                segments.segmentName(1)
+            ),
+            segmentDirs()
+        );
 
-        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60000L));
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60_000L));
+        assertEquals(
+            Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
                 KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-        ), results);
+            ),
+            results
+        );
 
     }
 
     @Test
-    public void shouldLoadSegementsWithOldStyleDateFormattedName() {
+    public void shouldLoadSegmentsWithOldStyleDateFormattedName() {
         final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
@@ -247,20 +274,29 @@ public class RocksDBSegmentedBytesStoreTest {
         final File oldStyleName = new File(parent, nameParts[0] + "-" + formatted);
         assertTrue(new File(parent, firstSegmentName).renameTo(oldStyleName));
 
-        bytesStore = new RocksDBSegmentedBytesStore(storeName,
-                retention,
-                segmentInterval,
-                schema);
+        bytesStore = new RocksDBSegmentedBytesStore(
+            storeName,
+            retention,
+            segmentInterval,
+            schema
+        );
 
         bytesStore.init(context, bytesStore);
-        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60000L));
-        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                KeyValue.pair(new Windowed<>(key, windows[3]), 100L))));
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
+        assertThat(
+            results,
+            equalTo(
+                Arrays.asList(
+                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
+                )
+            )
+        );
     }
 
 
     @Test
-    public void shouldLoadSegementsWithOldStyleColonFormattedName() {
+    public void shouldLoadSegmentsWithOldStyleColonFormattedName() {
         final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
@@ -274,15 +310,24 @@ public class RocksDBSegmentedBytesStoreTest {
         final File oldStyleName = new File(parent, nameParts[0] + ":" + Long.parseLong(nameParts[1]));
         assertTrue(new File(parent, firstSegmentName).renameTo(oldStyleName));
 
-        bytesStore = new RocksDBSegmentedBytesStore(storeName,
-                retention,
-                segmentInterval,
-                schema);
+        bytesStore = new RocksDBSegmentedBytesStore(
+            storeName,
+            retention,
+            segmentInterval,
+            schema
+        );
 
         bytesStore.init(context, bytesStore);
-        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60000L));
-        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                KeyValue.pair(new Windowed<>(key, windows[3]), 100L))));
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
+        assertThat(
+            results,
+            equalTo(
+                Arrays.asList(
+                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
+                )
+            )
+        );
     }
 
 
@@ -304,7 +349,7 @@ public class RocksDBSegmentedBytesStoreTest {
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
         final Map<Segment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
         assertEquals(2, writeBatchMap.size());
-        for (final WriteBatch batch: writeBatchMap.values()) {
+        for (final WriteBatch batch : writeBatchMap.values()) {
             assertEquals(1, batch.count());
         }
     }
@@ -323,7 +368,7 @@ public class RocksDBSegmentedBytesStoreTest {
         assertEquals(2, bytesStore.getSegments().size());
 
         // Bulk loading is enabled during recovery.
-        for (final Segment segment: bytesStore.getSegments()) {
+        for (final Segment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
@@ -347,20 +392,20 @@ public class RocksDBSegmentedBytesStoreTest {
 
         restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
 
-        for (final Segment segment: bytesStore.getSegments()) {
+        for (final Segment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
         restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
-        for (final Segment segment: bytesStore.getSegments()) {
+        for (final Segment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
         }
     }
 
     private Set<String> segmentDirs() {
-        File windowDir = new File(stateDir, storeName);
+        final File windowDir = new File(stateDir, storeName);
 
-        return new HashSet<>(Arrays.asList(windowDir.list()));
+        return Utils.mkSet(Objects.requireNonNull(windowDir.list()));
     }
 
     private byte[] serializeValue(final long value) {
@@ -383,14 +428,14 @@ public class RocksDBSegmentedBytesStoreTest {
             final KeyValue<Bytes, byte[]> next = iterator.next();
             if (schema instanceof WindowKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                        WindowKeySchema.fromStoreKey(next.key.get(), windowSizeForTimeWindow, stateSerdes),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                    WindowKeySchema.fromStoreKey(next.key.get(), windowSizeForTimeWindow, stateSerdes),
+                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
             } else {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                        SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
-                        stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                    SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
+                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
             }
