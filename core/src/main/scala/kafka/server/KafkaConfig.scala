@@ -540,8 +540,8 @@ object KafkaConfig {
   val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: `RACK1`, `us-east-1d`"
   /** ********* Log Configuration ***********/
   val NumPartitionsDoc = "The default number of log partitions per topic"
-  val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property). Default directory (" + Defaults.LogDir + ") is not safe for production deployment. Use valid persistent directory."
-  val LogDirsDoc = "The directories in which the log data is kept. If not set, the value in " + LogDirProp + " is used. Default directory (" + Defaults.LogDir + ") is not safe for production deployment. Use valid persistent directory."
+  val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
+  val LogDirsDoc = "The directories in which the log data is kept. If not set, the value in " + LogDirProp + " is used"
   val LogSegmentBytesDoc = "The maximum size of a single log file"
   val LogRollTimeMillisDoc = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LogRollTimeHoursProp + " is used"
   val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
