@@ -521,7 +521,7 @@ public class StreamsBuilder {
     public synchronized Topology build() {
         return build(null);
     }
-
+    
     /**
      * Returns the {@link Topology} that represents the specified processing logic and accepts
      * a {@link Properties} instance used to indicate whether to optimize topology or not.
@@ -531,6 +531,7 @@ public class StreamsBuilder {
      */
     public synchronized Topology build(final Properties props) {
         // the props instance will be used once optimization framework merged
+        internalStreamsBuilder.buildAndOptimizeTopology();
         return topology;
     }
 }

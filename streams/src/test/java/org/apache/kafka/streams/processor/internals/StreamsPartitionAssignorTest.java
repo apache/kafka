@@ -731,9 +731,6 @@ public class StreamsPartitionAssignorTest {
     public void shouldGenerateTasksForAllCreatedPartitions() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
-        internalTopologyBuilder.setApplicationId(applicationId);
-
         // KStream with 3 partitions
         final KStream<Object, Object> stream1 = builder
             .stream("topic1")
@@ -771,6 +768,8 @@ public class StreamsPartitionAssignorTest {
 
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
+        internalTopologyBuilder.setApplicationId(applicationId);
 
         mockTaskManager(
             Collections.<TaskId>emptySet(),
@@ -910,8 +909,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
-        internalTopologyBuilder.setApplicationId(applicationId);
+
 
         final KStream<Object, Object> stream1 = builder
 
@@ -969,6 +967,9 @@ public class StreamsPartitionAssignorTest {
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
 
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
+        internalTopologyBuilder.setApplicationId(applicationId);
+
         mockTaskManager(
             Collections.<TaskId>emptySet(),
             Collections.<TaskId>emptySet(),
@@ -1020,10 +1021,10 @@ public class StreamsPartitionAssignorTest {
     public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
         final StreamsBuilder builder = new StreamsBuilder();
 
+        builder.stream("topic1").groupByKey().count();
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
         internalTopologyBuilder.setApplicationId(applicationId);
 
-        builder.stream("topic1").groupByKey().count();
 
         final UUID uuid = UUID.randomUUID();
         mockTaskManager(
