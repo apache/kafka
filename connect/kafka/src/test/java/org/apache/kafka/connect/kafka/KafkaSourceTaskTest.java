@@ -330,7 +330,7 @@ public class KafkaSourceTaskTest {
 
         SourceRecord testRecord = records.get(0);
         assertEquals(String.format("%s:%d", FIRST_TOPIC, FIRST_PARTITION), testRecord.sourcePartition().get(TOPIC_PARTITION_KEY));
-        assertEquals(0L, testRecord.sourceOffset().get(OFFSET_KEY));
+        assertEquals(FIRST_OFFSET, testRecord.sourceOffset().get(OFFSET_KEY));
         assertEquals(0, testRecord.headers().size());
 
         verifyAll();
