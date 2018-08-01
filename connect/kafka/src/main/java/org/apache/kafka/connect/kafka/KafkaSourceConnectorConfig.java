@@ -55,9 +55,9 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
     public static final String SOURCE_PREFIX =              "source.";
     public static final String DESTINATION_PREFIX =         "destination.";
 
-    // Any config beginning with this prefix will set the config parameters for the kafka consumer used in this connector
+    // Any CONFIG beginning with this prefix will set the CONFIG parameters for the kafka consumer used in this connector
     public static final String CONSUMER_PREFIX =            "connector.consumer.";
-    // Any config beginning with this prefix will set the config parameters for the admin client used by the partition monitor
+    // Any CONFIG beginning with this prefix will set the CONFIG parameters for the admin client used by the partition monitor
     public static final String ADMIN_CLIENT_PREFIX =        "connector.admin.";
 
     public static final String TASK_PREFIX =                "task.";
@@ -65,7 +65,7 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
     // Topic partition list we send to each task. Not user configurable.
     public static final String TASK_LEADER_TOPIC_PARTITION_CONFIG = TASK_PREFIX.concat("leader.topic.partitions");
 
-    // General Connector config
+    // General Connector CONFIG
     // Topics
     public static final String SOURCE_TOPIC_WHITELIST_CONFIG =         SOURCE_PREFIX.concat("topic.whitelist");
     public static final String SOURCE_TOPIC_WHITELIST_DOC =            "Regular expressions indicating the topics to consume from the source cluster. " +
@@ -105,8 +105,8 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
     public static final Object SOURCE_BOOTSTRAP_SERVERS_DEFAULT =         ConfigDef.NO_DEFAULT_VALUE;
 
     // These are the kafka consumer configs we override defaults for
-    // Note that *any* kafka consumer config can be set by adding the
-    // CONSUMER_PREFIX in front of the standard consumer config strings
+    // Note that *any* kafka consumer CONFIG can be set by adding the
+    // CONSUMER_PREFIX in front of the standard consumer CONFIG strings
     public static final String CONSUMER_MAX_POLL_RECORDS_CONFIG =           SOURCE_PREFIX.concat("max.poll.records");
     public static final String CONSUMER_MAX_POLL_RECORDS_DOC =              "Maximum number of records to return from each poll of the consumer";
     public static final int CONSUMER_MAX_POLL_RECORDS_DEFAULT =             500;
@@ -132,7 +132,7 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
 
 
     // Config definition
-    public static ConfigDef config = new ConfigDef()
+    public static final ConfigDef CONFIG = new ConfigDef()
         .define(SOURCE_TOPIC_WHITELIST_CONFIG, Type.STRING, SOURCE_TOPIC_WHITELIST_DEFAULT, TOPIC_WHITELIST_REGEX_VALIDATOR, Importance.HIGH, SOURCE_TOPIC_WHITELIST_DOC)
         .define(DESTINATION_TOPIC_PREFIX_CONFIG, Type.STRING, DESTINATION_TOPIC_PREFIX_DEFAULT, Importance.MEDIUM, DESTINATION_TOPIC_PREFIX_DOC)
         .define(INCLUDE_MESSAGE_HEADERS_CONFIG, Type.BOOLEAN, INCLUDE_MESSAGE_HEADERS_DEFAULT, Importance.MEDIUM, INCLUDE_MESSAGE_HEADERS_DOC)
@@ -150,7 +150,7 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
         .define(CONSUMER_GROUP_ID_CONFIG, Type.STRING, CONSUMER_GROUP_ID_DEFAULT, new ConfigDef.NonEmptyString(), Importance.MEDIUM, CONSUMER_GROUP_ID_DOC);
 
     public KafkaSourceConnectorConfig(Map<String, String> props) {
-        super(config, props);
+        super(CONFIG, props);
     }
 
 
@@ -227,7 +227,7 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
         try {
             return Pattern.compile(regex);
         } catch (PatternSyntaxException e) {
-            throw new ConfigException(regex + " is an invalid regex for config " + SOURCE_TOPIC_WHITELIST_CONFIG);
+            throw new ConfigException(regex + " is an invalid regex for CONFIG " + SOURCE_TOPIC_WHITELIST_CONFIG);
         }
     }
 

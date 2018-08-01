@@ -51,7 +51,7 @@ public class KafkaSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> config) throws ConfigException {
-        LOG.info("Connector: start()");
+        LOG.info("Connector starting");
         connectorConfig = new KafkaSourceConnectorConfig(config);
         LOG.info("Starting Partition Monitor to monitor source kafka cluster partitions");
         partitionMonitor = new PartitionMonitor(context, connectorConfig);
@@ -97,8 +97,7 @@ public class KafkaSourceConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        LOG.info("Connector: config()");
-        return KafkaSourceConnectorConfig.config;
+        return KafkaSourceConnectorConfig.CONFIG;
     }
     
 }
