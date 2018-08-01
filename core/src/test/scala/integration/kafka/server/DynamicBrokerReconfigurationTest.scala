@@ -733,7 +733,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // Verify that producer connections fail since advertised listener is invalid
     val bootstrap = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
       .replaceAll(invalidHost, "localhost") // allow bootstrap connection to succeed
-    val producer1 = ProducerBuilder().trustStoreProps(sslProperties1)
+    val producer1 = ProducerBuilder()
+      .trustStoreProps(sslProperties1)
       .maxRetries(0)
       .requestTimeoutMs(1000)
       .deliveryTimeoutMs(1000)
@@ -741,7 +742,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .build()
 
     assertTrue(intercept[ExecutionException] {
-      producer1.send(new ProducerRecord(topic, "key", "value")).get(2, TimeUnit.SECONDS)
+      val future = producer1.send(new ProducerRecord(topic, "key", "value"))
+      future.get(2, TimeUnit.SECONDS)
     }.getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
 
     alterAdvertisedListener(adminClient, externalAdminClient, invalidHost, "localhost")
@@ -1387,7 +1389,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         trustStoreFile = Some(trustStoreFile1),
         keySerializer = new StringSerializer,
         valueSerializer = new StringSerializer,
-        props = Some(propsOverride))
+        overrides = Some(propsOverride))
       producers += producer
       producer
     }
@@ -1412,7 +1414,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         trustStoreFile = Some(trustStoreFile1),
         keyDeserializer = new StringDeserializer,
         valueDeserializer = new StringDeserializer,
-        props = Some(consumerProps))
+        overrides = Some(consumerProps))
       consumer.subscribe(Collections.singleton(_topic))
       if (_autoOffsetReset == "latest")
         awaitInitialPositions(consumer)

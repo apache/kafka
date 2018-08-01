@@ -412,7 +412,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
     TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = -1, lingerMs = 10000,
-      props = Option(CoreUtils.propsWith(
+      overrides = Option(CoreUtils.propsWith(
         (ProducerConfig.BATCH_SIZE_CONFIG, String.valueOf(msg.length * 1000))
         , (ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy")
       )))

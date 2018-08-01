@@ -55,16 +55,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     createTopic(topic, partitionNum, serverCount)
   }
 
-  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(brokerList,
-      retries = 0,
-      securityProtocol = this.securityProtocol,
-      trustStoreFile = this.trustStoreFile,
-      saslProperties = this.clientSaslProperties,
-      props = Some(producerConfig))
-  }
-
-
   @Test
   def testIOExceptionDuringLogRoll() {
     testProduceAfterLogDirFailureOnLeader(Roll)
@@ -107,7 +97,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
-    val producer = producers.head
+    val producer = createProducer(retries = 0)
     val partition = new TopicPartition(topic, 0)
 
     val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
@@ -134,9 +124,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
-    val producer = producers.head
+    val producer = createProducer(retries = 0)
     val partition = new TopicPartition(topic, 0)
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 

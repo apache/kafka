@@ -768,7 +768,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+      securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(consumerConfig))
     try {
       // ensure that internal topics are not included if no permission
       consumer.subscribe(Pattern.compile(".*"))
@@ -798,7 +798,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+      securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(consumerConfig))
     try {
       consumer.subscribe(Pattern.compile(".*"))
       // It is possible that the first call returns records of "topic" and the second call throws TopicAuthorizationException
@@ -822,7 +822,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+      securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(consumerConfig))
     try {
       consumer.subscribe(Pattern.compile(topicPattern))
       consumeRecords(consumer)
@@ -1484,7 +1484,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val transactionalProperties = new Properties()
     transactionalProperties.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      props = Some(transactionalProperties))
+      overrides = Some(transactionalProperties))
     producers += producer
     producer
   }
@@ -1493,7 +1493,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val idempotentProperties = new Properties()
     idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      props = Some(idempotentProperties))
+      overrides = Some(idempotentProperties))
     producers += producer
     producer
   }

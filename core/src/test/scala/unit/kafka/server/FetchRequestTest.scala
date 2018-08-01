@@ -205,7 +205,7 @@ class FetchRequestTest extends BaseRequestTest {
     propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       lingerMs = Int.MaxValue, keySerializer = new StringSerializer,
-      valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
+      valueSerializer = new ByteArraySerializer, overrides = Some(propsOverride))
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>
@@ -262,7 +262,9 @@ class FetchRequestTest extends BaseRequestTest {
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
+      retries = 5,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer,
       lingerMs = 30 * 1000,
       deliveryTimeoutMs = 60 * 1000)
 

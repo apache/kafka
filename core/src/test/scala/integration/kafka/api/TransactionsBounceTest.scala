@@ -161,7 +161,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+      securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(props))
     consumer.subscribe(topics.asJava)
     consumer
   }

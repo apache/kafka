@@ -72,7 +72,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
                                lingerMs: Int = 0,
                                props: Option[Properties] = None): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
-      saslProperties = clientSaslProperties, lingerMs = lingerMs, props = props)
+      saslProperties = clientSaslProperties, lingerMs = lingerMs, overrides = props)
     registerProducer(producer)
   }
 

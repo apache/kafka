@@ -17,6 +17,7 @@
   */
 
 package kafka.server
+
 import java.util.Collections
 
 import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
@@ -35,8 +36,6 @@ import scala.collection.JavaConverters._
  */
 class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
-  override val producerCount = 0
-  override val consumerCount = 0
   override val serverCount = 1
 
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"

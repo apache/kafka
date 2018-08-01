@@ -576,7 +576,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(props))
     transactionalConsumers += consumer
     consumer
   }
@@ -586,7 +586,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, overrides = Some(props))
     nonTransactionalConsumers += consumer
     consumer
   }

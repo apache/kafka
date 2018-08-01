@@ -273,7 +273,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // Don't rely on coordinator as it may be down when this method is called
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = TestUtils.createConsumer(brokerList, "group" + random.nextLong,
-      securityProtocol = SecurityProtocol.PLAINTEXT, valueDeserializer = new StringDeserializer, props = Some(props))
+      securityProtocol = SecurityProtocol.PLAINTEXT, valueDeserializer = new StringDeserializer, overrides = Some(props))
     try {
       val tp = new TopicPartition(topic, partitionId)
       consumer.assign(Seq(tp).asJava)

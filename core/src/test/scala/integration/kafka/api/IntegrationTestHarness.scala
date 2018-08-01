@@ -17,35 +17,36 @@
 
 package kafka.api
 
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import java.time.Duration
+
+import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}
 
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
 abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
-  val producerCount: Int
-  val consumerCount: Int
   val serverCount: Int
   var logDirCount: Int = 1
-  lazy val producerConfig = new Properties
-  lazy val consumerConfig = new Properties
-  lazy val serverConfig = new Properties
+  val producerConfig = new Properties
+  val consumerConfig = new Properties
+  val serverConfig = new Properties
 
-  val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-  val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
+  private val producers = mutable.Buffer[KafkaProducer[_, _]]()
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
@@ -69,20 +70,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @Before
   override def setUp() {
-    val producerSecurityProps = clientSecurityProps("producer")
-    val consumerSecurityProps = clientSecurityProps("consumer")
+    // Client certs if needed, are generated before the brokers startup
+    producerConfig.putAll(clientSecurityProps("producer"))
+    consumerConfig.putAll(clientSecurityProps("consumer"))
+
     super.setUp()
-    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
-    producerConfig ++= producerSecurityProps
-    consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
-    consumerConfig ++= consumerSecurityProps
-    for (_ <- 0 until producerCount)
-      producers += createProducer
-    for (_ <- 0 until consumerCount) {
-      consumers += createConsumer
-    }
 
     TestUtils.createOffsetsTopic(zkClient, servers)
   }
@@ -92,26 +84,67 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       clientSaslProperties)
   }
 
-  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(brokerList,
-      securityProtocol = this.securityProtocol,
-      trustStoreFile = this.trustStoreFile,
-      saslProperties = this.clientSaslProperties,
-      props = Some(producerConfig))
+  def createProducer[K, V](acks: Int = -1,
+                           maxBlockMs: Long = 60 * 1000L,
+                           bufferSize: Long = 1024L * 1024L,
+                           retries: Int = Int.MaxValue,
+                           deliveryTimeoutMs: Int = 30 * 1000,
+                           lingerMs: Int = 0,
+                           requestTimeoutMs: Int = 20 * 1000,
+                           keySerializer: Serializer[K] = new ByteArraySerializer,
+                           valueSerializer: Serializer[V] = new ByteArraySerializer,
+                           configOverrides: Properties = new Properties()): KafkaProducer[K, V] = {
+    val props = new Properties()
+    props.putAll(producerConfig)
+    props.putAll(configOverrides)
+
+    val producer = TestUtils.createProducer(brokerList,
+      acks = acks,
+      maxBlockMs = maxBlockMs,
+      bufferSize = bufferSize,
+      retries = retries,
+      deliveryTimeoutMs = deliveryTimeoutMs,
+      lingerMs = lingerMs,
+      requestTimeoutMs = requestTimeoutMs,
+      keySerializer = keySerializer,
+      valueSerializer = valueSerializer,
+      overrides = Some(props))
+    producers += producer
+    producer
   }
 
-  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
-    TestUtils.createConsumer(brokerList,
-      securityProtocol = this.securityProtocol,
-      trustStoreFile = this.trustStoreFile,
-      saslProperties = this.clientSaslProperties,
-      props = Some(consumerConfig))
+  def createConsumer[K, V](groupId: String = "group",
+                           autoOffsetReset: String = "earliest",
+                           partitionFetchSize: Long = 4096L,
+                           partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
+                           sessionTimeout: Int = 30000,
+                           keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           configOverrides: Properties = new Properties()): KafkaConsumer[K, V] = {
+    val props = new Properties()
+    props.putAll(consumerConfig)
+    props.putAll(configOverrides)
+
+    val consumer = TestUtils.createConsumer(brokerList,
+      groupId = groupId,
+      autoOffsetReset = autoOffsetReset,
+      partitionFetchSize = partitionFetchSize,
+      partitionAssignmentStrategy = partitionAssignmentStrategy,
+      sessionTimeout = sessionTimeout,
+      keyDeserializer = keyDeserializer,
+      valueDeserializer = valueDeserializer,
+      overrides = Some(props))
+    consumers += consumer
+    consumer
   }
 
   @After
   override def tearDown() {
-    producers.foreach(_.close())
-    consumers.foreach(_.close())
+    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    consumers.foreach(_.wakeup())
+    consumers.foreach(_.close(Duration.ZERO))
+    producers.clear()
+    consumers.clear()
     super.tearDown()
   }
 

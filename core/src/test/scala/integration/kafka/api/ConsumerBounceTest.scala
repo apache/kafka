@@ -94,13 +94,13 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
     TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
         securityProtocol = SecurityProtocol.PLAINTEXT,
-        props = Some(producerConfig))
+        overrides = Some(producerConfig))
   }
 
   def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
     TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
         securityProtocol = SecurityProtocol.PLAINTEXT,
-        props = Some(consumerConfig))
+        overrides = Some(consumerConfig))
   }
 
   @After
