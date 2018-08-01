@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -33,7 +34,6 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -394,6 +394,7 @@ public class StreamThreadTest {
     @Test
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -785,6 +786,7 @@ public class StreamThreadTest {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
 
+        internalStreamsBuilder.buildAndOptimizeTopology();
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
@@ -839,6 +841,7 @@ public class StreamThreadTest {
         materialized.generateStoreNameIfNeeded(internalStreamsBuilder, "");
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
 
+        internalStreamsBuilder.buildAndOptimizeTopology();
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName1,
@@ -927,6 +930,7 @@ public class StreamThreadTest {
         };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
+        internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -986,6 +990,7 @@ public class StreamThreadTest {
     public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
+        internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -1036,6 +1041,7 @@ public class StreamThreadTest {
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+        internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread("clientId", config, false);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
