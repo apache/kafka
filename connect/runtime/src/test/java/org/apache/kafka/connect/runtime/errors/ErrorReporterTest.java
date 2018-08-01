@@ -94,6 +94,11 @@ public class ErrorReporterTest {
         }
     }
 
+    @Test(expected = NullPointerException.class)
+    public void initializeDLQWithNullMetrics() {
+        new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null);
+    }
+
     @Test
     public void testDLQConfigWithEmptyTopicName() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
