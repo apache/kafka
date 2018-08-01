@@ -271,7 +271,8 @@ public class SegmentsTest {
         segments.openExisting(context);
 
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
-            final File newSegment = new File(storeDirectoryPath + File.separator + segments.segmentName(segmentId));
+            final String segmentName = storeName + "." + (long) segmentId * segmentInterval;
+            final File newSegment = new File(storeDirectoryPath + File.separator + segmentName);
             assertTrue(newSegment.exists());
         }
     }
