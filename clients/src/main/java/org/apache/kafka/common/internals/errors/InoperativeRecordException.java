@@ -14,15 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.internals.errors;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.UnconsumableRecordException;
 
 /**
  *  Thrown when encountering a corrupt/invalid record in the consumer
  *  Contains the offset of the record or the last offset of the batch record
  */
-public class InoperativeRecordException extends ApiException {
+public class InoperativeRecordException extends ApiException implements UnconsumableRecordException {
 
     private static final long serialVersionUID = 1L;
     private TopicPartition partition;

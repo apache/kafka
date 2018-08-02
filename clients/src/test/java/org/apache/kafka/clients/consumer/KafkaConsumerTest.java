@@ -34,9 +34,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.InoperativeRecordException;
+import org.apache.kafka.common.errors.UnconsumableRecordException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -199,10 +198,14 @@ public class KafkaConsumerTest {
 
         try {
             consumer.poll(Duration.ZERO);
-            fail("Second poll should raise " + RecordDeserializationException.class.getName());
-        } catch (RecordDeserializationException rde) {
-            assertEquals(invalidRecordOffset, rde.offset());
-            assertEquals(tp0, rde.partition());
+            fail("Second poll should raise an exception that implements " + UnconsumableRecordException.class.getName());
+        } catch (SerializationException se) {
+            if (!(se instanceof UnconsumableRecordException))
+                fail("Second poll should raise an exception that implements " + UnconsumableRecordException.class.getName());
+
+            UnconsumableRecordException ure = (UnconsumableRecordException) se;
+            assertEquals(invalidRecordOffset, ure.offset());
+            assertEquals(tp0, ure.partition());
         }
 
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -223,10 +226,14 @@ public class KafkaConsumerTest {
 
         try {
             consumer.poll(Duration.ZERO);
-            fail("Poll should raise " + InoperativeRecordException.class.getName());
-        } catch (InoperativeRecordException ire) {
-            assertEquals(tp0, ire.partition());
-            assertEquals(corruptRecordOffset, ire.offset());
+            fail("Poll should raise an exception that implements" + UnconsumableRecordException.class.getName());
+        } catch (KafkaException ke) {
+            if (!(ke instanceof UnconsumableRecordException))
+                fail("Poll should raise an exception that implements" + UnconsumableRecordException.class.getName());
+
+            UnconsumableRecordException ure = (UnconsumableRecordException) ke;
+            assertEquals(tp0, ure.partition());
+            assertEquals(corruptRecordOffset, ure.offset());
         }
 
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -1875,7 +1882,7 @@ public class KafkaConsumerTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE,
                 TimestampType.CREATE_TIME, baseOffset);
 
-        int startOffset = startFromOffset ? (int) baseOffset : 0 ;
+        int startOffset = startFromOffset ? (int) baseOffset : 0;
         for (int i = startOffset; i < (startOffset + recordCount); i++)
             builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
 
