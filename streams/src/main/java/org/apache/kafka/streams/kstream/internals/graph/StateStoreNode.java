@@ -18,15 +18,14 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 public class StateStoreNode extends StreamsGraphNode {
 
-    protected final StoreBuilder<KeyValueStore> storeBuilder;
+    protected final StoreBuilder storeBuilder;
     private final String[] processorNames;
 
-    public StateStoreNode(final StoreBuilder<KeyValueStore> storeBuilder,
+    public StateStoreNode(final StoreBuilder storeBuilder,
                           final String... processorNames) {
         super(storeBuilder.toString(), false);
 

@@ -168,7 +168,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void addStateStore(final StoreBuilder<KeyValueStore> builder) {
+    public synchronized void addStateStore(final StoreBuilder builder) {
         addGraphNode(root, new StateStoreNode(builder));
     }
 
