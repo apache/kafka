@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.singleton;
@@ -66,13 +67,14 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
+    private final ErrorHandlingMetrics errorHandlingMetrics;
 
     private KafkaProducer<byte[], byte[]> kafkaProducer;
-    private ErrorHandlingMetrics errorHandlingMetrics;
 
     public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
                                                          ConnectorTaskId id,
-                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps) {
+                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
+                                                         ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
 
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
@@ -90,7 +92,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id);
+        return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
     }
 
     /**
@@ -99,14 +101,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
      */
     // Visible for testing
-    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig, ConnectorTaskId id) {
+    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig,
+                            ConnectorTaskId id, ErrorHandlingMetrics errorHandlingMetrics) {
+        Objects.requireNonNull(kafkaProducer);
+        Objects.requireNonNull(connConfig);
+        Objects.requireNonNull(id);
+        Objects.requireNonNull(errorHandlingMetrics);
+
         this.kafkaProducer = kafkaProducer;
         this.connConfig = connConfig;
         this.connectorTaskId = id;
-    }
-
-    @Override
-    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
