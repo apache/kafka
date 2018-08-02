@@ -21,7 +21,9 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
@@ -166,8 +168,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void addStateStore(final StoreBuilder builder) {
-        internalTopologyBuilder.addStateStore(builder);
+    public synchronized void addStateStore(final StoreBuilder<KeyValueStore> builder) {
+        addGraphNode(root, new StateStoreNode(builder));
     }
 
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
@@ -176,16 +178,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                             final ConsumedInternal consumed,
                                             final String processorName,
                                             final ProcessorSupplier stateUpdateSupplier) {
-        // explicitly disable logging for global stores
-        storeBuilder.withLoggingDisabled();
-        internalTopologyBuilder.addGlobalStore(storeBuilder,
-                                               sourceName,
-                                               consumed.timestampExtractor(),
-                                               consumed.keyDeserializer(),
-                                               consumed.valueDeserializer(),
-                                               topic,
-                                               processorName,
-                                               stateUpdateSupplier);
+        StreamsGraphNode globalStoreNode = new GlobalStoreNode(storeBuilder,
+                                                               sourceName,
+                                                               topic,
+                                                               consumed,
+                                                               processorName,
+                                                               stateUpdateSupplier);
+
+        addGraphNode(root, globalStoreNode);
     }
 
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
