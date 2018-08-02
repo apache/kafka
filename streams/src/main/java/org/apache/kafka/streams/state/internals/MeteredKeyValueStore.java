@@ -32,6 +32,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -59,6 +63,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     private Sensor rangeTime;
     private Sensor flushTime;
     private StreamsMetricsImpl metrics;
+    private String taskName;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricScope,
@@ -77,79 +82,27 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        final String name = name();
-        final String tagKey = "task-id";
-        final String taskName = context.taskId().toString();
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+
+        taskName = context.taskId().toString();
+        final String metricsGroup = "stream-" + metricScope + "-metrics";
+        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
+        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
 
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.metrics = (StreamsMetricsImpl) context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "put",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "put-if-absent",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "get",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "delete",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "put-all",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.allTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "all",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "range",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "flush",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(
-            taskName,
-            metricScope,
-            name,
-            "restore",
-            Sensor.RecordingLevel.DEBUG,
-            tagKey, taskName);
+        putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        putIfAbsentTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-if-absent", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        putAllTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        getTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "get", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        allTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        rangeTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "range", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        deleteTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "delete", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
 
         // register and possibly restore the state from the logs
         if (restoreTime.shouldRecord()) {
@@ -162,6 +115,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         } else {
             inner.init(context, root);
         }
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
     }
 
     @Override
