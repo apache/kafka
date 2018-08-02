@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.kafka;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -23,7 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigException;
-
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import java.util.List;
 import java.util.Map;
@@ -91,7 +93,7 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
     public static final String RECONFIGURE_TASKS_ON_LEADER_CHANGE_CONFIG =  "reconfigure.tasks.on.partition.leader.change";
     public static final String RECONFIGURE_TASKS_ON_LEADER_CHANGE_DOC =     "Indicates whether the partition monitor should request a task reconfiguration when partition leaders have changed";
     public static final boolean RECONFIGURE_TASKS_ON_LEADER_CHANGE_DEFAULT = false;
-    // Internal Timing Stuff
+    // Internal Connector Timing
     public static final String POLL_LOOP_TIMEOUT_MS_CONFIG =    "poll.loop.timeout.ms";
     public static final String POLL_LOOP_TIMEOUT_MS_DOC =       "Maximum amount of time to wait in each poll loop without data before cancelling the poll and returning control to the worker task";
     public static final int POLL_LOOP_TIMEOUT_MS_DEFAULT =      1000;
@@ -100,33 +102,33 @@ public class KafkaSourceConnectorConfig extends AbstractConfig {
     public static final int MAX_SHUTDOWN_WAIT_MS_DEFAULT =      2000;
 
     // General Source Kafka Config - Applies to Consumer and Admin Client if not overridden by CONSUMER_PREFIX or ADMIN_CLIENT_PREFIX
-    public static final String SOURCE_BOOTSTRAP_SERVERS_CONFIG =          SOURCE_PREFIX.concat("bootstrap.servers");
+    public static final String SOURCE_BOOTSTRAP_SERVERS_CONFIG =          SOURCE_PREFIX.concat(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
     public static final String SOURCE_BOOTSTRAP_SERVERS_DOC =             "list of kafka brokers to use to bootstrap the source cluster";
     public static final Object SOURCE_BOOTSTRAP_SERVERS_DEFAULT =         ConfigDef.NO_DEFAULT_VALUE;
 
     // These are the kafka consumer configs we override defaults for
     // Note that *any* kafka consumer CONFIG can be set by adding the
     // CONSUMER_PREFIX in front of the standard consumer CONFIG strings
-    public static final String CONSUMER_MAX_POLL_RECORDS_CONFIG =           SOURCE_PREFIX.concat("max.poll.records");
+    public static final String CONSUMER_MAX_POLL_RECORDS_CONFIG =           SOURCE_PREFIX.concat(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
     public static final String CONSUMER_MAX_POLL_RECORDS_DOC =              "Maximum number of records to return from each poll of the consumer";
     public static final int CONSUMER_MAX_POLL_RECORDS_DEFAULT =             500;
-    public static final String CONSUMER_AUTO_OFFSET_RESET_CONFIG =          SOURCE_PREFIX.concat("auto.offset.reset");
+    public static final String CONSUMER_AUTO_OFFSET_RESET_CONFIG =          SOURCE_PREFIX.concat(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
     public static final String CONSUMER_AUTO_OFFSET_RESET_DOC =             "If there is no stored offset for a partition, where to reset from [earliest|latest].";
     public static final String CONSUMER_AUTO_OFFSET_RESET_DEFAULT =         "earliest";
     public static final ValidString CONSUMER_AUTO_OFFSET_RESET_VALIDATOR =  ConfigDef.ValidString.in("earliest", "latest");
-    public static final String CONSUMER_KEY_DESERIALIZER_CONFIG =           SOURCE_PREFIX.concat("key.deserializer");
+    public static final String CONSUMER_KEY_DESERIALIZER_CONFIG =           SOURCE_PREFIX.concat(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
     public static final String CONSUMER_KEY_DESERIALIZER_DOC =              "Key deserializer to use for the kafka consumers connecting to the source cluster.";
-    public static final String CONSUMER_KEY_DESERIALIZER_DEFAULT =          "org.apache.kafka.common.serialization.ByteArrayDeserializer";
-    public static final String CONSUMER_VALUE_DESERIALIZER_CONFIG =         SOURCE_PREFIX.concat("value.deserializer");
+    public static final String CONSUMER_KEY_DESERIALIZER_DEFAULT =          ByteArrayDeserializer.class.getName();
+    public static final String CONSUMER_VALUE_DESERIALIZER_CONFIG =         SOURCE_PREFIX.concat(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
     public static final String CONSUMER_VALUE_DESERIALIZER_DOC =            "Value deserializer to use for the kafka consumers connecting to the source cluster.";
-    public static final String CONSUMER_VALUE_DESERIALIZER_DEFAULT =        "org.apache.kafka.common.serialization.ByteArrayDeserializer";
-    public static final String CONSUMER_ENABLE_AUTO_COMMIT_CONFIG =         SOURCE_PREFIX.concat("enable.auto.commit");
+    public static final String CONSUMER_VALUE_DESERIALIZER_DEFAULT =        ByteArrayDeserializer.class.getName();
+    public static final String CONSUMER_ENABLE_AUTO_COMMIT_CONFIG =         SOURCE_PREFIX.concat(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
     public static final String CONSUMER_ENABLE_AUTO_COMMIT_DOC =            "If true the consumer's offset will be periodically committed to the source cluster in the background. " +
             "Note that these offsets are not used to resume the connector (They are stored in the Kafka Connect offset store), but may be useful in monitoring the current offset lag " +
             "of this connector on the source cluster";
     public static final Boolean CONSUMER_ENABLE_AUTO_COMMIT_DEFAULT =        true;
 
-    public static final String CONSUMER_GROUP_ID_CONFIG =         SOURCE_PREFIX.concat("group.id");
+    public static final String CONSUMER_GROUP_ID_CONFIG =         SOURCE_PREFIX.concat(ConsumerConfig.GROUP_ID_CONFIG);
     public static final String CONSUMER_GROUP_ID_DOC =            "Source Kafka Consumer group id. This must be set if source.enable.auto.commit is set as a group id is required for offset tracking on the source cluster";
     public static final Object CONSUMER_GROUP_ID_DEFAULT =        ConfigDef.NO_DEFAULT_VALUE;
 

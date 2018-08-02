@@ -200,8 +200,6 @@ public class KafkaSourceTask extends SourceTask {
         LOG.info("{}: task has been stopped", this);
     }
 
-
-
     @Override
     public String version() {
         return AppInfoParser.getVersion();
