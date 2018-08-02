@@ -34,9 +34,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.InoperativeRecordException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.FaultyRecordException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -183,7 +182,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException() {
+    public void testSecondPollWithDeserializationErrorThrowsFaultyRecordException() {
         int invalidRecordNumber = 4;
         int invalidRecordOffset = 3;
         ByteArrayDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
@@ -199,10 +198,10 @@ public class KafkaConsumerTest {
 
         try {
             consumer.poll(Duration.ZERO);
-            fail("Second poll should raise " + RecordDeserializationException.class.getName());
-        } catch (RecordDeserializationException rde) {
-            assertEquals(invalidRecordOffset, rde.offset());
-            assertEquals(tp0, rde.partition());
+            fail("Second poll should raise " + FaultyRecordException.class.getName());
+        } catch (FaultyRecordException fre) {
+            assertEquals(invalidRecordOffset, fre.offset());
+            assertEquals(tp0, fre.partition());
         }
 
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -210,7 +209,7 @@ public class KafkaConsumerTest {
 
 
     @Test
-    public void testPollCorruptedRecordThrowsInoperativeRecordException() {
+    public void testPollCorruptedRecordThrowsFaultyRecordException() {
         int numRecords = 10;  // total number of records created is 20
         int corruptRecordOffset = 19;
 
@@ -223,10 +222,10 @@ public class KafkaConsumerTest {
 
         try {
             consumer.poll(Duration.ZERO);
-            fail("Poll should raise " + InoperativeRecordException.class.getName());
-        } catch (InoperativeRecordException ire) {
-            assertEquals(tp0, ire.partition());
-            assertEquals(corruptRecordOffset, ire.offset());
+            fail("Poll should raise " + FaultyRecordException.class.getName());
+        } catch (FaultyRecordException fre) {
+            assertEquals(tp0, fre.partition());
+            assertEquals(corruptRecordOffset, fre.offset());
         }
 
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -1875,7 +1874,7 @@ public class KafkaConsumerTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE,
                 TimestampType.CREATE_TIME, baseOffset);
 
-        int startOffset = startFromOffset ? (int) baseOffset : 0 ;
+        int startOffset = startFromOffset ? (int) baseOffset : 0;
         for (int i = startOffset; i < (startOffset + recordCount); i++)
             builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
 

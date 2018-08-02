@@ -36,12 +36,11 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.FaultyRecordException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.RecordDeserializationException;
-import org.apache.kafka.common.errors.InoperativeRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -320,12 +319,12 @@ public class FetcherTest {
                 fail("fetchedRecords should have raised");
             } catch (SerializationException e) {
                 // catch SerializationException to ensure backwards compatibility
-                if (!(e instanceof RecordDeserializationException))
-                    fail("fetchedRecords should have raised " + RecordDeserializationException.class.getName());
+                if (!(e instanceof FaultyRecordException))
+                    fail("fetchedRecords should have raised " + FaultyRecordException.class.getName());
 
                 // the position should not advance since no data has been returned
                 assertEquals(1, subscriptions.position(tp0).longValue());
-                RecordDeserializationException error = (RecordDeserializationException) e;
+                FaultyRecordException error = (FaultyRecordException) e;
                 assertEquals(error.partition(), tp0);
                 assertEquals(error.offset(), subscriptions.position(tp0).longValue());
             }
@@ -392,9 +391,9 @@ public class FetcherTest {
             // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
             seekAndConsumeRecord(buffer, 4L);
             fail("Should have thrown exception when fail to retrieve a record from iterator.");
-        } catch (InoperativeRecordException ire) {
-            assertEquals(ire.partition(), tp0);
-            assertEquals(ire.offset(), 4L);
+        } catch (FaultyRecordException fre) {
+            assertEquals(fre.partition(), tp0);
+            assertEquals(fre.offset(), 4L);
         }
         ensureBlockOnRecord(tp0, 4L);
     }
@@ -405,9 +404,9 @@ public class FetcherTest {
             try {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
-            } catch (InoperativeRecordException ire) {
-                assertEquals(partition, ire.partition());
-                assertEquals(blockedOffset, ire.offset());
+            } catch (FaultyRecordException fre) {
+                assertEquals(partition, fre.partition());
+                assertEquals(blockedOffset, fre.offset());
                 assertEquals(blockedOffset, subscriptions.position(tp0).longValue());
             }
         }
@@ -465,11 +464,11 @@ public class FetcherTest {
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
                 // check KafkaException for backwards compatibility
-                if (!(e instanceof InoperativeRecordException))
-                    fail("Error should be of type " + InoperativeRecordException.class.getName());
+                if (!(e instanceof FaultyRecordException))
+                    fail("Error should be of type " + FaultyRecordException.class.getName());
 
                 assertEquals(0, subscriptions.position(tp0).longValue());
-                InoperativeRecordException err = (InoperativeRecordException) e;
+                FaultyRecordException err = (FaultyRecordException) e;
                 assertEquals(err.partition(), tp0);
                 assertEquals(batchEndOffset, err.offset());
             }
@@ -501,12 +500,12 @@ public class FetcherTest {
             fail("fetchedRecords should have raised");
         } catch (KafkaException e) {
             // check KafkaException for backwards compatibility
-            if (!(e instanceof InoperativeRecordException))
-                fail("Error should be of type " + InoperativeRecordException.class.getName());
+            if (!(e instanceof FaultyRecordException))
+                fail("Error should be of type " + FaultyRecordException.class.getName());
 
             // the position should not advance since no data has been returned
             assertEquals(0, subscriptions.position(tp0).longValue());
-            InoperativeRecordException err = (InoperativeRecordException) e;
+            FaultyRecordException err = (FaultyRecordException) e;
             assertEquals(err.partition(), tp0);
             assertEquals(lastBatchOffset, err.offset());
         }

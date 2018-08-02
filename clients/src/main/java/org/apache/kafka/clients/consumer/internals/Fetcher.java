@@ -30,13 +30,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InoperativeRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.FaultyRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -1015,7 +1014,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers);
         } catch (RuntimeException e) {
-            throw new RecordDeserializationException(partition, record.offset(),
+            throw new FaultyRecordException(partition, record.offset(),
                     "Error deserializing key/value for partition " + partition + " at offset " + record.offset()
                             + ". If needed, please seek past the record to continue consumption.");
         }
@@ -1082,7 +1081,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 try {
                     batch.ensureValid();
                 } catch (CorruptRecordException e) {
-                    throw new InoperativeRecordException(partition, batch.lastOffset(),
+                    throw new FaultyRecordException(partition, batch.lastOffset(),
                             "Record batch for partition " + partition + " at offset " + batch.baseOffset()
                                     + " is invalid, cause: " + e.getMessage(), e);
                 }
@@ -1095,7 +1094,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     record.ensureValid();
                 } catch (CorruptRecordException e) {
                     long offset = record.offset();
-                    throw new InoperativeRecordException(partition, offset,
+                    throw new FaultyRecordException(partition, offset,
                             "Record for partition " + partition + " at offset " + offset
                                     + " is invalid, cause: " + e.getMessage(), e);
                 }
@@ -1172,14 +1171,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (corruptLastRecord) {
                 long corruptOffset;
 
-                if (cachedRecordException instanceof InoperativeRecordException)
-                    corruptOffset = ((InoperativeRecordException) cachedRecordException).offset();
-                else if (cachedRecordException instanceof RecordDeserializationException)
-                    corruptOffset = ((RecordDeserializationException) cachedRecordException).offset();
+                if (cachedRecordException instanceof FaultyRecordException)
+                    corruptOffset = ((FaultyRecordException) cachedRecordException).offset();
                 else
                     corruptOffset = nextFetchOffset;
 
-                throw new InoperativeRecordException(partition, corruptOffset,
+                throw new FaultyRecordException(partition, corruptOffset,
                         "Received exception when fetching the next record from " + partition
                                 + ". If needed, please seek past the record to "
                                 + "continue consumption.", cachedRecordException);
@@ -1208,17 +1205,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // we allow user to move forward in this case.
                     cachedRecordException = null;
                 }
-            } catch (RecordDeserializationException de) {
-                cachedRecordException = de;
-                if (records.isEmpty())
-                    throw de;
             } catch (KafkaException e) {
                 cachedRecordException = e;
                 if (records.isEmpty()) {
-                    if (e instanceof InoperativeRecordException)
+                    if (e instanceof FaultyRecordException)
                         throw e;
                     else
-                        throw new InoperativeRecordException(
+                        throw new FaultyRecordException(
                                 partition, nextFetchOffset, "Received exception when fetching the next record from " + partition
                                 + ". If needed, please seek past the record to continue consumption.", e
                         );
