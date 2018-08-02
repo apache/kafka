@@ -358,6 +358,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             keyChangingNode.addChildNode(optimizedSingleRepartition);
+            keyChangingOperationsToOptimizableRepartitionNodes.remove(streamsGraphNodeSetEntry.getKey());
         }
     }
 
