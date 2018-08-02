@@ -87,7 +87,7 @@ public class RepartitionOptimizingIntegrationTest {
 
     @Before
     public void setUp() throws Exception {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
 
@@ -180,7 +180,6 @@ public class RepartitionOptimizingIntegrationTest {
 
         final Topology topology = builder.build(streamsConfiguration);
         final String topologyString = topology.describe().toString();
-        System.out.println(topologyString);
 
 
         /*
