@@ -950,6 +950,10 @@ public class ConfigDef {
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
+
+        public String toString() {
+            return "non-null string";
+        }
     }
 
     public static class CompositeValidator implements Validator {
@@ -1018,6 +1022,10 @@ public class ConfigDef {
             if (!foundIllegalCharacters.isEmpty()) {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
             }
+        }
+
+        public String toString() {
+            return "non-empty string without ISO control characters";
         }
     }
 
