@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Logger log;
@@ -89,14 +88,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     int process() {
         int processed = 0;
 
-        // only iterate over tasks who has data in all its input topic partitions
-        final Map<TaskId, StreamTask> processable = running.entrySet().stream()
-                .filter(entry -> entry.getValue().isProcessable())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
+        while (it.hasNext()) {
+            final StreamTask task = it.next().getValue();
 
-        for (final StreamTask task : processable.values()) {
             try {
-                if (task.process()) {
+                if (task.isProcessable() && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
@@ -106,7 +103,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 if (fatalException != null) {
                     throw fatalException;
                 }
-                running.remove(task.id());
+                it.remove();
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);

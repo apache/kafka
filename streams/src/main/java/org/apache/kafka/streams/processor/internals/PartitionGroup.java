@@ -27,8 +27,10 @@ import java.util.Set;
 
 /**
  * A PartitionGroup is composed from a set of partitions. It also maintains the timestamp of this
- * group, a.k.a. the stream time of the associated task as the min timestamp across all partitions in the group.
+ * group, a.k.a. the stream time of the associated task. It is defined as the maximum timestamp of
+ * all the records having been retrieved for processing from this PartitionGroup so far.
  *
+ * We decide from which partition to retrieve the next record to process based on partitions' timestamps.
  * The timestamp of a specific partition is initialized as UNKNOWN (-1), and is updated with the head record's timestamp
  * if it is smaller (i.e. it should be monotonically increasing); when the partition's buffer becomes empty and there is
  * no head record, the partition's timestamp will not be updated any more.
@@ -117,14 +119,11 @@ public class PartitionGroup {
         if (oldSize == 0 && newSize > 0) {
             nonEmptyQueuesByTime.offer(recordQueue);
 
-            // if all partitions now are non-empty, set the flag and compute the stream time
+            // if all partitions now are non-empty, set the flag
+            // we do not need to update the stream time here since this task will definitely be
+            // processed next, and hence the stream time will be updated when we retrieved records by then
             if (nonEmptyQueuesByTime.size() == this.partitionQueues.size()) {
                 allBuffered = true;
-
-                // since we may enforce processing even if some queue is empty, it is possible that after some
-                // raw data has been added to that queue the new partition's timestamp is even smaller than the current
-                // stream time, in this case we should not update.
-                streamTime = Math.max(streamTime, nonEmptyQueuesByTime.peek().timestamp());
             }
         }
 
