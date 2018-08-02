@@ -353,7 +353,7 @@ object ReassignPartitionsCommand extends Logging {
     val (beingReassigned, notBeingReassigned) = partitionsToBeReassigned.keys.partition { topicAndPartition =>
       partitionsBeingReassigned.contains(topicAndPartition)
     }
-    beingReassigned.groupBy { topicAndPartition =>
+    notBeingReassigned.groupBy { topicAndPartition =>
       topicAndPartition.topic
     }.flatMap { case (topic, partitions) =>
       val replicasForTopic = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic))
@@ -365,7 +365,7 @@ object ReassignPartitionsCommand extends Logging {
         }
         (topicAndPartition, reassignmentStatus)
       }
-    } ++ notBeingReassigned.map { topicAndPartition =>
+    } ++ beingReassigned.map { topicAndPartition =>
       (topicAndPartition, ReassignmentInProgress)
     }.toMap
   }
