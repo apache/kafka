@@ -219,11 +219,6 @@ public class Stores {
                                                    + name + " must be no smaller than its window size. Got size=["
                                                    + windowSize + "], retention=[" + retentionPeriod + "]");
         }
-        if (windowSize > segmentInterval) {
-            throw new IllegalArgumentException("The segment interval of the window store "
-                                                   + name + " must be no smaller than its window size. Got size=["
-                                                   + windowSize + "], segmentInterval=[" + segmentInterval + "]");
-        }
 
         return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
     }

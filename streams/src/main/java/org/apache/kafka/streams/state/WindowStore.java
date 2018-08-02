@@ -30,7 +30,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * Use the current record timestamp as the {@code windowStartTimestamp} and
      * delegate to {@link WindowStore#put(Object, Object, long)}.
      *
-     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead.
+     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
+     * is unlikely to be the correct windowStartTimestamp in general.
      *
      * @param key The key to associate the value to
      * @param value The value to update, it can be null;
