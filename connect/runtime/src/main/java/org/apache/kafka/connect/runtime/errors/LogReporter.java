@@ -21,6 +21,8 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Objects;
+
 /**
  * Writes errors and their context to application logs.
  */
@@ -30,12 +32,16 @@ public class LogReporter implements ErrorReporter {
 
     private final ConnectorTaskId id;
     private final ConnectorConfig connConfig;
+    private final ErrorHandlingMetrics errorHandlingMetrics;
 
-    private ErrorHandlingMetrics errorHandlingMetrics;
+    public LogReporter(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
+        Objects.requireNonNull(id);
+        Objects.requireNonNull(connConfig);
+        Objects.requireNonNull(errorHandlingMetrics);
 
-    public LogReporter(ConnectorTaskId id, ConnectorConfig connConfig) {
         this.id = id;
         this.connConfig = connConfig;
+        this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
     /**
@@ -55,11 +61,6 @@ public class LogReporter implements ErrorReporter {
 
         log.error(message(context), context.error());
         errorHandlingMetrics.recordErrorLogged();
-    }
-
-    @Override
-    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
-        this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
     // Visible for testing
