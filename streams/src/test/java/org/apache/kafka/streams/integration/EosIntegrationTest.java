@@ -391,8 +391,9 @@ public class EosIntegrationTest {
         // the app is supposed to emit all 40 update records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
+        // in the uncommitted batch sending some data for the new key to validate that upon resuming they will not be shown up in the store
         //
-        // the failure gets inject after 20 committed and 30 uncommitted records got received
+        // the failure gets inject after 20 committed and 10 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
@@ -402,7 +403,7 @@ public class EosIntegrationTest {
             streams.start();
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
 
             final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
             dataBeforeFailure.addAll(committedDataBeforeFailure);
@@ -610,10 +611,6 @@ public class EosIntegrationTest {
 
                     @Override
                     public KeyValue<Long, Long> transform(final Long key, final Long value) {
-                        if (errorInjected.compareAndSet(true, false)) {
-                            // only tries to fail once on one of the task
-                            throw new RuntimeException("Injected test exception.");
-                        }
                         if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
                                 try {
@@ -631,16 +628,27 @@ public class EosIntegrationTest {
 
                         if (state != null) {
                             Long sum = state.get(key);
+
                             if (sum == null) {
                                 sum = value;
                             } else {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            context.forward(key, sum);
-                            return null;
+                            state.flush();
                         }
-                        return new KeyValue<>(key, value);
+
+
+                        if (errorInjected.compareAndSet(true, false)) {
+                            // only tries to fail once on one of the task
+                            throw new RuntimeException("Injected test exception.");
+                        }
+
+                        if (state != null) {
+                            return new KeyValue<>(key, state.get(key));
+                        } else {
+                            return new KeyValue<>(key, value);
+                        }
                     }
 
                     @Override

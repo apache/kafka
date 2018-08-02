@@ -43,6 +43,7 @@ import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetA
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.RetriableException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -304,11 +305,26 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: KafkaZkClient, topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+  def createTopic(zkClient: KafkaZkClient,
+                  topic: String,
+                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
                   servers: Seq[KafkaServer]): scala.collection.immutable.Map[Int, Int] = {
+    createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
+  }
+
+  /**
+   * Create a topic in ZooKeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(zkClient: KafkaZkClient,
+                  topic: String,
+                  partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+                  servers: Seq[KafkaServer],
+                  topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment)
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { case i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -531,9 +547,10 @@ object TestUtils extends Logging {
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
                            bufferSize: Long = 1024L * 1024L,
-                           retries: Int = 0,
-                           lingerMs: Long = 0,
-                           requestTimeoutMs: Long = 30 * 1000L,
+                           retries: Int = Int.MaxValue,
+                           deliveryTimeoutMs: Int = 30 * 1000,
+                           lingerMs: Int = 0,
+                           requestTimeoutMs: Int = 20 * 1000,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
@@ -547,7 +564,9 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
+    producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
     producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
 
     /* Only use these if not already set */
     val defaultProps = Map(
@@ -658,7 +677,7 @@ object TestUtils extends Logging {
       val listenerName = ListenerName.forSecurityProtocol(protocol)
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), b.rack)
     }
-    brokers.foreach(b => zkClient.registerBrokerInZk(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
+    brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
       ApiVersion.latestVersion, jmxPort = -1)))
     brokers
   }
@@ -772,17 +791,33 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wait until the given condition is true or throw an exception if the given wait time elapses.
-   */
+    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    *
+    * @param condition condition to check
+    * @param msg error message
+    * @param waitTime maximum time to wait and retest the condition before failing the test
+    * @param pause delay between condition checks
+    * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
+    */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
+                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
     val startTime = System.currentTimeMillis()
+    var retry = 0
     while (true) {
-      if (condition())
-        return
-      if (System.currentTimeMillis() > startTime + waitTime)
-        fail(msg)
-      Thread.sleep(waitTime.min(pause))
+      try {
+        if (condition())
+          return
+        if (System.currentTimeMillis() > startTime + waitTime)
+          fail(msg)
+        Thread.sleep(waitTime.min(pause))
+      }
+      catch {
+        case e: RetriableException if retry < maxRetries => {
+          debug("Retrying after error", e)
+          retry += 1
+        }
+        case e : Throwable => throw e
+      }
     }
     // should never hit here
     throw new RuntimeException("unexpected error")
@@ -956,7 +991,7 @@ object TestUtils extends Logging {
                       compressionType: CompressionType = CompressionType.NONE): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = acks)
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -980,10 +1015,7 @@ object TestUtils extends Logging {
   }
 
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
-    val producer = createProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5
-    )
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers))
     producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
   }
@@ -1236,19 +1268,17 @@ object TestUtils extends Logging {
                                   transactionTimeoutMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, props = Some(props))
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
   def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))

@@ -514,6 +514,50 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testForceMetadataRefreshForPatternSubscriptionDuringRebalance() {
+        // Set up a non-leader consumer with pattern subscription and a cluster containing one topic matching the
+        // pattern.
+        final String consumerId = "consumer";
+
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+        metadata.update(TestUtils.singletonCluster(topic1, 1), Collections.<String>emptySet(),
+            time.milliseconds());
+        assertEquals(singleton(topic1), subscriptions.subscription());
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+
+        // Instrument the test so that metadata will contain two topics after next refresh.
+        client.prepareMetadataUpdate(cluster, Collections.emptySet());
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.memberId().equals(consumerId) &&
+                    sync.generationId() == 1 &&
+                    sync.groupAssignment().isEmpty();
+            }
+        }, syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+        // This will trigger rebalance.
+        coordinator.poll(Long.MAX_VALUE);
+
+        // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain two topics.
+        final Set<String> updatedSubscriptionSet = new HashSet<>(Arrays.asList(topic1, topic2));
+        assertEquals(updatedSubscriptionSet, subscriptions.subscription());
+
+        // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
+        // rebalance again.
+        metadata.requestUpdate();
+        client.poll(Long.MAX_VALUE, time.milliseconds());
+        assertFalse(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
     public void testWakeupDuringJoin() {
         final String consumerId = "leader";
 
@@ -872,6 +916,57 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
+    }
+
+    @Test
+    public void testWakeupFromAssignmentCallback() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false, true);
+
+        final String topic = "topic1";
+        TopicPartition partition = new TopicPartition(topic, 0);
+        final String consumerId = "follower";
+        Set<String> topics = Collections.singleton(topic);
+        MockRebalanceListener rebalanceListener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                boolean raiseWakeup = this.assignedCount == 0;
+                super.onPartitionsAssigned(partitions);
+
+                if (raiseWakeup)
+                    throw new WakeupException();
+            }
+        };
+
+        subscriptions.subscribe(topics, rebalanceListener);
+        metadata.setTopics(topics);
+
+        // we only have metadata for one topic initially
+        metadata.update(TestUtils.singletonCluster(topic, 1), Collections.emptySet(), time.milliseconds());
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+
+        // prepare initial rebalance
+        partitionAssignor.prepare(singletonMap(consumerId, Collections.singletonList(partition)));
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Collections.singletonList(partition), Errors.NONE));
+
+
+        // The first call to poll should raise the exception from the rebalance listener
+        try {
+            coordinator.poll(Long.MAX_VALUE);
+            fail("Expected exception thrown from assignment callback");
+        } catch (WakeupException e) {
+        }
+
+        // The second call should retry the assignment callback and succeed
+        coordinator.poll(Long.MAX_VALUE);
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(2, rebalanceListener.assignedCount);
     }
 
     @Test
@@ -1901,7 +1996,7 @@ public class ConsumerCoordinatorTest {
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
         return new JoinGroupResponse(error, generationId, partitionAssignor.name(), memberId, leaderId,
-                Collections.<String, ByteBuffer>emptyMap());
+                Collections.emptyMap());
     }
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
@@ -1914,7 +2009,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(Errors topLevelError) {
-        return new OffsetFetchResponse(topLevelError, Collections.<TopicPartition, OffsetFetchResponse.PartitionData>emptyMap());
+        return new OffsetFetchResponse(topLevelError, Collections.emptyMap());
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {

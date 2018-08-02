@@ -716,7 +716,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
-        if (timestamp == TimestampTracker.NOT_KNOWN) {
+        if (timestamp == RecordQueue.NOT_KNOWN) {
             return false;
         } else {
             return streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);

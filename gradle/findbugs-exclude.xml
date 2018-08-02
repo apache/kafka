@@ -171,13 +171,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Suppress some inconsistent synchronization warnings.  TODO: fix these.  See
-             KAFKA-4994. -->
-        <Class name="org.apache.kafka.connect.storage.OffsetStorageWriter"/>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
-    </Match>
-
-    <Match>
         <!-- Suppress a warning about intentional switch statement fallthrough. -->
         <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
         <Method name="authenticate"/>

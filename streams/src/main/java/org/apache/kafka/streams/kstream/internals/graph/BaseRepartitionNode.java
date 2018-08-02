@@ -53,4 +53,15 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
 
     abstract Deserializer<V> getValueDeserializer();
 
+    @Override
+    public String toString() {
+        return "BaseRepartitionNode{" +
+               "keySerde=" + keySerde +
+               ", valueSerde=" + valueSerde +
+               ", sinkName='" + sinkName + '\'' +
+               ", sourceName='" + sourceName + '\'' +
+               ", repartitionTopic='" + repartitionTopic + '\'' +
+               ", processorParameters=" + processorParameters +
+               "} " + super.toString();
+    }
 }

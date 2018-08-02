@@ -200,9 +200,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                                                  Map<String, ByteBuffer> allMemberMetadata);
 
     /**
-     * Invoked when a group member has successfully joined a group. If this call is woken up (i.e.
-     * if the invocation raises {@link org.apache.kafka.common.errors.WakeupException}), then it
-     * will be retried on the next call to {@link #ensureActiveGroup()}.
+     * Invoked when a group member has successfully joined a group. If this call fails with an exception,
+     * then it will be retried using the same assignment state on the next call to {@link #ensureActiveGroup()}.
      *
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
@@ -418,7 +417,9 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
-                onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
+                // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
+                ByteBuffer memberAssignment = future.value().duplicate();
+                onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
 
                 // We reset the join group future only after the completion callback returns. This ensures
                 // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
@@ -802,7 +803,7 @@ public abstract class AbstractCoordinator implements Closeable {
         if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation != Generation.NO_GENERATION) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            log.debug("Sending LeaveGroup request to coordinator {}", coordinator);
+            log.info("Sending LeaveGroup request to coordinator {}", coordinator);
             LeaveGroupRequest.Builder request =
                     new LeaveGroupRequest.Builder(groupId, generation.memberId);
             client.send(coordinator, request)
@@ -1031,6 +1032,12 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll(), so we explicitly leave the group.
+                            log.warn("This member will leave the group because consumer poll timeout has expired. This " +
+                                    "means the time between subsequent calls to poll() was longer than the configured " +
+                                    "max.poll.interval.ms, which typically implies that the poll loop is spending too " +
+                                    "much time processing messages. You can address this either by increasing " +
+                                    "max.poll.interval.ms or by reducing the maximum size of batches returned in poll() " +
+                                    "with max.poll.records.");
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the

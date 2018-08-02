@@ -153,10 +153,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        // the next 2 config values make sure that all records are produced with no loss and no duplicates
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 80000);
 
         final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
@@ -166,7 +163,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final ValueList[] data = new ValueList[numKeys];
         for (int i = 0; i < numKeys; i++) {
             data[i] = new ValueList(i, i + maxRecordsPerKey - 1);
-            allData.put(data[i].key, new HashSet<Integer>());
+            allData.put(data[i].key, new HashSet<>());
         }
         final Random rand = new Random();
 

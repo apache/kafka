@@ -45,6 +45,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -340,5 +342,18 @@ public class TestUtils {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
+        throws InterruptedException {
+        try {
+            future.get();
+            fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            assertEquals("Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
+                    cause.getClass().getSimpleName(),
+                exceptionClass, cause.getClass());
+        }
     }
 }

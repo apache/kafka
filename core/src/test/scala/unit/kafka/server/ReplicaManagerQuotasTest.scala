@@ -52,8 +52,8 @@ class ReplicaManagerQuotasTest {
     val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded()).andReturn(false).once()
-    expect(quota.isQuotaExceeded()).andReturn(true).once()
+    expect(quota.isQuotaExceeded).andReturn(false).once()
+    expect(quota.isQuotaExceeded).andReturn(true).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(
@@ -78,8 +78,8 @@ class ReplicaManagerQuotasTest {
     val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded()).andReturn(true).once()
-    expect(quota.isQuotaExceeded()).andReturn(true).once()
+    expect(quota.isQuotaExceeded).andReturn(true).once()
+    expect(quota.isQuotaExceeded).andReturn(true).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(
@@ -103,8 +103,8 @@ class ReplicaManagerQuotasTest {
     val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded()).andReturn(false).once()
-    expect(quota.isQuotaExceeded()).andReturn(false).once()
+    expect(quota.isQuotaExceeded).andReturn(false).once()
+    expect(quota.isQuotaExceeded).andReturn(false).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(
@@ -128,8 +128,8 @@ class ReplicaManagerQuotasTest {
     val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded()).andReturn(false).once()
-    expect(quota.isQuotaExceeded()).andReturn(true).once()
+    expect(quota.isQuotaExceeded).andReturn(false).once()
+    expect(quota.isQuotaExceeded).andReturn(true).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(

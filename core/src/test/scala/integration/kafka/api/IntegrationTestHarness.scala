@@ -93,19 +93,19 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-      TestUtils.createProducer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.clientSaslProperties,
-                                  props = Some(producerConfig))
+    TestUtils.createProducer(brokerList,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(producerConfig))
   }
 
   def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
-      TestUtils.createConsumer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.clientSaslProperties,
-                                  props = Some(consumerConfig))
+    TestUtils.createConsumer(brokerList,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(consumerConfig))
   }
 
   @After

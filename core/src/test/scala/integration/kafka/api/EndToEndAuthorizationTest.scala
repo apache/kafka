@@ -22,7 +22,6 @@ import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
-import kafka.common.TopicAndPartition
 import kafka.security.auth._
 import kafka.server._
 import kafka.utils._
@@ -73,7 +72,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val wildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = TopicAndPartition(topic, part)
   val clientPrincipal: String
   val kafkaPrincipal: String
 
@@ -191,11 +189,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
     TestUtils.createProducer(brokerList,
-                                maxBlockMs = 3000L,
-                                securityProtocol = this.securityProtocol,
-                                trustStoreFile = this.trustStoreFile,
-                                saslProperties = this.clientSaslProperties,
-                                props = Some(producerConfig))
+      maxBlockMs = 3000L,
+      securityProtocol = this.securityProtocol,
+      trustStoreFile = this.trustStoreFile,
+      saslProperties = this.clientSaslProperties,
+      props = Some(producerConfig))
   }
 
   /**

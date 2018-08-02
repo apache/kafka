@@ -152,6 +152,25 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes() {
+
+        createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02, task03,
+                                                            task04, task05, task10);
+
+        createClient(p2, 1);
+
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(task10, task00, task01, task02, task03, task04, task05);
+
+        final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task01, task10, task05));
+        final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(task02, task03, task04));
+
+        taskAssignor.assign(0);
+
+        assertThat(clients.get(p1).activeTasks(), equalTo(expectedClientITasks));
+        assertThat(clients.get(p2).activeTasks(), equalTo(expectedClientIITasks));
+    }
+
+    @Test
     public void shouldKeepActiveTaskStickynessWhenMoreClientThanActiveTasks() {
         final int p5 = 5;
         createClientWithPreviousActiveTasks(p1, 1, task00);

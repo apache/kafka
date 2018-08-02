@@ -291,7 +291,7 @@ class GroupCoordinator(val brokerId: Int,
                   if (group.is(CompletingRebalance) && generationId == group.generationId) {
                     if (error != Errors.NONE) {
                       resetAndPropagateAssignmentError(group, error)
-                      maybePrepareRebalance(group)
+                      maybePrepareRebalance(group, s"error when storing group assignment during SyncGroup (member: $memberId)")
                     } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
@@ -333,7 +333,7 @@ class GroupCoordinator(val brokerId: Int,
             val member = group.get(memberId)
             removeHeartbeatForLeavingMember(group, member)
             debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
-            removeMemberAndUpdateGroup(group, member)
+            removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
             responseCallback(Errors.NONE)
           }
         }
@@ -698,7 +698,7 @@ class GroupCoordinator(val brokerId: Int,
                                     protocolType: String,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
-                                    callback: JoinCallback) = {
+                                    callback: JoinCallback): MemberMetadata = {
     val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
@@ -707,7 +707,7 @@ class GroupCoordinator(val brokerId: Int,
       group.newMemberAdded = true
 
     group.add(member, callback)
-    maybePrepareRebalance(group)
+    maybePrepareRebalance(group, s"Adding new member $memberId")
     member
   }
 
@@ -716,17 +716,17 @@ class GroupCoordinator(val brokerId: Int,
                                        protocols: List[(String, Array[Byte])],
                                        callback: JoinCallback) {
     group.updateMember(member, protocols, callback)
-    maybePrepareRebalance(group)
+    maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
   }
 
-  private def maybePrepareRebalance(group: GroupMetadata) {
+  private def maybePrepareRebalance(group: GroupMetadata, reason: String) {
     group.inLock {
       if (group.canRebalance)
-        prepareRebalance(group)
+        prepareRebalance(group, reason)
     }
   }
 
-  private def prepareRebalance(group: GroupMetadata) {
+  private def prepareRebalance(group: GroupMetadata, reason: String) {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(CompletingRebalance))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
@@ -743,18 +743,18 @@ class GroupCoordinator(val brokerId: Int,
 
     group.transitionTo(PreparingRebalance)
 
-    info(s"Preparing to rebalance group ${group.groupId} with old generation ${group.generationId} " +
-      s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+    info(s"Preparing to rebalance group ${group.groupId} in state ${group.currentState} with old generation " +
+      s"${group.generationId} (${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) (reason: $reason)")
 
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
-  private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata) {
+  private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata, reason: String) {
     group.remove(member.memberId)
     group.currentState match {
       case Dead | Empty =>
-      case Stable | CompletingRebalance => maybePrepareRebalance(group)
+      case Stable | CompletingRebalance => maybePrepareRebalance(group, reason)
       case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
@@ -832,7 +832,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
-        removeMemberAndUpdateGroup(group, member)
+        removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
       }
     }
   }

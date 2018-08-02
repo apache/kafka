@@ -228,11 +228,13 @@ public class StandbyTaskTest {
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
-        new InternalStreamsBuilder(internalTopologyBuilder)
-            .stream(Collections.singleton("topic"), new ConsumedInternal<>())
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
+        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
             .windowedBy(TimeWindows.of(60_000).until(120_000))
             .count(Materialized.as(storeName));
+
+        builder.buildAndOptimizeTopology();
 
         final StandbyTask task = new StandbyTask(
             taskId,
@@ -323,10 +325,12 @@ public class StandbyTaskTest {
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
-        new InternalStreamsBuilder(internalTopologyBuilder)
-            .stream(Collections.singleton("topic"), new ConsumedInternal<>())
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
+        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
             .count(Materialized.as(storeName));
+
+        builder.buildAndOptimizeTopology();
 
         consumer.assign(partitions);
 
@@ -479,6 +483,7 @@ public class StandbyTaskTest {
 
     private void initializeStandbyStores(final InternalStreamsBuilder builder) throws IOException {
         final StreamsConfig config = createConfig(baseDir);
+        builder.buildAndOptimizeTopology();
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
 

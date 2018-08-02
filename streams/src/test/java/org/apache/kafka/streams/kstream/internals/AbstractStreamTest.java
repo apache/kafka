@@ -19,13 +19,15 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -102,8 +104,11 @@ public class AbstractStreamTest {
 
         KStream<K, V> randomFilter() {
             String name = builder.newProcessorName("RANDOM-FILTER-");
-            builder.internalTopologyBuilder.addProcessor(name, new ExtendedKStreamDummy(), this.name);
-            return new KStreamImpl<>(builder, name, sourceNodes, false, null);
+            ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
+                                                                      new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
+                                                                      false);
+            builder.addGraphNode(this.streamsGraphNode, processorNode);
+            return new KStreamImpl<>(builder, name, sourceNodes, false, processorNode);
         }
     }
 

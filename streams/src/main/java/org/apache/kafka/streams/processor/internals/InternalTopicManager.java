@@ -35,7 +35,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -43,6 +42,12 @@ import java.util.concurrent.ExecutionException;
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
+
+    private static final class InternalAdminClientConfig extends AdminClientConfig {
+        private InternalAdminClientConfig(final Map<?, ?> props) {
+            super(props, false);
+        }
+    }
 
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
@@ -57,12 +62,12 @@ public class InternalTopicManager {
                                 final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
-        LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
+        final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        retries = new AdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+        retries = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
 
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -146,12 +151,7 @@ public class InternalTopicManager {
                 }
 
                 if (retry) {
-                    final Iterator<NewTopic> it = newTopics.iterator();
-                    while (it.hasNext()) {
-                        if (createTopicNames.contains(it.next().name())) {
-                            it.remove();
-                        }
-                    }
+                    newTopics.removeIf(newTopic -> createTopicNames.contains(newTopic.name()));
 
                     continue;
                 }
