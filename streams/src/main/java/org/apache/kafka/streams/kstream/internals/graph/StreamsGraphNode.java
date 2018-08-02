@@ -26,8 +26,8 @@ import java.util.LinkedHashSet;
 
 public abstract class StreamsGraphNode {
 
-    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
-    private final Collection<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
     private final String nodeName;
     private final boolean repartitionRequired;
     private boolean keyChangingOperation;
@@ -68,6 +68,18 @@ public abstract class StreamsGraphNode {
 
     public Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
+    }
+
+    public void clearChildren() {
+        childNodes.clear();
+    }
+
+    public StreamsGraphNode getParent(StreamsGraphNode parentCandidate) {
+        return parentNodes.stream().filter(p -> p.equals(parentCandidate)).findFirst().orElse(null);
+    }
+
+    public boolean removeChild(StreamsGraphNode child) {
+        return childNodes.remove(child);
     }
 
     public void addChildNode(final StreamsGraphNode childNode) {

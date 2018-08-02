@@ -529,7 +529,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                       joiner,
                       windows,
                       joined,
-                      new KStreamImplJoin(false, false, this.streamsGraphNode));
+                      new KStreamImplJoin(false, false));
 
     }
 
@@ -545,7 +545,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true, this.streamsGraphNode));
+        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
     }
 
     private <V1, R> KStream<K, R> doJoin(final KStream<K, V1> other,
@@ -656,7 +656,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             joiner,
             windows,
             joined,
-            new KStreamImplJoin(true, false, this.streamsGraphNode)
+            new KStreamImplJoin(true, false)
         );
 
     }
@@ -840,14 +840,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         private final boolean leftOuter;
         private final boolean rightOuter;
-        private final StreamsGraphNode parentGraphNode;
+
 
         KStreamImplJoin(final boolean leftOuter,
-                        final boolean rightOuter,
-                        final StreamsGraphNode parentGraphNode) {
+                        final boolean rightOuter) {
             this.leftOuter = leftOuter;
             this.rightOuter = rightOuter;
-            this.parentGraphNode = parentGraphNode;
         }
 
         @SuppressWarnings("unchecked")

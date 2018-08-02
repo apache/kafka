@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -24,6 +26,8 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
@@ -39,9 +43,16 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 public class InternalStreamsBuilder implements InternalNameProvider {
@@ -51,6 +62,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
     private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
+    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
+    private final Map<StreamsGraphNode, StreamSinkNode> stateStoreNodeToSinkNodes = new HashMap<>();
+    private final Set<TableSourceNode> tableSourceNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -227,9 +241,32 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
+
+        if (node.parentNodes().isEmpty() && !node.nodeName().equals(TOPOLOGY_ROOT)) {
+            throw new IllegalStateException(
+                "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
+                + node.getClass().getSimpleName());
+        }
+
+        if (node instanceof TableSourceNode && !((TableSourceNode) node).isGlobalKTable()) {
+            tableSourceNodes.add((TableSourceNode) node);
+        } else if (node.isKeyChangingOperation() && !keyChangingOperationsToOptimizableRepartitionNodes.containsKey(node)) {
+            keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
+        } else if (node instanceof OptimizableRepartitionNode) {
+            StreamsGraphNode parentNode = findParentNodeMatching(node, StreamsGraphNode::isKeyChangingOperation);
+            if (parentNode != null) {
+                keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
+            }
+
+        }
     }
 
-    public void buildAndOptimizeTopology() {
+    public void buildAndOptimizeTopology(Properties props) {
+
+        if (props != null && props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE)) {
+            LOG.debug("Optimizing the Kafka Streams graph");
+            optimize();
+        }
 
         final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
@@ -253,6 +290,129 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
+    private void optimize() {
+        maybeOptimizeRepartitionOperations();
+    }
+
+    private void maybeOptimizeRepartitionOperations() {
+        StreamsGraphNode optimizedSingleRepartition = null;
+
+        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
+
+            StreamsGraphNode keyChangingNode = streamsGraphNodeSetEntry.getKey();
+
+            if (streamsGraphNodeSetEntry.getValue().isEmpty()) {
+                continue;
+            }
+
+            StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(keyChangingNode, n -> n instanceof StreamSourceNode);
+
+            if (parentSourceNode == null) {
+                throw new IllegalStateException(String.format("Can't find parent source node for %s ", keyChangingNode));
+            }
+
+            optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
+                                                               parentSourceNode.keySerde(),
+                                                               parentSourceNode.valueSerde());
+
+            // re-use parent id to make sure StreamsGraphNode is evaluated before downstream nodes
+            optimizedSingleRepartition.setId(parentSourceNode.id());
+
+            for (OptimizableRepartitionNode repartitionNodeToBeReplaced : streamsGraphNodeSetEntry.getValue()) {
+
+                // The "easy" case, the forced repartition is a direct child node of key-changing operation
+                //   ..map.groupByKey()....
+                // We just need to move the repartition to occur immediately after the map
+                // then move all child nodes of the map call to children of the optimized repartition
+                if (repartitionNodeToBeReplaced.parentNodes().contains(keyChangingNode)) {
+                    // now get rid of the downstream repartition operation
+                    StreamsGraphNode parentOfRepartitionNodeToBeReplaced = repartitionNodeToBeReplaced.getParent(keyChangingNode);
+                    Collection<StreamsGraphNode> childrenOfRepartitionNodeToBeReplaced = repartitionNodeToBeReplaced.children();
+
+                    repartitionNodeToBeReplaced.clearChildren();
+                    parentOfRepartitionNodeToBeReplaced.removeChild(repartitionNodeToBeReplaced);
+
+                    for (StreamsGraphNode childOfRepartitionNodeToBeReplaced : childrenOfRepartitionNodeToBeReplaced) {
+                        optimizedSingleRepartition.addChildNode(childOfRepartitionNodeToBeReplaced);
+                    }
+
+                } else { /*
+                           The more difficult case is the auto generated repartition is somewhere downstream of key-changing like so:
+                                ..map.filter(..)..mapValues(..).peek(..).groupByKey.(auto-repartition node created internally before groupByKey)
+
+                           The repartition node was automatically added between peek and groupByKey
+                           We need to:
+                             1. Move the repartition to come immediately after the map call
+                             2. Remove the repartition between peek and groupByKey
+                             3. Re-attach graph children on either side to keep sub-topology in place
+                        */
+
+                    StreamsGraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNodes().contains(keyChangingNode));
+
+                    LOG.debug("Found the node downstream of key-changer {}", keyChangingNodeChild);
+
+                    // need to add children of key-changing node as children of optimized repartition
+                    // in order to process records from re-partitioning
+                    optimizedSingleRepartition.addChildNode(keyChangingNodeChild);
+
+                    LOG.debug("Removing {} from {}  children {}", keyChangingNodeChild, keyChangingNode, keyChangingNode.children());
+                    // now remove children from key-changing node
+                    keyChangingNode.removeChild(keyChangingNodeChild);
+
+                    // now need to get children of repartition node so we can remove repartition node
+                    Collection<StreamsGraphNode> repartitionNodeToBeReplacedChildren = repartitionNodeToBeReplaced.children();
+
+                    StreamsGraphNode parentOfRepartitionNodeToBeReplaced = findParentNodeMatching(repartitionNodeToBeReplaced, n -> repartitionNodeToBeReplaced.parentNodes().contains(n));
+
+                    LOG.debug("Returned {} parentOfRepartitionNodeToBeReplaced as parent of {}", parentOfRepartitionNodeToBeReplaced, repartitionNodeToBeReplaced);
+
+                    // remove repartition node
+                    parentOfRepartitionNodeToBeReplaced.removeChild(repartitionNodeToBeReplaced);
+
+                    repartitionNodeToBeReplaced.clearChildren();
+
+                    // re-attach children of removed repartition
+                    for (StreamsGraphNode repartitionNodeToBeReplacedChild : repartitionNodeToBeReplacedChildren) {
+                        parentOfRepartitionNodeToBeReplaced.addChildNode(repartitionNodeToBeReplacedChild);
+                    }
+                }
+
+                LOG.debug("UPDATED node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
+            }
+
+            keyChangingNode.addChildNode(optimizedSingleRepartition);
+            LOG.debug("Key Changing node {} children {}", keyChangingNode, keyChangingNode.children());
+        }
+
+        LOG.debug("Fully updated repartition {} children {}", optimizedSingleRepartition,
+                  optimizedSingleRepartition != null ? optimizedSingleRepartition.children() : null);
+    }
+
+    private StreamsGraphNode createRepartitionNode(String name, Serde keySerde, Serde valueSerde) {
+        OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        KStreamImpl.createRepartitionedSource(this,
+                                              keySerde,
+                                              valueSerde,
+                                              name + "-optimized",
+                                              name,
+                                              repartitionNodeBuilder);
+
+        return repartitionNodeBuilder.build();
+
+    }
+
+    private StreamsGraphNode findParentNodeMatching(StreamsGraphNode startSeekingNode, Predicate<StreamsGraphNode> parentNodePredicate) {
+        if (startSeekingNode == null || parentNodePredicate.test(startSeekingNode)) {
+            return startSeekingNode;
+        }
+        StreamsGraphNode foundParentNode = null;
+
+        for (final StreamsGraphNode parentNode : startSeekingNode.parentNodes()) {
+            foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
+        }
+
+        return foundParentNode;
+    }
 
     public StreamsGraphNode root() {
         return root;
