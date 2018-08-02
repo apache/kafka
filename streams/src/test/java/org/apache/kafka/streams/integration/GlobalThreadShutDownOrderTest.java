@@ -103,10 +103,10 @@ public class GlobalThreadShutDownOrderTest {
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(Stores.persistentKeyValueStore(globalStore),
-                                                                                     Serdes.String(),
-                                                                                     Serdes.Long(),
-                                                                                     mockTime);
+        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(Stores.persistentKeyValueStore(globalStore),
+                                                                                           Serdes.String(),
+                                                                                           Serdes.Long(),
+                                                                                           mockTime);
 
         builder.addGlobalStore(storeBuilder,
                                globalStoreTopic,
@@ -150,7 +150,7 @@ public class GlobalThreadShutDownOrderTest {
 
         kafkaStreams.close(30, TimeUnit.SECONDS);
 
-        List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
+        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);
     }
 
@@ -163,7 +163,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private void populateTopics(String topicName) throws Exception {
+    private void populateTopics(final String topicName) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topicName,
             Arrays.asList(
@@ -205,8 +205,8 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void close() {
-            List<String> keys = Arrays.asList("A", "B", "C", "D");
-            for (String key : keys) {
+            final List<String> keys = Arrays.asList("A", "B", "C", "D");
+            for (final String key : keys) {
                 // need to simulate thread slow in closing
                 Utils.sleep(1000);
                 retrievedValuesList.add(store.get(key));

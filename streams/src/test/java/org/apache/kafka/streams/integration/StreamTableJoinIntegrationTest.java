@@ -46,7 +46,7 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     private KStream<Long, String> leftStream;
     private KTable<Long, String> rightTable;
 
-    public StreamTableJoinIntegrationTest(boolean cacheEnabled) {
+    public StreamTableJoinIntegrationTest(final boolean cacheEnabled) {
         super(cacheEnabled);
     }
 

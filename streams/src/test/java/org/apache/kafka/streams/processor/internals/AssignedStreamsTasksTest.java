@@ -90,7 +90,7 @@ public class AssignedStreamsTasksTest {
 
         assignedTasks.initializeNewTasks();
 
-        Collection<StreamTask> restoring = assignedTasks.restoringTasks();
+        final Collection<StreamTask> restoring = assignedTasks.restoringTasks();
         assertThat(restoring.size(), equalTo(1));
         assertSame(restoring.iterator().next(), t1);
     }
@@ -293,7 +293,7 @@ public class AssignedStreamsTasksTest {
         try {
             assignedTasks.commit();
             fail("Should have thrown exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));

@@ -139,7 +139,7 @@ public class FineGrainedAutoResetIntegrationTest {
     @Before
     public void setUp() throws IOException {
 
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
@@ -276,10 +276,10 @@ public class FineGrainedAutoResetIntegrationTest {
 
     @Test
     public void shouldThrowStreamsExceptionNoResetSpecified() throws InterruptedException {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 
-        Properties localConfig = StreamsTestUtils.getStreamsConfig(
+        final Properties localConfig = StreamsTestUtils.getStreamsConfig(
                 "testAutoOffsetWithNone",
                 CLUSTER.bootstrapServers(),
                 STRING_SERDE_CLASSNAME,
@@ -291,7 +291,7 @@ public class FineGrainedAutoResetIntegrationTest {
 
         exceptionStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
-        KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
 
         final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
 
@@ -312,7 +312,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final class TestingUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
         boolean correctExceptionThrown = false;
         @Override
-        public void uncaughtException(Thread t, Throwable e) {
+        public void uncaughtException(final Thread t, final Throwable e) {
             assertThat(e.getClass().getSimpleName(), is("StreamsException"));
             assertThat(e.getCause().getClass().getSimpleName(), is("NoOffsetForPartitionException"));
             correctExceptionThrown = true;

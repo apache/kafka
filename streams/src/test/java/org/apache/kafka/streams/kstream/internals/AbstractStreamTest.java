@@ -78,7 +78,7 @@ public class AbstractStreamTest {
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final String topicName = "topic";
 
-        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
+        final ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
         stream.randomFilter().process(supplier);
 
@@ -89,7 +89,7 @@ public class AbstractStreamTest {
 
         final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
@@ -103,10 +103,10 @@ public class AbstractStreamTest {
         }
 
         KStream<K, V> randomFilter() {
-            String name = builder.newProcessorName("RANDOM-FILTER-");
-            ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
-                                                                      new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
-                                                                      false);
+            final String name = builder.newProcessorName("RANDOM-FILTER-");
+            final ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
+                                                                            new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
+                                                                            false);
             builder.addGraphNode(this.streamsGraphNode, processorNode);
             return new KStreamImpl<>(builder, name, sourceNodes, false, processorNode);
         }
@@ -127,7 +127,7 @@ public class AbstractStreamTest {
 
         private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
             @Override
-            public void process(K key, V value) {
+            public void process(final K key, final V value) {
                 // flip a coin and filter
                 if (rand.nextBoolean())
                     context().forward(key, value);

@@ -31,7 +31,7 @@ import java.util.Collections;
  */
 public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNode<K, V> {
 
-    private StoreBuilder<S> storeBuilder;
+    private final StoreBuilder<S> storeBuilder;
     private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;

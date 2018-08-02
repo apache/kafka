@@ -96,11 +96,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     protected volatile boolean open = false;
 
-    RocksDBStore(String name) {
+    RocksDBStore(final String name) {
         this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(String name, String parentDir) {
+    RocksDBStore(final String name, final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
     }
@@ -153,7 +153,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException(e);
         }
 

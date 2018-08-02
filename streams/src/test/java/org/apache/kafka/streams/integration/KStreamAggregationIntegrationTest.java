@@ -254,9 +254,8 @@ public class KStreamAggregationIntegrationTest {
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (String record: allRecords) {
-            record = "KeyValue(" + record + ")";
-            assertTrue(expectResultString.contains(record));
+        for (final String record: allRecords) {
+            assertTrue(expectResultString.contains("KeyValue(" + record + ")"));
         }
     }
 

@@ -82,7 +82,7 @@ public class RocksDBStoreTest {
     public void shouldRespectBulkloadOptionsDuringInit() {
         rocksDBStore.init(context, rocksDBStore);
 
-        StateRestoreListener restoreListener = context.getRestoreListener(rocksDBStore.name());
+        final StateRestoreListener restoreListener = context.getRestoreListener(rocksDBStore.name());
 
         restoreListener.onRestoreStart(null, rocksDBStore.name(), 0L, 0L);
 
@@ -131,21 +131,21 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()));
+        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 
         try {
             rocksDBStore.openDB(tmpContext);
             fail("Should have thrown ProcessorStateException");
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // this is good, do nothing
         }
     }
 
     @Test
     public void shouldPutAll() {
-        List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
             new Bytes(stringSerializer.serialize(null, "1")),
             stringSerializer.serialize(null, "a")));
@@ -180,7 +180,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldTogglePrepareForBulkloadSetting() {
         rocksDBStore.init(context, rocksDBStore);
-        RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
+        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
             (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
@@ -197,7 +197,7 @@ public class RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
-        RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
+        final RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
             (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
@@ -353,7 +353,7 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
-        } catch (NullPointerException e) {
+        } catch (final NullPointerException e) {
             // this is good
         }
     }
@@ -364,7 +364,7 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
-        } catch (NullPointerException e) {
+        } catch (final NullPointerException e) {
             // this is good
         }
     }
@@ -375,7 +375,7 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.get(null);
             fail("Should have thrown NullPointerException on null get()");
-        } catch (NullPointerException e) {
+        } catch (final NullPointerException e) {
             // this is good
         }
     }
@@ -386,7 +386,7 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.delete(null);
             fail("Should have thrown NullPointerException on deleting null key");
-        } catch (NullPointerException e) {
+        } catch (final NullPointerException e) {
             // this is good
         }
     }
@@ -397,7 +397,7 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
             fail("Should have thrown NullPointerException on deleting null key");
-        } catch (NullPointerException e) {
+        } catch (final NullPointerException e) {
             // this is good
         }
     }

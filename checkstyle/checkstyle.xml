@@ -71,6 +71,12 @@
     <module name="TypeName"/>
     <module name="AvoidStarImport"/>
 
+    <!-- variables that can be final should be final (suppressed except for Streams) -->
+    <module name="FinalLocalVariable">
+      <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
+      <property name="validateEnhancedForLoopVariable" value="true"/>
+    </module>
+
     <!-- dependencies -->
     <module name="ImportControl">
       <property name="file" value="${importControlFile}"/>

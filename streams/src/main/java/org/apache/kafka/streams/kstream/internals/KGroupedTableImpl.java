@@ -53,7 +53,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private final Aggregator<K, V, Long> countAdder = (aggKey, value, aggregate) -> aggregate + 1L;
 
-    private Aggregator<K, V, Long> countSubtractor = (aggKey, value, aggregate) -> aggregate - 1L;
+    private final Aggregator<K, V, Long> countSubtractor = (aggKey, value, aggregate) -> aggregate - 1L;
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
@@ -75,16 +75,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String funcName = builder.newProcessorName(functionName);
         final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
-                                                                 sourceName,
-                                                                 topic);
+        final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
+                                                                       sourceName,
+                                                                       topic);
 
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.streamsGraphNode, repartitionNode);
 
-        StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
-                                                                               funcName,
-                                                                               aggregateSupplier);
+        final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
+                                                                                     funcName,
+                                                                                     aggregateSupplier);
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionNode, statefulProcessorNode);
@@ -104,7 +104,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                                                final String functionName,
                                                                final ProcessorSupplier aggregateSupplier) {
 
-        ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
+        final ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
 
         return StatefulProcessorNode.statefulProcessorNodeBuilder()
             .withNodeName(functionName)

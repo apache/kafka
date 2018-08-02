@@ -238,11 +238,11 @@ public class InternalStreamsBuilderTest {
         stream2.leftJoin(globalTable2, kvMapper, MockValueJoiner.TOSTRING_JOINER);
 
         final Map<Integer, Set<String>> nodeGroups = builder.internalTopologyBuilder.nodeGroups();
-        for (Integer groupId : nodeGroups.keySet()) {
+        for (final Integer groupId : nodeGroups.keySet()) {
             final ProcessorTopology topology = builder.internalTopologyBuilder.build(groupId);
             final List<StateStore> stateStores = topology.globalStateStores();
             final Set<String> names = new HashSet<>();
-            for (StateStore stateStore : stateStores) {
+            for (final StateStore stateStore : stateStores) {
                 names.add(stateStore.name());
             }
 

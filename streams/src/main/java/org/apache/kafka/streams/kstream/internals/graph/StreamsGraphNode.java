@@ -29,7 +29,7 @@ public abstract class StreamsGraphNode {
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final Collection<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
     private final String nodeName;
-    private boolean repartitionRequired;
+    private final boolean repartitionRequired;
     private boolean keyChangingOperation;
     private Integer id;
     private boolean hasWrittenToTopology = false;
@@ -105,13 +105,13 @@ public abstract class StreamsGraphNode {
         return hasWrittenToTopology;
     }
 
-    public void setHasWrittenToTopology(boolean hasWrittenToTopology) {
+    public void setHasWrittenToTopology(final boolean hasWrittenToTopology) {
         this.hasWrittenToTopology = hasWrittenToTopology;
     }
 
     @Override
     public String toString() {
-        String[] parentNames = parentNodeNames();
+        final String[] parentNames = parentNodeNames();
         return "StreamsGraphNode{" +
                "nodeName='" + nodeName + '\'' +
                ", id=" + id +

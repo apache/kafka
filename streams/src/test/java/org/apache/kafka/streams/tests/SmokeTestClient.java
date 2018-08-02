@@ -89,7 +89,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
         try {
             thread.join();
-        } catch (Exception ex) {
+        } catch (final Exception ex) {
             // do not remove these printouts since they are needed for health scripts
             System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             // ignore
