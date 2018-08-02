@@ -71,6 +71,9 @@ public abstract class StreamsGraphNode {
     }
 
     public void clearChildren() {
+        for (StreamsGraphNode childNode : childNodes) {
+             childNode.removeParent(this);
+        }
         childNodes.clear();
     }
 
@@ -79,7 +82,11 @@ public abstract class StreamsGraphNode {
     }
 
     public boolean removeChild(StreamsGraphNode child) {
-        return childNodes.remove(child);
+        return childNodes.remove(child) && child.removeParent(this);
+    }
+
+    public boolean removeParent(StreamsGraphNode parentNode) {
+        return parentNodes.remove(parentNode);
     }
 
     public void addChildNode(final StreamsGraphNode childNode) {
