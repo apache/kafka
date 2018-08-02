@@ -14,24 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.TopicPartition;
 
 /**
- * Represents an exception which was caused by a faulty record in the log.
- * It holds information pointing to the specific record.
- * The user is expected to seek past the offset for the given partition ({@code {@link UnconsumableRecordException#offset()} + 1}).
+ *  Any exception during deserialization in the consumer
  */
-public interface UnconsumableRecordException {
-    /**
-     * @return the partition of the faulty record
-     */
-    TopicPartition partition();
+public class RecordDeserializationException extends SerializationException {
 
-    /**
-     * @return the offset of the faulty record
-     */
-    long offset();
+    private static final long serialVersionUID = 1L;
+    private TopicPartition partition;
+    private long offset;
+
+    public RecordDeserializationException(TopicPartition partition, long offset, String message) {
+        super(message);
+        this.partition = partition;
+        this.offset = offset;
+    }
+
+    public TopicPartition partition() {
+        return partition;
+    }
+
+    public long offset() {
+        return offset;
+    }
+
+    /* avoid the expensive and useless stack trace for serialization exceptions */
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
+    }
 }
