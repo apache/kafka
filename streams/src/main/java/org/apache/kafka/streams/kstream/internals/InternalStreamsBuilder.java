@@ -178,12 +178,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                             final ConsumedInternal consumed,
                                             final String processorName,
                                             final ProcessorSupplier stateUpdateSupplier) {
-        StreamsGraphNode globalStoreNode = new GlobalStoreNode(storeBuilder,
-                                                               sourceName,
-                                                               topic,
-                                                               consumed,
-                                                               processorName,
-                                                               stateUpdateSupplier);
+
+        final StreamsGraphNode globalStoreNode = new GlobalStoreNode(storeBuilder,
+                                                                     sourceName,
+                                                                     topic,
+                                                                     consumed,
+                                                                     processorName,
+                                                                     stateUpdateSupplier);
 
         addGraphNode(root, globalStoreNode);
     }
