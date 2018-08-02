@@ -67,6 +67,7 @@ public class AbstractHerderTest {
     private final String connector = "connector";
 
     @MockStrict private Worker worker;
+    @MockStrict private WorkerConfigTransformer transformer;
     @MockStrict private Plugins plugins;
     @MockStrict private ClassLoader classLoader;
     @MockStrict private ConfigBackingStore configStore;
@@ -261,6 +262,9 @@ public class AbstractHerderTest {
         EasyMock.expect(herder.generation()).andStubReturn(generation);
 
         // Call to validateConnectorConfig
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
         final Connector connector;
         try {

@@ -246,6 +246,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+        if (worker.configTransformer() != null) {
+            connectorProps = worker.configTransformer().transform(connectorProps);
+        }
         String connType = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
