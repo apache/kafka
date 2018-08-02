@@ -26,8 +26,8 @@ import java.util.LinkedHashSet;
 
 public abstract class StreamsGraphNode {
 
-    private final LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
-    private final LinkedHashSet<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
+    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final Collection<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
     private final String nodeName;
     private final boolean repartitionRequired;
     private boolean keyChangingOperation;

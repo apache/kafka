@@ -242,14 +242,14 @@ public class RepartitionOptimizingIntegrationTest {
 
     private static class SimpleProcessor extends AbstractProcessor<String, String> {
 
-        List<String> valueList;
+        final List<String> valueList;
 
-        public SimpleProcessor(List<String> valueList) {
+        SimpleProcessor(final List<String> valueList) {
             this.valueList = valueList;
         }
 
         @Override
-        public void process(String key, String value) {
+        public void process(final String key, final String value) {
             valueList.add(value);
         }
     }
