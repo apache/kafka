@@ -100,6 +100,10 @@ class LogManager(logDirs: Seq[File],
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile), logDirFailureChannel))).toMap
 
+  @volatile var highWatermarkCheckpoints = liveLogDirs.map(dir =>
+    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
+
+
   private val preferredLogDirs = new ConcurrentHashMap[TopicPartition, String]()
 
   private def offlineLogDirs: Iterable[File] = {

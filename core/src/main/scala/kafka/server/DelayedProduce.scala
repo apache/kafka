@@ -53,7 +53,7 @@ case class ProduceMetadata(produceRequiredAcks: Short,
  */
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
-                     replicaManager: ReplicaManager,
+                     partitionManager: PartitionManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                      lockOpt: Option[Lock] = None)
   extends DelayedOperation(delayMs, lockOpt) {
@@ -87,7 +87,7 @@ class DelayedProduce(delayMs: Long,
       trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
+        val (hasEnough, error) = partitionManager.getPartition(topicPartition) match {
           case Some(partition) =>
             if (partition eq ReplicaManager.OfflinePartition)
               (false, Errors.KAFKA_STORAGE_ERROR)

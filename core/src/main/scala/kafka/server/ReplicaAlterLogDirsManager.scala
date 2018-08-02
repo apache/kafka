@@ -21,7 +21,8 @@ package kafka.server
 import kafka.cluster.BrokerEndPoint
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
-                                 replicaManager: ReplicaManager,
+                                 partitionManager: PartitionManager,
+                                 messageFetcher: MessageFetcher,
                                  quotaManager: ReplicationQuotaManager,
                                  brokerTopicStats: BrokerTopicStats)
   extends AbstractFetcherManager(s"ReplicaAlterLogDirsManager on broker ${brokerConfig.brokerId}",
@@ -29,7 +30,7 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
-    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, replicaManager, quotaManager, brokerTopicStats)
+    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, partitionManager, messageFetcher, quotaManager, brokerTopicStats)
   }
 
   def shutdown() {

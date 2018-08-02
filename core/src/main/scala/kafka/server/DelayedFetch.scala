@@ -58,7 +58,8 @@ case class FetchMetadata(fetchMinBytes: Int,
  */
 class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
-                   replicaManager: ReplicaManager,
+                   partitionManager: PartitionManager,
+                   messageFetcher: MessageFetcher,
                    quota: ReplicaQuota,
                    isolationLevel: IsolationLevel,
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
@@ -82,7 +83,7 @@ class DelayedFetch(delayMs: Long,
         val fetchOffset = fetchStatus.startOffsetMetadata
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            val replica = replicaManager.getLeaderReplicaIfLocal(topicPartition)
+            val replica = partitionManager.getLeaderReplicaIfLocal(topicPartition)
             val endOffset =
               if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 replica.lastStableOffset
@@ -104,12 +105,12 @@ class DelayedFetch(delayMs: Long,
                 // or the partition has just rolled a new segment
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
                 // We will not force complete the fetch request if a replica should be throttled.
-                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                if (!messageFetcher.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
                   return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
-                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                if (!messageFetcher.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
               }
             }
@@ -145,7 +146,7 @@ class DelayedFetch(delayMs: Long,
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete() {
-    val logReadResults = replicaManager.readFromLocalLog(
+    val logReadResults = messageFetcher.readFromLocalLog(
       replicaId = fetchMetadata.replicaId,
       fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,
       readOnlyCommitted = fetchMetadata.fetchOnlyCommitted,

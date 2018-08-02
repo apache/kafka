@@ -25,7 +25,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
-import kafka.zk.AdminZkClient
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.TopicPartition
@@ -44,10 +44,13 @@ class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
-                           replicaMgr: ReplicaManager,
+                           zkClient: KafkaZkClient,
+                           partitionManager: PartitionManager,
+                           brokerTopicStats: BrokerTopicStats,
                            metrics: Metrics,
                            time: Time,
                            quota: ReplicaQuota,
+                           replicaAlterLogDirsManager: ReplicaAlterLogDirsManager,
                            leaderEndpointBlockingSend: Option[BlockingSend] = None)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
@@ -99,7 +102,7 @@ class ReplicaFetcherThread(name: String,
   private val shouldSendLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
-  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
+  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  partitionManager.getReplica(tp).map(_.epochs.get)
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
@@ -111,8 +114,8 @@ class ReplicaFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
-    val replica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val replica = partitionManager.getReplicaOrException(topicPartition)
+    val partition = partitionManager.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
     maybeWarnIfOversizedRecords(records, topicPartition)
@@ -145,7 +148,7 @@ class ReplicaFetcherThread(name: String,
     // traffic doesn't exceed quota.
     if (quota.isThrottled(topicPartition))
       quota.record(records.sizeInBytes)
-    replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
+    brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
   }
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
@@ -161,8 +164,8 @@ class ReplicaFetcherThread(name: String,
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
-    val replica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val replica = partitionManager.getReplicaOrException(topicPartition)
+    val partition = partitionManager.getPartition(topicPartition).get
 
     /**
      * Unclean leader election: A follower goes down, in the meanwhile the leader keeps appending messages. The follower comes back up
@@ -180,7 +183,7 @@ class ReplicaFetcherThread(name: String,
       // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
       // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
       // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
-      val adminZkClient = new AdminZkClient(replicaMgr.zkClient)
+      val adminZkClient = new AdminZkClient(zkClient)
       if (!LogConfig.fromProps(brokerConfig.originals, adminZkClient.fetchEntityConfig(
         ConfigType.Topic, topicPartition.topic)).uncleanLeaderElectionEnable) {
         // Log a fatal error and shutdown the broker to ensure that data loss does not occur unexpectedly.
@@ -192,7 +195,7 @@ class ReplicaFetcherThread(name: String,
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
       partition.truncateTo(leaderEndOffset, isFuture = false)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition, leaderEndOffset)
+      replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, topicPartition, leaderEndOffset)
       leaderEndOffset
     } else {
       /**
@@ -282,7 +285,7 @@ class ReplicaFetcherThread(name: String,
       // We will not include a replica in the fetch request if it should be throttled.
       if (partitionFetchState.isReadyForFetch && !shouldFollowerThrottle(quota, topicPartition)) {
         try {
-          val logStartOffset = replicaMgr.getReplicaOrException(topicPartition).logStartOffset
+          val logStartOffset = partitionManager.getReplicaOrException(topicPartition).logStartOffset
           builder.add(topicPartition, new JFetchRequest.PartitionData(
             partitionFetchState.fetchOffset, logStartOffset, fetchSize))
         } catch {
@@ -315,8 +318,8 @@ class ReplicaFetcherThread(name: String,
 
     fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
       try {
-        val replica = replicaMgr.getReplicaOrException(tp)
-        val partition = replicaMgr.getPartition(tp).get
+        val replica = partitionManager.getReplicaOrException(tp)
+        val partition = partitionManager.getPartition(tp).get
 
         if (leaderEpochOffset.hasError) {
           info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${leaderEpochOffset.error}")
@@ -329,7 +332,7 @@ class ReplicaFetcherThread(name: String,
           partition.truncateTo(offsetTruncationState.offset, isFuture = false)
           // mark the future replica for truncation only when we do last truncation
           if (offsetTruncationState.truncationCompleted)
-            replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
+            replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
           fetchOffsets.put(tp, offsetTruncationState)
         }
       } catch {
