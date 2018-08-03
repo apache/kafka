@@ -1426,7 +1426,8 @@ public class FetcherTest {
         client.prepareResponse(altered);
 
         Map<String, List<PartitionInfo>> topicMetadata =
-            fetcher.getTopicMetadata(new MetadataRequest.Builder(Collections.singletonList(topicName), false), 5000L);
+            fetcher.getTopicMetadata(new MetadataRequest.Builder(Collections.singletonList(topicName), false),
+                    time.timer(5000L));
 
         Assert.assertNotNull(topicMetadata);
         Assert.assertNotNull(topicMetadata.get(topicName));
