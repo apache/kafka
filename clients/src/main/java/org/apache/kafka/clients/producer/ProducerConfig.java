@@ -107,10 +107,14 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>delivery.timeout.ms</code> */
     public static final String DELIVERY_TIMEOUT_MS_CONFIG = "delivery.timeout.ms";
-    private static final String DELIVERY_TIMEOUT_MS_DOC = "An upper bound on the time to report success or failure after Producer.send() returns. "
-                                                          + "Producer may report failure to send a message earlier than this config if all the retries are exhausted or "
-                                                          + "a record is added to a batch nearing expiration. " + DELIVERY_TIMEOUT_MS_CONFIG + "should be equal to or "
-                                                          + "greater than " + REQUEST_TIMEOUT_MS_CONFIG + " + " + LINGER_MS_CONFIG;
+    private static final String DELIVERY_TIMEOUT_MS_DOC = "An upper bound on the time to report success or failure "
+            + "after a call to <code>send()</code> returns. This limits the total time that a record will be delayed "
+            + "prior to sending, the time to await acknowledgement from the broker (if expected), and the time allowed "
+            + "for retriable send failures. The producer may report failure to send a record earlier than this config if "
+            + "either an unrecoverable error is encountered, the retries have been exhausted, "
+            + "or the record is added to a batch which reached an earlier delivery expiration deadline."
+            + "The value of this config should be greater than or equal to the sum of " + REQUEST_TIMEOUT_MS_CONFIG
+            + " and " + LINGER_MS_CONFIG + ". ";
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -181,10 +185,14 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-                                              + " Note that this retry is no different than if the client resent the record upon receiving the error."
-                                              + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
-                                              + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
-                                              + " succeeds, then the records in the second batch may appear first.";
+            + " Note that this retry is no different than if the client resent the record upon receiving the error."
+            + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+            + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
+            + " succeeds, then the records in the second batch may appear first. Note additionall that produce requests will be"
+            + " failed before the number of retries has been exhausted if the timeout configured by"
+            + " " + DELIVERY_TIMEOUT_MS_CONFIG + " expires first before successful acknowledgement. Users should generally"
+            + " prefer to leave this config unset and instead use " + DELIVERY_TIMEOUT_MS_CONFIG + " to control"
+            + " retry behavior.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";

@@ -135,7 +135,6 @@ public class Worker {
         // These settings are designed to ensure there is no data loss. They *may* be overridden via configs passed to the
         // worker, but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE));
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
@@ -524,14 +523,13 @@ public class Worker {
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
                                                   ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig);
-        logReporter.metrics(errorHandlingMetrics);
+        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps);
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
 
@@ -541,8 +539,7 @@ public class Worker {
     private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
         List<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig);
-        logReporter.metrics(errorHandlingMetrics);
+        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         return reporters;

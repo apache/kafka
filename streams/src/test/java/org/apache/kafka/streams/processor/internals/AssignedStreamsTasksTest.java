@@ -342,6 +342,8 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
+        t1.maybeEnforceProcess();
+        EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(true);
         t1.process();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
@@ -349,7 +351,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
-        assignedTasks.update();
+        assignedTasks.maybeEnforceProcess();
 
         try {
             assignedTasks.process();
@@ -363,10 +365,13 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldNotProcessUnprocessableTasks() {
         mockTaskInitialization();
+        t1.maybeEnforceProcess();
+        EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(false);
         EasyMock.replay(t1);
         addAndInitTask();
-        assignedTasks.update();
+
+        assignedTasks.maybeEnforceProcess();
 
         assertThat(assignedTasks.process(), equalTo(0));
 
@@ -376,13 +381,15 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldAlwaysProcessProcessableTasks() {
         mockTaskInitialization();
+        t1.maybeEnforceProcess();
+        EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(true);
         EasyMock.expect(t1.process()).andReturn(true).once();
-        EasyMock.expect(t1.allSourcePartitionsBuffered()).andReturn(true);
+
         EasyMock.replay(t1);
 
         addAndInitTask();
-        assignedTasks.update();
+        assignedTasks.maybeEnforceProcess();
 
         assertThat(assignedTasks.process(), equalTo(1));
 

@@ -19,57 +19,47 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Used to represent any type of stateless operation:
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
- *
  */
-public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
+public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
-    // some processors need to register multiple parent names with
-    // the InternalTopologyBuilder KStream#merge for example.
-    // There is only one parent graph node but the name of each KStream merged needs
-    // to get registered with InternalStreamsBuilder
+    public ProcessorGraphNode(final String nodeName,
+                              final ProcessorParameters<K, V> processorParameters,
+                              final boolean repartitionRequired) {
 
-    private List<String> multipleParentNames = new ArrayList<>();
-
-
-    public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired) {
-
-        super(nodeName,
-              repartitionRequired);
+        super(nodeName, repartitionRequired);
 
         this.processorParameters = processorParameters;
     }
 
-    public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired,
-                           final List<String> multipleParentNames) {
-
-        this(nodeName, processorParameters, repartitionRequired);
-
-        this.multipleParentNames = multipleParentNames;
+    public ProcessorGraphNode(final String nodeName,
+                              final ProcessorParameters<K, V> processorParameters) {
+        this(
+            nodeName,
+            processorParameters,
+            false
+        );
     }
 
-    ProcessorParameters<K, V> processorSupplier() {
+    public ProcessorParameters processorParameters() {
         return processorParameters;
     }
 
-    List<String> multipleParentNames() {
-        return new ArrayList<>(multipleParentNames);
+    @Override
+    public String toString() {
+        return "ProcessorNode{" +
+               "processorParameters=" + processorParameters +
+               "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+
+        topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
     }
 }

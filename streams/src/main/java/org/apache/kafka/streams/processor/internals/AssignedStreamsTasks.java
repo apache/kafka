@@ -23,16 +23,13 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Logger log;
     private final TaskAction<StreamTask> maybeCommitAction;
-    private Map<TaskId, StreamTask> processable = Collections.emptyMap();
 
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
@@ -85,12 +82,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     /**
-     * Update the list of processable tasks
+     * Check if tasks need to be enforced processing
      */
-    void update() {
-        processable = running.entrySet().stream()
-                .filter(entry -> entry.getValue().isProcessable())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    void maybeEnforceProcess() {
+        for (final StreamTask task : running.values()) {
+            task.maybeEnforceProcess();
+        }
     }
 
     /**
@@ -99,10 +96,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     int process() {
         int processed = 0;
 
-        for (Iterator<StreamTask> iter = processable.values().iterator(); iter.hasNext(); ) {
-            StreamTask task = iter.next();
+        final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
+        while (it.hasNext()) {
+            final StreamTask task = it.next().getValue();
             try {
-                if (task.process()) {
+                if (task.isProcessable() && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
@@ -112,15 +110,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 if (fatalException != null) {
                     throw fatalException;
                 }
-                running.remove(task.id());
+                it.remove();
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
                 throw e;
-            }
-
-            if (!task.allSourcePartitionsBuffered()) {
-                iter.remove();
             }
         }
 

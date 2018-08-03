@@ -847,7 +847,7 @@ public class StreamThread extends Thread {
         }
 
         if (state == State.RUNNING) {
-            taskManager.updateProcessableTasks();
+            taskManager.maybeEnforceProcess();
 
             /*
              * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
@@ -992,7 +992,7 @@ public class StreamThread extends Thread {
                 totalProcessed += processed;
                 streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
 
-                taskManager.updateProcessableTasks();
+                taskManager.maybeEnforceProcess();
 
                 // commit any tasks that have requested a commit
                 final int committed = taskManager.maybeCommitActiveTasks();
@@ -1141,7 +1141,7 @@ public class StreamThread extends Thread {
                         throw new TaskMigratedException(task);
                     }
 
-                    log.info("Reinitializing StandbyTask {}", task);
+                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
                 restoreConsumer.seekToBeginning(partitions);

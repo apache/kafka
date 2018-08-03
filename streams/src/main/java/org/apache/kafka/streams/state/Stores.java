@@ -29,8 +29,6 @@ import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
@@ -73,8 +71,6 @@ import java.util.Objects;
  */
 @InterfaceStability.Evolving
 public class Stores {
-
-    private static final Logger log = LoggerFactory.getLogger(Stores.class);
 
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
@@ -195,7 +191,7 @@ public class Stores {
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
-     * @param segmentInterval       size of segments in ms (must be at least one minute)
+     * @param segmentInterval       size of segments in ms (cannot be negative)
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
@@ -206,14 +202,14 @@ public class Stores {
                                                                  final boolean retainDuplicates,
                                                                  final long segmentInterval) {
         Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0) {
+        if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        if (windowSize < 0) {
+        if (windowSize < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
-        if (segmentInterval < 60_000) {
-            throw new IllegalArgumentException("segmentInterval must be at least one minute");
+        if (segmentInterval < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
         }
 
         return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);

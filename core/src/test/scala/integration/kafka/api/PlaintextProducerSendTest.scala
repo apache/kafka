@@ -70,8 +70,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    */
   @Test
   def testAutoCreateTopic() {
-    val producer = createProducer(brokerList, retries = 5)
-
+    val producer = createProducer(brokerList)
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)

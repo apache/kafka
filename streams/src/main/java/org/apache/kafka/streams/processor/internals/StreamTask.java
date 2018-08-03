@@ -74,7 +74,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
-    private int waits = WAIT_ON_PARTIAL_INPUT;
+    private boolean enforcedProcess = false;
+    private int waitBeforeEnforceProcess = WAIT_ON_PARTIAL_INPUT;
     private final Time time;
     private final TaskMetrics taskMetrics;
 
@@ -280,22 +281,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     /**
-     * An active task is processable if its buffer contains data for all of its input source topic partitions
+     * An active task is processable if its buffer contains data for all of its input
+     * source topic partitions, or if it is enforced to be processable
      */
     public boolean isProcessable() {
-        if (partitionGroup.allPartitionsBuffered()) {
-            return true;
-        } else if (partitionGroup.numBuffered() > 0 && --waits < 0) {
-            taskMetrics.taskEnforcedProcessSensor.record();
-            waits = WAIT_ON_PARTIAL_INPUT;
-            return true;
-        } else {
-            return false;
-        }
+        return enforcedProcess || partitionGroup.allPartitionsBuffered();
     }
 
-    public boolean allSourcePartitionsBuffered() {
-        return partitionGroup.allPartitionsBuffered();
+    public void maybeEnforceProcess() {
+        if (partitionGroup.allPartitionsBuffered()) {
+            enforcedProcess = false;
+        } else if (partitionGroup.numBuffered() > 0 && --waitBeforeEnforceProcess < 0) {
+            taskMetrics.taskEnforcedProcessSensor.record();
+            waitBeforeEnforceProcess = WAIT_ON_PARTIAL_INPUT;
+            enforcedProcess = true;
+        } else {
+            enforcedProcess = false;
+        }
     }
 
     /**

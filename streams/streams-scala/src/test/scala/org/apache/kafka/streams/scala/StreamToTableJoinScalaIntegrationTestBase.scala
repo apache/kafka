@@ -125,7 +125,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamTo
       // consume and verify result
       val consumerConfig = getConsumerConfig()
 
-      IntegrationTestUtils.waitUntilExactKeyValueRecordsReceived(consumerConfig,
+      IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig,
                                                                  outputTopic,
                                                                  expectedClicksPerRegion.asJava)
     } else {

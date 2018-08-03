@@ -278,8 +278,8 @@ public class TaskManager {
         }
     }
 
-    void updateProcessableTasks() {
-        active.update();
+    void maybeEnforceProcess() {
+        active.maybeEnforceProcess();
     }
 
     AdminClient getAdminClient() {

@@ -52,7 +52,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
   private def initProducer(): Unit = {
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
   private def createTopics(numTopics: Int, numPartitions: Int,
