@@ -71,8 +71,26 @@ public class HeartbeatTest {
     public void testResetSession() {
         heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(sessionTimeoutMs + 5);
+        heartbeat.resetSessionTimeout();
+        assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+
+        // Resetting the session timeout should not reset the poll timeout
+        time.sleep(maxPollIntervalMs + 1);
+        heartbeat.resetSessionTimeout();
+        assertTrue(heartbeat.pollTimeoutExpired(time.milliseconds()));
+    }
+
+    @Test
+    public void testResetTimeouts() {
+        time.sleep(maxPollIntervalMs);
+        assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+        assertEquals(0, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+        assertTrue(heartbeat.pollTimeoutExpired(time.milliseconds()));
+
         heartbeat.resetTimeouts();
         assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+        assertEquals(heartbeatIntervalMs, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
     }
 
     @Test

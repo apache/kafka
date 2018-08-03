@@ -396,8 +396,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (timestampsToSearch.isEmpty())
             return result;
 
+        Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
-            Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
             client.poll(future, timer);
 

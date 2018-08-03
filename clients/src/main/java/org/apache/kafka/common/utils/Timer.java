@@ -41,7 +41,7 @@ package org.apache.kafka.common.utils;
  *     Time time = Time.SYSTEM;
  *     Timer timer = time.timer(500);
  *
- *     while (!conditionSatisfied() && !timer.isExpired) {
+ *     while (!conditionSatisfied() && timer.notExpired) {
  *         client.poll(timer.remainingMs(), timer.currentTimeMs());
  *         timer.update();
  *     }
@@ -55,6 +55,7 @@ public class Timer {
 
     Timer(Time time, long timeoutMs) {
         this.time = time;
+        update();
         reset(timeoutMs);
     }
 
@@ -84,12 +85,16 @@ public class Timer {
      *
      * @param timeoutMs The new timeout in milliseconds
      */
+    public void updateAndReset(long timeoutMs) {
+        update();
+        reset(timeoutMs);
+    }
+
     public void reset(long timeoutMs) {
         if (timeoutMs < 0)
             throw new IllegalArgumentException("Invalid negative timeout " + timeoutMs);
 
-        this.startMs = time.milliseconds();
-        this.currentTimeMs = startMs;
+        this.startMs = this.currentTimeMs;
 
         if (currentTimeMs > Long.MAX_VALUE - timeoutMs)
             this.deadlineMs = Long.MAX_VALUE;
@@ -103,14 +108,15 @@ public class Timer {
      * the update will be ignored.
      */
     public void update() {
-        this.currentTimeMs = Math.max(time.milliseconds(), this.currentTimeMs);
+        update(time.milliseconds());
     }
 
     /**
      * Update the cached current time to a specific value. In some contexts, the caller may already
      * have an accurate time, so this avoids unnecessary calls to system time.
      *
-     * Note that non-monotonic updates are ignored.
+     * Note that if the updated current time is smaller than the cached time, then the update
+     * is ignored.
      *
      * @param currentTimeMs The current time in milliseconds to cache
      */

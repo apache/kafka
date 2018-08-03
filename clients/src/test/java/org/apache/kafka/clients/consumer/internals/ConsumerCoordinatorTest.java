@@ -523,7 +523,7 @@ public class ConsumerCoordinatorTest {
         assertEquals(singleton(topic1), subscriptions.subscription());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // Instrument the test so that metadata will contain two topics after next refresh.
         client.prepareMetadataUpdate(cluster, Collections.emptySet());
@@ -542,7 +542,7 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
 
         // This will trigger rebalance.
-        coordinator.poll(Long.MAX_VALUE);
+        coordinator.poll(time.timer(Long.MAX_VALUE));
 
         // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain two topics.
         final Set<String> updatedSubscriptionSet = new HashSet<>(Arrays.asList(topic1, topic2));
@@ -943,7 +943,7 @@ public class ConsumerCoordinatorTest {
         metadata.update(TestUtils.singletonCluster(topic, 1), Collections.emptySet(), time.milliseconds());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // prepare initial rebalance
         partitionAssignor.prepare(singletonMap(consumerId, Collections.singletonList(partition)));
@@ -954,13 +954,13 @@ public class ConsumerCoordinatorTest {
 
         // The first call to poll should raise the exception from the rebalance listener
         try {
-            coordinator.poll(Long.MAX_VALUE);
+            coordinator.poll(time.timer(Long.MAX_VALUE));
             fail("Expected exception thrown from assignment callback");
         } catch (WakeupException e) {
         }
 
         // The second call should retry the assignment callback and succeed
-        coordinator.poll(Long.MAX_VALUE);
+        coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(1, rebalanceListener.revokedCount);

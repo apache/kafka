@@ -303,7 +303,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (heartbeat.shouldHeartbeat(now)) {
                 notify();
             }
-            heartbeat.poll();
+            heartbeat.poll(now);
         }
     }
 
@@ -653,7 +653,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             findCoordinatorResponse.node().port());
                     log.info("Discovered group coordinator {}", coordinator);
                     client.tryConnect(coordinator);
-                    heartbeat.resetTimeouts();
+                    heartbeat.resetSessionTimeout();
                 }
                 future.complete(null);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {

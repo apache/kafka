@@ -280,7 +280,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)
-            this.nextAutoCommitTimer.reset(autoCommitIntervalMs);
+            this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
@@ -558,6 +558,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 client.poll(timer);
+                invokeCompletedOffsetCommitCallbacks();
             }
         } finally {
             super.close(timer);
@@ -699,7 +700,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (exception instanceof RetriableException) {
                         log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
                                 exception);
-                        nextAutoCommitTimer.reset(retryBackoffMs);
+                        nextAutoCommitTimer.updateAndReset(retryBackoffMs);
                     } else {
                         log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                     }

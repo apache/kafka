@@ -56,23 +56,38 @@ public class TimerTest {
     }
 
     @Test
-    public void testTimerReset() {
+    public void testTimerUpdateAndReset() {
         Timer timer = time.timer(500);
         timer.sleep(200);
         assertEquals(300, timer.remainingMs());
         assertEquals(200, timer.elapsedMs());
 
-        timer.reset(400);
+        timer.updateAndReset(400);
         assertEquals(400, timer.remainingMs());
         assertEquals(0, timer.elapsedMs());
 
         timer.sleep(400);
         assertTrue(timer.isExpired());
 
-        timer.reset(200);
+        timer.updateAndReset(200);
         assertEquals(200, timer.remainingMs());
         assertEquals(0, timer.elapsedMs());
         assertFalse(timer.isExpired());
+    }
+
+    @Test
+    public void testTimerResetUsesCurrentTime() {
+        Timer timer = time.timer(500);
+        timer.sleep(200);
+        assertEquals(300, timer.remainingMs());
+        assertEquals(200, timer.elapsedMs());
+
+        time.sleep(300);
+        timer.reset(500);
+        assertEquals(500, timer.remainingMs());
+
+        timer.update();
+        assertEquals(200, timer.remainingMs());
     }
 
     @Test
