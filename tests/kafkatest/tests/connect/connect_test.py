@@ -141,17 +141,17 @@ class ConnectStandaloneFileTest(Test):
         self.enable_deadletterqueue = True
 
         successful_records = []
-        bad_records = []
         faulty_records = []
-        for i in range(0, 10):
+        all_records = []
+        for i in range(0, 1000):
             if i % 2 == 0:
-                bad_records.append('{"some_key":' + str(i) + '}')
+                all_records.append('{"some_key":' + str(i) + '}')
                 successful_records.append('{some_key=' + str(i) + '}')
             else:
                 # badly formatted json records (missing a quote after the key)
-                bad_records.append('{"some_key:' + str(i) + '}')
+                all_records.append('{"some_key:' + str(i) + '}')
                 faulty_records.append('{"some_key:' + str(i) + '}')
-        bad_records = "\n".join(bad_records) + "\n"
+        all_records = "\n".join(all_records) + "\n"
         successful_records = "\n".join(successful_records) + "\n"
         if error_tolerance == "all":
             faulty_records = ",".join(faulty_records)
@@ -178,7 +178,7 @@ class ConnectStandaloneFileTest(Test):
         self.sink.start()
 
         # Generating data on the source node should generate new records and create new output on the sink node
-        self.source.node.account.ssh("echo -e -n " + repr(bad_records) + " >> " + self.INPUT_FILE)
+        self.source.node.account.ssh("echo -e -n " + repr(all_records) + " >> " + self.INPUT_FILE)
 
         if error_tolerance == "none":
             try:
