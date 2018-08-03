@@ -129,6 +129,7 @@ class ConnectStandaloneFileTest(Test):
         except RemoteCommandError:
             return False
 
+    @cluster(num_nodes=5)
     @parametrize(error_tolerance="all")
     @parametrize(error_tolerance="none")
     def test_skip_and_log_to_dlq(self, error_tolerance="none"):
