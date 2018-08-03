@@ -84,7 +84,7 @@ public class ShutdownDeadlockTest {
         synchronized (this) {
             try {
                 wait();
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 // ignored
             }
         }

@@ -57,7 +57,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
-        byte[][] values = new byte[8][];
+        final byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
         while (iterator.hasNext()) {
@@ -101,8 +101,8 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldNotHaveNextIfAllCachedItemsDeleted() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}};
-        for (byte[] aByte : bytes) {
-            Bytes aBytes = Bytes.wrap(aByte);
+        for (final byte[] aByte : bytes) {
+            final Bytes aBytes = Bytes.wrap(aByte);
             store.put(aBytes, aByte);
             cache.put(namespace, aBytes, new LRUCacheEntry(null));
         }
@@ -112,7 +112,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}};
-        for (byte[] aByte : bytes) {
+        for (final byte[] aByte : bytes) {
             cache.put(namespace, Bytes.wrap(aByte), new LRUCacheEntry(null));
         }
         assertFalse(createIterator().hasNext());
@@ -121,8 +121,8 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldSkipAllDeletedFromCache() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
-        for (byte[] aByte : bytes) {
-            Bytes aBytes = Bytes.wrap(aByte);
+        for (final byte[] aByte : bytes) {
+            final Bytes aBytes = Bytes.wrap(aByte);
             store.put(aBytes, aByte);
             cache.put(namespace, aBytes, new LRUCacheEntry(aByte));
         }
@@ -148,7 +148,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     public void shouldPeekNextKey() throws Exception {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one", Serdes.Bytes(), Serdes.ByteArray());
         final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
-        byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
             cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));

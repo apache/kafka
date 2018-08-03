@@ -41,7 +41,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void setGlobalProcessorContext(InternalProcessorContext processorContext) {}
+    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
 
     @Override
     public Set<String> initialize() {

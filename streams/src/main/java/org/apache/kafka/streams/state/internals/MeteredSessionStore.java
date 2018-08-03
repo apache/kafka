@@ -140,7 +140,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     @Override
     public void put(final Windowed<K> sessionKey, final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        long startNs = time.nanoseconds();
+        final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));

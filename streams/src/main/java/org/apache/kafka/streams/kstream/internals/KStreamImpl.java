@@ -862,8 +862,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final String joinOtherName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
             final String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
-            StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
-            StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
+            final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
+            final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
             final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
                 createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");

@@ -59,7 +59,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
     @Test
     public void shouldPeekAndIterate() {
         final String[] kvs = {"a", "b", "c", "d", "e", "f"};
-        for (String kv : kvs) {
+        for (final String kv : kvs) {
             store.put(kv, kv);
         }
 

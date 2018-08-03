@@ -35,7 +35,7 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
 
     private StoreChangeLogger<K, V> changeLogger;
 
-    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
+    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, final Serde<K> keySerde, final Serde<V> valueSerde) {
         super(inner);
         this.inner = inner;
         this.keySerde = keySerde;
@@ -44,11 +44,11 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         inner.init(context, root);
 
         // construct the serde
-        StateSerdes<K, V>  serdes = new StateSerdes<>(
+        final StateSerdes<K, V>  serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), inner.name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
@@ -59,7 +59,7 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
         if (inner instanceof MemoryLRUCache) {
             ((MemoryLRUCache<K, V>) inner).whenEldestRemoved(new MemoryNavigableLRUCache.EldestEntryRemovalListener<K, V>() {
                 @Override
-                public void apply(K key, V value) {
+                public void apply(final K key, final V value) {
                     removed(key);
                 }
             });
@@ -72,20 +72,20 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
     }
 
     @Override
-    public V get(K key) {
+    public V get(final K key) {
         return this.inner.get(key);
     }
 
     @Override
-    public void put(K key, V value) {
+    public void put(final K key, final V value) {
         this.inner.put(key, value);
 
         changeLogger.logChange(key, value);
     }
 
     @Override
-    public V putIfAbsent(K key, V value) {
-        V originalValue = this.inner.putIfAbsent(key, value);
+    public V putIfAbsent(final K key, final V value) {
+        final V originalValue = this.inner.putIfAbsent(key, value);
         if (originalValue == null) {
             changeLogger.logChange(key, value);
         }
@@ -93,18 +93,18 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
+    public void putAll(final List<KeyValue<K, V>> entries) {
         this.inner.putAll(entries);
 
-        for (KeyValue<K, V> entry : entries) {
-            K key = entry.key;
+        for (final KeyValue<K, V> entry : entries) {
+            final K key = entry.key;
             changeLogger.logChange(key, entry.value);
         }
     }
 
     @Override
-    public V delete(K key) {
-        V value = this.inner.delete(key);
+    public V delete(final K key) {
+        final V value = this.inner.delete(key);
 
         removed(key);
 
@@ -117,12 +117,12 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
      *
      * @param key the key for the entry that the inner store removed
      */
-    protected void removed(K key) {
+    protected void removed(final K key) {
         changeLogger.logChange(key, null);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         return this.inner.range(from, to);
     }
 

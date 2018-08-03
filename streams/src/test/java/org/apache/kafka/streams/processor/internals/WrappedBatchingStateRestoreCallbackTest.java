@@ -42,7 +42,7 @@ public class WrappedBatchingStateRestoreCallbackTest {
     public void shouldRestoreSinglePutsFromArray() {
         wrappedBatchingStateRestoreCallback.restoreAll(records);
         assertThat(mockRestoreCallback.restored, is(records));
-        KeyValue<byte[], byte[]> record = mockRestoreCallback.restored.get(0);
+        final KeyValue<byte[], byte[]> record = mockRestoreCallback.restored.get(0);
         assertThat(record.key, is(key));
         assertThat(record.value, is(value));
     }

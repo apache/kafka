@@ -43,13 +43,13 @@ public class KStreamFlatMapTest {
 
     @Test
     public void testFlatMap() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
+        final KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
             new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
                 @Override
-                public Iterable<KeyValue<String, String>> apply(Number key, Object value) {
-                    ArrayList<KeyValue<String, String>> result = new ArrayList<>();
+                public Iterable<KeyValue<String, String>> apply(final Number key, final Object value) {
+                    final ArrayList<KeyValue<String, String>> result = new ArrayList<>();
                     for (int i = 0; i < key.intValue(); i++) {
                         result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
                     }
@@ -59,22 +59,22 @@ public class KStreamFlatMapTest {
 
         final int[] expectedKeys = {0, 1, 2, 3};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<String, String> supplier;
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<String, String> supplier;
 
         supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.flatMap(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
             }
         }
 
         assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
-        String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
+        final String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));

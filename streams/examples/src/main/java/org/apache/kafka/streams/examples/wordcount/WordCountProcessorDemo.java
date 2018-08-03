@@ -80,8 +80,7 @@ public final class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void process(final String dummy,
-                                    final String line) {
+                public void process(final String dummy, final String line) {
                     final String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
                     for (final String word : words) {

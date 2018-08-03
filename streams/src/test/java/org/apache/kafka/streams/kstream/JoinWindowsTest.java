@@ -30,8 +30,8 @@ public class JoinWindowsTest {
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        JoinWindows w1 = JoinWindows.of(anySize);
-        JoinWindows w2 = JoinWindows.of(anySize);
+        final JoinWindows w1 = JoinWindows.of(anySize);
+        final JoinWindows w2 = JoinWindows.of(anySize);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -42,8 +42,8 @@ public class JoinWindowsTest {
         assertEquals(w2, w1);
         assertEquals(w1.hashCode(), w2.hashCode());
 
-        JoinWindows w3 = JoinWindows.of(w2.afterMs).before(anyOtherSize);
-        JoinWindows w4 = JoinWindows.of(anyOtherSize).after(w2.afterMs);
+        final JoinWindows w3 = JoinWindows.of(w2.afterMs).before(anyOtherSize);
+        final JoinWindows w4 = JoinWindows.of(anyOtherSize).after(w2.afterMs);
         assertEquals(w3, w4);
         assertEquals(w4, w3);
         assertEquals(w3.hashCode(), w4.hashCode());
@@ -53,13 +53,13 @@ public class JoinWindowsTest {
         assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        JoinWindows differentWindowSize = JoinWindows.of(w1.afterMs + 1);
+        final JoinWindows differentWindowSize = JoinWindows.of(w1.afterMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
-        JoinWindows differentWindowSize2 = JoinWindows.of(w1.afterMs).after(w1.afterMs + 1);
+        final JoinWindows differentWindowSize2 = JoinWindows.of(w1.afterMs).after(w1.afterMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize2, w1);
 
-        JoinWindows differentWindowSize3 = JoinWindows.of(w1.afterMs).before(w1.beforeMs + 1);
+        final JoinWindows differentWindowSize3 = JoinWindows.of(w1.afterMs).before(w1.beforeMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize3, w1);
     }
 

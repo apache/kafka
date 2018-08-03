@@ -52,26 +52,26 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        long timestamp = w.startMs + 1;
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final long timestamp = w.startMs + 1;
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        long timestamp = w.startMs - 1;
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final long timestamp = w.startMs - 1;
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
     }
 

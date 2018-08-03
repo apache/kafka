@@ -40,7 +40,7 @@ public abstract class AbstractStream<K> {
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
-    public AbstractStream(AbstractStream<K> stream) {
+    public AbstractStream(final AbstractStream<K> stream) {
         this.builder = stream.builder;
         this.name = stream.name;
         this.sourceNodes = stream.sourceNodes;
@@ -68,7 +68,7 @@ public abstract class AbstractStream<K> {
     }
 
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
-        Set<String> allSourceNodes = new HashSet<>();
+        final Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(other.sourceNodes);
 
@@ -80,7 +80,7 @@ public abstract class AbstractStream<K> {
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override
-            public R apply(T2 value2, T1 value1) {
+            public R apply(final T2 value2, final T1 value1) {
                 return joiner.apply(value1, value2);
             }
         };

@@ -33,7 +33,7 @@ public class WrappedBatchingStateRestoreCallback implements BatchingStateRestore
 
     @Override
     public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        for (KeyValue<byte[], byte[]> record : records) {
+        for (final KeyValue<byte[], byte[]> record : records) {
             restore(record.key, record.value);
         }
     }

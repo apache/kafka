@@ -72,8 +72,8 @@ public abstract class AbstractJoinIntegrationTest {
 
     @Parameterized.Parameters(name = "caching enabled = {0}")
     public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        for (boolean cacheEnabled : Arrays.asList(true, false))
+        final List<Object[]> values = new ArrayList<>();
+        for (final boolean cacheEnabled : Arrays.asList(true, false))
             values.add(new Object[] {cacheEnabled});
         return values;
     }
@@ -124,7 +124,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     final boolean cacheEnabled;
 
-    AbstractJoinIntegrationTest(boolean cacheEnabled) {
+    AbstractJoinIntegrationTest(final boolean cacheEnabled) {
         this.cacheEnabled = cacheEnabled;
     }
 
@@ -206,7 +206,7 @@ public abstract class AbstractJoinIntegrationTest {
             for (final Input<String> singleInput : input) {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
 
-                List<String> expected = resultIterator.next();
+                final List<String> expected = resultIterator.next();
 
                 if (expected != null) {
                     checkResult(OUTPUT_TOPIC, expected);

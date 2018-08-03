@@ -96,7 +96,7 @@ public class RocksDBSessionStoreTest {
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
-        for (KeyValue<Windowed<String>, Long> kv : expected) {
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
 

@@ -75,7 +75,7 @@ public class StateRestorer {
         compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
     }
 
-    void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
+    void restoreBatchCompleted(final long currentRestoredOffset, final int numRestored) {
         compositeRestoreListener.onBatchRestored(partition, storeName, currentRestoredOffset, numRestored);
     }
 
@@ -87,7 +87,7 @@ public class StateRestorer {
         return persistent;
     }
 
-    void setUserRestoreListener(StateRestoreListener userRestoreListener) {
+    void setUserRestoreListener(final StateRestoreListener userRestoreListener) {
         this.compositeRestoreListener.setUserRestoreListener(userRestoreListener);
     }
 

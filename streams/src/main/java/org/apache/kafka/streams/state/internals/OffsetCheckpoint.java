@@ -74,7 +74,7 @@ public class OffsetCheckpoint {
             final File temp = new File(file.getAbsolutePath() + ".tmp");
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
-            try (BufferedWriter writer = new BufferedWriter(
+            try (final BufferedWriter writer = new BufferedWriter(
                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
@@ -121,7 +121,7 @@ public class OffsetCheckpoint {
      */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
-            try (BufferedReader reader = Files.newBufferedReader(file.toPath())) {
+            try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
                 final int version = readInt(reader);
                 switch (version) {
                     case 0:

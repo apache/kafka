@@ -308,8 +308,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    private String buildUniqueSensorName(String operationName, String taskName) {
-        String task = taskName == null ? "" : taskName + ".";
+    private String buildUniqueSensorName(final String operationName, final String taskName) {
+        final String task = taskName == null ? "" : taskName + ".";
         return threadName + "." + task + operationName;
     }
 

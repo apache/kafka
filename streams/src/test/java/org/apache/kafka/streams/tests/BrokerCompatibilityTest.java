@@ -80,7 +80,7 @@ public class BrokerCompatibilityTest {
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout + 1);
-        Serde<String> stringSerde = Serdes.String();
+        final Serde<String> stringSerde = Serdes.String();
 
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -89,7 +89,7 @@ public class BrokerCompatibilityTest {
             .toStream()
             .mapValues(new ValueMapper<Long, String>() {
                 @Override
-                public String apply(Long value) {
+                public String apply(final Long value) {
                     return value.toString();
                 }
             })

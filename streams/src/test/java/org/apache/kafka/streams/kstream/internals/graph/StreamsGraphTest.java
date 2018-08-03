@@ -120,7 +120,7 @@ public class StreamsGraphTest {
         // build step one
         assertEquals(expectedJoinedTopology, builder.build().describe().toString());
 
-        KStream<String, String> filteredJoinStream = joinedStream.filter((k, v) -> v.equals("foo"));
+        final KStream<String, String> filteredJoinStream = joinedStream.filter((k, v) -> v.equals("foo"));
         // build step two
         assertEquals(expectedJoinedFilteredTopology, builder.build().describe().toString());
 
