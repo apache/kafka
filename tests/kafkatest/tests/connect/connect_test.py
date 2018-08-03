@@ -18,6 +18,7 @@ from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize, matrix
 from ducktape.cluster.remoteaccount import RemoteCommandError
+from ducktape.errors import TimeoutError
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -127,3 +128,72 @@ class ConnectStandaloneFileTest(Test):
             return output_hash == hashlib.md5(value).hexdigest()
         except RemoteCommandError:
             return False
+
+    @parametrize(error_tolerance="all")
+    @parametrize(error_tolerance="none")
+    def test_skip_and_log_to_dlq(self, error_tolerance="none"):
+        self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
+                                  security_protocol='PLAINTEXT', interbroker_security_protocol='PLAINTEXT',
+                                  topics=self.topics)
+
+        self.override_error_tolerance_props = error_tolerance
+        self.enable_deadletterqueue = True
+
+        successful_records = []
+        bad_records = []
+        faulty_records = []
+        for i in range(0, 10):
+            if i % 2 == 0:
+                bad_records.append('{"some_key":' + str(i) + '}')
+                successful_records.append('{some_key=' + str(i) + '}')
+            else:
+                # badly formatted json records (missing a quote after the key)
+                bad_records.append('{"some_key:' + str(i) + '}')
+                faulty_records.append('{"some_key:' + str(i) + '}')
+        bad_records = "\n".join(bad_records) + "\n"
+        successful_records = "\n".join(successful_records) + "\n"
+        if error_tolerance == "all":
+            faulty_records = ",".join(faulty_records)
+        else:
+            faulty_records = faulty_records[0]
+
+        self.source = ConnectStandaloneService(self.test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
+        self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
+
+        self.zk.start()
+        self.kafka.start()
+
+        self.override_key_converter = "org.apache.kafka.connect.storage.StringConverter"
+        self.override_value_converter = "org.apache.kafka.connect.storage.StringConverter"
+        self.source.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-source.properties")])
+
+        self.override_key_converter = "org.apache.kafka.connect.json.JsonConverter"
+        self.override_value_converter = "org.apache.kafka.connect.json.JsonConverter"
+        self.override_key_converter_schemas_enable = False
+        self.override_value_converter_schemas_enable = False
+        self.sink.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-sink.properties")])
+
+        self.source.start()
+        self.sink.start()
+
+        # Generating data on the source node should generate new records and create new output on the sink node
+        self.source.node.account.ssh("echo -e -n " + repr(bad_records) + " >> " + self.INPUT_FILE)
+
+        if error_tolerance == "none":
+            try:
+                wait_until(lambda: self.validate_output(successful_records), timeout_sec=15,
+                           err_msg="Clean records added to input file were not seen in the output file in a reasonable amount of time.")
+                raise Exception("Expected to not find any results in this file.")
+            except TimeoutError:
+                self.logger.info("Caught expected exception")
+        else:
+            wait_until(lambda: self.validate_output(successful_records), timeout_sec=15,
+                       err_msg="Clean records added to input file were not seen in the output file in a reasonable amount of time.")
+
+        self.logger.info("Reading records from deadletterqueue")
+        if self.enable_deadletterqueue:
+            self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, "my-connector-errors",
+                                                      consumer_timeout_ms=10000)
+            self.consumer_validator.run()
+            actual = ",".join(self.consumer_validator.messages_consumed[1])
+            assert faulty_records == actual, "Expected %s but saw %s in dead letter queue" % (faulty_records, actual)
