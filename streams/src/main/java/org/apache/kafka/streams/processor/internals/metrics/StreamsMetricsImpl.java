@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
@@ -39,7 +38,6 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
-    private final Map<String, String> tags;
     private final Map<Sensor, Sensor> parentSensors;
     private final Sensor skippedRecordsSensor;
     private final String threadName;
@@ -59,17 +57,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         this.metrics = metrics;
 
-
-        final HashMap<String, String> tags = new LinkedHashMap<>();
-        tags.put("client-id", threadName);
-        this.tags = Collections.unmodifiableMap(tags);
-
         this.parentSensors = new HashMap<>();
 
         final String group = "stream-metrics";
         skippedRecordsSensor = threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
-        skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", group, "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
-        skippedRecordsSensor.add(metrics.metricName("skipped-records-total", group, "The total number of skipped records", tags), new Total());
+        skippedRecordsSensor.add(new MetricName("skipped-records-rate", group, "The average per-second number of skipped records", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(new MetricName("skipped-records-total", group, "The total number of skipped records", tagMap()), new Total());
     }
 
     public final Sensor threadLevelSensor(final String sensorName,
@@ -242,10 +235,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return taskSensorPrefix(taskName) + SENSOR_PREFIX_DELIMITER + "store" + SENSOR_PREFIX_DELIMITER + storeName;
     }
 
-    protected final Map<String, String> tags() {
-        return tags;
-    }
-
     public final Sensor skippedRecordsSensor() {
         return skippedRecordsSensor;
     }
@@ -275,9 +264,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         sensor.record(value);
     }
 
-    public Map<String, String> tagMap(final String... tags) {
-        // extract the additional tags if there are any
-        final Map<String, String> tagMap = new HashMap<>(this.tags);
+    public final Map<String, String> tagMap(final String... tags) {
+        final Map<String, String> tagMap = new HashMap<>();
         if (tags != null) {
             if ((tags.length % 2) != 0) {
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
@@ -286,6 +274,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
         }
+        tagMap.put("client-id", threadName);
         return tagMap;
     }
 
