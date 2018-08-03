@@ -600,7 +600,7 @@ class GroupCoordinator(val brokerId: Int,
         case Empty | Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
-            group.awaitingJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
+            group.invokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
           }
 
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
@@ -761,7 +761,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean) = {
     group.inLock {
-      if (!group.hasNotYetRejoinedMembers)
+      if (group.hasAllMembersJoined)
         forceComplete()
       else false
     }
@@ -812,7 +812,7 @@ class GroupCoordinator(val brokerId: Int,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
-            group.awaitingJoinCallback(member, joinResult)
+            group.invokeJoinCallback(member, joinResult)
             completeAndScheduleNextHeartbeatExpiration(group, member)
           }
         }
