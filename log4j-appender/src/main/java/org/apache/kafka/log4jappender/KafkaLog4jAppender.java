@@ -65,7 +65,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String saslKerberosServiceName;
     private String clientJaasConfPath;
     private String kerb5ConfPath;
-    private Integer timeout;
+    private Integer maxBlockMs;
 
     private int retries = Integer.MAX_VALUE;
     private int requiredNumAcks = 1;
@@ -214,12 +214,12 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         return kerb5ConfPath;
     }
 
-    public int getTimeout() {
-        return timeout;
+    public int getMaxBlockMs() {
+        return maxBlockMs;
     }
 
-    public void setTimeout(int timeout) {
-        this.timeout = timeout;
+    public void setMaxBlockMs(int maxBlockMs) {
+        this.maxBlockMs = maxBlockMs;
     }
 
     @Override
@@ -261,8 +261,8 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 System.setProperty("java.security.krb5.conf", kerb5ConfPath);
             }
         }
-        if (timeout != null) {
-            props.put(MAX_BLOCK_MS_CONFIG, timeout);
+        if (maxBlockMs != null) {
+            props.put(MAX_BLOCK_MS_CONFIG, maxBlockMs);
         }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());

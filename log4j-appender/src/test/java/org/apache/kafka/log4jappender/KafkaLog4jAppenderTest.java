@@ -167,8 +167,8 @@ public class KafkaLog4jAppenderTest {
         props.put("log4j.appender.KAFKA.Topic", "test-topic");
         props.put("log4j.appender.KAFKA.RequiredNumAcks", "1");
         props.put("log4j.appender.KAFKA.SyncSend", "true");
-        // setting producer timeout to be low
-        props.put("log4j.appender.KAFKA.timeout", "10");
+        // setting producer timeout (max.block.ms) to be low
+        props.put("log4j.appender.KAFKA.maxBlockMs", "10");
         // ignoring exceptions
         props.put("log4j.appender.KAFKA.IgnoreExceptions", Boolean.toString(ignoreExceptions));
         props.put("log4j.logger.kafka.log4j", "INFO, KAFKA");
