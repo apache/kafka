@@ -88,13 +88,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public final Sensor taskLevelSensor(final String taskName,
-                                         final String sensorName,
-                                         final Sensor.RecordingLevel recordingLevel,
-                                         final Sensor... parents) {
+                                        final String sensorName,
+                                        final Sensor.RecordingLevel recordingLevel,
+                                        final Sensor... parents) {
         final String key = threadName + "." + taskName;
         synchronized (taskLevelSensors) {
             if (!taskLevelSensors.containsKey(key)) {
-                taskLevelSensors.put(key, new LinkedList<String>());
+                taskLevelSensors.put(key, new LinkedList<>());
             }
 
             final String fullSensorName = key + "." + sensorName;
