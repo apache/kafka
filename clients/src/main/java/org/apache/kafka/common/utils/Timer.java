@@ -90,6 +90,13 @@ public class Timer {
         reset(timeoutMs);
     }
 
+    /**
+     * Reset the timer using a new timeout. Note that this does not update the cached current time
+     * in milliseconds, so it typically must be accompanied with a separate call to {@link #update()}.
+     * Typically, you can just use {@link #updateAndReset(long)}.
+     *
+     * @param timeoutMs The new timeout in milliseconds
+     */
     public void reset(long timeoutMs) {
         if (timeoutMs < 0)
             throw new IllegalArgumentException("Invalid negative timeout " + timeoutMs);
