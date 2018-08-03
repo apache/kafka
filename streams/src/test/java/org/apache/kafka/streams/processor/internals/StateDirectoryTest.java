@@ -29,6 +29,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
@@ -89,27 +90,6 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLockTaskStateDirectory() throws IOException {
-        final TaskId taskId = new TaskId(0, 0);
-        final File taskDirectory = directory.directoryForTask(taskId);
-
-        directory.lock(taskId);
-
-        try (
-            final FileChannel channel = FileChannel.open(
-                new File(taskDirectory, StateDirectory.LOCK_FILE_NAME).toPath(),
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-        ) {
-            channel.tryLock();
-            fail("shouldn't be able to lock already locked directory");
-        } catch (final OverlappingFileLockException e) {
-            // pass
-        } finally {
-            directory.unlock(taskId);
-        }
-    }
-
-    @Test
     public void shouldBeTrueIfAlreadyHoldsLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.directoryForTask(taskId);
@@ -140,17 +120,18 @@ public class StateDirectoryTest {
     @Test
     public void shouldLockMulitpleTaskDirectories() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
-        final File task1Dir = directory.directoryForTask(taskId);
+        final File task1Dir = directory.stateDir();
         final TaskId taskId2 = new TaskId(1, 0);
-        final File task2Dir = directory.directoryForTask(taskId2);
+        final File task2Dir = directory.stateDir();
 
 
         try (
             final FileChannel channel1 = FileChannel.open(
-                new File(task1Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(task1Dir, taskId + StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE);
-            final FileChannel channel2 = FileChannel.open(new File(task2Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+            final FileChannel channel2 = FileChannel.open(
+                new File(task2Dir, taskId2 + StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
@@ -196,15 +177,14 @@ public class StateDirectoryTest {
             directory.directoryForTask(new TaskId(2, 0));
 
             List<File> files = Arrays.asList(appDir.listFiles());
-            assertEquals(3, files.size());
+            assertEquals(1, files.size());
 
             time.sleep(1000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.asList(appDir.listFiles());
-            assertEquals(2, files.size());
-            assertTrue(files.contains(new File(appDir, task0.toString())));
-            assertTrue(files.contains(new File(appDir, task1.toString())));
+            files = Arrays.asList(directory.stateDir().listFiles());
+            // lock files have been cleaned
+            assertEquals(0, files.size());
         } finally {
             directory.unlock(task0);
             directory.unlock(task1);
