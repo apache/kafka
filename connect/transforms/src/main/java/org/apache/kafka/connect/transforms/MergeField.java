@@ -27,12 +27,14 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
-
-import java.util.Optional;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Optional;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
@@ -60,6 +62,23 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
 
     private Cache<Object, Schema> schemaUpdateCache;
 
+    private enum SpecTypes {
+        KEEP_OPTIONAL,
+        REMOVE_OPTIONAL,
+        KEEP_REQUIRED,
+        REMOVE_REQUIRED
+    }
+
+    private static final Map<String, String> REGEX_SPEC_MAP = new HashMap<String, String>() {{
+            put(SpecTypes.KEEP_OPTIONAL.name(), "\\*(?<fieldname>.*?)\\?");
+            put(SpecTypes.REMOVE_OPTIONAL.name(), "^(?!\\*)(?<fieldname>.*?)\\?");
+            put(SpecTypes.KEEP_REQUIRED.name(), "\\*(?<fieldname>.*?)(?<!\\?)$");
+            put(SpecTypes.REMOVE_REQUIRED.name(), "^(?!\\*)(?<fieldname>(?s)^.*+)(?<!\\?)$");
+        }};
+
+    /**
+     * For each
+     */
     public static final class MergeSpec {
         final String name;
         final boolean optional;
@@ -71,26 +90,58 @@ public abstract class MergeField<R extends ConnectRecord<R>> implements Transfor
             this.keepIt = keepIt;
         }
 
+        /**
+         * @param spec : field's specification
+         * @return an instance of {@link #MergeSpec}
+         */
         public static MergeSpec parse(String spec) {
 
             if (spec == null) return null;
 
-            else if (spec.startsWith("*") && spec.endsWith("?"))
-                return new MergeSpec(removeSpecs(spec), true, true);
 
-            else if (spec.startsWith("*") && !spec.endsWith("?"))
-                return new MergeSpec(removeSpecs(spec), true, false);
+            SpecPair mergeSpec = REGEX_SPEC_MAP.entrySet().stream()
+                    .map(keyValue -> {
+                        Optional<String> extracted = applyRegex(keyValue.getValue(), spec);
+                        return new SpecPair(SpecTypes.valueOf(keyValue.getKey()), extracted.isPresent() ? extracted.get() : null);
+                    })
+                    .filter(x -> Optional.ofNullable(x.value).isPresent())
+                    .findFirst()
+                    .get();
 
-            else if (!spec.startsWith("*") && spec.endsWith("?"))
-                return new MergeSpec(removeSpecs(spec), false, true);
+            switch (mergeSpec.spec) {
+                case KEEP_OPTIONAL: return new MergeSpec(mergeSpec.value, true, true);
+                case REMOVE_OPTIONAL: return new MergeSpec(mergeSpec.value, false, true);
+                case KEEP_REQUIRED: return new MergeSpec(mergeSpec.value, true, false);
+                case REMOVE_REQUIRED: return new MergeSpec(mergeSpec.value, false, false);
+                default: return null;
+            }
 
-            else
-                return new MergeSpec(removeSpecs(spec), false, false);
         }
 
         private static String removeSpecs(String spec) {
             return spec.replace("?", "").replace("*", "");
         }
+
+
+        public static Optional<String> applyRegex(String regex, String field) {
+            Matcher matcher = Pattern.compile(regex).matcher(field);
+            Optional<String> fieldName = Optional.empty();
+            if (matcher.find()) {
+                fieldName =  Optional.of(matcher.group("fieldname"));
+            }
+            return fieldName;
+        }
+
+        static class SpecPair {
+            SpecTypes spec;
+            String value;
+
+            public SpecPair(SpecTypes spec, String value) {
+                this.spec = spec;
+                this.value = value;
+            }
+        }
+
 
     }
 

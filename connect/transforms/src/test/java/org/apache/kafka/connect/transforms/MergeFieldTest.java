@@ -24,12 +24,10 @@ import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
 import java.util.Map;
-
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -221,8 +219,6 @@ public class MergeFieldTest {
         expectedStruct2.put(rootField, nestedExpectedStruct2);
 
         assertEquals(expectedStruct2, transformed2.value());
-
-
     }
 
     @Test
@@ -252,6 +248,26 @@ public class MergeFieldTest {
 
         assertNull(transformed.keySchema());
         assertEquals(transformed.key(), expectedRecord);
+    }
+
+
+    void testMergeSpecHelper(MergeField.MergeSpec result, MergeField.MergeSpec expected) {
+        assertEquals(result.name,   expected.name);
+        assertEquals(result.keepIt,  expected.keepIt);
+        assertEquals(result.optional, expected.optional);
+    }
+
+    @Test
+    public void mergeSpecTest() {
+        String optionalMergeAndKeep = "*abcd?";
+        String optionalMergeAndRemove = "abcd?";
+        String mergeAndKeep = "*abcd";
+        String mergeAndRemove = "abcd";
+
+        testMergeSpecHelper(MergeField.MergeSpec.parse(optionalMergeAndKeep), new MergeField.MergeSpec("abcd", true, true));
+        testMergeSpecHelper(MergeField.MergeSpec.parse(optionalMergeAndRemove), new MergeField.MergeSpec("abcd", false, true));
+        testMergeSpecHelper(MergeField.MergeSpec.parse(mergeAndKeep), new MergeField.MergeSpec("abcd", true, false));
+        testMergeSpecHelper(MergeField.MergeSpec.parse(mergeAndRemove), new MergeField.MergeSpec("abcd", false, false));
     }
 
 }
