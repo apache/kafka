@@ -627,8 +627,8 @@ public class StreamTaskTest {
                 public void flush() {
                     flushed.set(true);
                 }
-            }
-        );
+            },
+            metrics.sensor("dummy"));
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -972,8 +972,8 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer
-        );
+            producer,
+            metrics.sensor("dummy"));
         task.initializeStateStores();
         task.initializeTopology();
 
@@ -1041,8 +1041,8 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer
-        );
+            producer,
+            metrics.sensor("dummy"));
     }
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
@@ -1063,8 +1063,8 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer
-        );
+            producer,
+            metrics.sensor("dummy"));
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
@@ -1089,8 +1089,8 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer
-        );
+            producer,
+            metrics.sensor("dummy"));
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
@@ -1116,8 +1116,8 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer
-        ) {
+            producer,
+            metrics.sensor("dummy")) {
             @Override
             protected void flushState() {
                 throw new RuntimeException("KABOOM!");
