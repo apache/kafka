@@ -54,7 +54,6 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
         TestUtils.getBrokerListStrFromServers(Seq(server)),
-        retries = 5,
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
       )

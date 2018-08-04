@@ -44,7 +44,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     private KTable<Long, String> leftTable;
     private KTable<Long, String> rightTable;
 
-    public TableTableJoinIntegrationTest(boolean cacheEnabled) {
+    public TableTableJoinIntegrationTest(final boolean cacheEnabled) {
         super(cacheEnabled);
     }
 
@@ -80,7 +80,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         public void apply(final Long key, final String value) {
             numRecordsExpected++;
             if (expected.equals(value)) {
-                boolean ret = finalResultReached.compareAndSet(false, true);
+                final boolean ret = finalResultReached.compareAndSet(false, true);
 
                 if (!ret) {
                     // do nothing; it is possible that we will see multiple duplicates of final results due to KAFKA-4309
@@ -98,7 +98,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             leftTable.join(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTest(expectedFinalJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -129,7 +129,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTest(expectedFinalJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     Collections.singletonList("A-null"),
@@ -160,7 +160,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTest(expectedFinalJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     Collections.singletonList("A-null"),
@@ -197,7 +197,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         } else {
             // FIXME: the duplicate below for all the multi-joins
             //        are due to KAFKA-6443, should be updated once it is fixed.
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -235,7 +235,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -274,7 +274,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -312,7 +312,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -351,7 +351,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -390,7 +390,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -428,7 +428,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -467,7 +467,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -506,7 +506,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
-            List<List<String>> expectedResult = Arrays.asList(
+            final List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,

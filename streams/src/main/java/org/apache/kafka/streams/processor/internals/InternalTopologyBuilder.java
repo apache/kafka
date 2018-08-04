@@ -282,7 +282,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            String sourceTopics;
+            final String sourceTopics;
 
             if (pattern == null) {
                 sourceTopics = topics.toString();
@@ -475,7 +475,7 @@ public class InternalTopologyBuilder {
                 throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
             }
             if (!nodeFactories.containsKey(predecessor)) {
-                throw new TopologyException("Predecessor processor " + predecessor + " is not added yet.");
+                throw new TopologyException("Predecessor processor " + predecessor + " is not added yet for " + name);
             }
         }
 
@@ -1242,7 +1242,7 @@ public class InternalTopologyBuilder {
         return description;
     }
 
-    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, int id) {
+    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, final int id) {
         final Iterator<String> it = nodes.iterator();
         while (it.hasNext()) {
             final String node = it.next();
@@ -1627,10 +1627,10 @@ public class InternalTopologyBuilder {
     }
 
     public static class TopicsInfo {
-        public Set<String> sinkTopics;
-        public Set<String> sourceTopics;
-        public Map<String, InternalTopicConfig> stateChangelogTopics;
-        public Map<String, InternalTopicConfig> repartitionSourceTopics;
+        public final Set<String> sinkTopics;
+        public final Set<String> sourceTopics;
+        public final Map<String, InternalTopicConfig> stateChangelogTopics;
+        public final Map<String, InternalTopicConfig> repartitionSourceTopics;
 
         TopicsInfo(final Set<String> sinkTopics,
                    final Set<String> sourceTopics,

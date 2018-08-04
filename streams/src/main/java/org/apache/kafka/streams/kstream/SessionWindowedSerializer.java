@@ -47,8 +47,8 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         if (inner == null) {
-            String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
-            String value = (String) configs.get(propertyName);
+            final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
+            final String value = (String) configs.get(propertyName);
             try {
                 inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).serializer();
                 inner.configure(configs, isKey);

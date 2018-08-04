@@ -139,7 +139,7 @@ public class StateDirectory {
 
         try {
             lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // directoryForTask could be throwing an exception if another thread
             // has concurrently deleted the directory
             return false;
@@ -149,7 +149,7 @@ public class StateDirectory {
 
         try {
             channel = getOrCreateFileChannel(taskId, lockFile.toPath());
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             // FileChannel.open(..) could throw NoSuchFileException when there is another thread
             // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
             // file, in this case we will return immediately indicating locking failed.
@@ -175,7 +175,7 @@ public class StateDirectory {
         final FileChannel channel;
         try {
             channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             // FileChannel.open(..) could throw NoSuchFileException when there is another thread
             // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
             // file, in this case we will return immediately indicating locking failed.
@@ -337,7 +337,7 @@ public class StateDirectory {
     private FileLock tryLock(final FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
-        } catch (OverlappingFileLockException e) {
+        } catch (final OverlappingFileLockException e) {
             return null;
         }
     }

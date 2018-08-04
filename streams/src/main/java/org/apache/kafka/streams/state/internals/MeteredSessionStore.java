@@ -30,7 +30,11 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import java.util.Map;
 import java.util.Objects;
+
+import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, V> {
     private final SessionStore<Bytes, byte[]> inner;
@@ -44,6 +48,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     private Sensor fetchTime;
     private Sensor flushTime;
     private Sensor removeTime;
+    private String taskName;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
                         final String metricScope,
@@ -65,28 +70,38 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-        final String tagKey = "task-id";
-        final String taskName = context.taskId().toString();
         this.metrics = (StreamsMetricsImpl) context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "put",
-                                                                  Sensor.RecordingLevel.DEBUG, tagKey, taskName);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "fetch",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "flush",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
-        this.removeTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "remove",
-                                                                     Sensor.RecordingLevel.DEBUG, tagKey, taskName);
 
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "restore",
-                                                                              Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        taskName = context.taskId().toString();
+        final String metricsGroup = "stream-" + metricScope + "-metrics";
+        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
+        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
+
+        putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        fetchTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "fetch", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        removeTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "remove", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
             inner.init(context, root);
         } finally {
-            this.metrics.recordLatency(restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(
+                restoreTime,
+                startNs,
+                time.nanoseconds()
+            );
         }
     }
+
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
+    }
+
 
     @Override
     public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
@@ -140,7 +155,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     @Override
     public void put(final Windowed<K> sessionKey, final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        long startNs = time.nanoseconds();
+        final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));

@@ -102,7 +102,7 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
                                                 + "through the delegated StateRestoreCallback instance");
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback restoreCallback) {
         if (restoreCallback instanceof  BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) restoreCallback;
         }

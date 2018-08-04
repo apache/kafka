@@ -23,7 +23,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
     private final String storeName;
 
-    public KTableSourceValueGetterSupplier(String storeName) {
+    public KTableSourceValueGetterSupplier(final String storeName) {
         this.storeName = storeName;
     }
 
@@ -41,11 +41,11 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
         ReadOnlyKeyValueStore<K, V> store = null;
 
         @SuppressWarnings("unchecked")
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             store = (ReadOnlyKeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
-        public V get(K key) {
+        public V get(final K key) {
             return store.get(key);
         }
 

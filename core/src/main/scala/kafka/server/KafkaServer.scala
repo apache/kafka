@@ -254,7 +254,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager.startup()
 
         val brokerInfo = createBrokerInfo
-        zkClient.registerBrokerInZk(brokerInfo)
+        zkClient.registerBroker(brokerInfo)
 
         // Now that the broker id is successfully registered, checkpoint it
         checkpointBrokerId(config.brokerId)

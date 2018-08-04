@@ -53,8 +53,8 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        TimeWindows w1 = TimeWindows.of(ANY_SIZE);
-        TimeWindows w2 = TimeWindows.of(w1.sizeMs);
+        final TimeWindows w1 = TimeWindows.of(ANY_SIZE);
+        final TimeWindows w2 = TimeWindows.of(w1.sizeMs);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -66,7 +66,7 @@ public class TimeWindowsTest {
         assertEquals(w1.hashCode(), w2.hashCode());
 
         // Transitive
-        TimeWindows w3 = TimeWindows.of(w2.sizeMs);
+        final TimeWindows w3 = TimeWindows.of(w2.sizeMs);
         assertEquals(w2, w3);
         assertEquals(w1, w3);
         assertEquals(w1.hashCode(), w3.hashCode());
@@ -76,10 +76,10 @@ public class TimeWindowsTest {
         assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        TimeWindows differentWindowSize = TimeWindows.of(w1.sizeMs + 1);
+        final TimeWindows differentWindowSize = TimeWindows.of(w1.sizeMs + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
-        TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advanceMs - 1);
+        final TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advanceMs - 1);
         assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 
@@ -139,8 +139,8 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldComputeWindowsForHoppingWindows() {
-        TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
-        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        final TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
+        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(12L / 5L + 1, matched.size());
         assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
         assertEquals(new TimeWindow(15L, 27L), matched.get(15L));
@@ -149,16 +149,16 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldComputeWindowsForBarelyOverlappingHoppingWindows() {
-        TimeWindows windows = TimeWindows.of(6L).advanceBy(5L);
-        Map<Long, TimeWindow> matched = windows.windowsFor(7L);
+        final TimeWindows windows = TimeWindows.of(6L).advanceBy(5L);
+        final Map<Long, TimeWindow> matched = windows.windowsFor(7L);
         assertEquals(1, matched.size());
         assertEquals(new TimeWindow(5L, 11L), matched.get(5L));
     }
 
     @Test
     public void shouldComputeWindowsForTumblingWindows() {
-        TimeWindows windows = TimeWindows.of(12L);
-        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        final TimeWindows windows = TimeWindows.of(12L);
+        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(1, matched.size());
         assertEquals(new TimeWindow(12L, 24L), matched.get(12L));
     }

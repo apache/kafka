@@ -31,6 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+
 public class ProcessorNode<K, V> {
 
     // TODO: 'children' can be removed when #forward() via index is removed
@@ -41,32 +44,6 @@ public class ProcessorNode<K, V> {
     private final Processor<K, V> processor;
     private final String name;
     private final Time time;
-
-    private K key;
-    private V value;
-    private final Runnable processDelegate = new Runnable() {
-        @Override
-        public void run() {
-            processor.process(key, value);
-        }
-    };
-    private ProcessorContext context;
-    private final Runnable initDelegate = new Runnable() {
-        @Override
-        public void run() {
-            if (processor != null) {
-                processor.init(context);
-            }
-        }
-    };
-    private final Runnable closeDelegate = new Runnable() {
-        @Override
-        public void run() {
-            if (processor != null) {
-                processor.close();
-            }
-        }
-    };
 
     public final Set<String> stateStores;
 
@@ -107,10 +84,13 @@ public class ProcessorNode<K, V> {
     }
 
     public void init(final InternalProcessorContext context) {
-        this.context = context;
         try {
             nodeMetrics = new NodeMetrics(context.metrics(), name, context);
-            runAndMeasureLatency(time, initDelegate, nodeMetrics.nodeCreationSensor);
+            final long startNs = time.nanoseconds();
+            if (processor != null) {
+                processor.init(context);
+            }
+            nodeMetrics.nodeCreationSensor.record(time.nanoseconds() - startNs);
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
@@ -118,7 +98,11 @@ public class ProcessorNode<K, V> {
 
     public void close() {
         try {
-            runAndMeasureLatency(time, closeDelegate, nodeMetrics.nodeDestructionSensor);
+            final long startNs = time.nanoseconds();
+            if (processor != null) {
+                processor.close();
+            }
+            nodeMetrics.nodeDestructionSensor.record(time.nanoseconds() - startNs);
             nodeMetrics.removeAllSensors();
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
@@ -127,20 +111,15 @@ public class ProcessorNode<K, V> {
 
 
     public void process(final K key, final V value) {
-        this.key = key;
-        this.value = value;
-
-        runAndMeasureLatency(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
+        final long startNs = time.nanoseconds();
+        processor.process(key, value);
+        nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        final Runnable punctuateDelegate = new Runnable() {
-            @Override
-            public void run() {
-                punctuator.punctuate(timestamp);
-            }
-        };
-        runAndMeasureLatency(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
+        final long startNs = time.nanoseconds();
+        punctuator.punctuate(timestamp);
+        nodeMetrics.nodePunctuateTimeSensor.record(time.nanoseconds() - startNs);
     }
 
     /**
@@ -180,70 +159,90 @@ public class ProcessorNode<K, V> {
         private final Sensor sourceNodeForwardSensor;
         private final Sensor nodeCreationSensor;
         private final Sensor nodeDestructionSensor;
+        private final String taskName;
+        private final String processorNodeName;
 
         private NodeMetrics(final StreamsMetricsImpl metrics, final String processorNodeName, final ProcessorContext context) {
             this.metrics = metrics;
 
-            // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(
-                context.taskId().toString(),
-                "processor-node",
-                processorNodeName,
+            final String group = "stream-processor-node-metrics";
+            final String taskName = context.taskId().toString();
+            final Map<String, String> tagMap = metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", processorNodeName);
+            final Map<String, String> allTagMap = metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", "all");
+
+            nodeProcessTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "process",
-                Sensor.RecordingLevel.DEBUG,
-                "task-id", context.taskId().toString()
-            );
-            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(
-                context.taskId().toString(),
-                "processor-node",
+                metrics,
+                group,
+                taskName,
                 processorNodeName,
+                allTagMap,
+                tagMap
+            );
+
+            nodePunctuateTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "punctuate",
-                Sensor.RecordingLevel.DEBUG,
-                "task-id", context.taskId().toString()
-            );
-            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(
-                context.taskId().toString(),
-                "processor-node",
+                metrics,
+                group,
+                taskName,
                 processorNodeName,
+                allTagMap,
+                tagMap
+            );
+
+            nodeCreationSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "create",
-                Sensor.RecordingLevel.DEBUG,
-                "task-id", context.taskId().toString()
-            );
-            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(
-                context.taskId().toString(),
-                "processor-node",
+                metrics,
+                group,
+                taskName,
                 processorNodeName,
+                allTagMap,
+                tagMap
+            );
+
+            // note: this metric can be removed in the future, as it is only recorded before being immediately removed
+            nodeDestructionSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "destroy",
-                Sensor.RecordingLevel.DEBUG,
-                "task-id", context.taskId().toString()
-            );
-            this.sourceNodeForwardSensor = metrics.addThroughputSensor(
-                context.taskId().toString(),
-                "processor-node",
+                metrics,
+                group,
+                taskName,
                 processorNodeName,
-                "forward",
-                Sensor.RecordingLevel.DEBUG,
-                "task-id", context.taskId().toString()
+                allTagMap,
+                tagMap
             );
+
+            sourceNodeForwardSensor = createTaskAndNodeLatencyAndThroughputSensors(
+                "forward",
+                metrics,
+                group,
+                taskName,
+                processorNodeName,
+                allTagMap,
+                tagMap
+            );
+
+            this.taskName = taskName;
+            this.processorNodeName = processorNodeName;
         }
 
         private void removeAllSensors() {
-            metrics.removeSensor(nodeProcessTimeSensor);
-            metrics.removeSensor(nodePunctuateTimeSensor);
-            metrics.removeSensor(sourceNodeForwardSensor);
-            metrics.removeSensor(nodeCreationSensor);
-            metrics.removeSensor(nodeDestructionSensor);
+            metrics.removeAllNodeLevelSensors(taskName, processorNodeName);
         }
-    }
 
-    private static void runAndMeasureLatency(final Time time, final Runnable action, final Sensor sensor) {
-        long startNs = -1;
-        if (sensor.shouldRecord()) {
-            startNs = time.nanoseconds();
-        }
-        action.run();
-        if (startNs != -1) {
-            sensor.record(time.nanoseconds() - startNs);
+        private static Sensor createTaskAndNodeLatencyAndThroughputSensors(final String operation,
+                                                                           final StreamsMetricsImpl metrics,
+                                                                           final String group,
+                                                                           final String taskName,
+                                                                           final String processorNodeName,
+                                                                           final Map<String, String> taskTags,
+                                                                           final Map<String, String> nodeTags) {
+            final Sensor parent = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
+            addAvgMaxLatency(parent, group, taskTags, operation);
+            addInvocationRateAndCount(parent, group, taskTags, operation);
+            final Sensor sensor = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent);
+            addAvgMaxLatency(sensor, group, nodeTags, operation);
+            addInvocationRateAndCount(sensor, group, nodeTags, operation);
+            return sensor;
         }
     }
 }

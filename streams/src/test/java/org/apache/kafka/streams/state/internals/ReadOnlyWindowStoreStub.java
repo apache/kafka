@@ -44,7 +44,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     private final Map<Long, NavigableMap<K, V>> data = new HashMap<>();
     private boolean open  = true;
 
-    public ReadOnlyWindowStoreStub(long windowSize) {
+    public ReadOnlyWindowStoreStub(final long windowSize) {
         this.windowSize = windowSize;
     }
 
@@ -79,10 +79,10 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (long now : data.keySet()) {
+        for (final long now : data.keySet()) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (Entry<K, V> entry : kvMap.entrySet()) {
+                for (final Entry<K, V> entry : kvMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }
@@ -119,16 +119,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
     
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (long now : data.keySet()) {
+        for (final long now : data.keySet()) {
             if (!(now >= timeFrom && now <= timeTo)) continue;
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (Entry<K, V> entry : kvMap.entrySet()) {
+                for (final Entry<K, V> entry : kvMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }
@@ -165,7 +165,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
@@ -173,7 +173,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         for (long now = timeFrom; now <= timeTo; now++) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
+                for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }

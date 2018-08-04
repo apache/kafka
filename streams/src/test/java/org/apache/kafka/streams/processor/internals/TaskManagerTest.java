@@ -212,11 +212,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReturnCachedTaskIdsFromDirectory() throws IOException {
-        File[] taskFolders = Utils.mkList(testFolder.newFolder("0_1"),
-                testFolder.newFolder("0_2"),
-                testFolder.newFolder("0_3"),
-                testFolder.newFolder("1_1"),
-                testFolder.newFolder("dummy")).toArray(new File[0]);
+        final File[] taskFolders = Utils.mkList(testFolder.newFolder("0_1"),
+                                                testFolder.newFolder("0_2"),
+                                                testFolder.newFolder("0_3"),
+                                                testFolder.newFolder("1_1"),
+                                                testFolder.newFolder("dummy")).toArray(new File[0]);
 
         assertTrue((new File(taskFolders[0], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
         assertTrue((new File(taskFolders[1], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
@@ -227,7 +227,7 @@ public class TaskManagerTest {
 
         EasyMock.replay(activeTaskCreator, stateDirectory);
 
-        Set<TaskId> tasks = taskManager.cachedTasksIds();
+        final Set<TaskId> tasks = taskManager.cachedTasksIds();
 
         EasyMock.verify(activeTaskCreator, stateDirectory);
 
@@ -375,7 +375,7 @@ public class TaskManagerTest {
         try {
             taskManager.suspendTasksAndState();
             fail("Should have thrown streams exception");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // expected
         }
         verify(restoreConsumer, active, standby);
@@ -518,7 +518,7 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown first exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         verify(active, standby);
@@ -532,7 +532,7 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         verify(standby);
@@ -618,7 +618,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotResumeConsumptionUntilAllStoresRestored() {
         EasyMock.expect(active.allTasksRunning()).andReturn(false);
-        Consumer<byte[], byte[]> consumer = (Consumer<byte[], byte[]>) EasyMock.createStrictMock(Consumer.class);
+        final Consumer<byte[], byte[]> consumer = (Consumer<byte[], byte[]>) EasyMock.createStrictMock(Consumer.class);
         taskManager.setConsumer(consumer);
         EasyMock.replay(active, consumer);
 

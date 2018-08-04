@@ -62,14 +62,14 @@ public class ThreadMetadata {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (this == o) {
             return true;
         }
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        ThreadMetadata that = (ThreadMetadata) o;
+        final ThreadMetadata that = (ThreadMetadata) o;
         return Objects.equals(threadName, that.threadName) &&
                Objects.equals(threadState, that.threadState) &&
                Objects.equals(activeTasks, that.activeTasks) &&

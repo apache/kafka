@@ -246,7 +246,6 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     val txProducer = TestUtils.createProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   saslProperties = this.clientSaslProperties,
-                                  retries = 1000,
                                   acks = -1,
                                   props = Some(producerConfig))
     producers += txProducer

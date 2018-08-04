@@ -42,7 +42,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
 
-    public StreamStreamJoinIntegrationTest(boolean cacheEnabled) {
+    public StreamStreamJoinIntegrationTest(final boolean cacheEnabled) {
         super(cacheEnabled);
     }
 

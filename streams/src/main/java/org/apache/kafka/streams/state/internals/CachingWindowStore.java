@@ -89,7 +89,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (ThreadCache.DirtyEntry entry : entries) {
+                for (final ThreadCache.DirtyEntry entry : entries) {
                     final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
                     final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
 
@@ -156,7 +156,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                 context.headers(),
                 true,
                 context.offset(),
-                timestamp,
+                context.timestamp(),
                 context.partition(),
                 context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);

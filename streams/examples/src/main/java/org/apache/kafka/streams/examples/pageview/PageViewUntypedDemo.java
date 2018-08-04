@@ -54,8 +54,8 @@ import java.util.Properties;
  */
 public class PageViewUntypedDemo {
 
-    public static void main(String[] args) throws Exception {
-        Properties props = new Properties();
+    public static void main(final String[] args) throws Exception {
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
@@ -64,22 +64,22 @@ public class PageViewUntypedDemo {
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
         final Consumed<String, JsonNode> consumed = Consumed.with(Serdes.String(), jsonSerde);
-        KStream<String, JsonNode> views = builder.stream("streams-pageview-input", consumed);
+        final KStream<String, JsonNode> views = builder.stream("streams-pageview-input", consumed);
 
-        KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
+        final KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
 
-        KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
+        final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
-        KStream<JsonNode, JsonNode> regionCount = views
+        final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
-                ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+                final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
                 return (JsonNode) jNode.put("user", view.get("user").textValue())
                         .put("page", view.get("page").textValue())
                         .put("region", region == null ? "UNKNOWN" : region);
@@ -91,11 +91,11 @@ public class PageViewUntypedDemo {
             .count()
             .toStream()
             .map((key, value) -> {
-                ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
+                final ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
                 keyNode.put("window-start", key.window().start())
                         .put("region", key.key());
 
-                ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
+                final ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
                 valueNode.put("count", value);
 
                 return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
@@ -104,7 +104,7 @@ public class PageViewUntypedDemo {
         // write to the result topic
         regionCount.to("streams-pageviewstats-untyped-output", Produced.with(jsonSerde, jsonSerde));
 
-        KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
 
         // usually the stream application would be running forever,

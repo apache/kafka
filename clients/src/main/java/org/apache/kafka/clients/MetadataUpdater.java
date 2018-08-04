@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
+import java.io.Closeable;
 import java.util.List;
 
 /**
@@ -29,7 +30,7 @@ import java.util.List;
  * <p>
  * This class is not thread-safe!
  */
-public interface MetadataUpdater {
+public interface MetadataUpdater extends Closeable {
 
     /**
      * Gets the current cluster info without blocking.
@@ -82,4 +83,10 @@ public interface MetadataUpdater {
      * start of the update if possible (see `maybeUpdate` for more information).
      */
     void requestUpdate();
+
+    /**
+     * Close this updater.
+     */
+    @Override
+    void close();
 }

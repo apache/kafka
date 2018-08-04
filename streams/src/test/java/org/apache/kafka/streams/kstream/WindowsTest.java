@@ -27,7 +27,7 @@ public class WindowsTest {
     private class TestWindows extends Windows {
 
         @Override
-        public Map windowsFor(long timestamp) {
+        public Map windowsFor(final long timestamp) {
             return null;
         }
 

@@ -72,7 +72,7 @@ public class KTableMapValuesTest {
         final KTable<String, String> table1 = builder.table(topic1, consumed);
         final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
-            public Integer apply(CharSequence value) {
+            public Integer apply(final CharSequence value) {
                 return value.charAt(0) - 48;
             }
         });
@@ -92,7 +92,7 @@ public class KTableMapValuesTest {
         final KTable<String, String> table1 = builder.table(topic1, consumed);
         final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
-            public Integer apply(CharSequence value) {
+            public Integer apply(final CharSequence value) {
                 return value.charAt(0) - 48;
             }
         }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
@@ -124,10 +124,10 @@ public class KTableMapValuesTest {
         topologyBuilder.connectProcessorAndStateStores(table4.name, getterSupplier4.storeNames());
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
-            KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-            KTableValueGetter<String, String> getter4 = getterSupplier4.get();
+            final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+            final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+            final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+            final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
 
             getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
@@ -223,14 +223,14 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });
         final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -254,14 +254,14 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
             new ValueMapper<String, Integer>() {
                 @Override
-                public Integer apply(String value) {
+                public Integer apply(final String value) {
                     return new Integer(value);
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2).withValueSerde(Serdes.Integer()));
         final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean test(String key, Integer value) {
+                public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3).withValueSerde(Serdes.Integer()));
@@ -282,7 +282,7 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });
@@ -330,7 +330,7 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });

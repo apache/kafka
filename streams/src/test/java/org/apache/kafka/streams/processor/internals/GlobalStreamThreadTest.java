@@ -122,7 +122,7 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
             fail("Should have thrown StreamsException if start up failed");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // ok
         }
         assertFalse(globalStreamThread.stillRunning());
@@ -150,7 +150,7 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
             fail("Should have thrown StreamsException if start up failed");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(RuntimeException.class));
             assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }

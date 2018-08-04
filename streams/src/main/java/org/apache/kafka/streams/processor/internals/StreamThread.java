@@ -31,9 +31,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
@@ -438,8 +436,8 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                createProducer(taskId)
-            );
+                createProducer(taskId),
+                streamsMetrics.tasksClosedSensor);
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -527,36 +525,30 @@ public class StreamThread extends Thread {
             final String group = "stream-metrics";
 
             commitTimeSensor = threadLevelSensor("commit-latency", Sensor.RecordingLevel.INFO);
-            commitTimeSensor.add(metrics.metricName("commit-latency-avg", group, "The average commit time in ms", tags()), new Avg());
-            commitTimeSensor.add(metrics.metricName("commit-latency-max", group, "The maximum commit time in ms", tags()), new Max());
-            commitTimeSensor.add(metrics.metricName("commit-rate", group, "The average per-second number of commit calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            commitTimeSensor.add(metrics.metricName("commit-total", group, "The total number of commit calls", tags()), new Count());
+            addAvgMaxLatency(commitTimeSensor, group, tagMap(), "commit");
+            addInvocationRateAndCount(commitTimeSensor, group, tagMap(), "commit");
 
             pollTimeSensor = threadLevelSensor("poll-latency", Sensor.RecordingLevel.INFO);
-            pollTimeSensor.add(metrics.metricName("poll-latency-avg", group, "The average poll time in ms", tags()), new Avg());
-            pollTimeSensor.add(metrics.metricName("poll-latency-max", group, "The maximum poll time in ms", tags()), new Max());
-            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tags()), new Count());
+            addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
+            // can't use addInvocationRateAndCount due to non-standard description string
+            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new Count());
 
             processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
-            processTimeSensor.add(metrics.metricName("process-latency-avg", group, "The average process time in ms", tags()), new Avg());
-            processTimeSensor.add(metrics.metricName("process-latency-max", group, "The maximum process time in ms", tags()), new Max());
-            processTimeSensor.add(metrics.metricName("process-rate", group, "The average per-second number of process calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            processTimeSensor.add(metrics.metricName("process-total", group, "The total number of process calls", tags()), new Count());
+            addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
+            addInvocationRateAndCount(processTimeSensor, group, tagMap(), "process");
 
             punctuateTimeSensor = threadLevelSensor("punctuate-latency", Sensor.RecordingLevel.INFO);
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", group, "The average punctuate time in ms", tags()), new Avg());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", group, "The maximum punctuate time in ms", tags()), new Max());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-rate", group, "The average per-second number of punctuate calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            punctuateTimeSensor.add(metrics.metricName("punctuate-total", group, "The total number of punctuate calls", tags()), new Count());
+            addAvgMaxLatency(punctuateTimeSensor, group, tagMap(), "punctuate");
+            addInvocationRateAndCount(punctuateTimeSensor, group, tagMap(), "punctuate");
 
             taskCreatedSensor = threadLevelSensor("task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tags()), new Total());
+            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tagMap()), new Total());
 
             tasksClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-            tasksClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            tasksClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tags()), new Total());
+            tasksClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            tasksClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
         }
     }
 
@@ -831,18 +823,21 @@ public class StreamThread extends Thread {
             }
         }
 
-        if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
+        if (records != null && !records.isEmpty()) {
             streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
             addRecordsToTasks(records);
+        }
+
+        if (taskManager.hasActiveRunningTasks()) {
             final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, timerStartedMs);
                 processedBeforeCommit = adjustRecordsProcessedBeforeCommit(
-                    recordsProcessedBeforeCommit,
-                    totalProcessed,
-                    processLatency,
-                    commitTimeMs);
+                        recordsProcessedBeforeCommit,
+                        totalProcessed,
+                        processLatency,
+                        commitTimeMs);
             }
         }
 
@@ -1129,7 +1124,7 @@ public class StreamThread extends Thread {
                         throw new TaskMigratedException(task);
                     }
 
-                    log.info("Reinitializing StandbyTask {}", task);
+                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
                 restoreConsumer.seekToBeginning(partitions);

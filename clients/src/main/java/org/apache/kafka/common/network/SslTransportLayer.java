@@ -177,7 +177,7 @@ public class SslTransportLayer implements TransportLayer {
                 flush(netWriteBuffer);
             }
         } catch (IOException ie) {
-            log.warn("Failed to send SSL Close message", ie);
+            log.debug("Failed to send SSL Close message", ie);
         } finally {
             socketChannel.socket().close();
             socketChannel.close();

@@ -35,22 +35,22 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
-class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
+class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
 
     private final String storeName;
     private final SessionWindows windows;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
-    private final Merger<? super K, T> sessionMerger;
+    private final Initializer<Agg> initializer;
+    private final Aggregator<? super K, ? super V, Agg> aggregator;
+    private final Merger<? super K, Agg> sessionMerger;
 
     private boolean sendOldValues = false;
 
     KStreamSessionWindowAggregate(final SessionWindows windows,
                                   final String storeName,
-                                  final Initializer<T> initializer,
-                                  final Aggregator<? super K, ? super V, T> aggregator,
-                                  final Merger<? super K, T> sessionMerger) {
+                                  final Initializer<Agg> initializer,
+                                  final Aggregator<? super K, ? super V, Agg> aggregator,
+                                  final Merger<? super K, Agg> sessionMerger) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -70,8 +70,8 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
     private class KStreamSessionWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private SessionStore<K, T> store;
-        private TupleForwarder<Windowed<K>, T> tupleForwarder;
+        private SessionStore<K, Agg> store;
+        private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
@@ -79,7 +79,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            store = (SessionStore<K, T>) context.getStateStore(storeName);
+            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
@@ -97,20 +97,20 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             }
 
             final long timestamp = context().timestamp();
-            final List<KeyValue<Windowed<K>, T>> merged = new ArrayList<>();
+            final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
-            T agg = initializer.apply();
+            Agg agg = initializer.apply();
 
             try (
-                final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(
+                final KeyValueIterator<Windowed<K>, Agg> iterator = store.findSessions(
                     key,
                     timestamp - windows.inactivityGap(),
                     timestamp + windows.inactivityGap()
                 )
             ) {
                 while (iterator.hasNext()) {
-                    final KeyValue<Windowed<K>, T> next = iterator.next();
+                    final KeyValue<Windowed<K>, Agg> next = iterator.next();
                     merged.add(next);
                     agg = sessionMerger.apply(key, agg, next.value);
                     mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
@@ -120,7 +120,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             agg = aggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
             if (!mergedWindow.equals(newSessionWindow)) {
-                for (final KeyValue<Windowed<K>, T> session : merged) {
+                for (final KeyValue<Windowed<K>, Agg> session : merged) {
                     store.remove(session.key);
                     tupleForwarder.maybeForward(session.key, null, session.value);
                 }
@@ -139,36 +139,36 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
     }
 
     @Override
-    public KTableValueGetterSupplier<Windowed<K>, T> view() {
-        return new KTableValueGetterSupplier<Windowed<K>, T>() {
+    public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
+        return new KTableValueGetterSupplier<Windowed<K>, Agg>() {
             @Override
-            public KTableValueGetter<Windowed<K>, T> get() {
+            public KTableValueGetter<Windowed<K>, Agg> get() {
                 return new KTableSessionWindowValueGetter();
             }
 
             @Override
             public String[] storeNames() {
-                return new String[]{storeName};
+                return new String[] {storeName};
             }
         };
     }
 
-    private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<K>, T> {
-        private SessionStore<K, T> store;
+    private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
+        private SessionStore<K, Agg> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (SessionStore<K, T>) context.getStateStore(storeName);
+            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(final Windowed<K> key) {
-            try (final KeyValueIterator<Windowed<K>, T> iter = store.findSessions(key.key(), key.window().end(), key.window().end())) {
+        public Agg get(final Windowed<K> key) {
+            try (final KeyValueIterator<Windowed<K>, Agg> iter = store.findSessions(key.key(), key.window().end(), key.window().end())) {
                 if (!iter.hasNext()) {
                     return null;
                 }
-                final T value = iter.next().value;
+                final Agg value = iter.next().value;
                 if (iter.hasNext()) {
                     throw new ProcessorStateException(String.format("Iterator for key [%s] on session store has more than one value", key));
                 }

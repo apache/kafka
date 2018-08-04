@@ -20,7 +20,6 @@ import java.util.{ArrayList, Collections, Properties}
 import java.time.Duration
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
-import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.network.SocketServer
 import kafka.security.auth._
@@ -70,7 +69,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
   val deleteRecordsPartition = new TopicPartition(deleteTopic, part)
-  val topicAndPartition = TopicAndPartition(topic, part)
   val group = "my-group"
   val topicResource = Resource(Topic, topic, LITERAL)
   val groupResource = Resource(Group, group, LITERAL)
@@ -1444,7 +1442,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val transactionalProperties = new Properties()
     transactionalProperties.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 3,
       props = Some(transactionalProperties))
     producers += producer
     producer
@@ -1454,7 +1451,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val idempotentProperties = new Properties()
     idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 3,
       props = Some(idempotentProperties))
     producers += producer
     producer

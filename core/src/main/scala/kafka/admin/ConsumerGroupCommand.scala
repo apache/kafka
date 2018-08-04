@@ -27,7 +27,6 @@ import kafka.utils._
 import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
@@ -35,7 +34,6 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, Set}
-import scala.concurrent.ExecutionException
 import scala.util.{Failure, Success, Try}
 
 object ConsumerGroupCommand extends Logging {
@@ -340,20 +338,19 @@ object ConsumerGroupCommand extends Logging {
       val state = consumerGroup.state
       val committedOffsets = getCommittedOffsets(groupId).asScala.toMap
       var assignedTopicPartitions = ListBuffer[TopicPartition]()
-      val rowsWithConsumer = if (committedOffsets.isEmpty) List[PartitionAssignmentState]() else consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
-        .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size)
-        .flatMap { consumerSummary =>
-          val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
-          assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
-          val partitionOffsets = consumerSummary.assignment.topicPartitions.asScala
-            .map { topicPartition =>
-              topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
-            }.toMap
+      val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
+        .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
+        val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
+        assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
+        val partitionOffsets = consumerSummary.assignment.topicPartitions.asScala
+          .map { topicPartition =>
+            topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
+          }.toMap
 
         collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
           partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
           Some(s"${consumerSummary.clientId}"))
-        }
+      }
 
       val rowsWithoutConsumer = committedOffsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
         case (topicPartition, offset) =>

@@ -63,7 +63,7 @@ public class QueryableStoreTypes {
 
         private final Class matchTo;
 
-        QueryableStoreTypeMatcher(Class matchTo) {
+        QueryableStoreTypeMatcher(final Class matchTo) {
             this.matchTo = matchTo;
         }
 

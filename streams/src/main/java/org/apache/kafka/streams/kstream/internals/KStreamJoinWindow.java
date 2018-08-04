@@ -30,7 +30,7 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
     /**
      * @throws TopologyException if retention period of the join window is less than expected
      */
-    KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
+    KStreamJoinWindow(final String windowName, final long windowSizeMs, final long retentionPeriodMs) {
         this.windowName = windowName;
 
         if (windowSizeMs > retentionPeriodMs)
@@ -49,14 +49,14 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
 
             window = (WindowStore<K, V>) context.getStateStore(windowName);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, we do not need to put the record into window store
             // since it will never be considered for join operations
             if (key != null) {
