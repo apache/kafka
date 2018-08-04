@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -109,7 +110,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
             parent.add(
                 new MetricName("commit-total", group, "The total number of occurrence of commit operations.", allTagMap),
-                new Count()
+                new CumulativeCount()
             );
 
             // add the operation metrics with additional tags
@@ -129,7 +130,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
             taskCommitTimeSensor.add(
                 new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
-                new Count()
+                new CumulativeCount()
             );
 
             // add the metrics for enforced processing
@@ -140,7 +141,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
             taskEnforcedProcessSensor.add(
                     new MetricName("enforced-process-total", group, "The total number of occurrence of enforced-process operations.", tagMap),
-                    new Count()
+                    new CumulativeCount()
             );
 
         }
