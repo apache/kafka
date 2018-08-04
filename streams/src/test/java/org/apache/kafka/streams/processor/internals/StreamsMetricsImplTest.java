@@ -17,8 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
@@ -95,5 +99,43 @@ public class StreamsMetricsImplTest {
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
+    }
+
+    @Test
+    public void testTotalMetricDoesntDecrease() {
+        final MockTime time = new MockTime();
+        final MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
+        final Metrics metrics = new Metrics(config, time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
+
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "op";
+
+        final Sensor sensor = streamsMetrics.addLatencyAndThroughputSensor(
+                scope,
+                entity,
+                operation,
+                Sensor.RecordingLevel.INFO
+        );
+
+        final double latency = 100.0;
+        final MetricName totalMetricName = metrics.metricName(
+                "op-total",
+                "stream-scope-metrics",
+                "",
+                "client-id",
+                "",
+                "scope-id",
+                "entity"
+        );
+
+        final KafkaMetric totalMetric = metrics.metric(totalMetricName);
+
+        for (int i = 0; i < 10; i++) {
+            assertEquals(i, totalMetric.measurable().measure(config, time.milliseconds()), 0.0001);
+            sensor.record(latency, time.milliseconds());
+        }
+
     }
 }
