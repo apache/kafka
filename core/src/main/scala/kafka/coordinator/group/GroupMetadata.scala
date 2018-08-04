@@ -224,12 +224,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def remove(memberId: String) {
-    val member = members.remove(memberId)
-    if (member.nonEmpty) {
-      member.get.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
-      if (member.get.awaitingJoinCallback != null)
+    members.remove(memberId).foreach { member =>
+      member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
+      if (member.awaitingJoinCallback != null)
         numMembersAwaitingJoin -= 1
     }
+
     if (isLeader(memberId)) {
       leaderId = if (members.isEmpty) {
         None
