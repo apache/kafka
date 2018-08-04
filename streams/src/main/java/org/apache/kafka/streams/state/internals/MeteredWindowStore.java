@@ -108,10 +108,10 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public void put(final K key, final V value, final long timestamp) {
+    public void put(final K key, final V value, final long windowStartTimestamp) {
         final long startNs = time.nanoseconds();
         try {
-            inner.put(keyBytes(key), serdes.rawValue(value), timestamp);
+            inner.put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);

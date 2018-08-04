@@ -70,10 +70,10 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public void put(final K key, final V value, final long timestamp) {
+    public void put(final K key, final V value, final long windowStartTimestamp) {
         maybeUpdateSeqnumForDups();
 
-        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes), serdes.rawValue(value));
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
     @Override
