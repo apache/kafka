@@ -16,19 +16,31 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -37,6 +49,8 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
@@ -88,6 +102,102 @@ public class CachingWindowStoreTest {
     @After
     public void closeStore() {
         cachingStore.close();
+    }
+
+    @Test
+    public void shouldTest() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
+                Stores.persistentWindowStore("store-name", 3600000, 3, 60000, false),
+                Serdes.String(),
+                Serdes.String())
+                .withCachingEnabled();
+
+        builder.addStateStore(storeBuilder);
+
+        builder.stream("duplicate-example-input", Consumed.with(Serdes.String(), Serdes.String()))
+                .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
+
+                    private WindowStore<String, String> store;
+                    @Override
+                    public void init(ProcessorContext processorContext) {
+                        this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
+                        int count = 0;
+
+                        KeyValueIterator<Windowed<String>, String> all = store.all();
+                        while (all.hasNext()) {
+                            count++;
+                            all.next();
+                        }
+
+                        System.out.println("In init: number of items in store is: " + count);
+                    }
+
+                    @Override
+                    public KeyValue<String, String> transform(String key, String value) {
+                        int count = 0;
+
+                        KeyValueIterator<Windowed<String>, String> all = store.all();
+                        while (all.hasNext()) {
+                            count++;
+                            all.next();
+                        }
+                        System.out.println("Number of items in store is: " + count);
+
+                        store.put(value, value);
+                        return new KeyValue<>(key, value);
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                }, "store-name")
+                .through("whatever");
+
+        final String bootstrapServers = "localhost:9092";
+        final Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "duplicate-example");
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "duplicate-example-client");
+        // Where to find Kafka broker(s).
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        // Specify default (de)serializers for record keys and for record values.
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        // Records should be flushed every 10 seconds. This is less than the default
+        // in order to keep this example interactive.
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
+
+        TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration);
+
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(Serdes.String().serializer(), Serdes.String().serializer(), 0L);
+
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis()));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis()));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis()));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis()));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis()));
+        driver.advanceWallClockTime(10 * 1000L);
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 10 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 10 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 10 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 10 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 10 * 1000L));
+        driver.advanceWallClockTime(10 * 1000L);
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 20 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 20 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 20 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 20 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 20 * 1000L));
+        driver.advanceWallClockTime(10 * 1000L);
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 30 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 30 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 30 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 30 * 1000L));
+        driver.pipeInput(recordFactory.create("duplicate-example-input", UUID.randomUUID().toString(), UUID.randomUUID().toString(), System.currentTimeMillis() + 30 * 1000L));
     }
 
     @Test
