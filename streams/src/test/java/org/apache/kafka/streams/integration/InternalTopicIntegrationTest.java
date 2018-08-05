@@ -167,7 +167,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 5000);
+        waitForCompletion(streams, 2, 10000);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
