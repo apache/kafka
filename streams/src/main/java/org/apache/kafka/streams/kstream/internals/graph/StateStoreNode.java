@@ -23,23 +23,16 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class StateStoreNode extends StreamsGraphNode {
 
     protected final StoreBuilder storeBuilder;
-    private final String[] processorNames;
 
-    public StateStoreNode(final StoreBuilder storeBuilder,
-                          final String... processorNames) {
+    public StateStoreNode(final StoreBuilder storeBuilder) {
         super(storeBuilder.toString(), false);
 
         this.storeBuilder = storeBuilder;
-        this.processorNames = processorNames;
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
-        if (processorNames != null && processorNames.length > 0) {
-            topologyBuilder.addStateStore(storeBuilder, processorNames);
-        } else {
-            topologyBuilder.addStateStore(storeBuilder);
-        }
+        topologyBuilder.addStateStore(storeBuilder);
     }
 }
