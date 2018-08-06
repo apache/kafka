@@ -36,7 +36,14 @@ buildscript {
 apply plugin: "com.diffplug.gradle.spotless"
 spotless {
   scala {
-    target 'streams/**/*.scala'
+    def slist = []
+    def spotlessRegex = project.hasProperty('spotlessRegex') ? project.getProperty('spotlessRegex') : null
+    if ( spotlessRegex != null ) {
+      def spAddList = spotlessRegex.split()
+      slist.addAll(spAddList)
+    }
+    slist.addAll('streams/**/*.scala')
+    target slist
     scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
   }
 }
