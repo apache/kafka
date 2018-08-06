@@ -114,8 +114,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
   def moveLeaderToPreferredReplica() = {
     try {
-      val topics = partitionsFromUser.map(_.topic).toSeq.distinct
-      val partitionsFromZk = zkClient.getPartitionsForTopics(topics.toSet).flatMap{ case (topic, partitions) =>
+      val topics = partitionsFromUser.map(_.topic).toSet
+      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
         partitions.map(new TopicPartition(topic, _))
       }.toSet
 
