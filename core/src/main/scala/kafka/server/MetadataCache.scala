@@ -40,7 +40,7 @@ import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest
 class MetadataCache(brokerId: Int) extends Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
-  @volatile private var metadataSnapshot : MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.Map.empty,
+  @volatile private var metadataSnapshot : MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
     controllerId = None, aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty)
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
@@ -153,7 +153,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     metadataSnapshot.aliveBrokers.values.toBuffer
   }
 
-  private def addOrUpdatePartitionInfo(cache: mutable.Map[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
+  private def addOrUpdatePartitionInfo(cache: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataRequest.PartitionState) {
@@ -209,7 +209,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     inWriteLock(partitionMetadataLock) {
 
       //since kafka may do partial metadata updates, we start by copying the previous state
-      val partitionStates = mutable.Map[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]]()
+      val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]](metadataSnapshot.partitionStates.size)
       metadataSnapshot.partitionStates.foreach { case (topic, md) =>
         val copy = new mutable.LongMap[UpdateMetadataRequest.PartitionState](md.size)
         copy ++= md
@@ -267,7 +267,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
-  private def removePartitionInfo(partitionStates: mutable.Map[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]], topic: String, partitionId: Int): Boolean = {
+  private def removePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]], topic: String, partitionId: Int): Boolean = {
     partitionStates.get(topic).exists { infos =>
       infos.remove(partitionId)
       if (infos.isEmpty) partitionStates.remove(topic)
@@ -275,7 +275,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  case class MetadataSnapshot(partitionStates: mutable.Map[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
+  case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
                               controllerId: Option[Int],
                               aliveBrokers: mutable.LongMap[Broker],
                               aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]])
