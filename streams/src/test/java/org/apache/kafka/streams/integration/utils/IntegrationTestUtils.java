@@ -202,7 +202,7 @@ public class IntegrationTestUtils {
             for (final KeyValue<K, V> record : records) {
                 final Future<RecordMetadata> f = producer.send(
                     new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
-                //f.get();
+                f.get();
             }
             if (enabledTransactions) {
                 producer.commitTransaction();

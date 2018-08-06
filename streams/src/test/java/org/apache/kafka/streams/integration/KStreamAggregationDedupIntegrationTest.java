@@ -25,8 +25,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -42,15 +40,9 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
@@ -66,7 +58,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -108,7 +99,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
@@ -126,134 +117,6 @@ public class KStreamAggregationDedupIntegrationTest {
                 return value1 + ":" + value2;
             }
         };
-    }
-
-    @Test
-    public void shouldTest() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("store-name", 3600000, 3, 60000, false),
-                Serdes.String(),
-                Serdes.String())
-                .withCachingEnabled();
-
-        builder.addStateStore(storeBuilder);
-
-        builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
-                .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
-
-                    private WindowStore<String, String> store;
-                    @Override
-                    public void init(ProcessorContext processorContext) {
-                        this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
-                        int count = 0;
-
-                        KeyValueIterator<Windowed<String>, String> all = store.all();
-                        while (all.hasNext()) {
-                            count++;
-                            all.next();
-                        }
-
-                        System.out.println("In init: number of items in store is: " + count);
-                    }
-
-                    @Override
-                    public KeyValue<String, String> transform(String key, String value) {
-                        int count = 0;
-
-                        KeyValueIterator<Windowed<String>, String> all = store.all();
-                        while (all.hasNext()) {
-                            count++;
-                            all.next();
-                        }
-                        System.out.println("Number of items in store is: " + count);
-
-                        store.put(value, value);
-                        return new KeyValue<>(key, value);
-                    }
-
-                    @Override
-                    public void close() {
-
-                    }
-                }, "store-name");
-
-        final String bootstrapServers = CLUSTER.bootstrapServers();
-        final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "duplicate-example");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "duplicate-example-client");
-        // Where to find Kafka broker(s).
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        // Specify default (de)serializers for record keys and for record values.
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        // Records should be flushed every 10 seconds. This is less than the default
-        // in order to keep this example interactive.
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
-
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
-
-        streams.cleanUp();
-        streams.start();
-
-        Thread.sleep(6000);
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                streamOneInput,
-                Arrays.asList(
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString())),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                null);
-
-        Thread.sleep(7000);
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                streamOneInput,
-                Arrays.asList(
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString())),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                null);
-
-        Thread.sleep(10000);
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                streamOneInput,
-                Arrays.asList(
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString()),
-                        new KeyValue<>(UUID.randomUUID().toString(), UUID.randomUUID().toString())),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                null);
-
-        Thread.sleep(8000);
-
-
-        streams.close();
     }
 
     @After
@@ -425,7 +288,7 @@ public class KStreamAggregationDedupIntegrationTest {
     private void createTopics() throws InterruptedException {
         streamOneInput = "stream-one-" + testNo;
         outputTopic = "output-" + testNo;
-        CLUSTER.createTopic(streamOneInput, 1, 1);
+        CLUSTER.createTopic(streamOneInput, 3, 1);
         CLUSTER.createTopic(outputTopic);
     }
 
