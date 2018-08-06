@@ -310,18 +310,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 continue;
             }
 
-            final StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(keyChangingNode, n -> n instanceof StreamSourceNode);
-
-            if (parentSourceNode == null) {
-                throw new IllegalStateException(String.format("Can't find parent source node for %s ", keyChangingNode));
-            }
-
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
-                                                                                      parentSourceNode.keySerde(),
-                                                                                      parentSourceNode.valueSerde());
+                                                                                      null,
+                                                                                       null);
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
-            optimizedSingleRepartition.setBuildPriority(parentSourceNode.buildPriority());
+            optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
 
             for (final OptimizableRepartitionNode repartitionNodeToBeReplaced : entry.getValue()) {
 
@@ -348,7 +342,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 }
 
                 for (final StreamsGraphNode parentNode : parentsOfRepartitionNodeToBeReplaced) {
-                     parentNode.removeChild(repartitionNodeToBeReplaced);
+                    parentNode.removeChild(repartitionNodeToBeReplaced);
                 }
                 repartitionNodeToBeReplaced.clearChildren();
 
@@ -379,12 +373,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,
                                                     final Predicate<StreamsGraphNode> parentNodePredicate) {
-        if (startSeekingNode == null || parentNodePredicate.test(startSeekingNode)) {
+        if (parentNodePredicate.test(startSeekingNode)) {
             return startSeekingNode;
         }
         StreamsGraphNode foundParentNode = null;
 
         for (final StreamsGraphNode parentNode : startSeekingNode.parentNodes()) {
+            if (parentNodePredicate.test(parentNode)) {
+                return parentNode;
+            }
             foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
         }
         return foundParentNode;
