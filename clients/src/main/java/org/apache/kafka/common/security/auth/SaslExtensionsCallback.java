@@ -14,30 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram.internals;
 
-import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.utils.Utils;
+package org.apache.kafka.common.security.auth;
 
-import java.util.Collections;
-import java.util.Map;
+import javax.security.auth.callback.Callback;
 
-public class ScramExtensions extends SaslExtensions {
+/**
+ * Optional callback used for SASL mechanisms if any extensions need to be set
+ * in the SASL exchange.
+ */
+public class SaslExtensionsCallback implements Callback {
+    private SaslExtensions extensions;
 
-    public ScramExtensions() {
-        this(Collections.<String, String>emptyMap());
+    /**
+     * Returns a {@link SaslExtensions} consisting of the extension names and values that are sent by the client to
+     * the server in the initial client SASL authentication message.
+     */
+    public SaslExtensions extensions() {
+        return extensions;
     }
 
-    public ScramExtensions(String extensions) {
-        this(Utils.parseMap(extensions, "=", ","));
-    }
-
-    public ScramExtensions(Map<String, String> extensionMap) {
-        super(extensionMap);
-    }
-
-    public boolean tokenAuthenticated() {
-        return Boolean.parseBoolean(map().get(ScramLoginModule.TOKEN_AUTH_CONFIG));
+    /**
+     * Sets the SASL extensions on this callback.
+     */
+    public void extensions(SaslExtensions extensions) {
+        this.extensions = extensions;
     }
 }

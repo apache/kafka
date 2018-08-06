@@ -14,30 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram.internals;
+package org.apache.kafka.common.security;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.utils.Utils;
+import org.junit.Before;
+import org.junit.Test;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
-public class ScramExtensions extends SaslExtensions {
+import static org.junit.Assert.assertNull;
 
-    public ScramExtensions() {
-        this(Collections.<String, String>emptyMap());
+public class SaslExtensionsTest {
+    Map<String, String> map;
+
+    @Before
+    public void setUp() {
+        this.map = new HashMap<>();
+        this.map.put("what", "42");
+        this.map.put("who", "me");
     }
 
-    public ScramExtensions(String extensions) {
-        this(Utils.parseMap(extensions, "=", ","));
+    @Test(expected = UnsupportedOperationException.class)
+    public void testReturnedMapIsImmutable() {
+        SaslExtensions extensions = new SaslExtensions(this.map);
+        extensions.map().put("hello", "test");
     }
 
-    public ScramExtensions(Map<String, String> extensionMap) {
-        super(extensionMap);
-    }
+    @Test
+    public void testCannotAddValueToMapReferenceAndGetFromExtensions() {
+        SaslExtensions extensions = new SaslExtensions(this.map);
 
-    public boolean tokenAuthenticated() {
-        return Boolean.parseBoolean(map().get(ScramLoginModule.TOKEN_AUTH_CONFIG));
+        assertNull(extensions.map().get("hello"));
+        this.map.put("hello", "42");
+        assertNull(extensions.map().get("hello"));
     }
 }

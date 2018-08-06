@@ -18,11 +18,48 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
 
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.junit.Test;
 
+import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class OAuthBearerClientInitialResponseTest {
+
+    /*
+        Test how a client would build a response
+     */
+    @Test
+    public void testBuildClientResponseToBytes() throws Exception {
+        String expectedMesssage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
+
+        Map<String, String> extensions = new HashMap<>();
+        extensions.put("nineteen", "42");
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions));
+
+        String message = new String(response.toBytes(), StandardCharsets.UTF_8);
+
+        assertEquals(expectedMesssage, message);
+    }
+
+    @Test
+    public void testBuildServerResponseToBytes() throws Exception {
+        String serverMessage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(serverMessage.getBytes(StandardCharsets.UTF_8));
+
+        String message = new String(response.toBytes(), StandardCharsets.UTF_8);
+
+        assertEquals(serverMessage, message);
+    }
+
+    @Test(expected = SaslException.class)
+    public void testThrowsSaslExceptionOnInvalidExtensionKey() throws Exception {
+        Map<String, String> extensions = new HashMap<>();
+        extensions.put("19", "42"); // keys can only be a-z
+        new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions));
+    }
 
     @Test
     public void testToken() throws Exception {
@@ -41,13 +78,13 @@ public class OAuthBearerClientInitialResponseTest {
     }
 
     @Test
-    public void testProperties() throws Exception {
+    public void testExtensions() throws Exception {
         String message = "n,,\u0001propA=valueA1, valueA2\u0001auth=Bearer 567\u0001propB=valueB\u0001\u0001";
         OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
         assertEquals("567", response.tokenValue());
         assertEquals("", response.authorizationId());
-        assertEquals("valueA1, valueA2", response.propertyValue("propA"));
-        assertEquals("valueB", response.propertyValue("propB"));
+        assertEquals("valueA1, valueA2", response.extensions().map().get("propA"));
+        assertEquals("valueB", response.extensions().map().get("propB"));
     }
 
     // The example in the RFC uses `vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg==` as the token
@@ -59,7 +96,7 @@ public class OAuthBearerClientInitialResponseTest {
         OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
         assertEquals("vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg", response.tokenValue());
         assertEquals("user@example.com", response.authorizationId());
-        assertEquals("server.example.com", response.propertyValue("host"));
-        assertEquals("143", response.propertyValue("port"));
+        assertEquals("server.example.com", response.extensions().map().get("host"));
+        assertEquals("143", response.extensions().map().get("port"));
     }
 }

@@ -19,6 +19,8 @@ package org.apache.kafka.common.security.oauthbearer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -36,16 +38,24 @@ import javax.security.auth.login.LoginException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
 public class OAuthBearerLoginModuleTest {
-    private static class TestTokenCallbackHandler implements AuthenticateCallbackHandler {
+
+    public static final SaslExtensions RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG = null;
+
+    private static class TestCallbackHandler implements AuthenticateCallbackHandler {
         private final OAuthBearerToken[] tokens;
         private int index = 0;
+        private int extensionsIndex = 0;
+        private final SaslExtensions[] extensions;
 
-        public TestTokenCallbackHandler(OAuthBearerToken[] tokens) {
+        public TestCallbackHandler(OAuthBearerToken[] tokens, SaslExtensions[] extensions) {
             this.tokens = Objects.requireNonNull(tokens);
+            this.extensions = extensions;
         }
 
         @Override
@@ -57,7 +67,13 @@ public class OAuthBearerLoginModuleTest {
                     } catch (KafkaException e) {
                         throw new IOException(e.getMessage(), e);
                     }
-                else
+                else if (callback instanceof SaslExtensionsCallback) {
+                    try {
+                        handleExtensionsCallback((SaslExtensionsCallback) callback);
+                    } catch (KafkaException e) {
+                        throw new IOException(e.getMessage(), e);
+                    }
+                } else
                     throw new UnsupportedCallbackException(callback);
             }
         }
@@ -81,6 +97,19 @@ public class OAuthBearerLoginModuleTest {
             else
                 throw new IOException("no more tokens");
         }
+
+        private void handleExtensionsCallback(SaslExtensionsCallback callback) throws IOException, UnsupportedCallbackException {
+            if (extensions.length > extensionsIndex) {
+                SaslExtensions extension = extensions[extensionsIndex++];
+
+                if (extension == RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG) {
+                    throw new UnsupportedCallbackException(callback);
+                }
+
+                callback.extensions(extension);
+            } else
+                throw new IOException("no more extensions");
+        }
     }
 
     @Test
@@ -92,12 +121,16 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
+            EasyMock.mock(SaslExtensions.class), EasyMock.mock(SaslExtensions.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        EasyMock.replay(extensions[0], extensions[2]);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -112,47 +145,68 @@ public class OAuthBearerLoginModuleTest {
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.commit();
-        // Now we should have the first token
+        // Now we should have the first token and extensions
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertSame(extensions[0], publicCredentials.iterator().next());
 
         // Now login on loginModule2 to get the second token
+        // loginModule2 does not support the extensions callback and will raise UnsupportedCallbackException
         loginModule2.login();
-        // Should still have just the first token
+        // Should still have just the first token and extensions
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule2.commit();
         // Should have the first and second tokens at this point
         assertEquals(2, privateCredentials.size());
+        assertEquals(2, publicCredentials.size());
         Iterator<Object> iterator = privateCredentials.iterator();
+        Iterator<Object> publicIterator = publicCredentials.iterator();
         assertNotSame(tokens[2], iterator.next());
         assertNotSame(tokens[2], iterator.next());
+        assertNotSame(extensions[2], publicIterator.next());
+        assertNotSame(extensions[2], publicIterator.next());
         // finally logout() on loginModule1
         loginModule1.logout();
-        // Now we should have just the second token
+        // Now we should have just the second token and extension
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
+        assertSame(extensions[1], publicCredentials.iterator().next());
 
         // Now login on loginModule3 to get the third token
         loginModule3.login();
-        // Should still have just the second token
+        // Should still have just the second token and extensions
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
+        assertSame(extensions[1], publicCredentials.iterator().next());
         loginModule3.commit();
         // Should have the second and third tokens at this point
         assertEquals(2, privateCredentials.size());
+        assertEquals(2, publicCredentials.size());
         iterator = privateCredentials.iterator();
+        publicIterator = publicCredentials.iterator();
         assertNotSame(tokens[0], iterator.next());
         assertNotSame(tokens[0], iterator.next());
+        assertNotSame(extensions[0], publicIterator.next());
+        assertNotSame(extensions[0], publicIterator.next());
         // finally logout() on loginModule2
         loginModule2.logout();
         // Now we should have just the third token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
+        assertSame(extensions[2], publicCredentials.iterator().next());
     }
 
     @Test
@@ -163,12 +217,16 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
+            EasyMock.mock(SaslExtensions.class)};
         EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        EasyMock.replay(extensions[0], extensions[1]);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -180,27 +238,36 @@ public class OAuthBearerLoginModuleTest {
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.commit();
         // Now we should have the first token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule1.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
 
         loginModule2.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule2.commit();
         // Now we should have the second token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
+        assertSame(extensions[1], publicCredentials.iterator().next());
         loginModule2.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
     }
 
     @Test
@@ -210,12 +277,16 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
+            EasyMock.mock(SaslExtensions.class)};
         EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        EasyMock.replay(extensions[0], extensions[1]);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login module
         OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
@@ -224,23 +295,30 @@ public class OAuthBearerLoginModuleTest {
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule.abort();
         // Should still have nothing since we aborted
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
 
         loginModule.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule.commit();
         // Now we should have the second token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[1], privateCredentials.iterator().next());
+        assertSame(extensions[1], publicCredentials.iterator().next());
         loginModule.logout();
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
     }
 
     @Test
@@ -251,12 +329,16 @@ public class OAuthBearerLoginModuleTest {
          */
         Subject subject = new Subject();
         Set<Object> privateCredentials = subject.getPrivateCredentials();
+        Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
         OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
             EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
+            EasyMock.mock(SaslExtensions.class), EasyMock.mock(SaslExtensions.class)};
         EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        TestTokenCallbackHandler testTokenCallbackHandler = new TestTokenCallbackHandler(tokens);
+        EasyMock.replay(extensions[0], extensions[1], extensions[2]);
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
@@ -271,38 +353,81 @@ public class OAuthBearerLoginModuleTest {
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.login();
         // Should still have nothing until commit() is called
         assertEquals(0, privateCredentials.size());
+        assertEquals(0, publicCredentials.size());
         loginModule1.commit();
         // Now we should have the first token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertSame(extensions[0], publicCredentials.iterator().next());
 
         // Now go get the second token
         loginModule2.login();
         // Should still have first token
         assertEquals(1, privateCredentials.size());
+        assertEquals(1, publicCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule2.abort();
         // Should still have just the first token because we aborted
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertEquals(1, publicCredentials.size());
+        assertSame(extensions[0], publicCredentials.iterator().next());
 
         // Now go get the third token
         loginModule2.login();
         // Should still have first token
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[0], privateCredentials.iterator().next());
+        assertEquals(1, publicCredentials.size());
+        assertSame(extensions[0], publicCredentials.iterator().next());
         loginModule2.commit();
         // Should have first and third tokens at this point
         assertEquals(2, privateCredentials.size());
         Iterator<Object> iterator = privateCredentials.iterator();
         assertNotSame(tokens[1], iterator.next());
         assertNotSame(tokens[1], iterator.next());
+        assertEquals(2, publicCredentials.size());
+        Iterator<Object> publicIterator = publicCredentials.iterator();
+        assertNotSame(extensions[1], publicIterator.next());
+        assertNotSame(extensions[1], publicIterator.next());
         loginModule1.logout();
         // Now we should have just the third token
         assertEquals(1, privateCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
+        assertEquals(1, publicCredentials.size());
+        assertSame(extensions[2], publicCredentials.iterator().next());
+    }
+
+    /**
+     * 2.1.0 added customizable SASL extensions and a new callback type.
+     * Ensure that old, custom-written callbackHandlers that do not handle the callback work
+     */
+    @Test
+    public void commitDoesNotThrowOnUnsupportedExtensionsCallback() throws LoginException {
+        Subject subject = new Subject();
+
+        // Create callback handler
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
+                EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
+        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, new SaslExtensions[] {RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG});
+
+        // Create login modules
+        OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+
+        loginModule1.login();
+        // Should populate public credentials with SaslExtensions and not throw an exception
+        loginModule1.commit();
+        SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
+        assertNotNull(extensions);
+        assertTrue(extensions.map().isEmpty());
     }
 }
