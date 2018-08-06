@@ -100,7 +100,7 @@ public class CachingWindowStoreTest {
     public void shouldTest() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
+        final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore("store-name", 3600000L, 60000L, false),
                 Serdes.String(),
                 Serdes.String())
@@ -114,11 +114,11 @@ public class CachingWindowStoreTest {
                     private WindowStore<String, String> store;
                     private int numRecordsProcessed;
                     @Override
-                    public void init(ProcessorContext processorContext) {
+                    public void init(final ProcessorContext processorContext) {
                         this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
                         int count = 0;
 
-                        KeyValueIterator<Windowed<String>, String> all = store.all();
+                        final KeyValueIterator<Windowed<String>, String> all = store.all();
                         while (all.hasNext()) {
                             count++;
                             all.next();
@@ -128,10 +128,10 @@ public class CachingWindowStoreTest {
                     }
 
                     @Override
-                    public KeyValue<String, String> transform(String key, String value) {
+                    public KeyValue<String, String> transform(final String key, final String value) {
                         int count = 0;
 
-                        KeyValueIterator<Windowed<String>, String> all = store.all();
+                        final KeyValueIterator<Windowed<String>, String> all = store.all();
                         while (all.hasNext()) {
                             count++;
                             all.next();
@@ -165,7 +165,7 @@ public class CachingWindowStoreTest {
         // in order to keep this example interactive.
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
-        TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration);
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration);
 
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(Serdes.String().serializer(), Serdes.String().serializer(), 0L);
 
