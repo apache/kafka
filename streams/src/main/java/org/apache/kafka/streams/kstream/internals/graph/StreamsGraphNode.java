@@ -31,7 +31,7 @@ public abstract class StreamsGraphNode {
     private final String nodeName;
     private final boolean repartitionRequired;
     private boolean keyChangingOperation;
-    private Integer id;
+    private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
 
     public StreamsGraphNode(final String nodeName,
@@ -106,12 +106,12 @@ public abstract class StreamsGraphNode {
         this.keyChangingOperation = keyChangingOperation;
     }
 
-    public void setId(final int id) {
-        this.id = id;
+    public void setBuildPriority(final int buildPriority) {
+        this.buildPriority = buildPriority;
     }
 
-    public Integer id() {
-        return this.id;
+    public Integer buildPriority() {
+        return this.buildPriority;
     }
 
     public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
@@ -129,7 +129,7 @@ public abstract class StreamsGraphNode {
         final String[] parentNames = parentNodeNames();
         return "StreamsGraphNode{" +
                "nodeName='" + nodeName + '\'' +
-               ", id=" + id +
+               ", buildPriority=" + buildPriority +
                " parentNodes=" + Arrays.toString(parentNames) + '}';
     }
 }
