@@ -39,14 +39,14 @@ import static org.junit.Assert.fail;
 
 public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
-    private static final Map<String, String> testProperties = new LinkedHashMap<String, String>() {
+    private static final Map<String, String> TEST_PROPERTIES = new LinkedHashMap<String, String>() {
         {
             put("One", "1");
             put("Two", "2");
             put("Three", "3");
         }
     };
-    private SaslExtensions testExtensions = new SaslExtensions(testProperties);
+    private SaslExtensions testExtensions = new SaslExtensions(TEST_PROPERTIES);
     private final String errorMessage = "Error as expected!";
 
     public class ExtensionsCallbackHandler implements AuthenticateCallbackHandler {
@@ -99,9 +99,9 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
     @Test
     public void testNoExtensionsDoesNotAttachAnythingToFirstClientMessage() throws Exception {
-        testProperties.clear();
-        testExtensions = new SaslExtensions(testProperties);
-        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, new SaslExtensions(testProperties)).toBytes(), StandardCharsets.UTF_8);
+        TEST_PROPERTIES.clear();
+        testExtensions = new SaslExtensions(TEST_PROPERTIES);
+        String expectedToken = new String(new OAuthBearerClientInitialResponse(null, new SaslExtensions(TEST_PROPERTIES)).toBytes(), StandardCharsets.UTF_8);
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(false));
 
         String message = new String(client.evaluateChallenge("".getBytes()), StandardCharsets.UTF_8);
