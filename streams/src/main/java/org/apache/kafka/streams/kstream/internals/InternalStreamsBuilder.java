@@ -60,7 +60,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
+    private final BuildPriorityComparator buildPriorityComparator = new BuildPriorityComparator();
     private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
     private final Set<TableSourceNode> tableSourceNodes = new LinkedHashSet<>();
 
@@ -270,7 +270,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         maybePerformOptimizations(props);
 
-        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
+        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, buildPriorityComparator);
 
         graphNodePriorityQueue.offer(root);
 
@@ -391,7 +391,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return root;
     }
 
-    private static class NodeIdComparator implements Comparator<StreamsGraphNode>, Serializable {
+    private static class BuildPriorityComparator implements Comparator<StreamsGraphNode>, Serializable {
 
         @Override
         public int compare(final StreamsGraphNode o1,
