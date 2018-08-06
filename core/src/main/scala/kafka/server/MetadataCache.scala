@@ -205,15 +205,15 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
-  def updateCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
+  def updateMetadataSnapshot(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
 
       //since kafka may do partial metadata updates, we start by copying the previous state
-      val cache = mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]]()
+      val partitionStates = mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]]()
       metadataSnapshot.partitionStates.foreach { case (topic, md) =>
         val copy = mutable.Map[Int, UpdateMetadataRequest.PartitionState]()
         copy ++= md
-        cache += (topic -> copy)
+        partitionStates += (topic -> copy)
       }
       val aliveBrokers = mutable.Map[Int, Broker]()
       val aliveNodes = mutable.Map[Int, collection.Map[ListenerName, Node]]()
@@ -246,17 +246,17 @@ class MetadataCache(brokerId: Int) extends Logging {
         val controllerId = updateMetadataRequest.controllerId
         val controllerEpoch = updateMetadataRequest.controllerEpoch
         if (info.basePartitionState.leader == LeaderAndIsr.LeaderDuringDelete) {
-          removePartitionInfo(cache, tp.topic, tp.partition)
+          removePartitionInfo(partitionStates, tp.topic, tp.partition)
           stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
             s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
           deletedPartitions += tp
         } else {
-          addOrUpdatePartitionInfo(cache, tp.topic, tp.partition, info)
+          addOrUpdatePartitionInfo(partitionStates, tp.topic, tp.partition, info)
           stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to " +
             s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
         }
       }
-      metadataSnapshot = MetadataSnapshot(cache, controllerId, aliveBrokers, aliveNodes)
+      metadataSnapshot = MetadataSnapshot(partitionStates, controllerId, aliveBrokers, aliveNodes)
       deletedPartitions
     }
   }
@@ -267,10 +267,10 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
-  private def removePartitionInfo(cache: mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]], topic: String, partitionId: Int): Boolean = {
-    cache.get(topic).exists { infos =>
+  private def removePartitionInfo(partitionStates: mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]], topic: String, partitionId: Int): Boolean = {
+    partitionStates.get(topic).exists { infos =>
       infos.remove(partitionId)
-      if (infos.isEmpty) cache.remove(topic)
+      if (infos.isEmpty) partitionStates.remove(topic)
       true
     }
   }
