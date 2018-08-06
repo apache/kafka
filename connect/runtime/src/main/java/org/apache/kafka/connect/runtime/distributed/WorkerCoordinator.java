@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -105,8 +106,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     // expose for tests
     @Override
-    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
-        return super.ensureCoordinatorReady(timeoutMs);
+    protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
+        return super.ensureCoordinatorReady(timer);
     }
 
     public void poll(long timeout) {
@@ -117,7 +118,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady(Long.MAX_VALUE);
+                ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
                 now = time.milliseconds();
             }
 
@@ -133,7 +134,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
             // Note that because the network client is shared with the background heartbeat thread,
             // we do not want to block in poll longer than the time to the next heartbeat.
-            client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+            long pollTimeout = Math.min(Math.max(0, remaining), timeToNextHeartbeat(now));
+            client.poll(time.timer(pollTimeout));
 
             now = time.milliseconds();
             elapsed = now - start;

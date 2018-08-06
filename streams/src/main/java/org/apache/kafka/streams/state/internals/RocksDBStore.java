@@ -90,17 +90,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private FlushOptions fOptions;
 
     private volatile boolean prepareForBulkload = false;
-    private ProcessorContext internalProcessorContext;
+    ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
 
-    RocksDBStore(String name) {
+    RocksDBStore(final String name) {
         this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(String name, String parentDir) {
+    RocksDBStore(final String name, final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
     }
@@ -153,7 +153,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException(e);
         }
 
@@ -230,7 +230,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    private void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
 
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
@@ -276,7 +276,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         return originalValue;
     }
 
-    private void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
+    void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
         try (final WriteBatch batch = new WriteBatch()) {
             for (final KeyValue<byte[], byte[]> record : records) {
                 if (record.value == null) {
@@ -285,7 +285,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                     batch.put(record.key, record.value);
                 }
             }
-            db.write(wOptions, batch);
+            write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
         }
@@ -310,6 +310,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
+    void write(final WriteBatch batch) throws RocksDBException {
+        db.write(wOptions, batch);
+    }
+
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         try (final WriteBatch batch = new WriteBatch()) {
@@ -321,7 +325,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                     batch.put(entry.key.get(), entry.value);
                 }
             }
-            db.write(wOptions, batch);
+            write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
         }

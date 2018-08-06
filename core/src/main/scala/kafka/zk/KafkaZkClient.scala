@@ -79,13 +79,24 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     createResponse.name
   }
 
-  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
+  def registerBroker(brokerInfo: BrokerInfo): Unit = {
     val path = brokerInfo.path
     checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
 
-  def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
+  /**
+   * Registers a given broker in zookeeper as the controller.
+   * @param controllerId the id of the broker that is to be registered as the controller.
+   * @param timestamp the timestamp of the controller election.
+   * @throws KeeperException if an error is returned by ZooKeeper.
+   */
+  def registerController(controllerId: Int, timestamp: Long): Unit = {
+    val path = ControllerZNode.path
+    checkedEphemeralCreate(path, ControllerZNode.encode(controllerId, timestamp))
+  }
+
+  def updateBrokerInfo(brokerInfo: BrokerInfo): Unit = {
     val brokerIdPath = brokerInfo.path
     val setDataRequest = SetDataRequest(brokerIdPath, brokerInfo.toJsonBytes, ZkVersion.NoVersion)
     val response = retryRequestUntilConnected(setDataRequest)
@@ -1509,7 +1520,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     responses
   }
 
-  def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {
+  private def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {
     val checkedEphemeral = new CheckedEphemeral(path, data)
     info(s"Creating $path (is it secure? $isSecure)")
     val code = checkedEphemeral.create()

@@ -58,4 +58,3 @@ trait StreamToTableJoinTestData {
     new KeyValue("asia", 124L)
   )
 }
-

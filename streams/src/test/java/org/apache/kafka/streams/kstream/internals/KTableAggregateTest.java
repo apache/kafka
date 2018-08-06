@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -77,9 +77,9 @@ public class KTableAggregateTest {
         final String topic1 = "topic1";
 
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-                                                       stringSerialzied
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                             stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
@@ -123,9 +123,9 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-                                                       stringSerialzied
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                             stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
@@ -149,21 +149,22 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-            @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                switch (key) {
-                    case "null":
-                        return KeyValue.pair(null, value);
-                    case "NULL":
-                        return null;
-                    default:
-                        return KeyValue.pair(value, value);
-                }
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(
+            new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                @Override
+                public KeyValue<String, String> apply(final String key, final String value) {
+                    switch (key) {
+                        case "null":
+                            return KeyValue.pair(null, value);
+                        case "NULL":
+                            return null;
+                        default:
+                            return KeyValue.pair(value, value);
+                    }
                 }
             },
-                stringSerialzied
+            stringSerialzied
         )
                 .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -195,7 +196,7 @@ public class KTableAggregateTest {
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
-                "2:0+2", 
+                "2:0+2",
                   //noop
                 "2:0+2-2", "4:0+4",
                   //noop
@@ -286,7 +287,7 @@ public class KTableAggregateTest {
             "green:2"
             ), proc.processed);
     }
-    
+
     @Test
     public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -297,7 +298,7 @@ public class KTableAggregateTest {
                 .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
 
                     @Override
-                    public KeyValue<String, String> apply(String key, String value) {
+                    public KeyValue<String, String> apply(final String key, final String value) {
                         return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
                     }
                 }, stringSerialzied)
@@ -308,15 +309,15 @@ public class KTableAggregateTest {
                         return "";
                     }
                 }, new Aggregator<String, String, String>() {
-                    
+
                     @Override
-                    public String apply(String aggKey, String value, String aggregate) {
+                    public String apply(final String aggKey, final String value, final String aggregate) {
                         return aggregate + value;
-                    } 
+                    }
                 }, new Aggregator<String, String, String>() {
 
                     @Override
-                    public String apply(String key, String value, String aggregate) {
+                    public String apply(final String key, final String value, final String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
                 }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))

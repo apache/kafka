@@ -32,7 +32,7 @@ public class TopologyWrapper extends Topology {
         return internalTopologyBuilder;
     }
 
-    public void setApplicationId(String applicationId) {
+    public void setApplicationId(final String applicationId) {
         internalTopologyBuilder.setApplicationId(applicationId);
     }
 }

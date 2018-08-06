@@ -80,8 +80,8 @@ public class KTableImplTest {
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
-        String topic2 = "topic2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
 
@@ -90,7 +90,7 @@ public class KTableImplTest {
 
         final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
             @Override
-            public Integer apply(String value) {
+            public Integer apply(final String value) {
                 return new Integer(value);
             }
         });
@@ -99,7 +99,7 @@ public class KTableImplTest {
 
         final KTable<String, Integer> table3 = table2.filter(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return (value % 2) == 0;
             }
         });
@@ -137,14 +137,14 @@ public class KTableImplTest {
         final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });
         final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -271,14 +271,14 @@ public class KTableImplTest {
         final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });
         table1Mapped.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -303,21 +303,21 @@ public class KTableImplTest {
         final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
-                    public Integer apply(String value) {
+                    public Integer apply(final String value) {
                         return new Integer(value);
                     }
                 });
         final KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
         table2.join(table1MappedFiltered,
                 new ValueJoiner<String, Integer, String>() {
                     @Override
-                    public String apply(String v1, Integer v2) {
+                    public String apply(final String v1, final Integer v2) {
                         return v1 + v2;
                     }
                 });
@@ -371,8 +371,8 @@ public class KTableImplTest {
             assertTopologyContainsProcessor(topology, "KSTREAM-SINK-0000000007");
             assertTopologyContainsProcessor(topology, "KSTREAM-SOURCE-0000000008");
 
-            Field valSerializerField = ((SinkNode) driver.getProcessor("KSTREAM-SINK-0000000003")).getClass().getDeclaredField("valSerializer");
-            Field valDeserializerField = ((SourceNode) driver.getProcessor("KSTREAM-SOURCE-0000000004")).getClass().getDeclaredField("valDeserializer");
+            final Field valSerializerField = ((SinkNode) driver.getProcessor("KSTREAM-SINK-0000000003")).getClass().getDeclaredField("valSerializer");
+            final Field valDeserializerField = ((SourceNode) driver.getProcessor("KSTREAM-SOURCE-0000000004")).getClass().getDeclaredField("valDeserializer");
             valSerializerField.setAccessible(true);
             valDeserializerField.setAccessible(true);
 

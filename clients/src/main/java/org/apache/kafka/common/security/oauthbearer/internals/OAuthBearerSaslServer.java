@@ -21,8 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -33,6 +31,7 @@ import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -48,19 +47,17 @@ import org.slf4j.LoggerFactory;
  * for example).
  */
 public class OAuthBearerSaslServer implements SaslServer {
-    private static final String INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE = "Invalid OAUTHBEARER client first message";
+
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerSaslServer.class);
     private static final String NEGOTIATED_PROPERTY_KEY_TOKEN = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token";
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
-    private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
-    private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
-            String.format("n,(a=(?<authzid>%s))?,auth=(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)", SASLNAME));
 
     private final AuthenticateCallbackHandler callbackHandler;
 
     private boolean complete;
     private OAuthBearerToken tokenForNegotiatedProperty = null;
     private String errorMessage = null;
+    private SaslExtensions extensions;
 
     public OAuthBearerSaslServer(CallbackHandler callbackHandler) {
         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
@@ -90,24 +87,16 @@ public class OAuthBearerSaslServer implements SaslServer {
             throw new SaslAuthenticationException(errorMessage);
         }
         errorMessage = null;
-        String responseMsg = new String(response, StandardCharsets.UTF_8);
-        Matcher matcher = CLIENT_INITIAL_RESPONSE_PATTERN.matcher(responseMsg);
-        if (!matcher.matches()) {
-            if (log.isDebugEnabled())
-                log.debug(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
-            throw new SaslException(INVALID_OAUTHBEARER_CLIENT_FIRST_MESSAGE);
+
+        OAuthBearerClientInitialResponse clientResponse;
+        try {
+            clientResponse = new OAuthBearerClientInitialResponse(response);
+        } catch (SaslException e) {
+            log.debug(e.getMessage());
+            throw e;
         }
-        String authzid = matcher.group("authzid");
-        String authorizationId = authzid != null ? authzid : "";
-        if (!"bearer".equalsIgnoreCase(matcher.group("scheme"))) {
-            String msg = String.format("Invalid scheme in OAUTHBEARER client first message: %s",
-                    matcher.group("scheme"));
-            if (log.isDebugEnabled())
-                log.debug(msg);
-            throw new SaslException(msg);
-        }
-        String tokenValue = matcher.group("token");
-        return process(tokenValue, authorizationId);
+
+        return process(clientResponse.tokenValue(), clientResponse.authorizationId(), clientResponse.extensions());
     }
 
     @Override
@@ -126,7 +115,10 @@ public class OAuthBearerSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName) ? tokenForNegotiatedProperty : null;
+        if (NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName))
+            return tokenForNegotiatedProperty;
+
+        return extensions.map().get(propName);
     }
 
     @Override
@@ -152,9 +144,10 @@ public class OAuthBearerSaslServer implements SaslServer {
     public void dispose() throws SaslException {
         complete = false;
         tokenForNegotiatedProperty = null;
+        extensions = null;
     }
 
-    private byte[] process(String tokenValue, String authorizationId) throws SaslException {
+    private byte[] process(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(tokenValue);
         try {
             callbackHandler.handle(new Callback[] {callback});
@@ -181,6 +174,7 @@ public class OAuthBearerSaslServer implements SaslServer {
                     "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
                     authorizationId, token.principalName()));
         tokenForNegotiatedProperty = token;
+        this.extensions = extensions;
         complete = true;
         if (log.isDebugEnabled())
             log.debug("Successfully authenticate User={}", token.principalName());

@@ -77,7 +77,8 @@ object ImplicitConversions {
                                                             valueSerde: Serde[V]): Materialized[K, V, S] =
     Materialized.`with`[K, V, S](keySerde, valueSerde)
 
-  implicit def joinedFromKeyValueOtherSerde[K, V, VO]
-    (implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): Joined[K, V, VO] =
+  implicit def joinedFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
+                                                      valueSerde: Serde[V],
+                                                      otherValueSerde: Serde[VO]): Joined[K, V, VO] =
     Joined.`with`(keySerde, valueSerde, otherValueSerde)
 }

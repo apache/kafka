@@ -323,7 +323,7 @@ public class TaskManager {
         active.updateRestored(restored);
 
         if (active.allTasksRunning()) {
-            Set<TopicPartition> assignment = consumer.assignment();
+            final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
@@ -373,7 +373,7 @@ public class TaskManager {
         this.assignedStandbyTasks = standbyTasks;
     }
 
-    public void updateSubscriptionsFromAssignment(List<TopicPartition> partitions) {
+    public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
         if (builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
@@ -388,7 +388,7 @@ public class TaskManager {
         }
     }
 
-    public void updateSubscriptionsFromMetadata(Set<String> topics) {
+    public void updateSubscriptionsFromMetadata(final Set<String> topics) {
         if (builder().sourceTopicPattern() != null) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
             if (!existingTopics.equals(topics)) {
@@ -402,7 +402,7 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      */
     int commitAll() {
-        int committed = active.commit();
+        final int committed = active.commit();
         return committed + standby.commit();
     }
 

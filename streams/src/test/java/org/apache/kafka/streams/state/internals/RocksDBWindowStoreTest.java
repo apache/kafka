@@ -68,10 +68,10 @@ public class RocksDBWindowStoreTest {
 
     private final int numSegments = 3;
     private final long windowSize = 3L;
+    private final long segmentInterval = 600L;
+    private final long retentionPeriod = segmentInterval * (numSegments - 1);
     private final String windowName = "window";
-    private final long segmentSize = 60_000;
-    private final long retentionPeriod = segmentSize * (numSegments - 1);
-    private final Segments segments = new Segments(windowName, retentionPeriod, segmentSize);
+    private final Segments segments = new Segments(windowName, retentionPeriod, segmentInterval);
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
     private final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
@@ -107,12 +107,7 @@ public class RocksDBWindowStoreTest {
 
     private WindowStore<Integer, String> createWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                retentionPeriod,
-                numSegments,
-                windowSize,
-                retainDuplicates),
+            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, retainDuplicates, segmentInterval),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -134,10 +129,10 @@ public class RocksDBWindowStoreTest {
         setCurrentTime(currentTime);
         windowStore.put(1, "one");
 
-        currentTime = currentTime + segmentSize;
+        currentTime = currentTime + segmentInterval;
         setCurrentTime(currentTime);
         windowStore.put(1, "two");
-        currentTime = currentTime + segmentSize;
+        currentTime = currentTime + segmentInterval;
 
         setCurrentTime(currentTime);
         windowStore.put(1, "three");
@@ -145,13 +140,13 @@ public class RocksDBWindowStoreTest {
         final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, currentTime);
 
         // roll to the next segment that will close the first
-        currentTime = currentTime + segmentSize;
+        currentTime = currentTime + segmentInterval;
         setCurrentTime(currentTime);
         windowStore.put(1, "four");
 
         // should only have 2 values as the first segment is no longer open
-        assertEquals(new KeyValue<>(60000L, "two"), iterator.next());
-        assertEquals(new KeyValue<>(120000L, "three"), iterator.next());
+        assertEquals(new KeyValue<>(segmentInterval, "two"), iterator.next());
+        assertEquals(new KeyValue<>(2 * segmentInterval, "three"), iterator.next());
         assertFalse(iterator.hasNext());
     }
 
@@ -167,7 +162,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void testRangeAndSinglePointFetch() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -226,7 +221,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldGetAll() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -245,7 +240,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldFetchAllInTimeRange() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -274,7 +269,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void testFetchRange() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -322,7 +317,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void testPutAndFetchBefore() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -368,7 +363,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void testPutAndFetchAfter() {
         windowStore = createWindowStore(context, false);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         putFirstBatch(windowStore, startTime, context);
 
@@ -414,7 +409,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void testPutSameKeyTimestamp() {
         windowStore = createWindowStore(context, true);
-        final long startTime = segmentSize - 4L;
+        final long startTime = segmentInterval - 4L;
 
         setCurrentTime(startTime);
         windowStore.put(0, "zero");
@@ -444,8 +439,8 @@ public class RocksDBWindowStoreTest {
         windowStore = createWindowStore(context, false);
 
         // to validate segments
-        final long startTime = segmentSize * 2;
-        final long increment = segmentSize / 2;
+        final long startTime = segmentInterval * 2;
+        final long increment = segmentInterval / 2;
         setCurrentTime(startTime);
         windowStore.put(0, "zero");
         assertEquals(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
@@ -573,8 +568,8 @@ public class RocksDBWindowStoreTest {
 
     @Test
     public void testRestore() throws IOException {
-        final long startTime = segmentSize * 2;
-        final long increment = segmentSize / 2;
+        final long startTime = segmentInterval * 2;
+        final long increment = segmentInterval / 2;
 
         windowStore = createWindowStore(context, false);
         setCurrentTime(startTime);
@@ -644,7 +639,7 @@ public class RocksDBWindowStoreTest {
             segmentDirs(baseDir)
         );
 
-        setCurrentTime(59999);
+        setCurrentTime(segmentInterval - 1);
         windowStore.put(0, "v");
         windowStore.put(0, "v");
         assertEquals(
@@ -652,7 +647,7 @@ public class RocksDBWindowStoreTest {
             segmentDirs(baseDir)
         );
 
-        setCurrentTime(60000);
+        setCurrentTime(segmentInterval);
         windowStore.put(0, "v");
         assertEquals(
             Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
@@ -662,7 +657,7 @@ public class RocksDBWindowStoreTest {
         WindowStoreIterator iter;
         int fetchedCount;
 
-        iter = windowStore.fetch(0, 0L, 240000L);
+        iter = windowStore.fetch(0, 0L, segmentInterval * 4);
         fetchedCount = 0;
         while (iter.hasNext()) {
             iter.next();
@@ -675,10 +670,10 @@ public class RocksDBWindowStoreTest {
             segmentDirs(baseDir)
         );
 
-        setCurrentTime(180000);
+        setCurrentTime(segmentInterval * 3);
         windowStore.put(0, "v");
 
-        iter = windowStore.fetch(0, 0L, 240000L);
+        iter = windowStore.fetch(0, 0L, segmentInterval * 4);
         fetchedCount = 0;
         while (iter.hasNext()) {
             iter.next();
@@ -691,10 +686,10 @@ public class RocksDBWindowStoreTest {
             segmentDirs(baseDir)
         );
 
-        setCurrentTime(300000);
+        setCurrentTime(segmentInterval * 5);
         windowStore.put(0, "v");
 
-        iter = windowStore.fetch(0, 240000L, 1000000L);
+        iter = windowStore.fetch(0, segmentInterval * 4, segmentInterval * 10);
         fetchedCount = 0;
         while (iter.hasNext()) {
             iter.next();
@@ -725,7 +720,7 @@ public class RocksDBWindowStoreTest {
         new File(storeDir, segments.segmentName(6L)).mkdir();
         windowStore.close();
 
-        context.setStreamTime(segmentSize * 6L);
+        context.setStreamTime(segmentInterval * 6L);
         windowStore = createWindowStore(context, false);
 
         final List<String> expected = Utils.mkList(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L));
@@ -768,13 +763,9 @@ public class RocksDBWindowStoreTest {
     public void shouldFetchAndIterateOverExactKeys() {
         final long windowSize = 0x7a00000000000000L;
         final long retentionPeriod = 0x7a00000000000000L;
+
         final WindowStore<String, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                retentionPeriod,
-                2,
-                windowSize,
-                true),
+            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, true),
             Serdes.String(),
             Serdes.String()).build();
 
@@ -837,7 +828,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldNoNullPointerWhenSerdeDoesNotHandleNull() {
         windowStore = new RocksDBWindowStore<>(
-            new RocksDBSegmentedBytesStore(windowName, retentionPeriod, numSegments, new WindowKeySchema()),
+            new RocksDBSegmentedBytesStore(windowName, retentionPeriod, segmentInterval, new WindowKeySchema()),
             Serdes.Integer(),
             new SerdeThatDoesntHandleNull(),
             false,
@@ -850,20 +841,15 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                60000,
-                2,
-                60000,
-                true),
+            Stores.persistentWindowStore(windowName, 60_000L, 60_000L, true),
             Serdes.Bytes(),
             Serdes.String()).build();
 
         windowStore.init(context, windowStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
         windowStore.put(key1, "1", 0);
         windowStore.put(key2, "2", 0);
         windowStore.put(key3, "3", 0);
@@ -938,11 +924,7 @@ public class RocksDBWindowStoreTest {
             final Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
             final String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
-            Set<String> entries = entriesByKey.get(key);
-            if (entries == null) {
-                entries = new HashSet<>();
-                entriesByKey.put(key, entries);
-            }
+            final Set<String> entries = entriesByKey.computeIfAbsent(key, k -> new HashSet<>());
             entries.add(value + "@" + (timestamp - startTime));
         }
 

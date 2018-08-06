@@ -630,17 +630,17 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val brokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
     val differentBrokerInfoWithSameId = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
 
-    zkClient.registerBrokerInZk(brokerInfo)
+    zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
     assertEquals("Other ZK clients can read broker info", Some(brokerInfo.broker), otherZkClient.getBroker(1))
 
     // Node exists, owned by current session - no error, no update
-    zkClient.registerBrokerInZk(differentBrokerInfoWithSameId)
+    zkClient.registerBroker(differentBrokerInfoWithSameId)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
 
     // Other client tries to register broker with same id causes failure, info is not changed in ZK
     intercept[NodeExistsException] {
-      otherZkClient.registerBrokerInZk(differentBrokerInfoWithSameId)
+      otherZkClient.registerBroker(differentBrokerInfoWithSameId)
     }
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
   }
@@ -656,8 +656,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
     val brokerInfo1 = createBrokerInfo(1, "test.host1", 9999, SecurityProtocol.SSL)
 
-    zkClient.registerBrokerInZk(brokerInfo1)
-    otherZkClient.registerBrokerInZk(brokerInfo0)
+    zkClient.registerBroker(brokerInfo1)
+    otherZkClient.registerBroker(brokerInfo0)
 
     assertEquals(Seq(0, 1), zkClient.getSortedBrokerList())
     assertEquals(
@@ -674,17 +674,17 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // Updating info of a broker not existing in ZK fails
     val originalBrokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
     intercept[NoNodeException]{
-      zkClient.updateBrokerInfoInZk(originalBrokerInfo)
+      zkClient.updateBrokerInfo(originalBrokerInfo)
     }
 
-    zkClient.registerBrokerInZk(originalBrokerInfo)
+    zkClient.registerBroker(originalBrokerInfo)
 
     val updatedBrokerInfo = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
-    zkClient.updateBrokerInfoInZk(updatedBrokerInfo)
+    zkClient.updateBrokerInfo(updatedBrokerInfo)
     assertEquals(Some(updatedBrokerInfo.broker), zkClient.getBroker(1))
 
     // Other ZK clients can update info
-    otherZkClient.updateBrokerInfoInZk(originalBrokerInfo)
+    otherZkClient.updateBrokerInfo(originalBrokerInfo)
     assertEquals(Some(originalBrokerInfo.broker), otherZkClient.getBroker(1))
   }
 
@@ -937,7 +937,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // No controller
     assertEquals(None, zkClient.getControllerId)
     // Create controller
-    zkClient.checkedEphemeralCreate(ControllerZNode.path, ControllerZNode.encode(brokerId = 1, timestamp = 123456))
+    zkClient.registerController(controllerId = 1, timestamp = 123456)
     assertEquals(Some(1), zkClient.getControllerId)
     zkClient.deleteController()
     assertEquals(None, zkClient.getControllerId)

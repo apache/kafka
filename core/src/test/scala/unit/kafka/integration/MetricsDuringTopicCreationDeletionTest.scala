@@ -135,7 +135,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Create topics
       for (t <- topics if running) {
         try {
-          adminZkClient.createTopic(t, partitionNum, replicationFactor)
+          createTopic(t, partitionNum, replicationFactor)
         } catch {
           case e: Exception => e.printStackTrace
         }

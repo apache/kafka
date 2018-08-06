@@ -238,7 +238,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
       val prefixed = aclCache.range(
         Resource(resourceType, resourceName, PatternType.PREFIXED),
-        Resource(resourceType, resourceName.substring(0, 1), PatternType.PREFIXED)
+        Resource(resourceType, resourceName.take(1), PatternType.PREFIXED)
       )
         .filterKeys(resource => resourceName.startsWith(resource.name))
         .flatMap { case (resource, versionedAcls) => versionedAcls.acls }

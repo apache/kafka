@@ -166,8 +166,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -218,8 +217,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -283,8 +281,7 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
-        reporter.metrics(errorHandlingMetrics);
+        LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -28,9 +29,9 @@ import java.util.Collections;
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
+public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNode<K, V> {
 
-    private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<S> storeBuilder;
     private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
@@ -39,7 +40,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
                     final String sourceName,
                     final String topic,
                     final ConsumedInternal<K, V> consumedInternal,
-                    final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                    final StoreBuilder<S> storeBuilder,
                     final ProcessorParameters<K, V> processorParameters,
                     final boolean isGlobalKTable) {
 
@@ -53,80 +54,102 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         this.storeBuilder = storeBuilder;
     }
 
-    StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
-        return storeBuilder;
-    }
-
-    ProcessorParameters<K, V> processorParameters() {
-        return processorParameters;
-    }
-
-    String sourceName() {
-        return sourceName;
-    }
-
-    boolean isGlobalKTable() {
+    public boolean isGlobalKTable() {
         return isGlobalKTable;
     }
 
-    public static <K, V> TableSourceNodeBuilder<K, V> tableSourceNodeBuilder() {
+    @Override
+    public String toString() {
+        return "TableSourceNode{" +
+               "storeBuilder=" + storeBuilder +
+               ", processorParameters=" + processorParameters +
+               ", sourceName='" + sourceName + '\'' +
+               ", isGlobalKTable=" + isGlobalKTable +
+               "} " + super.toString();
+    }
+
+    public static <K, V, S extends StateStore> TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder() {
         return new TableSourceNodeBuilder<>();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        final String topicName = getTopicNames().iterator().next();
+
+        if (isGlobalKTable) {
+            topologyBuilder.addGlobalStore((StoreBuilder<KeyValueStore>) storeBuilder,
+                                           sourceName,
+                                           consumedInternal().timestampExtractor(),
+                                           consumedInternal().keyDeserializer(),
+                                           consumedInternal().valueDeserializer(),
+                                           topicName,
+                                           processorParameters.processorName(),
+                                           processorParameters.processorSupplier());
+        } else {
+            topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
+                                      sourceName,
+                                      consumedInternal().timestampExtractor(),
+                                      consumedInternal().keyDeserializer(),
+                                      consumedInternal().valueDeserializer(),
+                                      topicName);
+
+            topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
+
+            topologyBuilder.addStateStore(storeBuilder, nodeName());
+            topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
+        }
+
     }
 
-    public static final class TableSourceNodeBuilder<K, V> {
+    public static final class TableSourceNodeBuilder<K, V, S extends StateStore> {
 
         private String nodeName;
         private String sourceName;
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
-        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+        private StoreBuilder<S> storeBuilder;
         private ProcessorParameters<K, V> processorParameters;
         private boolean isGlobalKTable = false;
 
         private TableSourceNodeBuilder() {
         }
 
-        public TableSourceNodeBuilder<K, V> withSourceName(final String sourceName) {
+        public TableSourceNodeBuilder<K, V, S> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withTopic(final String topic) {
+        public TableSourceNodeBuilder<K, V, S> withTopic(final String topic) {
             this.topic = topic;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public TableSourceNodeBuilder<K, V, S> withStoreBuilder(final StoreBuilder<S> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
+        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public TableSourceNodeBuilder<K, V, S> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withNodeName(final String nodeName) {
+        public TableSourceNodeBuilder<K, V, S> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
+        public TableSourceNodeBuilder<K, V, S> isGlobalKTable(final boolean isGlobaKTable) {
             this.isGlobalKTable = isGlobaKTable;
             return this;
         }
 
-        public TableSourceNode<K, V> build() {
+        public TableSourceNode<K, V, S> build() {
             return new TableSourceNode<>(nodeName,
                                          sourceName,
                                          topic,

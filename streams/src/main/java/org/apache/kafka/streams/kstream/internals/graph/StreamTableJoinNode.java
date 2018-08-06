@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -29,37 +30,42 @@ public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
     private final ProcessorParameters<K, V> processorParameters;
-    private boolean isGlobalKTableJoin;
+    private final String otherJoinSideNodeName;
 
     public StreamTableJoinNode(final String nodeName,
-                        final ProcessorParameters<K, V> processorParameters,
-                        final String[] storeNames) {
+                               final ProcessorParameters<K, V> processorParameters,
+                               final String[] storeNames,
+                               final String otherJoinSideNodeName) {
         super(nodeName,
               false);
 
         // in the case of Stream-Table join the state stores associated with the KTable
         this.storeNames = storeNames;
         this.processorParameters = processorParameters;
+        this.otherJoinSideNodeName = otherJoinSideNodeName;
     }
 
-    String[] storeNames() {
-        return Arrays.copyOf(storeNames, storeNames.length);
-    }
-
-    ProcessorParameters<K, V> processorParameters() {
-        return processorParameters;
-    }
-
-    public void setGlobalKTableJoin(boolean globalKTableJoin) {
-        isGlobalKTableJoin = globalKTableJoin;
-    }
-
-    boolean isGlobalKTableJoin() {
-        return isGlobalKTableJoin;
+    @Override
+    public String toString() {
+        return "StreamTableJoinNode{" +
+               "storeNames=" + Arrays.toString(storeNames) +
+               ", processorParameters=" + processorParameters +
+               ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
+               "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        final String processorName = processorParameters.processorName();
+        final ProcessorSupplier processorSupplier = processorParameters.processorSupplier();
+
+        // Stream - Table join (Global or KTable)
+        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
+
+        // Steam - KTable join only
+        if (otherJoinSideNodeName != null) {
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+        }
+
     }
 }

@@ -30,7 +30,7 @@ import java.lang.{Iterable => JIterable}
  * more expressive, with less boilerplate and more succinct.
  * <p>
  * For Scala 2.11, most of these conversions need to be invoked explicitly, as Scala 2.11 does not
- * have full support for SAM types. 
+ * have full support for SAM types.
  */
 object FunctionConversions {
 
@@ -40,7 +40,7 @@ object FunctionConversions {
     }
   }
 
-  implicit class MapperFromFunction[T, U, VR](val f:(T,U) => VR) extends AnyVal {
+  implicit class MapperFromFunction[T, U, VR](val f: (T, U) => VR) extends AnyVal {
     def asKeyValueMapper: KeyValueMapper[T, U, VR] = new KeyValueMapper[T, U, VR] {
       override def apply(key: T, value: U): VR = f(key, value)
     }
@@ -49,7 +49,7 @@ object FunctionConversions {
     }
   }
 
-  implicit class KeyValueMapperFromFunction[K, V, KR, VR](val f:(K,V) => (KR, VR)) extends AnyVal {
+  implicit class KeyValueMapperFromFunction[K, V, KR, VR](val f: (K, V) => (KR, VR)) extends AnyVal {
     def asKeyValueMapper: KeyValueMapper[K, V, KeyValue[KR, VR]] = new KeyValueMapper[K, V, KeyValue[KR, VR]] {
       override def apply(key: K, value: V): KeyValue[KR, VR] = {
         val (kr, vr) = f(key, value)
@@ -88,7 +88,7 @@ object FunctionConversions {
     }
   }
 
-  implicit class MergerFromFunction[K,VR](val f: (K, VR, VR) => VR) extends AnyVal {
+  implicit class MergerFromFunction[K, VR](val f: (K, VR, VR) => VR) extends AnyVal {
     def asMerger: Merger[K, VR] = new Merger[K, VR] {
       override def apply(aggKey: K, aggOne: VR, aggTwo: VR): VR = f(aggKey, aggOne, aggTwo)
     }

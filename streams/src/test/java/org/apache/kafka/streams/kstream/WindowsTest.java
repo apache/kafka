@@ -27,7 +27,7 @@ public class WindowsTest {
     private class TestWindows extends Windows {
 
         @Override
-        public Map windowsFor(long timestamp) {
+        public Map windowsFor(final long timestamp) {
             return null;
         }
 
@@ -40,7 +40,13 @@ public class WindowsTest {
     @Test
     public void shouldSetNumberOfSegments() {
         final int anySegmentSizeLargerThanOne = 5;
-        assertEquals(anySegmentSizeLargerThanOne, new TestWindows().segments(anySegmentSizeLargerThanOne).segments);
+        final TestWindows testWindow = new TestWindows();
+        final long maintainMs = testWindow.maintainMs();
+
+        assertEquals(
+            maintainMs / (anySegmentSizeLargerThanOne - 1),
+            testWindow.segments(anySegmentSizeLargerThanOne).segmentInterval()
+        );
     }
 
     @Test
