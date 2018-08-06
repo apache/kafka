@@ -27,12 +27,12 @@ public class CumulativeCount implements MeasurableStat {
     private double count = 0.0;
 
     @Override
-    public void record(MetricConfig config, double value, long timeMs) {
+    public void record(final MetricConfig config, final double value, final long timeMs) {
         count += 1;
     }
 
     @Override
-    public double measure(MetricConfig config, long now) {
+    public double measure(final MetricConfig config, final long now) {
         return count;
     }
 }

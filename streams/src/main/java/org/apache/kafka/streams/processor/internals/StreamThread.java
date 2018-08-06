@@ -514,7 +514,7 @@ public class StreamThread extends Thread {
 
         @Override
         public void close() {
-           streamsMetrics.taskClosedSensor.record();
+            streamsMetrics.taskClosedSensor.record();
         }
     }
 
