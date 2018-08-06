@@ -97,7 +97,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
  * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}. Note that there
- * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at {@link OAuthBearerClientInitialResponse.AUTH_KEY}.
+ * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at
+ * {@link org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse#AUTH_KEY}.
  * The {@code OAuthBearerLoginModule} instance also asks its configured {@link AuthenticateCallbackHandler}
  * implementation to handle an instance of {@link SaslExtensionsCallback} and return an instance of {@link SaslExtensions}.
  * The configured callback handler does not need to handle this callback, though -- any {@code UnsupportedCallbackException}
@@ -239,6 +240,7 @@ public class OAuthBearerLoginModule implements LoginModule {
      */
     public static final String OAUTHBEARER_MECHANISM = "OAUTHBEARER";
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginModule.class);
+    private static final SaslExtensions EMPTY_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
     private Subject subject = null;
     private AuthenticateCallbackHandler callbackHandler = null;
     private OAuthBearerToken tokenRequiringCommit = null;
@@ -290,8 +292,8 @@ public class OAuthBearerLoginModule implements LoginModule {
 
         tokenRequiringCommit = tokenCallback.token();
         if (tokenRequiringCommit == null) {
-            log.info(String.format("Login failed: %s : %s (URI=%s)", tokenCallback.errorCode(), tokenCallback.errorDescription(),
-                    tokenCallback.errorUri()));
+            log.info("Login failed: {} : {} (URI={})", tokenCallback.errorCode(), tokenCallback.errorDescription(),
+                    tokenCallback.errorUri());
             throw new LoginException(tokenCallback.errorDescription());
         }
     }
@@ -308,8 +310,8 @@ public class OAuthBearerLoginModule implements LoginModule {
             log.error(e.getMessage(), e);
             throw new LoginException("An internal error occurred while retrieving SASL extensions from callback handler");
         } catch (UnsupportedCallbackException e) {
-            extensionsRequiringCommit = new SaslExtensions(Collections.emptyMap());
-            log.info("CallbackHandler " + callbackHandler.getClass().getName() + " does not support SASL extensions. No extensions will be added");
+            extensionsRequiringCommit = EMPTY_EXTENSIONS;
+            log.info("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
         }
         if (extensionsRequiringCommit ==  null) {
             log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
@@ -339,13 +341,8 @@ public class OAuthBearerLoginModule implements LoginModule {
         log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
 
         log.info("Logging out my extensions");
-        for (Iterator<Object> iterator = subject.getPublicCredentials().iterator(); iterator.hasNext();) {
-            if (myCommittedExtensions == iterator.next()) {
-                iterator.remove();
-                myCommittedExtensions = null;
-                break;
-            }
-        }
+        if (subject.getPublicCredentials().removeIf(e -> myCommittedExtensions == e))
+            myCommittedExtensions = null;
         log.info("Done logging out my extensions");
 
         return true;

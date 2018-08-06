@@ -106,13 +106,13 @@ public class OAuthBearerClientInitialResponse {
     }
 
     /**
-     * Validates that the given extensions conform to the standard. They should also not contain the reserve key name {@link OAuthBearerClientInitialResponse.AUTH_KEY}
+     * Validates that the given extensions conform to the standard. They should also not contain the reserve key name {@link OAuthBearerClientInitialResponse#AUTH_KEY}
      *
      * @see <a href="https://tools.ietf.org/html/rfc7628#section-3.1">RFC 7628,
      *  Section 3.1</a>
      */
     public static SaslExtensions validateExtensions(SaslExtensions extensions) throws SaslException {
-        if (extensions.map().get(OAuthBearerClientInitialResponse.AUTH_KEY) != null)
+        if (extensions.map().containsKey(OAuthBearerClientInitialResponse.AUTH_KEY))
             throw new SaslException("Extension name " + OAuthBearerClientInitialResponse.AUTH_KEY + " is invalid");
 
         for (Map.Entry<String, String> entry : extensions.map().entrySet()) {

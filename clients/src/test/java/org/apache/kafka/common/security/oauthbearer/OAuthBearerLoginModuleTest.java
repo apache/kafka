@@ -19,13 +19,11 @@ package org.apache.kafka.common.security.oauthbearer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +46,6 @@ import org.junit.Test;
 public class OAuthBearerLoginModuleTest {
 
     public static final SaslExtensions RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG = null;
-    public static final SaslExtensions EMPTY_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
 
     private static class TestCallbackHandler implements AuthenticateCallbackHandler {
         private final OAuthBearerToken[] tokens;
@@ -423,8 +420,8 @@ public class OAuthBearerLoginModuleTest {
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
-        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
 
         loginModule1.login();
         // Should populate public credentials with SaslExtensions and not throw an exception

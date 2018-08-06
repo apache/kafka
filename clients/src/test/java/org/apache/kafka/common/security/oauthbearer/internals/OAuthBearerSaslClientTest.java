@@ -39,7 +39,7 @@ import static org.junit.Assert.fail;
 
 public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
-    private Map<String, String> testProperties = new LinkedHashMap<String, String>() {
+    private static final Map<String, String> testProperties = new LinkedHashMap<String, String>() {
         {
             put("One", "1");
             put("Two", "2");
