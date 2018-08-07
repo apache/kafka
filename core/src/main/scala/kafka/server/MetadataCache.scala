@@ -40,7 +40,11 @@ import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest
 class MetadataCache(brokerId: Int) extends Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
-  @volatile private var metadataSnapshot : MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
+  //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
+  //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
+  //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
+  //multiple reads of this value risk getting different snapshots.
+  @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
     controllerId = None, aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty)
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
@@ -132,7 +136,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
-    snapshot.partitionStates.keySet.toSet
+    snapshot.partitionStates.keySet
   }
 
   private def getAllPartitions(snapshot: MetadataSnapshot): Map[TopicPartition, UpdateMetadataRequest.PartitionState] = {
@@ -153,11 +157,11 @@ class MetadataCache(brokerId: Int) extends Logging {
     metadataSnapshot.aliveBrokers.values.toBuffer
   }
 
-  private def addOrUpdatePartitionInfo(cache: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
+  private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataRequest.PartitionState) {
-    val infos = cache.getOrElseUpdate(topic, mutable.LongMap())
+    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
     infos(partitionId) = stateInfo
   }
 
