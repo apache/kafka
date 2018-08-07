@@ -27,6 +27,7 @@ from kafkatest.services.security.security_config import SecurityConfig
 
 import hashlib
 import json
+import os.path
 
 
 class ConnectStandaloneFileTest(Test):
@@ -44,7 +45,8 @@ class ConnectStandaloneFileTest(Test):
 
     OFFSETS_FILE = "/mnt/connect.offsets"
 
-    TOPIC = "test"
+    TOPIC = "${file:/mnt/connect/connect-file-external.properties:topic.external}"
+    TOPIC_TEST = "test"
 
     FIRST_INPUT_LIST = ["foo", "bar", "baz"]
     FIRST_INPUT = "\n".join(FIRST_INPUT_LIST) + "\n"
@@ -90,13 +92,18 @@ class ConnectStandaloneFileTest(Test):
 
         self.source = ConnectStandaloneService(self.test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
         self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
-        self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC,
+        self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC_TEST,
                                                   consumer_timeout_ms=10000)
 
         self.zk.start()
         self.kafka.start()
 
+        source_external_props = os.path.join(self.source.PERSISTENT_ROOT, "connect-file-external.properties")
+        self.source.node.account.create_file(source_external_props, self.render('connect-file-external.properties'))
         self.source.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-source.properties")])
+
+        sink_external_props = os.path.join(self.sink.PERSISTENT_ROOT, "connect-file-external.properties")
+        self.sink.node.account.create_file(sink_external_props, self.render('connect-file-external.properties'))
         self.sink.set_configs(lambda node: self.render("connect-standalone.properties", node=node), [self.render("connect-file-sink.properties")])
 
         self.source.start()
