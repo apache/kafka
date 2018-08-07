@@ -145,7 +145,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
                 props, new StringDeserializer(), new StringDeserializer());
 
-        Assert.assertTrue(MockMetricsReporter.clientId.startsWith("consumer-"));
+        Assert.assertEquals(consumer.getClientId(), MockMetricsReporter.clientId);
         consumer.close();
     }
 

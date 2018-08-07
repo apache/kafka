@@ -2212,4 +2212,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
+    // Visible for testing
+    String getClientId() {
+        return clientId;
+    }
 }

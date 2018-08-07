@@ -83,7 +83,8 @@ public class KafkaProducerTest {
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaProducer<String, String> producer = new KafkaProducer<>(
                 props, new StringSerializer(), new StringSerializer());
-        Assert.assertTrue(MockMetricsReporter.clientId.startsWith("producer-"));
+
+        Assert.assertEquals(producer.getClientId(), MockMetricsReporter.clientId);
         producer.close();
     }
 

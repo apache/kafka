@@ -1203,6 +1203,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
     }
 
+    // Visible for testing
+    String getClientId() {
+        return clientId;
+    }
+
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;
