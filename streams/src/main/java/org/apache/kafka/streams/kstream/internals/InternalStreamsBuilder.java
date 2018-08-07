@@ -204,14 +204,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
-    void addGraphNode(StreamsGraphNode parent, StreamsGraphNode child) {
+    void addGraphNode(final StreamsGraphNode parent, final StreamsGraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
         parent.addChildNode(child);
         maybeAddNodeForOptimizationMetadata(child);
     }
 
-    void addGraphNode(Collection<StreamsGraphNode> parents, StreamsGraphNode child) {
+    void addGraphNode(final Collection<StreamsGraphNode> parents, final StreamsGraphNode child) {
         Objects.requireNonNull(parents, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
 
@@ -219,7 +219,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             throw new StreamsException("Parent node collection can't be empty");
         }
 
-        for (StreamsGraphNode parent : parents) {
+        for (final StreamsGraphNode parent : parents) {
             addGraphNode(parent, child);
         }
     }
@@ -246,7 +246,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 streamGraphNode.setHasWrittenToTopology(true);
             }
 
-            for (StreamsGraphNode graphNode : streamGraphNode.children()) {
+            for (final StreamsGraphNode graphNode : streamGraphNode.children()) {
                 graphNodePriorityQueue.offer(graphNode);
             }
         }

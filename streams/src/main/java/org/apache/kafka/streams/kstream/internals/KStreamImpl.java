@@ -862,8 +862,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final String joinOtherName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
             final String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
-            StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
-            StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
+            final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
+            final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
             final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
                 createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
@@ -871,22 +871,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
                 createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
 
-
-            final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(
-                thisWindowStore.name(),
-                windows.beforeMs + windows.afterMs + 1,
-                windows.maintainMs()
-            );
+            final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
             final ProcessorParameters thisWindowStreamProcessorParams = new ProcessorParameters(thisWindowedStream, thisWindowStreamName);
             final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
             builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
 
-            final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(
-                otherWindowStore.name(),
-                windows.beforeMs + windows.afterMs + 1,
-                windows.maintainMs()
-            );
+            final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
 
             final ProcessorParameters otherWindowStreamProcessorParams = new ProcessorParameters(otherWindowedStream, otherWindowStreamName);
             final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);

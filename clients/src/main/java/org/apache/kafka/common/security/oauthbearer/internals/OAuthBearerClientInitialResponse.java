@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals;
 
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,15 +31,19 @@ public class OAuthBearerClientInitialResponse {
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
     private static final String KEY = "[A-Za-z]+";
     private static final String VALUE = "[\\x21-\\x7E \t\r\n]+";
+
     private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
     private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
-    private static final String AUTH_KEY = "auth";
+    public static final String AUTH_KEY = "auth";
 
     private final String tokenValue;
     private final String authorizationId;
-    private final Map<String, String> properties;
+    private SaslExtensions saslExtensions;
+
+    public static final Pattern EXTENSION_KEY_PATTERN = Pattern.compile(KEY);
+    public static final Pattern EXTENSION_VALUE_PATTERN = Pattern.compile(VALUE);
 
     public OAuthBearerClientInitialResponse(byte[] response) throws SaslException {
         String responseMsg = new String(response, StandardCharsets.UTF_8);
@@ -49,10 +53,12 @@ public class OAuthBearerClientInitialResponse {
         String authzid = matcher.group("authzid");
         this.authorizationId = authzid == null ? "" : authzid;
         String kvPairs = matcher.group("kvpairs");
-        this.properties = Utils.parseMap(kvPairs, "=", SEPARATOR);
+        Map<String, String> properties = Utils.parseMap(kvPairs, "=", SEPARATOR);
         String auth = properties.get(AUTH_KEY);
         if (auth == null)
             throw new SaslException("Invalid OAUTHBEARER client first message: 'auth' not specified");
+        properties.remove(AUTH_KEY);
+        this.saslExtensions = validateExtensions(new SaslExtensions(properties));
 
         Matcher authMatcher = AUTH_PATTERN.matcher(auth);
         if (!authMatcher.matches())
@@ -65,20 +71,29 @@ public class OAuthBearerClientInitialResponse {
         this.tokenValue = authMatcher.group("token");
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue) {
-        this(tokenValue, "", new HashMap<>());
+    public OAuthBearerClientInitialResponse(String tokenValue, SaslExtensions extensions) throws SaslException {
+        this(tokenValue, "", extensions);
     }
 
-    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, Map<String, String> props) {
+    public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         this.tokenValue = tokenValue;
         this.authorizationId = authorizationId == null ? "" : authorizationId;
-        this.properties = new HashMap<>(props);
+        this.saslExtensions = validateExtensions(extensions);
+    }
+
+    public SaslExtensions extensions() {
+        return saslExtensions;
     }
 
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
-        String message = String.format("n,%s,%sauth=Bearer %s%s%s", authzid,
-                SEPARATOR, tokenValue, SEPARATOR, SEPARATOR);
+        String extensions = extensionsMessage();
+        if (extensions.length() > 0)
+            extensions = SEPARATOR + extensions;
+
+        String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,
+                SEPARATOR, tokenValue, extensions, SEPARATOR, SEPARATOR);
+
         return message.getBytes(StandardCharsets.UTF_8);
     }
 
@@ -90,7 +105,32 @@ public class OAuthBearerClientInitialResponse {
         return authorizationId;
     }
 
-    public String propertyValue(String name) {
-        return properties.get(name);
+    /**
+     * Validates that the given extensions conform to the standard. They should also not contain the reserve key name {@link OAuthBearerClientInitialResponse#AUTH_KEY}
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7628#section-3.1">RFC 7628,
+     *  Section 3.1</a>
+     */
+    public static SaslExtensions validateExtensions(SaslExtensions extensions) throws SaslException {
+        if (extensions.map().containsKey(OAuthBearerClientInitialResponse.AUTH_KEY))
+            throw new SaslException("Extension name " + OAuthBearerClientInitialResponse.AUTH_KEY + " is invalid");
+
+        for (Map.Entry<String, String> entry : extensions.map().entrySet()) {
+            String extensionName = entry.getKey();
+            String extensionValue = entry.getValue();
+
+            if (!EXTENSION_KEY_PATTERN.matcher(extensionName).matches())
+                throw new SaslException("Extension name " + extensionName + " is invalid");
+            if (!EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
+                throw new SaslException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
+        }
+        return extensions;
+    }
+
+    /**
+     * Converts the SASLExtensions to an OAuth protocol-friendly string
+     */
+    private String extensionsMessage() {
+        return Utils.mkString(saslExtensions.map(), "", "", "=", SEPARATOR);
     }
 }

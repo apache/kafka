@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,18 +32,23 @@ import java.util.Set;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * A {@code CallbackHandler} that recognizes {@link OAuthBearerTokenCallback}
- * and returns an unsecured OAuth 2 bearer token.
+ * to return an unsecured OAuth 2 bearer token and {@link SaslExtensionsCallback} to return SASL extensions
  * <p>
  * Claims and their values on the returned token can be specified using
  * {@code unsecuredLoginStringClaim_<claimname>},
@@ -51,6 +57,11 @@ import org.slf4j.LoggerFactory;
  * the value is taken as the delimiter for list claims. You may define any claim
  * name and value except '{@code iat}' and '{@code exp}', both of which are
  * calculated automatically.
+ * <p>
+ * <p>
+ * You can also add custom unsecured SASL extensions using
+ * {@code unsecuredLoginExtension_<extensionname>}. Extension keys and values are subject to regex validation.
+ * The extension key must also not be equal to the reserved key {@link OAuthBearerClientInitialResponse#AUTH_KEY}
  * <p>
  * This implementation also accepts the following options:
  * <ul>
@@ -72,7 +83,8 @@ import org.slf4j.LoggerFactory;
  *      org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required
  *      unsecuredLoginStringClaim_sub="thePrincipalName"
  *      unsecuredLoginListClaim_scope="|scopeValue1|scopeValue2"
- *      unsecuredLoginLifetimeSeconds="60";
+ *      unsecuredLoginLifetimeSeconds="60"
+ *      unsecuredLoginExtension_traceId="123";
  * };
  * </pre>
  * 
@@ -96,6 +108,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private static final String STRING_CLAIM_PREFIX = OPTION_PREFIX + "StringClaim_";
     private static final String NUMBER_CLAIM_PREFIX = OPTION_PREFIX + "NumberClaim_";
     private static final String LIST_CLAIM_PREFIX = OPTION_PREFIX + "ListClaim_";
+    private static final String EXTENSION_PREFIX = OPTION_PREFIX + "Extension_";
     private static final String QUOTE = "\"";
     private Time time = Time.SYSTEM;
     private Map<String, String> moduleOptions = null;
@@ -140,7 +153,13 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback)
                 try {
-                    handleCallback((OAuthBearerTokenCallback) callback);
+                    handleTokenCallback((OAuthBearerTokenCallback) callback);
+                } catch (KafkaException e) {
+                    throw new IOException(e.getMessage(), e);
+                }
+            else if (callback instanceof SaslExtensionsCallback)
+                try {
+                    handleExtensionsCallback((SaslExtensionsCallback) callback);
                 } catch (KafkaException e) {
                     throw new IOException(e.getMessage(), e);
                 }
@@ -154,7 +173,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         // empty
     }
 
-    private void handleCallback(OAuthBearerTokenCallback callback) throws IOException {
+    private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
@@ -188,6 +207,30 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             // occurs if the principal claim doesn't exist or has an empty value
             throw new OAuthBearerConfigException(e.getMessage(), e);
         }
+    }
+
+    /**
+     *  Add and validate all the configured extensions.
+     *  Token keys, apart from passing regex validation, must not be equal to the reserved key {@link OAuthBearerClientInitialResponse#AUTH_KEY}
+     */
+    private void handleExtensionsCallback(SaslExtensionsCallback callback) {
+        Map<String, String> extensions = new HashMap<>();
+        for (Map.Entry<String, String> configEntry : this.moduleOptions.entrySet()) {
+            String key = configEntry.getKey();
+            if (!key.startsWith(EXTENSION_PREFIX))
+                continue;
+
+            extensions.put(key.substring(EXTENSION_PREFIX.length()), configEntry.getValue());
+        }
+
+        SaslExtensions saslExtensions = new SaslExtensions(extensions);
+        try {
+            OAuthBearerClientInitialResponse.validateExtensions(saslExtensions);
+        } catch (SaslException e) {
+            throw new ConfigException(e.getMessage());
+        }
+
+        callback.extensions(saslExtensions);
     }
 
     private String commaPrependedStringNumberAndListClaimsJsonText() throws OAuthBearerConfigException {

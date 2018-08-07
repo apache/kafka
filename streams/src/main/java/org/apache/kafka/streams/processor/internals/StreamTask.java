@@ -78,6 +78,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private int waitBeforeEnforceProcess = WAIT_ON_PARTIAL_INPUT;
     private final Time time;
     private final TaskMetrics taskMetrics;
+    private Sensor closeSensor;
 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
@@ -159,8 +160,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final Producer<byte[], byte[]> producer) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null);
+                      final Producer<byte[], byte[]> producer,
+                      final Sensor closeSensor) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null, closeSensor);
     }
 
     public StreamTask(final TaskId id,
@@ -174,11 +176,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final Producer<byte[], byte[]> producer,
-                      final RecordCollector recordCollector) {
+                      final RecordCollector recordCollector,
+                      final Sensor closeSensor) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
         this.producer = producer;
+        this.closeSensor = closeSensor;
         this.taskMetrics = new TaskMetrics(id, metrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
@@ -606,6 +610,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 }
             }
         }
+
+        closeSensor.record();
 
         if (firstException != null) {
             throw firstException;

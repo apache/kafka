@@ -97,7 +97,7 @@ public class RestoreIntegrationTest {
     }
 
     private Properties props(final String applicationId) {
-        Properties streamsConfiguration = new Properties();
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -397,7 +397,7 @@ public class RestoreIntegrationTest {
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
 
-        for (TopicPartition partition : partitions) {
+        for (final TopicPartition partition : partitions) {
             final long position = consumer.position(partition);
             consumer.seek(partition, position - limitDelta);
         }

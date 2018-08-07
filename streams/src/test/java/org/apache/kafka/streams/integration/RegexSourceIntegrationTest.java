@@ -397,7 +397,7 @@ public class RegexSourceIntegrationTest {
         streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.setStateListener(new KafkaStreams.StateListener() {
             @Override
-            public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
                 if (newState == KafkaStreams.State.ERROR)
                     expectError.set(true);
             }

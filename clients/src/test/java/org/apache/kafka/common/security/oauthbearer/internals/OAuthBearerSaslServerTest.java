@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -68,7 +70,7 @@ public class OAuthBearerSaslServerTest {
     private OAuthBearerSaslServer saslServer;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         saslServer = new OAuthBearerSaslServer(VALIDATOR_CALLBACK_HANDLER);
     }
 
@@ -77,6 +79,32 @@ public class OAuthBearerSaslServerTest {
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(null));
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+    }
+
+    @Test
+    public void savesCustomExtensionAsNegotiatedProperty() throws Exception {
+        Map<String, String> customExtensions = new HashMap<>();
+        customExtensions.put("firstKey", "value1");
+        customExtensions.put("secondKey", "value2");
+
+        byte[] nextChallenge = saslServer
+                .evaluateResponse(clientInitialResponse(null, false, customExtensions));
+
+        assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+        assertEquals("value1", saslServer.getNegotiatedProperty("firstKey"));
+        assertEquals("value2", saslServer.getNegotiatedProperty("secondKey"));
+    }
+
+    @Test
+    public void returnsNullForNonExistentProperty() throws Exception {
+        Map<String, String> customExtensions = new HashMap<>();
+        customExtensions.put("firstKey", "value1");
+
+        byte[] nextChallenge = saslServer
+                .evaluateResponse(clientInitialResponse(null, false, customExtensions));
+
+        assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+        assertNull(saslServer.getNegotiatedProperty("secondKey"));
     }
 
     @Test
@@ -93,7 +121,7 @@ public class OAuthBearerSaslServerTest {
 
     @Test
     public void illegalToken() throws Exception {
-        byte[] bytes = saslServer.evaluateResponse(clientInitialResponse(null, true));
+        byte[] bytes = saslServer.evaluateResponse(clientInitialResponse(null, true, Collections.emptyMap()));
         String challenge = new String(bytes, StandardCharsets.UTF_8);
         assertEquals("{\"status\":\"invalid_token\"}", challenge);
     }
@@ -105,11 +133,17 @@ public class OAuthBearerSaslServerTest {
 
     private byte[] clientInitialResponse(String authorizationId, boolean illegalToken)
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+        return clientInitialResponse(authorizationId, false, Collections.emptyMap());
+    }
+
+    private byte[] clientInitialResponse(String authorizationId, boolean illegalToken, Map<String, String> customExtensions)
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         LOGIN_CALLBACK_HANDLER.handle(new Callback[] {callback});
         OAuthBearerToken token = callback.token();
         String compactSerialization = token.value();
+
         String tokenValue = compactSerialization + (illegalToken ? "AB" : "");
-        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, Collections.emptyMap()).toBytes();
+        return new OAuthBearerClientInitialResponse(tokenValue, authorizationId, new SaslExtensions(customExtensions)).toBytes();
     }
 }

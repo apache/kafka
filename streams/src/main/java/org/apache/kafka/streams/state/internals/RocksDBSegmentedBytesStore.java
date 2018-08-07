@@ -69,7 +69,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, Bytes keyTo, final long from, final long to) {
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
         final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
@@ -134,7 +134,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     @Override
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));

@@ -248,13 +248,13 @@ public class GlobalKTableEOSIntegrationTest {
                 ReadOnlyKeyValueStore<Long, String> store = null;
                 try {
                     store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
-                } catch (InvalidStateStoreException ex) {
+                } catch (final InvalidStateStoreException ex) {
                     return false;
                 }
-                Map<Long, String> result = new HashMap<>();
-                Iterator<KeyValue<Long, String>> it = store.all();
+                final Map<Long, String> result = new HashMap<>();
+                final Iterator<KeyValue<Long, String>> it = store.all();
                 while (it.hasNext()) {
-                    KeyValue<Long, String> kv = it.next();
+                    final KeyValue<Long, String> kv = it.next();
                     result.put(kv.key, kv.value);
                 }
                 return result.equals(expected);
@@ -282,13 +282,13 @@ public class GlobalKTableEOSIntegrationTest {
                 ReadOnlyKeyValueStore<Long, String> store = null;
                 try {
                     store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
-                } catch (InvalidStateStoreException ex) {
+                } catch (final InvalidStateStoreException ex) {
                     return false;
                 }
-                Map<Long, String> result = new HashMap<>();
-                Iterator<KeyValue<Long, String>> it = store.all();
+                final Map<Long, String> result = new HashMap<>();
+                final Iterator<KeyValue<Long, String>> it = store.all();
                 while (it.hasNext()) {
-                    KeyValue<Long, String> kv = it.next();
+                    final KeyValue<Long, String> kv = it.next();
                     result.put(kv.key, kv.value);
                 }
                 return result.equals(expected);

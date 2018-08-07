@@ -125,11 +125,11 @@ public class KafkaStreamsTest {
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
-        List<Node> nodes = Arrays.asList(new Node(0, "localhost", 8121));
-        Cluster cluster = new Cluster("mockClusterId", nodes,
-            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-            Collections.<String>emptySet(), nodes.get(0));
-        MockClientSupplier clientSupplier = new MockClientSupplier();
+        final List<Node> nodes = Arrays.asList(new Node(0, "localhost", 8121));
+        final Cluster cluster = new Cluster("mockClusterId", nodes,
+                                            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
+                                            Collections.<String>emptySet(), nodes.get(0));
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setClusterForAdminClient(cluster);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, clientSupplier);
         streams.close();
@@ -143,7 +143,7 @@ public class KafkaStreamsTest {
         // Ensure that any created clients are closed
         assertTrue(clientSupplier.consumer.closed());
         assertTrue(clientSupplier.restoreConsumer.closed());
-        for (MockProducer p : clientSupplier.producers) {
+        for (final MockProducer p : clientSupplier.producers) {
             assertTrue(p.closed());
         }
     }
@@ -462,10 +462,10 @@ public class KafkaStreamsTest {
     @Test
     public void shouldReturnThreadMetadata() {
         streams.start();
-        Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+        final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
         assertNotNull(threadMetadata);
         assertEquals(2, threadMetadata.size());
-        for (ThreadMetadata metadata : threadMetadata) {
+        for (final ThreadMetadata metadata : threadMetadata) {
             assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
                 Utils.mkList("RUNNING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());

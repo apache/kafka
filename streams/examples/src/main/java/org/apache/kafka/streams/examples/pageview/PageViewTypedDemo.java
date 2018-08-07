@@ -81,8 +81,8 @@ public class PageViewTypedDemo {
         public String region;
     }
 
-    public static void main(String[] args) {
-        Properties props = new Properties();
+    public static void main(final String[] args) {
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
@@ -91,10 +91,10 @@ public class PageViewTypedDemo {
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         // TODO: the following can be removed with a serialization factory
-        Map<String, Object> serdeProps = new HashMap<>();
+        final Map<String, Object> serdeProps = new HashMap<>();
 
         final Serializer<PageView> pageViewSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", PageView.class);
@@ -143,14 +143,14 @@ public class PageViewTypedDemo {
         pageViewByRegionDeserializer.configure(serdeProps, false);
         final Serde<PageViewByRegion> pageViewByRegionSerde = Serdes.serdeFrom(pageViewByRegionSerializer, pageViewByRegionDeserializer);
 
-        KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), pageViewSerde));
+        final KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), pageViewSerde));
 
-        KTable<String, UserProfile> users = builder.table("streams-userprofile-input",
-                                                          Consumed.with(Serdes.String(), userProfileSerde));
+        final KTable<String, UserProfile> users = builder.table("streams-userprofile-input",
+                                                                Consumed.with(Serdes.String(), userProfileSerde));
 
-        KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
+        final KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
             .leftJoin(users, (view, profile) -> {
-                PageViewByRegion viewByRegion = new PageViewByRegion();
+                final PageViewByRegion viewByRegion = new PageViewByRegion();
                 viewByRegion.user = view.user;
                 viewByRegion.page = view.page;
 
@@ -167,11 +167,11 @@ public class PageViewTypedDemo {
             .count()
             .toStream()
             .map((key, value) -> {
-                WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
+                final WindowedPageViewByRegion wViewByRegion = new WindowedPageViewByRegion();
                 wViewByRegion.windowStart = key.window().start();
                 wViewByRegion.region = key.key();
 
-                RegionCount rCount = new RegionCount();
+                final RegionCount rCount = new RegionCount();
                 rCount.region = key.key();
                 rCount.count = value;
 
@@ -181,7 +181,7 @@ public class PageViewTypedDemo {
         // write to the result topic
         regionCount.to("streams-pageviewstats-typed-output", Produced.with(wPageViewByRegionSerde, regionCountSerde));
 
-        KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
@@ -196,7 +196,7 @@ public class PageViewTypedDemo {
         try {
             streams.start();
             latch.await();
-        } catch (Throwable e) {
+        } catch (final Throwable e) {
             System.exit(1);
         }
         System.exit(0);

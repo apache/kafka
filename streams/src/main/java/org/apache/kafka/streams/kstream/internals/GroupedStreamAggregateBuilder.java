@@ -71,27 +71,27 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         final String aggFunctionName = builder.newProcessorName(functionName);
 
-        OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
         final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
 
         StreamsGraphNode parentNode = streamsGraphNode;
 
         if (!sourceName.equals(this.name)) {
-            StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
+            final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
             builder.addGraphNode(parentNode, repartitionNode);
             parentNode = repartitionNode;
         }
-        StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
+        final StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
 
-        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
         statefulProcessorNodeBuilder
             .withProcessorParameters(processorParameters)
             .withNodeName(aggFunctionName)
             .withRepartitionRequired(repartitionRequired)
             .withStoreBuilder(storeBuilder);
 
-        StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
+        final StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 

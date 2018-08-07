@@ -600,11 +600,9 @@ class GroupCoordinator(val brokerId: Int,
         case Empty | Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
-            if (member.awaitingJoinCallback != null) {
-              member.awaitingJoinCallback(joinError(member.memberId, Errors.NOT_COORDINATOR))
-              member.awaitingJoinCallback = null
-            }
+            group.invokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
           }
+
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
 
         case Stable | CompletingRebalance =>
@@ -704,12 +702,11 @@ class GroupCoordinator(val brokerId: Int,
     val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
-    member.awaitingJoinCallback = callback
     // update the newMemberAdded flag to indicate that the join group can be further delayed
     if (group.is(PreparingRebalance) && group.generationId == 0)
       group.newMemberAdded = true
 
-    group.add(member)
+    group.add(member, callback)
     maybePrepareRebalance(group, s"Adding new member $memberId")
     member
   }
@@ -718,8 +715,7 @@ class GroupCoordinator(val brokerId: Int,
                                        member: MemberMetadata,
                                        protocols: List[(String, Array[Byte])],
                                        callback: JoinCallback) {
-    member.supportedProtocols = protocols
-    member.awaitingJoinCallback = callback
+    group.updateMember(member, protocols, callback)
     maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
   }
 
@@ -765,7 +761,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean) = {
     group.inLock {
-      if (group.notYetRejoinedMembers.isEmpty)
+      if (group.hasAllMembersJoined)
         forceComplete()
       else false
     }
@@ -816,8 +812,7 @@ class GroupCoordinator(val brokerId: Int,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
-            member.awaitingJoinCallback(joinResult)
-            member.awaitingJoinCallback = null
+            group.invokeJoinCallback(member, joinResult)
             completeAndScheduleNextHeartbeatExpiration(group, member)
           }
         }

@@ -110,9 +110,9 @@ public class StreamsStandByReplicaTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
+        final KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
 
-        ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
+        final ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
             @Override
             public String apply(final Long value) {
                 return value.toString();

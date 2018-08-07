@@ -167,7 +167,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 5000);
+        waitForCompletion(streams, 2, 10000);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -186,8 +186,8 @@ public class InternalTopicIntegrationTest {
         //
         // Step 1: Configure and start a simple word count topology
         //
-        StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
         final int durationMs = 2000;
 
@@ -201,7 +201,7 @@ public class InternalTopicIntegrationTest {
                 .windowedBy(TimeWindows.of(1000).until(2000))
                 .count(Materialized.<String, Long, WindowStore<org.apache.kafka.common.utils.Bytes, byte[]>>as("CountWindows"));
 
-        KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
         streams.start();
 
         //
