@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -145,7 +146,9 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
                 props, new StringDeserializer(), new StringDeserializer());
 
-        Assert.assertEquals(consumer.getClientId(), MockMetricsReporter.clientId);
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
+
+        Assert.assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
         consumer.close();
     }
 

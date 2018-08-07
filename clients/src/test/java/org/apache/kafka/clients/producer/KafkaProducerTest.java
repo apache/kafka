@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -84,7 +85,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(
                 props, new StringSerializer(), new StringSerializer());
 
-        Assert.assertEquals(producer.getClientId(), MockMetricsReporter.clientId);
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().get(0);
+
+        Assert.assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
         producer.close();
     }
 

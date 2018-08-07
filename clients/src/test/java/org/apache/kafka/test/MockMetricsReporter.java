@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MockMetricsReporter implements MetricsReporter {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    public static String clientId;
+    public String clientId;
 
     public MockMetricsReporter() {
     }
