@@ -63,4 +63,16 @@ public class GlobalStoreNode extends StateStoreNode {
                                        stateUpdateSupplier);
 
     }
+
+
+    @Override
+    public String toString() {
+        return "GlobalStoreNode{" +
+               "sourceName='" + sourceName + '\'' +
+               ", topic='" + topic + '\'' +
+               ", consumed=" + consumed +
+               ", processorName='" + processorName + '\'' +
+               ", stateUpdateSupplier=" + stateUpdateSupplier +
+               "} " + super.toString();
+    }
 }

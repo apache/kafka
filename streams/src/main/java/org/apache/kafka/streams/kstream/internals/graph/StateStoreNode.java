@@ -35,4 +35,13 @@ public class StateStoreNode extends StreamsGraphNode {
 
         topologyBuilder.addStateStore(storeBuilder);
     }
+
+    @Override
+    public String toString() {
+        return "StateStoreNode{" +
+               " name='" + storeBuilder.name() +  '\'' +
+               ", logConfig=" + storeBuilder.logConfig() +
+               ", loggingEnabled='" + storeBuilder.loggingEnabled() + '\'' +
+               "} " + super.toString();
+    }
 }
