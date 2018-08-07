@@ -53,7 +53,7 @@ import java.util.regex.Pattern;
  * {@link ConfigProvider#unsubscribe(String, Set, ConfigChangeCallback)} methods.
  */
 public class ConfigTransformer {
-    private static final Pattern DEFAULT_PATTERN = Pattern.compile("\\$\\{(.*?):((.*?):)?(.*?)\\}");
+    public static final Pattern DEFAULT_PATTERN = Pattern.compile("\\$\\{(.*?):((.*?):)?(.*?)\\}");
     private static final String EMPTY_PATH = "";
 
     private final Map<String, ConfigProvider> configProviders;
