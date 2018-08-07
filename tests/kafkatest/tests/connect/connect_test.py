@@ -23,6 +23,7 @@ from ducktape.errors import TimeoutError
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.connect import ConnectStandaloneService
+from kafkatest.services.connect import ErrorTolerance
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -130,30 +131,30 @@ class ConnectStandaloneFileTest(Test):
             return False
 
     @cluster(num_nodes=5)
-    @parametrize(error_tolerance="all")
-    @parametrize(error_tolerance="none")
-    def test_skip_and_log_to_dlq(self, error_tolerance="none"):
-        self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
-                                  security_protocol='PLAINTEXT', interbroker_security_protocol='PLAINTEXT',
-                                  topics=self.topics)
+    @parametrize(error_tolerance=ErrorTolerance.ALL)
+    @parametrize(error_tolerance=ErrorTolerance.NONE)
+    def test_skip_and_log_to_dlq(self, error_tolerance):
+        self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk, topics=self.topics)
 
+        # set config props
         self.override_error_tolerance_props = error_tolerance
         self.enable_deadletterqueue = True
 
         successful_records = []
         faulty_records = []
-        all_records = []
+        records = []
         for i in range(0, 1000):
             if i % 2 == 0:
-                all_records.append('{"some_key":' + str(i) + '}')
+                records.append('{"some_key":' + str(i) + '}')
                 successful_records.append('{some_key=' + str(i) + '}')
             else:
                 # badly formatted json records (missing a quote after the key)
-                all_records.append('{"some_key:' + str(i) + '}')
+                records.append('{"some_key:' + str(i) + '}')
                 faulty_records.append('{"some_key:' + str(i) + '}')
-        all_records = "\n".join(all_records) + "\n"
+
+        records = "\n".join(records) + "\n"
         successful_records = "\n".join(successful_records) + "\n"
-        if error_tolerance == "all":
+        if error_tolerance == ErrorTolerance.ALL:
             faulty_records = ",".join(faulty_records)
         else:
             faulty_records = faulty_records[0]
@@ -178,9 +179,9 @@ class ConnectStandaloneFileTest(Test):
         self.sink.start()
 
         # Generating data on the source node should generate new records and create new output on the sink node
-        self.source.node.account.ssh("echo -e -n " + repr(all_records) + " >> " + self.INPUT_FILE)
+        self.source.node.account.ssh("echo -e -n " + repr(records) + " >> " + self.INPUT_FILE)
 
-        if error_tolerance == "none":
+        if error_tolerance == ErrorTolerance.NONE:
             try:
                 wait_until(lambda: self.validate_output(successful_records), timeout_sec=15,
                            err_msg="Clean records added to input file were not seen in the output file in a reasonable amount of time.")
@@ -191,10 +192,10 @@ class ConnectStandaloneFileTest(Test):
             wait_until(lambda: self.validate_output(successful_records), timeout_sec=15,
                        err_msg="Clean records added to input file were not seen in the output file in a reasonable amount of time.")
 
-        self.logger.info("Reading records from deadletterqueue")
         if self.enable_deadletterqueue:
-            self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, "my-connector-errors",
-                                                      consumer_timeout_ms=10000)
-            self.consumer_validator.run()
-            actual = ",".join(self.consumer_validator.messages_consumed[1])
+            self.logger.info("Reading records from deadletterqueue")
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, "my-connector-errors",
+                                                 consumer_timeout_ms=10000)
+            consumer_validator.run()
+            actual = ",".join(consumer_validator.messages_consumed[1])
             assert faulty_records == actual, "Expected %s but saw %s in dead letter queue" % (faulty_records, actual)
