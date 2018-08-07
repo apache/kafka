@@ -73,10 +73,12 @@ public class AbstractHerderTest {
     private static final Map<String, String> CONN1_CONFIG = new HashMap<>();
     private static final String TEST_KEY = "testKey";
     private static final String TEST_KEY2 = "testKey2";
+    private static final String TEST_KEY3 = "testKey3";
     private static final String TEST_VAL = "testVal";
     private static final String TEST_VAL2 = "testVal2";
     private static final String TEST_REF = "${file:/tmp/somefile.txt:somevar}";
     private static final String TEST_REF2 = "${file:/tmp/somefile2.txt:somevar2}";
+    private static final String TEST_REF3 = "${file:/tmp/somefile3.txt:somevar3}";
     static {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
@@ -84,6 +86,7 @@ public class AbstractHerderTest {
         CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
         CONN1_CONFIG.put(TEST_KEY, TEST_REF);
         CONN1_CONFIG.put(TEST_KEY2, TEST_REF2);
+        CONN1_CONFIG.put(TEST_KEY3, TEST_REF3);
     }
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
     static {
@@ -313,6 +316,10 @@ public class AbstractHerderTest {
         // The SNAPSHOT has no task configs but does have a connector config with TEST_KEY2 and TEST_REF2
         reverseTransformed = AbstractHerder.reverseTransform(CONN1, SNAPSHOT_NO_TASKS, newTaskConfigs);
         assertEquals(TEST_REF2, reverseTransformed.get(0).get(TEST_KEY2));
+
+        // The reverseTransformed result should not have TEST_KEY3 since newTaskConfigs does not have TEST_KEY3
+        reverseTransformed = AbstractHerder.reverseTransform(CONN1, SNAPSHOT_NO_TASKS, newTaskConfigs);
+        assertFalse(reverseTransformed.get(0).containsKey(TEST_KEY3));
     }
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass) {

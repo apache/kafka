@@ -464,7 +464,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 keysWithVariableValues = connKeysWithVariableValues;
             }
             for (String key : keysWithVariableValues) {
-                newConfig.put(key, rawConfig.get(key));
+                if (newConfig.containsKey(key)) {
+                    newConfig.put(key, rawConfig.get(key));
+                }
             }
             result.add(newConfig);
             index++;
