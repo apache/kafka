@@ -16,9 +16,8 @@ import java.io.File
 import java.util.Locale
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils, ZkUtils}
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 
@@ -52,8 +51,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
    */
   @Test
   def testZkAclsDisabled() {
-    val zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
-    TestUtils.verifyUnsecureZkAcls(zkUtils)
-    CoreUtils.swallow(zkUtils.close(), this)
+    TestUtils.verifyUnsecureZkAcls(zkClient)
   }
 }

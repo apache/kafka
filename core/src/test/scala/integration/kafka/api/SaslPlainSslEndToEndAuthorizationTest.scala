@@ -22,12 +22,11 @@ import javax.security.auth.Subject
 import javax.security.auth.login.AppConfigurationEntry
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.utils.{TestUtils}
 import kafka.utils.JaasTestUtils._
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.junit.Test
@@ -134,8 +133,6 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls() {
-    val zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
-    TestUtils.verifySecureZkAcls(zkUtils, 1)
-    CoreUtils.swallow(zkUtils.close(), this)
+    TestUtils.verifySecureZkAcls(zkClient, 1)
   }
 }

@@ -17,9 +17,11 @@
 
 package kafka.admin
 
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging, ZkUtils}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
+import kafka.zk.{KafkaZkClient, ZkData}
 import org.I0Itec.zkclient.exception.ZkException
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -92,8 +94,9 @@ object ZkSecurityMigrator extends Logging {
     val zkUrl = opts.options.valueOf(opts.zkUrlOpt)
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
-    val zkUtils = ZkUtils(zkUrl, zkSessionTimeout, zkConnectionTimeout, zkAcl)
-    val migrator = new ZkSecurityMigrator(zkUtils)
+    val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
+      Int.MaxValue, Time.SYSTEM)
+    val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run()
   }
 
@@ -120,17 +123,17 @@ object ZkSecurityMigrator extends Logging {
   }
 }
 
-class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
+class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   private val futures = new Queue[Future[String]]
 
   private def setAcl(path: String, setPromise: Promise[String]) = {
     info("Setting ACL for path %s".format(path))
-    zkUtils.zkConnection.getZookeeper.setACL(path, zkUtils.defaultAcls(path), -1, SetACLCallback, setPromise)
+    zkClient.currentZooKeeper.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, setPromise)
   }
 
   private def getChildren(path: String, childrenPromise: Promise[String]) = {
     info("Getting children to set ACLs for path %s".format(path))
-    zkUtils.zkConnection.getZookeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
+    zkClient.currentZooKeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
   }
 
   private def setAclIndividually(path: String) = {
@@ -157,7 +160,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
                       path: String,
                       ctx: Object,
                       children: java.util.List[String]) {
-      val zkHandle = zkUtils.zkConnection.getZookeeper
+      val zkHandle = zkClient.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
         case Code.OK =>
@@ -191,7 +194,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
                       path: String,
                       ctx: Object,
                       stat: Stat) {
-      val zkHandle = zkUtils.zkConnection.getZookeeper
+      val zkHandle = zkClient.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
 
       Code.get(rc) match {
@@ -199,7 +202,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
           info("Successfully set ACLs for %s".format(path))
           promise success "done"
         case Code.CONNECTIONLOSS =>
-            zkHandle.setACL(path, zkUtils.defaultAcls(path), -1, SetACLCallback, ctx)
+            zkHandle.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, ctx)
         case Code.NONODE =>
           warn("Znode is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
@@ -218,9 +221,9 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
   private def run(): Unit = {
     try {
       setAclIndividually("/")
-      for (path <- ZkUtils.SecureZkRootPaths) {
+      for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        zkUtils.makeSurePersistentPathExists(path)
+        zkClient.makeSurePersistentPathExists(path)
         setAclsRecursively(path)
       }
 
@@ -240,7 +243,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
       recurse()
 
     } finally {
-      zkUtils.close
+      zkClient.close
     }
   }
 }
