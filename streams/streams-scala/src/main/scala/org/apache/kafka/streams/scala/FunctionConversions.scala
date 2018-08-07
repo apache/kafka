@@ -105,4 +105,10 @@ object FunctionConversions {
       override def apply(): VA = f()
     }
   }
+
+  implicit class TransformerSupplierFromFunction[K, V, VO](val f: () => Transformer[K, V, VO]) extends AnyVal {
+    def asTransformerSupplier: TransformerSupplier[K, V, VO] = new TransformerSupplier[K, V, VO] {
+      override def get(): Transformer[K, V, VO] = f()
+    }
+  }
 }
