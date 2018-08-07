@@ -326,6 +326,11 @@ class ConnectDistributedService(ConnectServiceBase):
             raise RuntimeError("No process ids recorded")
 
 
+class ErrorTolerance(object):
+    ALL = "all"
+    NONE = "none"
+
+
 class ConnectRestError(RuntimeError):
     def __init__(self, status, msg, url):
         self.status = status
