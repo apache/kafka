@@ -299,7 +299,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
                         stateStoreNames: String*): KStream[K1, V1] =
     inner.transform(transformerSupplier.asTransformerSupplier, stateStoreNames: _*)
 
-
   /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input

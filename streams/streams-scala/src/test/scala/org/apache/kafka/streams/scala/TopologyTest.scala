@@ -209,12 +209,15 @@ class TopologyTest extends JUnitSuite {
 
       val _: KTable[String, Long] =
         textLines
-          .transform(() => new Transformer[String, String, KeyValue[String, String]] {
-              override def init(context: ProcessorContext): Unit = Unit
-              override def transform(key: String, value: String): KeyValue[String, String] =
-                new KeyValue(key, value.toLowerCase)
-              override def close(): Unit = Unit
-          })
+          .transform(
+            () =>
+              new Transformer[String, String, KeyValue[String, String]] {
+                override def init(context: ProcessorContext): Unit = Unit
+                override def transform(key: String, value: String): KeyValue[String, String] =
+                  new KeyValue(key, value.toLowerCase)
+                override def close(): Unit = Unit
+            }
+          )
           .groupBy((k, v) => v)
           .count()
 
@@ -229,15 +232,16 @@ class TopologyTest extends JUnitSuite {
 
       val lowered: KStreamJ[String, String] = textLines
         .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
-        override def get(): Transformer[String, String, KeyValue[String, String]] = new Transformer[String, String, KeyValue[String, String]] {
-          override def init(context: ProcessorContext): Unit = Unit
+          override def get(): Transformer[String, String, KeyValue[String, String]] =
+            new Transformer[String, String, KeyValue[String, String]] {
+              override def init(context: ProcessorContext): Unit = Unit
 
-          override def transform(key: String, value: String): KeyValue[String, String] =
-            new KeyValue(key, value.toLowerCase)
+              override def transform(key: String, value: String): KeyValue[String, String] =
+                new KeyValue(key, value.toLowerCase)
 
-          override def close(): Unit = Unit
-        }
-      })
+              override def close(): Unit = Unit
+            }
+        })
 
       val grouped: KGroupedStreamJ[String, String] = lowered.groupBy {
         new KeyValueMapper[String, String, String] {
