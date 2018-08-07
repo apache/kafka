@@ -72,8 +72,8 @@ object ReassignPartitionsCommand extends Logging {
 
   private def createAdminClient(opts: ReassignPartitionsCommandOptions): Option[JAdminClient] = {
     if (opts.options.has(opts.bootstrapServerOpt)) {
-      val props = if (opts.options.has(opts.configFileOpt))
-        Utils.loadProps(opts.options.valueOf(opts.configFileOpt))
+      val props = if (opts.options.has(opts.commandConfigOpt))
+        Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
       else
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
@@ -459,7 +459,7 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("Server(s) to use for bootstrapping")
                       .ofType(classOf[String])
-    val configFileOpt = parser.accepts("config-file", "Property file containing configs to be passed to Admin Client.")
+    val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
                       .withRequiredArg
                       .describedAs("Admin client property file")
                       .ofType(classOf[String])
