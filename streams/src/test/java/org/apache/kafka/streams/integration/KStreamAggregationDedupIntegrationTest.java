@@ -151,8 +151,8 @@ public class KStreamAggregationDedupIntegrationTest {
 
         startStreams();
 
-        long firstBatchWindow = firstBatchTimestamp / 500 * 500;
-        long secondBatchWindow = secondBatchTimestamp / 500 * 500;
+        final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
+        final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
         validateReceivedMessages(
                 new StringDeserializer(),

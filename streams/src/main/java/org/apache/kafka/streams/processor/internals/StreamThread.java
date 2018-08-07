@@ -978,13 +978,11 @@ public class StreamThread extends Thread {
         long totalProcessed = 0;
 
         for (int i = 0; i < numIterations; i++) {
-            int processed = taskManager.process();
+            final int processed = taskManager.process();
 
             if (processed > 0) {
                 totalProcessed += processed;
                 streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
-
-                taskManager.maybeEnforceProcess();
 
                 // commit any tasks that have requested a commit
                 final int committed = taskManager.maybeCommitActiveTasks();

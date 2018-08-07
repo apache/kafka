@@ -37,16 +37,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 abstract class AssignedTasks<T extends Task> {
-    private final Logger log;
+    protected final Logger log;
     private final String taskTypeName;
-    private final TaskAction<T> commitAction;
     private final Map<TaskId, T> created = new HashMap<>();
     private final Map<TaskId, T> suspended = new HashMap<>();
     private final Map<TaskId, T> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
-
-    protected int committed = 0;
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
@@ -56,23 +53,7 @@ abstract class AssignedTasks<T extends Task> {
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
         this.taskTypeName = taskTypeName;
-
         this.log = logContext.logger(getClass());
-
-        commitAction = new TaskAction<T>() {
-            @Override
-            public String name() {
-                return "commit";
-            }
-
-            @Override
-            public void apply(final T task) {
-                if (task.commitNeeded()) {
-                    committed++;
-                    task.commit();
-                }
-            }
-        };
     }
 
     void addNewTask(final T task) {
@@ -355,21 +336,19 @@ abstract class AssignedTasks<T extends Task> {
      *                               or if the task producer got fenced (EOS)
      */
     int commit() {
-        committed = 0;
-        applyToRunningTasks(commitAction);
-        return committed;
-    }
-
-    void applyToRunningTasks(final TaskAction<T> action) {
+        int committed = 0;
         RuntimeException firstException = null;
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
-                action.apply(task);
+                if (task.commitNeeded()) {
+                    committed++;
+                    task.commit();
+                }
             } catch (final TaskMigratedException e) {
-                log.info("Failed to commit {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
+                log.info("Failed to commit {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -377,11 +356,9 @@ abstract class AssignedTasks<T extends Task> {
                 it.remove();
                 throw e;
             } catch (final RuntimeException t) {
-                log.error("Failed to {} {} {} due to the following error:",
-                          action.name(),
-                          taskTypeName,
-                          task.id(),
-                          t);
+                log.error("Failed to commit {} due to the following error:",
+                        task.id(),
+                        t);
                 if (firstException == null) {
                     firstException = t;
                 }
@@ -391,6 +368,8 @@ abstract class AssignedTasks<T extends Task> {
         if (firstException != null) {
             throw firstException;
         }
+
+        return committed;
     }
 
     void closeNonAssignedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
