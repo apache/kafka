@@ -47,7 +47,6 @@ public class PartitionStates<S> {
     /* the number of partitions that are currently assigned available in a thread safe manner */
     private volatile int size = 0;
 
-
     public PartitionStates() {}
 
     public void moveToEnd(TopicPartition topicPartition) {

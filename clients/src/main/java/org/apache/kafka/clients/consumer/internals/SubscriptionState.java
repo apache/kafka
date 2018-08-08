@@ -71,7 +71,7 @@ public class SubscriptionState {
     private final Set<String> groupSubscription;
 
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
-    private final Assignment<TopicPartitionState> assignment;
+    private final PartitionStates<TopicPartitionState> assignment;
 
     /* Default offset reset strategy */
     private final OffsetResetStrategy defaultResetStrategy;
@@ -85,7 +85,7 @@ public class SubscriptionState {
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
-        this.assignment = new Assignment<>();
+        this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
@@ -539,60 +539,4 @@ public class SubscriptionState {
         void onAssignment(Set<TopicPartition> assignment);
     }
 
-
-    /**
-     * Wrapper to manipulate assignment while exporting the number of partitions in a thread safe manner.
-     */
-    private static class Assignment<S> {
-        /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
-        private final PartitionStates<S> assignment;
-
-        /* the number of partitions that are currently assigned available in a thread safe manner */
-        private volatile int size;
-
-        private Assignment() {
-            this.assignment = new PartitionStates<>();
-            this.size = 0;
-        }
-
-        private void moveToEnd(TopicPartition topicPartition) {
-            assignment.moveToEnd(topicPartition);
-        }
-
-        /**
-         * Returns the partitions in random order.
-         */
-        private Set<TopicPartition> partitionSet() {
-            return assignment.partitionSet();
-        }
-
-        private boolean contains(TopicPartition topicPartition) {
-            return assignment.contains(topicPartition);
-        }
-
-        private void clear() {
-            this.assignment.clear();
-            this.size = 0;
-        }
-
-        /**
-         * Returns the partition states in order.
-         */
-        private List<PartitionStates.PartitionState<S>> partitionStates() {
-            return assignment.partitionStates();
-        }
-
-        private S stateValue(TopicPartition topicPartition) {
-            return assignment.stateValue(topicPartition);
-        }
-
-        private void set(Map<TopicPartition, S> partitionToState) {
-            this.assignment.set(partitionToState);
-            this.size = assignment.size();
-        }
-
-        private int size() {
-            return size;
-        }
-    }
 }
