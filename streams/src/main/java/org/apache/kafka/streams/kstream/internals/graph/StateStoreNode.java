@@ -42,6 +42,6 @@ public class StateStoreNode extends StreamsGraphNode {
                " name='" + storeBuilder.name() +  '\'' +
                ", logConfig=" + storeBuilder.logConfig() +
                ", loggingEnabled='" + storeBuilder.loggingEnabled() + '\'' +
-               "} " + super.toString();
+               "} ";
     }
 }

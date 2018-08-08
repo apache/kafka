@@ -70,9 +70,7 @@ public class GlobalStoreNode extends StateStoreNode {
         return "GlobalStoreNode{" +
                "sourceName='" + sourceName + '\'' +
                ", topic='" + topic + '\'' +
-               ", consumed=" + consumed +
                ", processorName='" + processorName + '\'' +
-               ", stateUpdateSupplier=" + stateUpdateSupplier +
-               "} " + super.toString();
+               "} ";
     }
 }
