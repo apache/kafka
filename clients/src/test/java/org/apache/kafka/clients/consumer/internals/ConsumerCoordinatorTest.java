@@ -1771,7 +1771,7 @@ public class ConsumerCoordinatorTest {
 
         // Assign two partitions to trigger a metric change that can lead to ConcurrentModificationException
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
 
         // Change the assignment several times to increase likelihood of concurrent updates
         Set<TopicPartition> partitions = new HashSet<>();
