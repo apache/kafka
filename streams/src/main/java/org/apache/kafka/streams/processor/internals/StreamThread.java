@@ -455,7 +455,6 @@ public class StreamThread extends Thread {
 
         @Override
         public void close() {
-            streamsMetrics.taskClosedSensor.record();
             if (threadProducer != null) {
                 try {
                     threadProducer.close();
@@ -510,11 +509,6 @@ public class StreamThread extends Thread {
                 );
                 return null;
             }
-        }
-
-        @Override
-        public void close() {
-            streamsMetrics.taskClosedSensor.record();
         }
     }
 
