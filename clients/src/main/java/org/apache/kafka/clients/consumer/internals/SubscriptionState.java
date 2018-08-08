@@ -268,6 +268,14 @@ public class SubscriptionState {
         return this.assignment.partitionSet();
     }
 
+    /**
+     * Provides the number of assigned partitions in a thread safe manner.
+     * @return the number of assigned partitions.
+     */
+    public int numAssignedPartitions() {
+        return this.assignment.size();
+    }
+
     public List<TopicPartition> fetchablePartitions() {
         List<TopicPartition> fetchable = new ArrayList<>(assignment.size());
         for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
