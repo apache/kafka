@@ -1035,6 +1035,7 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
+  test.dependsOn(':spotlessScalaCheck')
 }
 
 project(':streams:test-utils') {
