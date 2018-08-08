@@ -38,7 +38,7 @@ class KStreamTest extends JUnitSuite {
   }
 
   // demonstrating the condition under which the deprecated method yields incorrect behavior
-  @Test def deprecatedTransformShouldDoesntCreateATrueSupplierWhenPassedAnInstance(): Unit = {
+  @Test def deprecatedTransformDoesNotCreateATrueSupplierWhenPassedAnInstance(): Unit = {
     val jstream = createMock(classOf[JStream[String, Long]])
 
     val capture: Capture[TransformerSupplier[String, Long, KeyValue[Int, Double]]] = newCapture()
