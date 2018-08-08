@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{Transformer, TransformerSupplier, KStream => JStream}
-import org.apache.kafka.streams.processor.ProcessorContext
+import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.kstream.KStream
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock}
@@ -29,6 +29,37 @@ import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
 
 class KStreamTest extends JUnitSuite {
+
+  @Test def shouldAllowCallingProcessWithSupplier(): Unit = {
+    val jstream = createMock(classOf[JStream[String, String]])
+    val kstream = new KStream(jstream)
+
+    kstream.process(new ProcessorSupplier[String, String] {
+      override def get(): Processor[String, String] = new Processor[String, String] {
+        override def init(context: ProcessorContext): Unit = ???
+
+        override def process(key: String, value: String): Unit = ???
+
+        override def close(): Unit = ???
+      }
+    })
+  }
+
+  @Test def shouldAllowCallingProcessWithFunction(): Unit = {
+    val jstream = createMock(classOf[JStream[String, String]])
+    val kstream = new KStream(jstream)
+
+    kstream.process(
+      () =>
+        new Processor[String, String] {
+          override def init(context: ProcessorContext): Unit = ???
+
+          override def process(key: String, value: String): Unit = ???
+
+          override def close(): Unit = ???
+      }
+    )
+  }
 
   @Test def deprecatedTransformShouldCreateATrueSupplier(): Unit = {
     val jstream = createMock(classOf[JStream[String, Long]])
@@ -92,4 +123,5 @@ class KStreamTest extends JUnitSuite {
 
     override def close(): Unit = ???
   }
+
 }

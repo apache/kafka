@@ -387,6 +387,19 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   }
 
   /**
+   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and registered
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+   *
+   * @param processorSupplier a supplier that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def process(processorSupplier: ProcessorSupplier[K, V], stateStoreNames: String*): Unit =
+    inner.process(processorSupplier, stateStoreNames: _*)
+
+  /**
    * Group the records by their current key into a [[KGroupedStream]]
    * <p>
    * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
