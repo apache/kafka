@@ -943,7 +943,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 new Measurable() {
                     public double measure(MetricConfig config, long now) {
                         // Get the number of assigned partitions in a thread safe manner
-                        return subscriptions.assignedPartitionsSize();
+                        return subscriptions.numAssignedPartitions();
                     }
                 };
             metrics.addMetric(metrics.metricName("assigned-partitions",

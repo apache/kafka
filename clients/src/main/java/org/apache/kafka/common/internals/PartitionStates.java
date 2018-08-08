@@ -36,10 +36,17 @@ import java.util.Set;
  * topic would "wrap around" and appear twice. However, as partitions are fetched in different orders and partition
  * leadership changes, we will deviate from the optimal. If this turns out to be an issue in practice, we can improve
  * it by tracking the partitions per node or calling `set` every so often.
+ *
+ * Note that this class is not thread-safe with the exception of {@link #size()} which returns the number of
+ * partitions currently tracked.
  */
 public class PartitionStates<S> {
 
     private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
+
+    /* the number of partitions that are currently assigned available in a thread safe manner */
+    private volatile int size = 0;
+
 
     public PartitionStates() {}
 
@@ -52,10 +59,12 @@ public class PartitionStates<S> {
     public void updateAndMoveToEnd(TopicPartition topicPartition, S state) {
         map.remove(topicPartition);
         map.put(topicPartition, state);
+        size = map.size();
     }
 
     public void remove(TopicPartition topicPartition) {
         map.remove(topicPartition);
+        size = map.size();
     }
 
     /**
@@ -67,6 +76,7 @@ public class PartitionStates<S> {
 
     public void clear() {
         map.clear();
+        size = 0;
     }
 
     public boolean contains(TopicPartition topicPartition) {
@@ -95,8 +105,11 @@ public class PartitionStates<S> {
         return map.get(topicPartition);
     }
 
+    /**
+     * Get the number of partitions that are currently being tracked. This is thread-safe.
+     */
     public int size() {
-        return map.size();
+        return size;
     }
 
     /**
@@ -108,6 +121,7 @@ public class PartitionStates<S> {
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
         update(partitionToState);
+        size = map.size();
     }
 
     private void update(Map<TopicPartition, S> partitionToState) {

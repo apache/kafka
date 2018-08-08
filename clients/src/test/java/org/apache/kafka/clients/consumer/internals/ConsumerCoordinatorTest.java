@@ -57,6 +57,7 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -443,7 +444,7 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(2, subscriptions.assignedPartitionsSize());
+        assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.groupSubscription().size());
         assertEquals(2, subscriptions.subscription().size());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -688,7 +689,7 @@ public class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(2, subscriptions.assignedPartitionsSize());
+        assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.subscription().size());
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
@@ -1752,16 +1753,19 @@ public class ConsumerCoordinatorTest {
         // Start polling the metric in the background
         final AtomicBoolean doStop = new AtomicBoolean();
         final AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+        final AtomicInteger observedSize = new AtomicInteger();
+
         Thread poller = new Thread() {
             @Override
             public void run() {
                 // Poll as fast as possible to reproduce ConcurrentModificationException
                 while (!doStop.get()) {
                     try {
-                        metric.value();
+                        int size = ((Double) metric.metricValue()).intValue();
+                        observedSize.set(size);
                     } catch (Exception e) {
                         exceptionHolder.set(e);
-                        doStop.set(true);
+                        return;
                     }
                 }
             }
@@ -1771,12 +1775,26 @@ public class ConsumerCoordinatorTest {
         // Assign two partitions to trigger a metric change that can lead to ConcurrentModificationException
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(t1p, t2p)));
-        // Wait just a bit for the poller to see the metric value transition from 0.0 to 2.0
-        Thread.sleep(50);
-        // Stop and wait for the poller
+
+        // Change the assignment several times to increase likelihood of concurrent updates
+        Set<TopicPartition> partitions = new HashSet<>();
+        int totalPartitions = 10;
+        for (int partition = 0; partition < totalPartitions; partition++) {
+            partitions.add(new TopicPartition(topic1, partition));
+            subscriptions.assignFromUser(partitions);
+        }
+
+        // Wait for the metric poller to observe the final assignment change or raise an error
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return observedSize.get() == totalPartitions || exceptionHolder.get() != null;
+            }
+        }, "Failed to observe expected assignment change");
+
         doStop.set(true);
         poller.join();
+
         assertNull("Failed fetching the metric at least once", exceptionHolder.get());
     }
 
