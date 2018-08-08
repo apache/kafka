@@ -184,9 +184,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#branch`
    */
   //noinspection ScalaUnnecessaryParentheses
-  def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] = {
+  def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
     inner.branch(predicates.map(_.asPredicate): _*).map(kstream => wrapKStream(kstream))
-  }
 
   /**
    * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for
@@ -302,20 +301,20 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.transform(transformerSupplier, stateStoreNames: _*)
 
   /**
-    * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-    * can be altered arbitrarily).
-    * A `Transformer` is applied to each input record and computes zero or more output records. In order to assign a
-    * state, the state must be created and registered beforehand via stores added via `addStateStore` or `addGlobalStore`
-    * before they can be connected to the `Transformer`
-    *
-    * This method is deprecated because there is a danger of passing a specific Transformer instance, which would
-    * result in incorrect execution. It's highly recommended to us [[KStream.transform(TransformSupplier, String*)]] instead.
-    *
-    * @param transformer the `Transformer` instance
-    * @param stateStoreNames     the names of the state stores used by the processor
-    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-    * @see [[org.apache.kafka.streams.kstream.KStream#transform]]
-    */
+   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+   * can be altered arbitrarily).
+   * A `Transformer` is applied to each input record and computes zero or more output records. In order to assign a
+   * state, the state must be created and registered beforehand via stores added via `addStateStore` or `addGlobalStore`
+   * before they can be connected to the `Transformer`
+   *
+   * This method is deprecated because there is a danger of passing a specific Transformer instance, which would
+   * result in incorrect execution. It's highly recommended to us [[KStream.transform(TransformSupplier, String*)]] instead.
+   *
+   * @param transformer the `Transformer` instance
+   * @param stateStoreNames     the names of the state stores used by the processor
+   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
+   * @see [[org.apache.kafka.streams.kstream.KStream#transform]]
+   */
   @deprecated("Use transform(TransformerSupplier,String) instead.", "2.0")
   def transform[K1, V1](transformer: => Transformer[K, V, (K1, V1)], stateStoreNames: String*): KStream[K1, V1] = {
     //noinspection ConvertExpressionToSAM // due to 2.11

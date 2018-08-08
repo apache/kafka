@@ -3,7 +3,27 @@ package org.apache.kafka.streams.scala
 import java.lang
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{ForeachAction, GlobalKTable, JoinWindows, Joined, KGroupedStream, KTable, KeyValueMapper, Predicate, Printed, Produced, Serialized, Transformer, TransformerSupplier, ValueJoiner, ValueMapper, ValueMapperWithKey, ValueTransformerSupplier, ValueTransformerWithKeySupplier, KStream => JStream}
+import org.apache.kafka.streams.kstream.{
+  ForeachAction,
+  GlobalKTable,
+  JoinWindows,
+  Joined,
+  KGroupedStream,
+  KTable,
+  KeyValueMapper,
+  Predicate,
+  Printed,
+  Produced,
+  Serialized,
+  Transformer,
+  TransformerSupplier,
+  ValueJoiner,
+  ValueMapper,
+  ValueMapperWithKey,
+  ValueTransformerSupplier,
+  ValueTransformerWithKeySupplier,
+  KStream => JStream
+}
 import org.apache.kafka.streams.processor.{ProcessorContext, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.kstream.KStream
 import org.easymock.EasyMock._
@@ -62,7 +82,6 @@ class KStreamTest extends JUnitSuite {
     Assert.assertEquals(new KeyValue(1, 1.0), transformer1.transform("A", 1L))
     Assert.assertEquals(new KeyValue(2, 2.0), transformer2.transform("A", 1L))
   }
-
 
   private class TestTransformer extends Transformer[String, Long, (Int, Double)] {
     var transforms: Int = 0
