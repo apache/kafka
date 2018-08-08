@@ -104,7 +104,7 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int compareTo(final TaskId other) {
-        int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
+        final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
         return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
     }
 }
