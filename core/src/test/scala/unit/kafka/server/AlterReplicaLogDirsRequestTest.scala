@@ -32,9 +32,9 @@ import scala.collection.mutable
 import scala.util.Random
 
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
+  logDirCount = 5
 
   override def numBrokers: Int = 1
-  override def logDirCount: Int = 5
 
   val topic = "topic"
 

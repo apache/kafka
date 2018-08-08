@@ -16,7 +16,7 @@ import java.io.File
 
 import kafka.server.KafkaConfig
 import org.junit.{After, Before, Test}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.collection.JavaConverters._

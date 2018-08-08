@@ -113,10 +113,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     }
 
-    val producer = createProducer(valueSerializer = extendedSerializer)
+    val producer = createProducer(
+      keySerializer = new ByteArraySerializer,
+      valueSerializer = extendedSerializer)
     producer.send(record)
 
-    val consumer = createConsumer(valueDeserializer = extendedDeserializer)
+    val consumer = createConsumer(
+      keyDeserializer = new ByteArrayDeserializer,
+      valueDeserializer = extendedDeserializer)
     assertEquals(0, consumer.assignment.size)
     consumer.assign(List(tp).asJava)
     assertEquals(1, consumer.assignment.size)
@@ -286,8 +290,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.close()
 
     // now we should see the committed positions from another consumer
-    assertEquals(300, consumer.committed(tp).offset)
-    assertEquals(500, consumer.committed(tp2).offset)
+    val anotherConsumer = createConsumer()
+    assertEquals(300, anotherConsumer.committed(tp).offset)
+    assertEquals(500, anotherConsumer.committed(tp2).offset)
   }
 
   @Test
@@ -628,7 +633,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producerProps = new Properties()
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Int.MaxValue.toString)
-    val producer = createProducer(lingerMs = Int.MaxValue, configOverrides = producerProps)
+    val producer = createProducer(configOverrides = producerProps)
     (0 until numRecords).foreach { i =>
       producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
     }
@@ -904,9 +909,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  def reverse(m: Map[Long, Set[TopicPartition]]) =
-    m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
-
   /**
    * This test runs the following scenario to verify sticky assignor behavior.
    * Topics: single-topic, with random number of partitions, where #par is 10, 20, 30, 40, 50, 60, 70, 80, 90, or 100
@@ -920,6 +922,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   @Test
   def testMultiConsumerStickyAssignment() {
+
+    def reverse(m: Map[Long, Set[TopicPartition]]) =
+      m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
+
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
 

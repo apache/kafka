@@ -33,8 +33,6 @@ import scala.collection.JavaConverters._
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   override val serverCount = 2
-  val producerCount = 1
-  val consumerCount = 1
 
   protected def producerClientId = "QuotasTestProducer-1"
   protected def consumerClientId = "QuotasTestConsumer-1"
@@ -46,7 +44,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100")
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
   this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "0")
+  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "-1")
   this.producerConfig.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, "300000")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "QuotasTest")
@@ -79,7 +77,6 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   @Test
   def testThrottledProducerConsumer() {
-
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
@@ -169,7 +166,7 @@ abstract class QuotaTestClients(topic: String,
                                 val producer: KafkaProducer[Array[Byte], Array[Byte]],
                                 val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
 
-  def userPrincipal : KafkaPrincipal
+  def userPrincipal: KafkaPrincipal
   def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double)
   def removeQuotaOverrides()
 
@@ -229,9 +226,9 @@ abstract class QuotaTestClients(topic: String,
   def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
     val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
     if (expectThrottle) {
-      assertTrue("Should have been throttled", throttleMetricValue > 0)
+      assertTrue(s"Client with id=$clientId should have been throttled", throttleMetricValue > 0)
     } else {
-      assertEquals("Should not have been throttled", 0.0, throttleMetricValue, 0.0)
+      assertEquals(s"Client with id=$clientId should not have been throttled", 0.0, throttleMetricValue, 0.0)
     }
   }
 

@@ -16,7 +16,7 @@ package kafka.api
 
 import java.io.File
 import java.{lang, util}
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Collections, Properties}
 
@@ -202,7 +202,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def addUser(user: String, leader: Int): GroupedUser = {
-
     val password = s"$user:secret"
     createScramCredentials(zkConnect, user, password)
     servers.foreach { server =>
@@ -213,7 +212,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val userGroup = group(user)
     val topic = s"${userGroup}_topic"
     val producerClientId = s"$user:producer-client-id"
-    val consumerClientId = s"$user:producer-client-id"
+    val consumerClientId = s"$user:consumer-client-id"
 
     producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)

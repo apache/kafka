@@ -416,11 +416,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected final def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
-                             numRecords: Int = 1,
-                             startingOffset: Int = 0,
-                             topic: String = topic,
-                             part: Int = part,
-                             timeout: Long = 10000) {
+                                     numRecords: Int = 1,
+                                     startingOffset: Int = 0,
+                                     topic: String = topic,
+                                     part: Int = part,
+                                     timeout: Long = 10000) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
     val deadlineMs = System.currentTimeMillis() + timeout

@@ -346,26 +346,6 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a test config for a consumer
-   */
-  def createConsumerProperties(zkConnect: String, groupId: String, consumerId: String,
-                               consumerTimeout: Long = -1): Properties = {
-    val props = new Properties
-    props.put("zookeeper.connect", zkConnect)
-    props.put("group.id", groupId)
-    props.put("consumer.id", consumerId)
-    props.put("consumer.timeout.ms", consumerTimeout.toString)
-    props.put("zookeeper.session.timeout.ms", "6000")
-    props.put("zookeeper.sync.time.ms", "200")
-    props.put("auto.commit.interval.ms", "1000")
-    props.put("rebalance.max.retries", "4")
-    props.put("auto.offset.reset", "smallest")
-    props.put("num.consumer.fetchers", "2")
-
-    props
-  }
-
-  /**
    * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
    */
   def fail(msg: String): Nothing = throw new AssertionError(msg)
@@ -522,11 +502,11 @@ object TestUtils extends Logging {
   }
 
   def securityConfigs(mode: Mode,
-                              securityProtocol: SecurityProtocol,
-                              trustStoreFile: Option[File],
-                              certAlias: String,
-                              certCn: String,
-                              saslProperties: Option[Properties]): Properties = {
+                      securityProtocol: SecurityProtocol,
+                      trustStoreFile: Option[File],
+                      certAlias: String,
+                      certCn: String,
+                      saslProperties: Option[Properties]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn)
@@ -537,9 +517,9 @@ object TestUtils extends Logging {
     props
   }
 
-  private def producerSecurityConfigs(securityProtocol: SecurityProtocol,
-                                      trustStoreFile: Option[File],
-                                      saslProperties: Option[Properties]): Properties =
+  def producerSecurityConfigs(securityProtocol: SecurityProtocol,
+                              trustStoreFile: Option[File],
+                              saslProperties: Option[Properties]): Properties =
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
 
   /**
@@ -552,13 +532,14 @@ object TestUtils extends Logging {
                            retries: Int = Int.MaxValue,
                            deliveryTimeoutMs: Int = 30 * 1000,
                            lingerMs: Int = 0,
+                           batchSize: Int = 16384,
+                           compressionType: String = "none",
                            requestTimeoutMs: Int = 20 * 1000,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keySerializer: Serializer[K] = new ByteArraySerializer,
-                           valueSerializer: Serializer[V] = new ByteArraySerializer,
-                           overrides: Option[Properties] = None): KafkaProducer[K, V] = {
+                           valueSerializer: Serializer[V] = new ByteArraySerializer): KafkaProducer[K, V] = {
     val producerProps = new Properties
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
@@ -567,21 +548,10 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
     producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
     producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
-    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-    producerProps.put(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
-
-    overrides.foreach(producerProps.putAll(_))
-
-    /*
-     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
-     * securityConfigs has been invoked already. For example, we need to
-     * invoke it before this call in IntegrationTestHarness, otherwise the
-     * SSL client auth fails.
-     */
-    if (!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
-
+    producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
+    producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
 
@@ -607,36 +577,22 @@ object TestUtils extends Logging {
   def createConsumer[K, V](brokerList: String,
                            groupId: String = "group",
                            autoOffsetReset: String = "earliest",
-                           partitionFetchSize: Long = 4096L,
-                           partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
-                           sessionTimeout: Int = 30000,
+                           enableAutoCommit: Boolean = true,
+                           readCommitted: Boolean = false,
+                           maxPollRecords: Int = 500,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                           overrides: Option[Properties] = None): KafkaConsumer[K, V] = {
-    val consumerProps = overrides.getOrElse(new Properties())
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): KafkaConsumer[K, V] = {
+    val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
-    consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, partitionFetchSize.toString)
-    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-    consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
-    consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
-    consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-
-    overrides.foreach(consumerProps.putAll(_))
-
-    /*
-     * It uses CommonClientConfigs.SECURITY_PROTOCOL_CONFIG to determine whether
-     * securityConfigs has been invoked already. For example, we need to
-     * invoke it before this call in IntegrationTestHarness, otherwise the
-     * SSL client auth fails.
-     */
-    if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
-
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.toString)
+    consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
+    consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
+    consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
@@ -1200,8 +1156,10 @@ object TestUtils extends Logging {
                                 securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                                 trustStoreFile: Option[File] = None,
                                 waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol), groupId = groupId,
-      securityProtocol = securityProtocol, trustStoreFile = trustStoreFile)
+    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol),
+      groupId = groupId,
+      securityProtocol = securityProtocol,
+      trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
       consumeRecords(consumer, numMessages, waitTime)
@@ -1237,21 +1195,26 @@ object TestUtils extends Logging {
     records
   }
 
-  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer], batchSize: Int = 16384,
+  def createTransactionalProducer(transactionalId: String,
+                                  servers: Seq[KafkaServer],
+                                  batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000) = {
     val props = new Properties()
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.put(ProducerConfig.ACKS_CONFIG, "all")
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, overrides = Some(props))
+    new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
   def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = -1, overrides = Some(props))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))

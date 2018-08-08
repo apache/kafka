@@ -17,7 +17,6 @@ import java.util
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.ShutdownableThread
 import kafka.server.KafkaConfig
@@ -295,9 +294,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
    */
   def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
                                  partitions: Set[TopicPartition]): Boolean = {
-    val allNonEmptyAssignments = assignments forall (assignment => assignment.nonEmpty)
+    val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
+      val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
       return false
     }
 

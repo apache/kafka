@@ -411,11 +411,11 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = -1, lingerMs = 10000,
-      overrides = Option(CoreUtils.propsWith(
-        (ProducerConfig.BATCH_SIZE_CONFIG, String.valueOf(msg.length * 1000))
-        , (ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy")
-      )))
+    TestUtils.createProducer(getBrokerListStrFromServers(brokers),
+      acks = -1,
+      lingerMs = 10000,
+      batchSize = msg.length * 1000,
+      compressionType = "snappy")
   }
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {

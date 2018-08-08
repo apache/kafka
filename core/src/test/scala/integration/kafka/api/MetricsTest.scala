@@ -19,6 +19,7 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.config.SaslConfigs
@@ -86,7 +87,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     consumer.seek(tp, 0)
     TestUtils.consumeRecords(consumer, numRecords)
 
-    verifyKafkaRateMetricsHaveCumulativeCount()
+    verifyKafkaRateMetricsHaveCumulativeCount(producer, consumer)
     verifyClientVersionMetrics(consumer.metrics, "Consumer")
     verifyClientVersionMetrics(producer.metrics, "Producer")
 
@@ -110,16 +111,17 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   // Create a producer that fails authentication to verify authentication failure metrics
   private def generateAuthenticationFailure(tp: TopicPartition): Unit = {
-    val producerProps = new Properties()
     val saslProps = new Properties()
      // Temporary limit to reduce blocking before KIP-152 client-side changes are merged
-    saslProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000")
-    saslProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000")
     saslProps.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256")
     // Use acks=0 to verify error metric when connection is closed without a response
-    saslProps.put(ProducerConfig.ACKS_CONFIG, "0")
-    val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol,
-        trustStoreFile = trustStoreFile, saslProperties = Some(saslProps), overrides = Some(producerProps))
+    val producer = TestUtils.createProducer(brokerList,
+      acks = 0,
+      requestTimeoutMs = 1000,
+      maxBlockMs = 1000,
+      securityProtocol = securityProtocol,
+      trustStoreFile = trustStoreFile,
+      saslProperties = Some(saslProps))
 
     try {
       producer.send(new ProducerRecord(tp.topic, tp.partition, "key".getBytes, "value".getBytes)).get
@@ -130,7 +132,8 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 
-  private def verifyKafkaRateMetricsHaveCumulativeCount(): Unit =  {
+  private def verifyKafkaRateMetricsHaveCumulativeCount(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                                                        consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit =  {
 
     def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
       allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))
@@ -144,12 +147,10 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
           totalExists || totalTimeExists)
     }
 
-    val consumer = createConsumer()
     val consumerMetricNames = consumer.metrics.keySet.asScala.toSet
     consumerMetricNames.filter(_.name.endsWith("-rate"))
         .foreach(verify(_, consumerMetricNames))
 
-    val producer = createProducer()
     val producerMetricNames = producer.metrics.keySet.asScala.toSet
     val producerExclusions = Set("compression-rate") // compression-rate is an Average metric, not Rate
     producerMetricNames.filter(_.name.endsWith("-rate"))

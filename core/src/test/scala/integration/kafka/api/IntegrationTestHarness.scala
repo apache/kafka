@@ -19,13 +19,13 @@ package kafka.api
 
 import java.time.Duration
 
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -38,7 +38,6 @@ import scala.collection.mutable
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
 abstract class IntegrationTestHarness extends KafkaServerTestHarness {
-
   val serverCount: Int
   var logDirCount: Int = 1
   val producerConfig = new Properties
@@ -50,7 +49,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
-  override def generateConfigs = {
+  override def generateConfigs: Seq[KafkaConfig] = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     cfgs.foreach { config =>
@@ -70,13 +69,29 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @Before
   override def setUp() {
-    // Client certs if needed, are generated before the brokers startup
+    doSetup(createOffsetsTopic = true)
+  }
+
+  def doSetup(createOffsetsTopic: Boolean): Unit = {
+    // Generate client security properties before starting the brokers in case certs are needed
     producerConfig.putAll(clientSecurityProps("producer"))
     consumerConfig.putAll(clientSecurityProps("consumer"))
 
     super.setUp()
 
-    TestUtils.createOffsetsTopic(zkClient, servers)
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerConfig.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1")
+    producerConfig.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+    producerConfig.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerConfig.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
+    consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+
+    if (createOffsetsTopic)
+      TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
@@ -84,56 +99,24 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       clientSaslProperties)
   }
 
-  def createProducer[K, V](acks: Int = -1,
-                           maxBlockMs: Long = 60 * 1000L,
-                           bufferSize: Long = 1024L * 1024L,
-                           retries: Int = Int.MaxValue,
-                           deliveryTimeoutMs: Int = 30 * 1000,
-                           lingerMs: Int = 0,
-                           requestTimeoutMs: Int = 20 * 1000,
-                           keySerializer: Serializer[K] = new ByteArraySerializer,
+  def createProducer[K, V](keySerializer: Serializer[K] = new ByteArraySerializer,
                            valueSerializer: Serializer[V] = new ByteArraySerializer,
-                           configOverrides: Properties = new Properties()): KafkaProducer[K, V] = {
-    val props = new Properties()
+                           configOverrides: Properties = new Properties): KafkaProducer[K, V] = {
+    val props = new Properties
     props.putAll(producerConfig)
     props.putAll(configOverrides)
-
-    val producer = TestUtils.createProducer(brokerList,
-      acks = acks,
-      maxBlockMs = maxBlockMs,
-      bufferSize = bufferSize,
-      retries = retries,
-      deliveryTimeoutMs = deliveryTimeoutMs,
-      lingerMs = lingerMs,
-      requestTimeoutMs = requestTimeoutMs,
-      keySerializer = keySerializer,
-      valueSerializer = valueSerializer,
-      overrides = Some(props))
+    val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
   }
 
-  def createConsumer[K, V](groupId: String = "group",
-                           autoOffsetReset: String = "earliest",
-                           partitionFetchSize: Long = 4096L,
-                           partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
-                           sessionTimeout: Int = 30000,
-                           keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+  def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                           configOverrides: Properties = new Properties()): KafkaConsumer[K, V] = {
-    val props = new Properties()
+                           configOverrides: Properties = new Properties): KafkaConsumer[K, V] = {
+    val props = new Properties
     props.putAll(consumerConfig)
     props.putAll(configOverrides)
-
-    val consumer = TestUtils.createConsumer(brokerList,
-      groupId = groupId,
-      autoOffsetReset = autoOffsetReset,
-      partitionFetchSize = partitionFetchSize,
-      partitionAssignmentStrategy = partitionAssignmentStrategy,
-      sessionTimeout = sessionTimeout,
-      keyDeserializer = keyDeserializer,
-      valueDeserializer = valueDeserializer,
-      overrides = Some(props))
+    val consumer = new KafkaConsumer[K, V](props, keyDeserializer, valueDeserializer)
     consumers += consumer
     consumer
   }

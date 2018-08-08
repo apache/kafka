@@ -201,11 +201,11 @@ class FetchRequestTest extends BaseRequestTest {
 
     val msgValueLen = 100 * 1000
     val batchSize = 4 * msgValueLen
-    val propsOverride = new Properties
-    propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      lingerMs = Int.MaxValue, keySerializer = new StringSerializer,
-      valueSerializer = new ByteArraySerializer, overrides = Some(propsOverride))
+      lingerMs = Int.MaxValue,
+      batchSize = batchSize,
+      keySerializer = new StringSerializer,
+      valueSerializer = new ByteArraySerializer)
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>
