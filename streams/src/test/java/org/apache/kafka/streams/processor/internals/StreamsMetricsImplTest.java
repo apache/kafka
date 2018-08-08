@@ -26,6 +26,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
+import java.util.concurrent.TimeUnit;
+
 import static org.junit.Assert.assertEquals;
 
 public class StreamsMetricsImplTest {
@@ -103,8 +105,8 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void testTotalMetricDoesntDecrease() {
-        final MockTime time = new MockTime();
-        final MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
+        final MockTime time = new MockTime(1);
+        final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
         final Metrics metrics = new Metrics(config, time);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
 
