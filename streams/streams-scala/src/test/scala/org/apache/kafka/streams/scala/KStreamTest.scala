@@ -1,30 +1,8 @@
 package org.apache.kafka.streams.scala
 
-import java.lang
-
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{
-  ForeachAction,
-  GlobalKTable,
-  JoinWindows,
-  Joined,
-  KGroupedStream,
-  KTable,
-  KeyValueMapper,
-  Predicate,
-  Printed,
-  Produced,
-  Serialized,
-  Transformer,
-  TransformerSupplier,
-  ValueJoiner,
-  ValueMapper,
-  ValueMapperWithKey,
-  ValueTransformerSupplier,
-  ValueTransformerWithKeySupplier,
-  KStream => JStream
-}
-import org.apache.kafka.streams.processor.{ProcessorContext, ProcessorSupplier, TopicNameExtractor}
+import org.apache.kafka.streams.kstream.{Transformer, TransformerSupplier, KStream => JStream}
+import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.kstream.KStream
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock}
