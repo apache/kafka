@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -92,39 +93,41 @@ public class RepartitionOptimizingIntegrationTest {
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            "replace-me",
+            "maybe-optimized-test-app",
             CLUSTER.bootstrapServers(),
             Serdes.String().getClass().getName(),
             Serdes.String().getClass().getName(),
             props);
 
-        CLUSTER.deleteAndRecreateTopics(INPUT_TOPIC,
-                                        COUNT_TOPIC,
-                                        AGGREGATION_TOPIC,
-                                        REDUCE_TOPIC,
-                                        JOINED_TOPIC);
+        CLUSTER.createTopics(INPUT_TOPIC,
+                             COUNT_TOPIC,
+                             AGGREGATION_TOPIC,
+                             REDUCE_TOPIC,
+                             JOINED_TOPIC);
 
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
+    @After
+    public void tearDown() throws Exception {
+        CLUSTER.deleteAllTopicsAndWait(30_000L);
+    }
+
     @Test
     public void shouldSendCorrectRecords_OPTIMIZED() throws Exception {
         runIntegrationTest(StreamsConfig.OPTIMIZE,
-                           "optimized-test-app",
                            ONE_REPARTITION_TOPIC);
     }
 
     @Test
     public void shouldSendCorrectResults_NO_OPTIMIZATION() throws Exception {
         runIntegrationTest(StreamsConfig.NO_OPTIMIZATION,
-                           "non-optimized-test-app",
                            FOUR_REPARTITION_TOPICS);
     }
 
 
     private void runIntegrationTest(final String optimizationConfig,
-                                    final String appId,
                                     final int expectedNumberRepartitionTopics) throws Exception {
 
         final Initializer<Integer> initializer = () -> 0;
@@ -156,9 +159,8 @@ public class RepartitionOptimizingIntegrationTest {
 
 
         // adding operators for case where the repartition node is further downstream
-        mappedStream.filter((k, v) -> true).mapValues(v -> v).groupByKey().reduce(reducer,
-                                                                                  Materialized.with(Serdes.String(), Serdes.String()))
-            .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey().reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
+                    .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         mappedStream.filter((k, v) -> k.equals("A"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
@@ -168,7 +170,6 @@ public class RepartitionOptimizingIntegrationTest {
 
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
-        streamsConfiguration.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 

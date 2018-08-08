@@ -31,6 +31,7 @@ public abstract class StreamsGraphNode {
     private final String nodeName;
     private final boolean repartitionRequired;
     private boolean keyChangingOperation;
+    private boolean valueChangingOperation;
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
 
@@ -100,6 +101,14 @@ public abstract class StreamsGraphNode {
 
     public boolean isKeyChangingOperation() {
         return keyChangingOperation;
+    }
+
+    public boolean isValueChangingOperation() {
+        return valueChangingOperation;
+    }
+
+    public void setValueChangingOperation(final boolean valueChangingOperation) {
+        this.valueChangingOperation = valueChangingOperation;
     }
 
     public void keyChangingOperation(final boolean keyChangingOperation) {

@@ -254,7 +254,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         } else if (node.isKeyChangingOperation()) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
-            final StreamsGraphNode parentNode = findParentNodeMatching(node, StreamsGraphNode::isKeyChangingOperation);
+            final StreamsGraphNode parentNode = getKeyChangingParentNode(node);
             if (parentNode != null) {
                 keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
             }
@@ -369,6 +369,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         return repartitionNodeBuilder.build();
 
+    }
+
+    private StreamsGraphNode getKeyChangingParentNode(final StreamsGraphNode repartitionNode) {
+        final StreamsGraphNode shouldBeKeyChangingNode = findParentNodeMatching(repartitionNode, n -> n.isKeyChangingOperation() || n.isValueChangingOperation());
+
+        final StreamsGraphNode keyChangingNode = findParentNodeMatching(repartitionNode, StreamsGraphNode::isKeyChangingOperation);
+        if (shouldBeKeyChangingNode != null && shouldBeKeyChangingNode.equals(keyChangingNode)) {
+            return keyChangingNode;
+        }
+        return null;
     }
 
     private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,
