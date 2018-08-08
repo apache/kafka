@@ -450,26 +450,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Set<String> connKeysWithVariableValues = keysWithVariableValues(rawConnConfig, ConfigTransformer.DEFAULT_PATTERN);
 
         List<Map<String, String>> result = new ArrayList<>();
-        int index = 0;
         for (Map<String, String> config : configs) {
             Map<String, String> newConfig = new HashMap<>(config);
-            Map<String, String> rawConfig = configState.rawTaskConfig(new ConnectorTaskId(connName, index));
-            Set<String> keysWithVariableValues;
-            if (rawConfig != null) {
-                // If the raw task config is available, use it to obtain the variable references
-                keysWithVariableValues = keysWithVariableValues(rawConfig, ConfigTransformer.DEFAULT_PATTERN);
-            } else {
-                // Otherwise use the raw connector config to obtain the variable references
-                rawConfig = rawConnConfig;
-                keysWithVariableValues = connKeysWithVariableValues;
-            }
-            for (String key : keysWithVariableValues) {
+            for (String key : connKeysWithVariableValues) {
                 if (newConfig.containsKey(key)) {
-                    newConfig.put(key, rawConfig.get(key));
+                    newConfig.put(key, rawConnConfig.get(key));
                 }
             }
             result.add(newConfig);
-            index++;
         }
         return result;
     }
