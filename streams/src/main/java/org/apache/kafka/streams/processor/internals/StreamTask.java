@@ -750,10 +750,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             if (punctuated) {
                 commitNeeded = true;
-                return true;
-            } else {
-                return false;
             }
+
+            return punctuated;
         }
     }
 
@@ -771,10 +770,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         if (punctuated) {
             commitNeeded = true;
-            return true;
-        } else {
-            return false;
         }
+
+        return punctuated;
     }
 
     /**

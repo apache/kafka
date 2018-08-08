@@ -207,40 +207,25 @@ public class RecordCollectorImpl implements RecordCollector {
                 "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
         } catch (final Exception uncaughtException) {
-            if (uncaughtException instanceof KafkaException) {
+            if (uncaughtException instanceof KafkaException &&
+                uncaughtException.getCause() instanceof ProducerFencedException) {
                 final KafkaException kafkaException = (KafkaException) uncaughtException;
-
-                if (kafkaException.getCause() instanceof ProducerFencedException) {
-                    // producer.send() call may throw a KafkaException which wraps a FencedException,
-                    // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                    throw (ProducerFencedException) kafkaException.getCause();
-                } else {
-                    throw new StreamsException(
-                            String.format(
-                                    EXCEPTION_MESSAGE,
-                                    logPrefix,
-                                    "an error caught",
-                                    key,
-                                    value,
-                                    timestamp,
-                                    topic,
-                                    uncaughtException.toString()
-                            ),
-                            uncaughtException);
-                }
+                // producer.send() call may throw a KafkaException which wraps a FencedException,
+                // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
+                throw (ProducerFencedException) kafkaException.getCause();
             } else {
                 throw new StreamsException(
-                        String.format(
-                                EXCEPTION_MESSAGE,
-                                logPrefix,
-                                "an error caught",
-                                key,
-                                value,
-                                timestamp,
-                                topic,
-                                uncaughtException.toString()
-                        ),
-                        uncaughtException);
+                    String.format(
+                        EXCEPTION_MESSAGE,
+                        logPrefix,
+                        "an error caught",
+                        key,
+                        value,
+                        timestamp,
+                        topic,
+                        uncaughtException.toString()
+                    ),
+                    uncaughtException);
             }
         }
     }
