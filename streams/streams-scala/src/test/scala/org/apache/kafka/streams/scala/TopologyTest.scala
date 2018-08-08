@@ -31,6 +31,8 @@ import ImplicitConversions._
 
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
+import org.apache.kafka.streams.processor.ProcessorContext
+
 import collection.JavaConverters._
 
 /**
@@ -189,6 +191,67 @@ class TopologyTest extends JUnitSuite {
         }
 
       builder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala(), getTopologyJava())
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaTransform() = {
+
+    // build the Scala topology
+    def getTopologyScala(): TopologyDescription = {
+
+      import Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines = streamBuilder.stream[String, String](inputTopic)
+
+      val _: KTable[String, Long] =
+        textLines
+          .transform(
+            () =>
+              new Transformer[String, String, KeyValue[String, String]] {
+                override def init(context: ProcessorContext): Unit = Unit
+                override def transform(key: String, value: String): KeyValue[String, String] =
+                  new KeyValue(key, value.toLowerCase)
+                override def close(): Unit = Unit
+            }
+          )
+          .groupBy((k, v) => v)
+          .count()
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava(): TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+
+      val lowered: KStreamJ[String, String] = textLines
+        .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+          override def get(): Transformer[String, String, KeyValue[String, String]] =
+            new Transformer[String, String, KeyValue[String, String]] {
+              override def init(context: ProcessorContext): Unit = Unit
+
+              override def transform(key: String, value: String): KeyValue[String, String] =
+                new KeyValue(key, value.toLowerCase)
+
+              override def close(): Unit = Unit
+            }
+        })
+
+      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy {
+        new KeyValueMapper[String, String, String] {
+          def apply(k: String, v: String): String = v
+        }
+      }
+
+      val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
+
+      streamBuilder.build().describe()
     }
 
     // should match

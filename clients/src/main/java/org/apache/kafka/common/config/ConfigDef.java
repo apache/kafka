@@ -973,6 +973,19 @@ public class ConfigDef {
                 validator.ensureValid(name, value);
             }
         }
+
+        @Override
+        public String toString() {
+            if (validators == null) return "";
+            StringBuilder desc = new StringBuilder();
+            for (Validator v: validators) {
+                if (desc.length() > 0) {
+                    desc.append(',').append(' ');
+                }
+                desc.append(String.valueOf(v));
+            }
+            return desc.toString();
+        }
     }
 
     public static class NonEmptyString implements Validator {
