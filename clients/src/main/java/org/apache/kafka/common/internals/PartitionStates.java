@@ -58,12 +58,12 @@ public class PartitionStates<S> {
     public void updateAndMoveToEnd(TopicPartition topicPartition, S state) {
         map.remove(topicPartition);
         map.put(topicPartition, state);
-        size = map.size();
+        updateSize();
     }
 
     public void remove(TopicPartition topicPartition) {
         map.remove(topicPartition);
-        size = map.size();
+        updateSize();
     }
 
     /**
@@ -75,7 +75,7 @@ public class PartitionStates<S> {
 
     public void clear() {
         map.clear();
-        size = 0;
+        updateSize();
     }
 
     public boolean contains(TopicPartition topicPartition) {
@@ -120,6 +120,10 @@ public class PartitionStates<S> {
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
         update(partitionToState);
+        updateSize();
+    }
+
+    private void updateSize() {
         size = map.size();
     }
 
