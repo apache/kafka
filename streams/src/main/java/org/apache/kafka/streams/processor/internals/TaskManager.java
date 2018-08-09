@@ -336,6 +336,10 @@ public class TaskManager {
         return false;
     }
 
+    boolean hasActiveRunningTasks() {
+        return active.hasRunningTasks();
+    }
+
     boolean hasStandbyRunningTasks() {
         return standby.hasRunningTasks();
     }

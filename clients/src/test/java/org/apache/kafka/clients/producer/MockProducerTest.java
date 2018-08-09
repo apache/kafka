@@ -268,7 +268,9 @@ public class MockProducerTest {
         try {
             producer.send(null);
             fail("Should have thrown as producer is fenced off");
-        } catch (KafkaException e) { }
+        } catch (KafkaException e) {
+            assertTrue("The root cause of the exception should be ProducerFenced", e.getCause() instanceof ProducerFencedException);
+        }
     }
 
     @Test
