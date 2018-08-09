@@ -344,6 +344,11 @@ class RequestChannel(val queueSize: Int,
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
+  @volatile var lastDequeueTimeMs = time.milliseconds
+  // This metric can help user select a suitable threshold for requestMaxLocalTimeMs so that broker can shutdown itself only when it
+  // is stuck or too slow. A suggested value of requestMaxLocalTimeMs could be twice the 999'th percentile of the RequestDequeuePollIntervalMs.
+  private val requestDequeuePollIntervalMs = newHistogram("RequestDequeuePollIntervalMs")
+
   newGauge(requestQueueSizeMetricName, () => requestQueue.size)
 
   newGauge(responseQueueSizeMetricName, () => {
@@ -446,12 +451,20 @@ class RequestChannel(val queueSize: Int,
   }
 
   /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
+  def receiveRequest(timeout: Long): RequestChannel.BaseRequest = {
+    val curTime = time.milliseconds
+    requestDequeuePollIntervalMs.update(curTime - lastDequeueTimeMs)
+    lastDequeueTimeMs = curTime
     requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+  }
 
   /** Get the next request or block until there is one */
-  def receiveRequest(): RequestChannel.BaseRequest =
+  def receiveRequest(): RequestChannel.BaseRequest = {
+    val curTime = time.milliseconds
+    requestDequeuePollIntervalMs.update(curTime - lastDequeueTimeMs)
+    lastDequeueTimeMs = curTime
     requestQueue.take()
+  }
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
     errors.forKeyValue { (error, count) =>
