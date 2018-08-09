@@ -439,7 +439,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     /*
      * Performs a reverse transformation on a set of task configs, by replacing values with variable references.
-     * If the raw task config is not available, it will use the raw connector config to obtain variable references.
      */
     public static List<Map<String, String>> reverseTransform(String connName,
                                                              ClusterConfigState configState,
