@@ -169,8 +169,8 @@ public class StickyTaskAssignorTest {
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task10, task00, task01, task02, task03, task04, task05);
 
-        final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task01, task10, task05));
-        final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(task02, task03, task04));
+        final Set<TaskId> expectedClientITasks = new HashSet<>(Arrays.asList(task00, task01, task10, task04));
+        final Set<TaskId> expectedClientIITasks = new HashSet<>(Arrays.asList(task02, task03, task05));
 
         taskAssignor.assign(0);
 
