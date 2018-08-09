@@ -326,14 +326,15 @@ class Partition(val topic: String,
 
   /**
    *  Make the local replica the follower by setting the new leader and ISR to empty
-   *  If the leader replica id does not change and the new epooch is equal or one
-   *  greater (that is, no updates have been missed), return false to indicate the replica manager
+   *  If the leader replica id does not change and the new epoch is equal or one
+   *  greater (that is, no updates have been missed), return false to indicate to the
+    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(controllerId: Int, partitionStateInfo: LeaderAndIsrRequest.PartitionState, correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val newAssignedReplicas = partitionStateInfo.basePartitionState.replicas.asScala.map(_.toInt)
-      val newLeaderBrokerId: Int = partitionStateInfo.basePartitionState.leader
-      val oldLeaderEpoch: Int = leaderEpoch
+      val newLeaderBrokerId = partitionStateInfo.basePartitionState.leader
+      val oldLeaderEpoch = leaderEpoch
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.basePartitionState.controllerEpoch
@@ -346,7 +347,8 @@ class Partition(val topic: String,
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
 
       // If the leader is unchanged and the epochs are no more than one change apart, indicate that no follower changes are required
-      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId && (leaderEpoch == oldLeaderEpoch || leaderEpoch == oldLeaderEpoch + 1)) {
+      // Otherwise, we missed a leader epoch update, so we may need to truncate the log by
+      if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && (leaderEpoch == oldLeaderEpoch || leaderEpoch == oldLeaderEpoch + 1)) {
         false
       }
       else {
