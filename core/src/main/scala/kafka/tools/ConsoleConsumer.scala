@@ -389,7 +389,7 @@ object ConsoleConsumer extends Logging {
   private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
                                        consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
     consumerInit()
-    var recordIter = consumer.poll(Duration.ZERO).iterator
+    var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
     def consumerInit() {
       (topic, partitionId, offset, whitelist) match {

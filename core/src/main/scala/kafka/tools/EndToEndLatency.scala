@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util
 import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
@@ -71,9 +72,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
-
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-    consumer.subscribe(Collections.singletonList(topic))
 
     val producerProps = loadProps
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -90,9 +89,17 @@ object EndToEndLatency {
       consumer.close()
     }
 
-    //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
-    //a position() request is issued. Hence we need to position after we seek to ensure we see our first write.
-    consumer.seekToEnd(Collections.emptyList())
+    val topics = consumer.listTopics()
+    val tp = topics.get(topic)
+    if (tp == null) {
+      finalise()
+      throw new RuntimeException("The tested topic doesn't exist in the cluster")
+    }
+    val topicPartitions = tp.asScala
+      .map(pi => new TopicPartition(pi.topic(), pi.partition()))
+      .to[List].asJava
+    consumer.assign(topicPartitions)
+    consumer.seekToEnd(topicPartitions)
     consumer.assignment().asScala.foreach(consumer.position)
 
     var totalTime = 0.0
