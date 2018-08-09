@@ -856,22 +856,20 @@ public class StreamThread extends Thread {
                 totalProcessed = processAndMaybeCommit();
                 timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
-                if (timeSinceLastPoll >= maxPollTimeMs / 2) {
-                    break;
-                } else if (maybePunctuate() || maybeCommit()) {
+                if (maybePunctuate() || maybeCommit()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                 } else {
                     numIterations++;
                 }
-            } while (totalProcessed > 0);
-
-            // even if there is not data to process in this iteration, still need to check if commit / punctuate is needed
-            maybePunctuate();
-
-            maybeCommit();
-
-            maybeUpdateStandbyTasks();
+            } while (totalProcessed > 0 && timeSinceLastPoll < (maxPollTimeMs >> 1));
         }
+
+        // even if there is not data to process in this iteration, still need to check if commit / punctuate is needed
+        maybePunctuate();
+
+        maybeCommit();
+
+        maybeUpdateStandbyTasks();
     }
 
     /**
