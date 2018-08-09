@@ -62,7 +62,7 @@ public class AbstractProcessorContextTest {
         try {
             context.register(stateStore, null);
             fail("should throw illegal state exception when context already initialized");
-        } catch (IllegalStateException e) {
+        } catch (final IllegalStateException e) {
             // pass
         }
     }
@@ -198,7 +198,7 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
             return null;
         }
 

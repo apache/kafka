@@ -27,8 +27,8 @@ import org.apache.kafka.common.serialization.Serde;
  */
 public class Serialized<K, V> {
 
-    protected Serde<K> keySerde;
-    protected Serde<V> valueSerde;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
 
     private Serialized(final Serde<K> keySerde,
                        final Serde<V> valueSerde) {

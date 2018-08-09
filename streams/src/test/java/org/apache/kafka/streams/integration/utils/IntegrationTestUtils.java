@@ -50,7 +50,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -192,7 +194,7 @@ public class IntegrationTestUtils {
                                                                          final Long timestamp,
                                                                          final boolean enabledTransactions)
         throws ExecutionException, InterruptedException {
-        try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             if (enabledTransactions) {
                 producer.initTransactions();
                 producer.beginTransaction();
@@ -310,16 +312,80 @@ public class IntegrationTestUtils {
                                                                                   final long waitTime) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            final TestCondition valuesRead = () -> {
+                final List<KeyValue<K, V>> readData =
+                    readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
+            };
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
+            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+        }
+        return accumData;
+    }
+
+    /**
+     * Wait until enough data (key-value records) has been consumed.
+     *
+     * @param consumerConfig     Kafka Consumer configuration
+     * @param topic              Topic to consume from
+     * @param expectedNumRecords Minimum number of expected records
+     * @param waitTime           Upper bound in waiting time in milliseconds
+     * @return All the records consumed, or null if no records are consumed
+     * @throws AssertionError       if the given wait time elapses
+     */
+    public static <K, V> List<KeyValue<K, KeyValue<V, Long>>> waitUntilMinKeyValueWithTimestampRecordsReceived(final Properties consumerConfig,
+                                                                                                               final String topic,
+                                                                                                               final int expectedNumRecords,
+                                                                                                               final long waitTime) throws InterruptedException {
+        final List<KeyValue<K, KeyValue<V, Long>>> accumData = new ArrayList<>();
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            final TestCondition valuesRead = () -> {
+                final List<KeyValue<K, KeyValue<V, Long>>> readData =
+                    readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
+            };
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
+            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+        }
+        return accumData;
+    }
+
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                    final String topic,
+                                                                                    final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT);
+    }
+
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                    final String topic,
+                                                                                    final List<KeyValue<K, V>> expectedRecords,
+                                                                                    final long waitTime) throws InterruptedException {
+        final List<KeyValue<K, V>> accumData = new ArrayList<>();
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
             final TestCondition valuesRead = new TestCondition() {
                 @Override
                 public boolean conditionMet() {
                     final List<KeyValue<K, V>> readData =
-                        readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                            readKeyValues(topic, consumer, waitTime, expectedRecords.size());
                     accumData.addAll(readData);
-                    return accumData.size() >= expectedNumRecords;
+
+                    final Map<K, V> finalData = new HashMap<>();
+
+                    for (final KeyValue<K, V> keyValue : accumData) {
+                        finalData.put(keyValue.key, keyValue.value);
+                    }
+
+                    for (final KeyValue<K, V> keyValue : expectedRecords) {
+                        if (!keyValue.value.equals(finalData.get(keyValue.key)))
+                            return false;
+                    }
+
+                    return true;
                 }
             };
-            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
+            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -331,14 +397,11 @@ public class IntegrationTestUtils {
                                                                                 final long waitTime) throws InterruptedException {
         final List<ConsumerRecord<K, V>> accumData = new ArrayList<>();
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    final List<ConsumerRecord<K, V>> readData =
-                        readRecords(topic, consumer, waitTime, expectedNumRecords);
-                    accumData.addAll(readData);
-                    return accumData.size() >= expectedNumRecords;
-                }
+            final TestCondition valuesRead = () -> {
+                final List<ConsumerRecord<K, V>> readData =
+                    readRecords(topic, consumer, waitTime, expectedNumRecords);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
             };
             final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
@@ -369,14 +432,11 @@ public class IntegrationTestUtils {
                                                                 final long waitTime) throws InterruptedException {
         final List<V> accumData = new ArrayList<>();
         try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    final List<V> readData =
-                        readValues(topic, consumer, waitTime, expectedNumRecords);
-                    accumData.addAll(readData);
-                    return accumData.size() >= expectedNumRecords;
-                }
+            final TestCondition valuesRead = () -> {
+                final List<V> readData =
+                    readValues(topic, consumer, waitTime, expectedNumRecords);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
             };
             final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
@@ -401,23 +461,20 @@ public class IntegrationTestUtils {
                                                      final String topic,
                                                      final int partition,
                                                      final long timeout) throws InterruptedException {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                for (final KafkaServer server : servers) {
-                    final MetadataCache metadataCache = server.apis().metadataCache();
-                    final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
-                            metadataCache.getPartitionInfo(topic, partition);
-                    if (partitionInfo.isEmpty()) {
-                        return false;
-                    }
-                    final UpdateMetadataRequest.PartitionState metadataPartitionState = partitionInfo.get();
-                    if (!Request.isValidBrokerId(metadataPartitionState.basePartitionState.leader)) {
-                        return false;
-                    }
+        TestUtils.waitForCondition(() -> {
+            for (final KafkaServer server : servers) {
+                final MetadataCache metadataCache = server.apis().metadataCache();
+                final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
+                        metadataCache.getPartitionInfo(topic, partition);
+                if (partitionInfo.isEmpty()) {
+                    return false;
                 }
-                return true;
+                final UpdateMetadataRequest.PartitionState metadataPartitionState = partitionInfo.get();
+                if (!Request.isValidBrokerId(metadataPartitionState.basePartitionState.leader)) {
+                    return false;
+                }
             }
+            return true;
         }, timeout, "metadata for topic=" + topic + " partition=" + partition + " not propagated to all brokers");
 
     }
@@ -498,6 +555,28 @@ public class IntegrationTestUtils {
         final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
         for (final ConsumerRecord<K, V> record : records) {
             consumedValues.add(new KeyValue<>(record.key(), record.value()));
+        }
+        return consumedValues;
+    }
+
+    /**
+     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
+     * are already configured in the consumer).
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumer       Kafka consumer
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer
+     * @return The KeyValue elements retrieved via the consumer
+     */
+    private static <K, V> List<KeyValue<K, KeyValue<V, Long>>> readKeyValuesWithTimestamp(final String topic,
+                                                                                          final Consumer<K, V> consumer,
+                                                                                          final long waitTime,
+                                                                                          final int maxMessages) {
+        final List<KeyValue<K, KeyValue<V, Long>>> consumedValues = new ArrayList<>();
+        final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
+        for (final ConsumerRecord<K, V> record : records) {
+            consumedValues.add(new KeyValue<>(record.key(), KeyValue.pair(record.value(), record.timestamp())));
         }
         return consumedValues;
     }

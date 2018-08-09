@@ -145,7 +145,7 @@ public class StreamsMetadataStateTest {
         final StreamsMetadata three = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
                 Collections.singleton(topic3P0));
 
-        Collection<StreamsMetadata> actual = discovery.getAllMetadata();
+        final Collection<StreamsMetadata> actual = discovery.getAllMetadata();
         assertEquals(3, actual.size());
         assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
         assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
@@ -223,7 +223,7 @@ public class StreamsMetadataStateTest {
         final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-three", "merged-table"),
                 Utils.mkSet(topic2P0, tp4));
 
-        StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key", partitioner);
+        final StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key", partitioner);
         assertEquals(expected, actual);
     }
 
@@ -287,7 +287,7 @@ public class StreamsMetadataStateTest {
     public void shouldHaveGlobalStoreInAllMetadata() {
         final Collection<StreamsMetadata> metadata = discovery.getAllMetadataForStore(globalTable);
         assertEquals(3, metadata.size());
-        for (StreamsMetadata streamsMetadata : metadata) {
+        for (final StreamsMetadata streamsMetadata : metadata) {
             assertTrue(streamsMetadata.stateStoreNames().contains(globalTable));
         }
     }

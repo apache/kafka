@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
-public class ScramExtensions {
-    private final Map<String, String> extensionMap;
+public class ScramExtensions extends SaslExtensions {
 
     public ScramExtensions() {
         this(Collections.<String, String>emptyMap());
@@ -35,23 +34,10 @@ public class ScramExtensions {
     }
 
     public ScramExtensions(Map<String, String> extensionMap) {
-        this.extensionMap = extensionMap;
-    }
-
-    public String extensionValue(String name) {
-        return extensionMap.get(name);
-    }
-
-    public Set<String> extensionNames() {
-        return extensionMap.keySet();
+        super(extensionMap);
     }
 
     public boolean tokenAuthenticated() {
-        return Boolean.parseBoolean(extensionMap.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
-    }
-
-    @Override
-    public String toString() {
-        return Utils.mkString(extensionMap, "", "", "=", ",");
+        return Boolean.parseBoolean(map().get(ScramLoginModule.TOKEN_AUTH_CONFIG));
     }
 }

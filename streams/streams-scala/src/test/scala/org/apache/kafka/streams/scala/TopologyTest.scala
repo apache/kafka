@@ -21,17 +21,16 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, _}
+import org.apache.kafka.streams.processor.ProcessorContext
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.junit.Assert._
 import org.junit._
+import org.scalatest.junit.JUnitSuite
 
-import org.apache.kafka.streams.scala.kstream._
-
-import ImplicitConversions._
-
-import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
-import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
-import collection.JavaConverters._
+import _root_.scala.collection.JavaConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
@@ -189,6 +188,70 @@ class TopologyTest extends JUnitSuite {
         }
 
       builder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala(), getTopologyJava())
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaTransform() = {
+
+    // build the Scala topology
+    def getTopologyScala(): TopologyDescription = {
+
+      import Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines = streamBuilder.stream[String, String](inputTopic)
+
+      //noinspection ConvertExpressionToSAM due to 2.11 build
+      val _: KTable[String, Long] =
+        textLines
+          .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+            override def get(): Transformer[String, String, KeyValue[String, String]] =
+              new Transformer[String, String, KeyValue[String, String]] {
+                override def init(context: ProcessorContext): Unit = Unit
+
+                override def transform(key: String, value: String): KeyValue[String, String] =
+                  new KeyValue(key, value.toLowerCase)
+
+                override def close(): Unit = Unit
+              }
+          })
+          .groupBy((k, v) => v)
+          .count()
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava(): TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+
+      val lowered: KStreamJ[String, String] = textLines
+        .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+          override def get(): Transformer[String, String, KeyValue[String, String]] =
+            new Transformer[String, String, KeyValue[String, String]] {
+              override def init(context: ProcessorContext): Unit = Unit
+
+              override def transform(key: String, value: String): KeyValue[String, String] =
+                new KeyValue(key, value.toLowerCase)
+
+              override def close(): Unit = Unit
+            }
+        })
+
+      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy {
+        new KeyValueMapper[String, String, String] {
+          def apply(k: String, v: String): String = v
+        }
+      }
+
+      val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
+
+      streamBuilder.build().describe()
     }
 
     // should match

@@ -59,6 +59,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
+    private static final int WAIT_ON_PARTIAL_INPUT = 5;
+
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo;
     private final PunctuationQueue streamTimePunctuationQueue;
@@ -72,12 +74,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
     private boolean transactionInFlight = false;
+    private int waits = WAIT_ON_PARTIAL_INPUT;
     private final Time time;
     private final TaskMetrics taskMetrics;
+    private Sensor closeSensor;
 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
+        final Sensor taskEnforcedProcessSensor;
         private final String taskName;
 
 
@@ -108,7 +113,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             // add the operation metrics with additional tags
             final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor("commit", taskName, Sensor.RecordingLevel.DEBUG, parent);
+            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
             taskCommitTimeSensor.add(
                 new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
                 new Avg()
@@ -125,6 +130,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
                 new Count()
             );
+
+            // add the metrics for enforced processing
+            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-process", Sensor.RecordingLevel.DEBUG, parent);
+            taskEnforcedProcessSensor.add(
+                    new MetricName("enforced-process-rate", group, "The average number of occurrence of enforced-process per second.", tagMap),
+                    new Rate(TimeUnit.SECONDS, new Count())
+            );
+            taskEnforcedProcessSensor.add(
+                    new MetricName("enforced-process-total", group, "The total number of occurrence of enforced-process operations.", tagMap),
+                    new Count()
+            );
+
         }
 
         void removeAllSensors() {
@@ -142,8 +159,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final Producer<byte[], byte[]> producer) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null);
+                      final Producer<byte[], byte[]> producer,
+                      final Sensor closeSensor) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null, closeSensor);
     }
 
     public StreamTask(final TaskId id,
@@ -157,11 +175,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final Producer<byte[], byte[]> producer,
-                      final RecordCollector recordCollector) {
+                      final RecordCollector recordCollector,
+                      final Sensor closeSensor) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
         this.producer = producer;
+        this.closeSensor = closeSensor;
         this.taskMetrics = new TaskMetrics(id, metrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
@@ -261,6 +281,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void resume() {
         // nothing to do; new transaction will be started only after topology is initialized
         log.debug("Resuming");
+    }
+
+    /**
+     * An active task is processable if its buffer contains data for all of its input source topic partitions
+     */
+    public boolean isProcessable() {
+        if (partitionGroup.allPartitionsBuffered()) {
+            return true;
+        } else if (partitionGroup.numBuffered() > 0 && --waits < 0) {
+            taskMetrics.taskEnforcedProcessSensor.record();
+            waits = WAIT_ON_PARTIAL_INPUT;
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -585,6 +620,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 }
             }
         }
+
+        closeSensor.record();
 
         if (firstException != null) {
             throw firstException;

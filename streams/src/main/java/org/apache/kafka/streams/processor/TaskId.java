@@ -36,8 +36,7 @@ public class TaskId implements Comparable<TaskId> {
     private int numberOfStateStores;
     /** The number of Partitions in the task.*/
     private int numberOfInputPartitions;
-    
-    public TaskId(int topicGroupId, int partition) {
+
         this.topicGroupId = topicGroupId;
         this.partition = partition;
         this.numberOfStateStores = 0;
@@ -49,19 +48,19 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     /**
-     * @throws TaskIdFormatException if the string is not a valid {@link TaskId}
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
-    public static TaskId parse(String string) {
-        int index = string.indexOf('_');
-        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
+    public static TaskId parse(final String taskIdStr) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) throw new TaskIdFormatException(taskIdStr);
 
         try {
-            int topicGroupId = Integer.parseInt(string.substring(0, index));
-            int partition = Integer.parseInt(string.substring(index + 1));
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
 
             return new TaskId(topicGroupId, partition);
-        } catch (Exception e) {
-            throw new TaskIdFormatException(string);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
         }
     }
 
@@ -89,7 +88,7 @@ public class TaskId implements Comparable<TaskId> {
         return taskId;
     }
 
-    public void writeTo(ByteBuffer buf, final int version) {
+    public void writeTo(final ByteBuffer buf, final int version) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
         if (version == 4) {
@@ -108,7 +107,7 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (this == o)
             return true;
 
@@ -124,18 +123,14 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int hashCode() {
-        long n = ((long) topicGroupId << 32) | (long) partition;
+        final long n = ((long) topicGroupId << 32) | (long) partition;
         return (int) (n % 0xFFFFFFFFL);
     }
 
     @Override
-    public int compareTo(TaskId other) {
-        return
-            this.topicGroupId < other.topicGroupId ? -1 :
-                (this.topicGroupId > other.topicGroupId ? 1 :
-                    (this.partition < other.partition ? -1 :
-                        (this.partition > other.partition ? 1 :
-                            0)));
+    public int compareTo(final TaskId other) {
+        final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
+        return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
     }
 
     public int numberOfStateStores() {

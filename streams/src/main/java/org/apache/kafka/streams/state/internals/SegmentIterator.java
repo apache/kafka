@@ -76,7 +76,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
                 } else {
                     currentIterator = currentSegment.range(from, to);
                 }
-            } catch (InvalidStateStoreException e) {
+            } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
             }
         }
@@ -87,7 +87,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         boolean hasNext = false;
         try {
             hasNext = hasNextCondition.hasNext(currentIterator);
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             //already closed so ignore
         }
         return hasNext;

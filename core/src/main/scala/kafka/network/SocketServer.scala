@@ -57,9 +57,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
-  private val maxConnectionsPerIp = config.maxConnectionsPerIp
-  private val maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides
-
   private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
   this.logIdent = logContext.logPrefix
 
@@ -90,7 +87,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
    */
   def startup(startupProcessors: Boolean = true) {
     this.synchronized {
-      connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
+      connectionQuotas = new ConnectionQuotas(config.maxConnectionsPerIp, config.maxConnectionsPerIpOverrides)
       createAcceptorAndProcessors(config.numNetworkThreads, config.listeners)
       if (startupProcessors) {
         startProcessors()
@@ -227,6 +224,16 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     listenersRemoved.foreach { endpoint =>
       acceptors.asScala.remove(endpoint).foreach(_.shutdown())
     }
+  }
+
+  def updateMaxConnectionsPerIp(maxConnectionsPerIp: Int): Unit = {
+    info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
+    connectionQuotas.updateMaxConnectionsPerIp(maxConnectionsPerIp)
+  }
+
+  def updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides: Map[String, Int]): Unit = {
+    info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
+    connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
   }
 
   /* `protected` for test usage */
@@ -878,17 +885,26 @@ private[kafka] class Processor(val id: Int,
 
 class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
 
-  private val overrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var defaultMaxConnectionsPerIp = defaultMax
+  @volatile private var maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   private val counts = mutable.Map[InetAddress, Int]()
 
   def inc(address: InetAddress) {
     counts.synchronized {
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
-      val max = overrides.getOrElse(address, defaultMax)
+      val max = maxConnectionsPerIpOverrides.getOrElse(address, defaultMaxConnectionsPerIp)
       if (count >= max)
         throw new TooManyConnectionsException(address, max)
     }
+  }
+
+  def updateMaxConnectionsPerIp(maxConnectionsPerIp: Int): Unit = {
+    defaultMaxConnectionsPerIp = maxConnectionsPerIp
+  }
+
+  def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
+    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   }
 
   def dec(address: InetAddress) {

@@ -50,13 +50,13 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     public V get(final K key) {
         Objects.requireNonNull(key);
         final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
-        for (ReadOnlyKeyValueStore<K, V> store : stores) {
+        for (final ReadOnlyKeyValueStore<K, V> store : stores) {
             try {
                 final V result = store.get(key);
                 if (result != null) {
                     return result;
                 }
-            } catch (InvalidStateStoreException e) {
+            } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
             }
 
@@ -73,7 +73,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
                 try {
                     return store.range(from, to);
-                } catch (InvalidStateStoreException e) {
+                } catch (final InvalidStateStoreException e) {
                     throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
                 }
             }
@@ -89,7 +89,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
                 try {
                     return store.all();
-                } catch (InvalidStateStoreException e) {
+                } catch (final InvalidStateStoreException e) {
                     throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
                 }
             }
@@ -102,7 +102,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     public long approximateNumEntries() {
         final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         long total = 0;
-        for (ReadOnlyKeyValueStore<K, V> store : stores) {
+        for (final ReadOnlyKeyValueStore<K, V> store : stores) {
             total += store.approximateNumEntries();
             if (total < 0) {
                 return Long.MAX_VALUE;

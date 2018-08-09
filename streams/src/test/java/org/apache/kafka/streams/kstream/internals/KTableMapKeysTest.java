@@ -46,29 +46,29 @@ public class KTableMapKeysTest {
     public void testMapKeysConvertingToStream() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic_map_keys";
+        final String topic1 = "topic_map_keys";
 
-        KTable<Integer, String> table1 = builder.table(topic1, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KTable<Integer, String> table1 = builder.table(topic1, Consumed.with(Serdes.Integer(), Serdes.String()));
 
         final Map<Integer, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        KeyValueMapper<Integer, String, String> keyMapper = new KeyValueMapper<Integer, String, String>() {
+        final KeyValueMapper<Integer, String, String> keyMapper = new KeyValueMapper<Integer, String, String>() {
             @Override
-            public  String apply(Integer key, String value) {
+            public  String apply(final Integer key, final String value) {
                 return keyMap.get(key);
             }
         };
 
-        KStream<String, String> convertedStream = table1.toStream(keyMapper);
+        final KStream<String, String> convertedStream = table1.toStream(keyMapper);
 
         final String[] expected = new String[]{"ONE:V_ONE", "TWO:V_TWO", "THREE:V_THREE"};
         final int[] originalKeys = new int[]{1, 2, 3};
         final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
 
-        MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
 
         convertedStream.process(supplier);
 

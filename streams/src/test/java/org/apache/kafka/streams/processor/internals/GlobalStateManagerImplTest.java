@@ -349,7 +349,7 @@ public class GlobalStateManagerImplTest {
         try {
             stateManager.register(store1, null);
             fail("should have thrown due to null callback");
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             //pass
         }
     }
@@ -404,7 +404,7 @@ public class GlobalStateManagerImplTest {
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // expected
         }
         assertFalse(store.isOpen());
@@ -416,7 +416,7 @@ public class GlobalStateManagerImplTest {
         writeCorruptCheckpoint();
         try {
             stateManager.initialize();
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // expected
         }
         final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime());
@@ -535,7 +535,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized Map<TopicPartition, Long> endOffsets(Collection<org.apache.kafka.common.TopicPartition> partitions) {
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<org.apache.kafka.common.TopicPartition> partitions) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }
@@ -568,7 +568,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized List<PartitionInfo> partitionsFor(String topic) {
+            public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }

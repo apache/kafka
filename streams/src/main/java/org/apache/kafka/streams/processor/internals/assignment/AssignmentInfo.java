@@ -236,7 +236,7 @@ public class AssignmentInfo {
             final int usedVersion = in.readInt();
 
             final int latestSupportedVersion;
-
+          
             switch (usedVersion) {
                 case 1:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);

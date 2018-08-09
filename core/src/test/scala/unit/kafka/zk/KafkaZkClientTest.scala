@@ -176,7 +176,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // test with non-existing path
     val (data0, version0) = zkClient.getDataAndVersion(path)
     assertTrue(data0.isEmpty)
-    assertEquals(-1, version0)
+    assertEquals(ZkVersion.UnknownVersion, version0)
 
     // create a test path
     zkClient.createRecursive(path)
@@ -200,7 +200,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // test with non-existing path
     var statusAndVersion = zkClient.conditionalUpdatePath(path, "version0".getBytes(UTF_8), 0)
     assertFalse(statusAndVersion._1)
-    assertEquals(-1, statusAndVersion._2)
+    assertEquals(ZkVersion.UnknownVersion, statusAndVersion._2)
 
     // create path
     zkClient.createRecursive(path)
@@ -213,7 +213,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // test with invalid expected version
     statusAndVersion = zkClient.conditionalUpdatePath(path, "version2".getBytes(UTF_8), 2)
     assertFalse(statusAndVersion._1)
-    assertEquals(-1, statusAndVersion._2)
+    assertEquals(ZkVersion.UnknownVersion, statusAndVersion._2)
   }
 
   @Test
@@ -446,7 +446,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       // try getting acls for non-existing resource
       var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
       assertTrue(versionedAcls.acls.isEmpty)
-      assertEquals(-1, versionedAcls.zkVersion)
+      assertEquals(ZkVersion.UnknownVersion, versionedAcls.zkVersion)
       assertFalse(zkClient.resourceExists(resource1))
 
 
@@ -454,9 +454,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
       val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
 
+      // Conditional set should fail if path not created
+      assertFalse(zkClient.conditionalSetAclsForResource(resource1, Set(acl1, acl3), 0)._1)
+
       //create acls for resources
-      zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
-      zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
+      assertTrue(zkClient.createAclsForResourceIfNotExists(resource1, Set(acl1, acl2))._1)
+      assertTrue(zkClient.createAclsForResourceIfNotExists(resource2, Set(acl1, acl3))._1)
+
+      // Create should fail if path already exists
+      assertFalse(zkClient.createAclsForResourceIfNotExists(resource2, Set(acl1, acl3))._1)
 
       versionedAcls = zkClient.getVersionedAclsForResource(resource1)
       assertEquals(Set(acl1, acl2), versionedAcls.acls)
@@ -464,7 +470,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertTrue(zkClient.resourceExists(resource1))
 
       //update acls for resource
-      zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
+      assertTrue(zkClient.conditionalSetAclsForResource(resource1, Set(acl1, acl3), 0)._1)
 
       versionedAcls = zkClient.getVersionedAclsForResource(resource1)
       assertEquals(Set(acl1, acl3), versionedAcls.acls)
@@ -630,17 +636,17 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val brokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
     val differentBrokerInfoWithSameId = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
 
-    zkClient.registerBrokerInZk(brokerInfo)
+    zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
     assertEquals("Other ZK clients can read broker info", Some(brokerInfo.broker), otherZkClient.getBroker(1))
 
     // Node exists, owned by current session - no error, no update
-    zkClient.registerBrokerInZk(differentBrokerInfoWithSameId)
+    zkClient.registerBroker(differentBrokerInfoWithSameId)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
 
     // Other client tries to register broker with same id causes failure, info is not changed in ZK
     intercept[NodeExistsException] {
-      otherZkClient.registerBrokerInZk(differentBrokerInfoWithSameId)
+      otherZkClient.registerBroker(differentBrokerInfoWithSameId)
     }
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
   }
@@ -656,8 +662,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
     val brokerInfo1 = createBrokerInfo(1, "test.host1", 9999, SecurityProtocol.SSL)
 
-    zkClient.registerBrokerInZk(brokerInfo1)
-    otherZkClient.registerBrokerInZk(brokerInfo0)
+    zkClient.registerBroker(brokerInfo1)
+    otherZkClient.registerBroker(brokerInfo0)
 
     assertEquals(Seq(0, 1), zkClient.getSortedBrokerList())
     assertEquals(
@@ -674,17 +680,17 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // Updating info of a broker not existing in ZK fails
     val originalBrokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
     intercept[NoNodeException]{
-      zkClient.updateBrokerInfoInZk(originalBrokerInfo)
+      zkClient.updateBrokerInfo(originalBrokerInfo)
     }
 
-    zkClient.registerBrokerInZk(originalBrokerInfo)
+    zkClient.registerBroker(originalBrokerInfo)
 
     val updatedBrokerInfo = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
-    zkClient.updateBrokerInfoInZk(updatedBrokerInfo)
+    zkClient.updateBrokerInfo(updatedBrokerInfo)
     assertEquals(Some(updatedBrokerInfo.broker), zkClient.getBroker(1))
 
     // Other ZK clients can update info
-    otherZkClient.updateBrokerInfoInZk(originalBrokerInfo)
+    otherZkClient.updateBrokerInfo(originalBrokerInfo)
     assertEquals(Some(originalBrokerInfo.broker), otherZkClient.getBroker(1))
   }
 
@@ -937,7 +943,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // No controller
     assertEquals(None, zkClient.getControllerId)
     // Create controller
-    zkClient.checkedEphemeralCreate(ControllerZNode.path, ControllerZNode.encode(brokerId = 1, timestamp = 123456))
+    zkClient.registerController(controllerId = 1, timestamp = 123456)
     assertEquals(Some(1), zkClient.getControllerId)
     zkClient.deleteController()
     assertEquals(None, zkClient.getControllerId)

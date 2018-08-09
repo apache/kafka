@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -46,7 +47,7 @@ public class MetadataTest {
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true);
-    private AtomicReference<String> backgroundError = new AtomicReference<>();
+    private AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @After
     public void tearDown() {
@@ -81,6 +82,30 @@ public class MetadataTest {
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         time += metadataExpireMs;
         assertTrue("Update needed due to stale metadata.", metadata.timeToNextUpdate(time) == 0);
+    }
+
+    @Test
+    public void testMetadataAwaitAfterClose() throws InterruptedException {
+        long time = 0;
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
+        assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
+        metadata.requestUpdate();
+        assertFalse("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) == 0);
+        time += refreshBackoffMs;
+        assertTrue("Update needed now that backoff time expired", metadata.timeToNextUpdate(time) == 0);
+        String topic = "my-topic";
+        metadata.close();
+        Thread t1 = asyncFetch(topic, 500);
+        t1.join();
+        assertTrue(backgroundError.get().getClass() == KafkaException.class);
+        assertTrue(backgroundError.get().toString().contains("Requested metadata update after close"));
+        clearBackgroundError();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testMetadataUpdateAfterClose() {
+        metadata.close();
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), 1000);
     }
 
     private static void checkTimeToNextUpdate(long refreshBackoffMs, long metadataExpireMs) {
@@ -409,15 +434,18 @@ public class MetadataTest {
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
     }
 
+    private void clearBackgroundError() {
+        backgroundError.set(null);
+    }
+
     private Thread asyncFetch(final String topic, final long maxWaitMs) {
         Thread thread = new Thread() {
             public void run() {
-                while (metadata.fetch().partitionsForTopic(topic).isEmpty()) {
-                    try {
+                try {
+                    while (metadata.fetch().partitionsForTopic(topic).isEmpty())
                         metadata.awaitUpdate(metadata.requestUpdate(), maxWaitMs);
-                    } catch (Exception e) {
-                        backgroundError.set(e.toString());
-                    }
+                } catch (Exception e) {
+                    backgroundError.set(e);
                 }
             }
         };

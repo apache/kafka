@@ -24,11 +24,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
-import org.apache.kafka.streams.processor.internals.StreamThread
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.test.TestUtils
-import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
 import org.scalatest.junit.JUnitSuite
@@ -129,9 +125,9 @@ class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamTo
       // consume and verify result
       val consumerConfig = getConsumerConfig()
 
-      IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
-                                                               outputTopic,
-                                                               expectedClicksPerRegion.size)
+      IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig,
+                                                                 outputTopic,
+                                                                 expectedClicksPerRegion.asJava)
     } else {
       java.util.Collections.emptyList()
     }
