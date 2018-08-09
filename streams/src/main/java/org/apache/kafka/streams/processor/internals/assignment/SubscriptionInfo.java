@@ -246,18 +246,12 @@ public class SubscriptionInfo {
     }
 
     protected int getVersionFourByteLength(final byte[] endPointBytes) {
-        int initialBase = 4 + // used version
-                          4 + // latest supported version
-                          16 + // client ID
-                          4 + endPointBytes.length; // length + userEndPoint
-        initialBase += 8; // number of prevTasks and currTasks
-        for (final TaskId taskId : prevTasks) {
-            initialBase += taskId.getByteBufferLength();
-        }
-        for (final TaskId taskId : standbyTasks) {
-            initialBase += taskId.getByteBufferLength();
-        }
-        return initialBase;
+        return 4 + // used version
+               4 + // latest supported version version
+               16 + // client ID
+               4 + prevTasks.size() * 16 + // length + prev tasks
+               4 + standbyTasks.size() * 16 + // length + standby tasks
+               4 + endPointBytes.length; // length + userEndPoint
     }
 
     /**
@@ -315,16 +309,14 @@ public class SubscriptionInfo {
                                     final int usedVersion) {
         subscriptionInfo.prevTasks = new HashSet<>();
         final int numPrevTasks = data.getInt();
-        boolean positionReset = false;
         for (int i = 0; i < numPrevTasks; i++) {
-            subscriptionInfo.prevTasks.add(TaskId.readFrom(data, usedVersion, !positionReset));
-            positionReset = true;
+            subscriptionInfo.prevTasks.add(TaskId.readFrom(data, usedVersion));
         }
 
         subscriptionInfo.standbyTasks = new HashSet<>();
         final int numStandbyTasks = data.getInt();
         for (int i = 0; i < numStandbyTasks; i++) {
-            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data, usedVersion, false));
+            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data, usedVersion));
         }
     }
 
