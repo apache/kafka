@@ -74,8 +74,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   def doSetup(createOffsetsTopic: Boolean): Unit = {
     // Generate client security properties before starting the brokers in case certs are needed
-    producerConfig.putAll(clientSecurityProps("producer"))
-    consumerConfig.putAll(clientSecurityProps("consumer"))
+    producerConfig ++= clientSecurityProps("producer")
+    consumerConfig ++= clientSecurityProps("consumer")
 
     super.setUp()
 
@@ -103,8 +103,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                            valueSerializer: Serializer[V] = new ByteArraySerializer,
                            configOverrides: Properties = new Properties): KafkaProducer[K, V] = {
     val props = new Properties
-    props.putAll(producerConfig)
-    props.putAll(configOverrides)
+    props ++= producerConfig
+    props ++= configOverrides
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
@@ -114,8 +114,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
                            configOverrides: Properties = new Properties): KafkaConsumer[K, V] = {
     val props = new Properties
-    props.putAll(consumerConfig)
-    props.putAll(configOverrides)
+    props ++= consumerConfig
+    props ++= configOverrides
     val consumer = new KafkaConsumer[K, V](props, keyDeserializer, valueDeserializer)
     consumers += consumer
     consumer
