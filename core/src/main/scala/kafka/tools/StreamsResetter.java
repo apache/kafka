@@ -316,10 +316,8 @@ public class StreamsResetter {
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            Map<String, List<PartitionInfo>> pi = client.listTopics();
-            Collection<TopicPartition> partitions = pi.entrySet().stream()
-                    .filter(entry -> topicsToSubscribe.contains(entry.getKey()))
-                    .flatMap(entry -> entry.getValue().stream())
+            Collection<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
+                    .flatMap(Collection::stream)
                     .map(info -> new TopicPartition(info.topic(), info.partition()))
                     .collect(Collectors.toList());
             client.assign(partitions);
