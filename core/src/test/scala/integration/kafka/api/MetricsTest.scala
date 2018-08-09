@@ -44,7 +44,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableDoc, "false")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
-  this.producerConfig.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "1000000")
+  this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected val serverSaslProperties =
     Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
@@ -78,7 +78,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     // Produce and consume some records
     val numRecords = 10
-    val recordSize = 1000
+    val recordSize = 100000
     val producer = producers.head
     sendRecords(producer, numRecords, recordSize, tp)
 
@@ -198,17 +198,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     verifyYammerMetricRecorded(s"kafka.server:type=BrokerTopicMetrics,name=ProduceMessageConversionsPerSec")
 
-    // Conversion time less than 1 millisecond is reported as zero, so retry with larger batches until time > 0
-    var iteration = 0
-    TestUtils.retry(5000) {
-      val conversionTimeMs = yammerMetricValue(s"$requestMetricsPrefix,name=MessageConversionsTimeMs,request=Produce").asInstanceOf[Double]
-      if (conversionTimeMs <= 0.0) {
-        iteration += 1
-        sendRecords(producers.head, 1000 * iteration, 100, tp)
-      }
-      assertTrue(s"Message conversion time not recorded $conversionTimeMs", conversionTimeMs > 0.0)
-    }
-
+    verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=MessageConversionsTimeMs,request=Produce", value => value > 0.0)
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Fetch")
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Fetch", value => value == 0.0)
 
