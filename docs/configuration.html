@@ -203,6 +203,14 @@
     <li><code>background.threads</code></li>
   </ul>
 
+  <h5>Updating ConnectionQuota Configs</h5>
+  The maximum number of connections allowed for a given IP/host by the broker may be updated dynamically at cluster-default level used by all brokers.
+  The changes will apply for new connection creations and the existing connections count will be taken into account by the new limits.
+  <ul>
+    <li><code>max.connections.per.ip</code></li>
+    <li><code>max.connections.per.ip.overrides</code></li>
+  </ul>
+
   <h5>Adding and Removing Listeners</h5>
   <p>Listeners may be added or removed dynamically. When a new listener is added, security configs of the listener must be provided
   as listener configs with the listener prefix <code>listener.name.{listenerName}.</code>. If the new listener uses SASL,
