@@ -77,6 +77,8 @@ public class Meter implements CompoundStat {
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
         rate.record(config, value, timeMs);
-        total.record(config, value, timeMs);
+        // Total metrics with Count stat should record 1.0 (as recorded in the count)
+        double totalValue = (rate.stat instanceof Count) ? 1.0 : value;
+        total.record(config, totalValue, timeMs);
     }
 }
