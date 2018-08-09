@@ -164,7 +164,7 @@ public class AssignmentInfo {
         encodeActiveAndStandbyTaskAssignment(out, 1);
     }
 
-    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, int usedVersion) throws IOException {
+    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, final int usedVersion) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
@@ -278,7 +278,7 @@ public class AssignmentInfo {
 
     private static void decodeActiveTasks(final AssignmentInfo assignmentInfo,
                                           final DataInputStream in,
-                                          int usedVersion) throws IOException {
+                                          final int usedVersion) throws IOException {
         final int count = in.readInt();
         assignmentInfo.activeTasks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -288,7 +288,7 @@ public class AssignmentInfo {
 
     private static void decodeStandbyTasks(final AssignmentInfo assignmentInfo,
                                            final DataInputStream in,
-                                           int usedVersion) throws IOException {
+                                           final int usedVersion) throws IOException {
         final int count = in.readInt();
         assignmentInfo.standbyTasks = new HashMap<>(count);
         for (int i = 0; i < count; i++) {

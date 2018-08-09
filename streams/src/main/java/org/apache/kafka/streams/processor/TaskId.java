@@ -37,6 +37,7 @@ public class TaskId implements Comparable<TaskId> {
     /** The number of Partitions in the task.*/
     private int numberOfInputPartitions;
 
+    public TaskId(final int topicGroupId, final int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
         this.numberOfStateStores = 0;
@@ -67,7 +68,7 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot write to output stream
      */
-    public void writeTo(DataOutputStream out, int usedVersion) throws IOException {
+    public void writeTo(final DataOutputStream out, final int usedVersion) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
         if (usedVersion == 4) {
@@ -79,7 +80,7 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot read from input stream
      */
-    public static TaskId readFrom(DataInputStream in, int usedVersion) throws IOException {
+    public static TaskId readFrom(final DataInputStream in, final int usedVersion) throws IOException {
         final TaskId taskId = new TaskId(in.readInt(), in.readInt());
         if (usedVersion == 4) {
             taskId.setNumberOfStateStores(in.readInt());
@@ -97,7 +98,7 @@ public class TaskId implements Comparable<TaskId> {
         }
     }
 
-    public static TaskId readFrom(ByteBuffer buf, final int version) {
+    public static TaskId readFrom(final ByteBuffer buf, final int version) {
         final TaskId result = new TaskId(buf.getInt(), buf.getInt());
         if (version == 4) {
             result.setNumberOfStateStores(buf.getInt());
@@ -112,7 +113,7 @@ public class TaskId implements Comparable<TaskId> {
             return true;
 
         if (o instanceof TaskId) {
-            TaskId other = (TaskId) o;
+            final TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition && 
                    other.numberOfInputPartitions == this.numberOfInputPartitions &&
                    other.numberOfStateStores == this.numberOfStateStores;

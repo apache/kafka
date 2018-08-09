@@ -178,7 +178,7 @@ public class ClientState {
         return leastLoaded(thisLoad, otherLoad, other);
     }
 
-    boolean hasMoreAvailableStandbyTaskCapacityThan(ClientState other) {
+    boolean hasMoreAvailableStandbyTaskCapacityThan(final ClientState other) {
         checkCapacity(other);
 
         final double thisLoad = (double) (numberOfStandbyStateStores + standbyTasks.size()) / capacity;
