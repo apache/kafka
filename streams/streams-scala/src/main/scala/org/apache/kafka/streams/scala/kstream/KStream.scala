@@ -301,42 +301,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.transform(transformerSupplier, stateStoreNames: _*)
 
   /**
-   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-   * can be altered arbitrarily).
-   * A `Transformer` is applied to each input record and computes zero or more output records. In order to assign a
-   * state, the state must be created and registered beforehand via stores added via `addStateStore` or `addGlobalStore`
-   * before they can be connected to the `Transformer`
-   *
-   * This method is deprecated because there is a danger of passing a specific Transformer instance, which would
-   * result in incorrect execution. It's highly recommended to us [[KStream.transform(TransformSupplier, String*)]] instead.
-   *
-   * @param transformer the `Transformer` instance
-   * @param stateStoreNames     the names of the state stores used by the processor
-   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-   * @see [[org.apache.kafka.streams.kstream.KStream#transform]]
-   */
-  @deprecated("Use transform(TransformerSupplier,String) instead.", "2.0")
-  def transform[K1, V1](transformer: => Transformer[K, V, (K1, V1)], stateStoreNames: String*): KStream[K1, V1] = {
-    //noinspection ConvertExpressionToSAM // due to 2.11
-    val transformerSupplierJ: TransformerSupplier[K, V, KeyValue[K1, V1]] =
-      new TransformerSupplier[K, V, KeyValue[K1, V1]] {
-        override def get(): Transformer[K, V, KeyValue[K1, V1]] =
-          new Transformer[K, V, KeyValue[K1, V1]] {
-            override def transform(key: K, value: V): KeyValue[K1, V1] =
-              transformer.transform(key, value) match {
-                case (k1, v1) => KeyValue.pair(k1, v1)
-                case _        => null
-              }
-
-            override def init(context: ProcessorContext): Unit = transformer.init(context)
-
-            override def close(): Unit = transformer.close()
-          }
-      }
-    inner.transform(transformerSupplierJ, stateStoreNames: _*)
-  }
-
-  /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
@@ -385,19 +349,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     }
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }
-
-  /**
-   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
-   * `processorSupplier`).
-   * In order to assign a state, the state must be created and registered
-   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
-   *
-   * @param processorSupplier a supplier that generates a [[org.apache.kafka.streams.processor.Processor]]
-   * @param stateStoreNames   the names of the state store used by the processor
-   * @see `org.apache.kafka.streams.kstream.KStream#process`
-   */
-  def process(processorSupplier: ProcessorSupplier[K, V], stateStoreNames: String*): Unit =
-    inner.process(processorSupplier, stateStoreNames: _*)
 
   /**
    * Group the records by their current key into a [[KGroupedStream]]
