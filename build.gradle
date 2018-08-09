@@ -1015,6 +1015,7 @@ project(':streams:streams-scala') {
 
     testCompile libs.junit
     testCompile libs.scalatest
+    testCompile libs.easymock
 
     testRuntime libs.slf4jlog4j
   }
