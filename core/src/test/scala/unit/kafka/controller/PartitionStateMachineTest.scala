@@ -19,7 +19,7 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper.{CreateResponse, GetDataResponse, ResponseMetadata, ZooKeeperClientException}
