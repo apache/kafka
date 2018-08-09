@@ -36,7 +36,8 @@ import java.util.Collections;
 import java.util.Properties;
 
 public class WordCountProcessorTest {
-    StringDeserializer deserializer = new StringDeserializer();
+    private final StringDeserializer deserializer = new StringDeserializer();
+
     @Test
     public void test() throws Exception {
         KafkaStreams streams;
@@ -75,14 +76,14 @@ public class WordCountProcessorTest {
         inspectCountsStore(false);
     }
 
-    private void inspectCountsStore(boolean prepare) throws Exception {
-        StreamsConfig config = new StreamsConfig(new Properties() {
+    private void inspectCountsStore(final boolean prepare) throws Exception {
+        final StreamsConfig config = new StreamsConfig(new Properties() {
             {
                 put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
             }
         });
-        RocksDBStore store = new RocksDBStore("Counts");
+        final RocksDBStore store = new RocksDBStore("Counts");
         store.openDB(new ProcessorContextImpl(
             null,
             null,
@@ -102,11 +103,11 @@ public class WordCountProcessorTest {
             null
         ));
 
-        KeyValueIterator<Bytes, byte[]> iter = store.all();
+        final KeyValueIterator<Bytes, byte[]> iter = store.all();
         int count = 0;
         while (iter.hasNext()) {
             ++count;
-            KeyValue<Bytes, byte[]> record = iter.next();
+            final KeyValue<Bytes, byte[]> record = iter.next();
             System.out.println(deserializer.deserialize(null, record.key.get()) + " : " + record.value.length);
         }
         System.out.println("# " + count);

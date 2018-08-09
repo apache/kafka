@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -118,21 +117,18 @@ public final class WordCountProcessorDemo {
                 @SuppressWarnings("unchecked")
                 public void init(final ProcessorContext context) {
                     this.context = context;
-                    this.context.schedule(1000, PunctuationType.STREAM_TIME, new Punctuator() {
-                        @Override
-                        public void punctuate(long timestamp) {
-                            try (KeyValueIterator<String, ValueAndTimestamp<Integer>> iter = kvStore.all()) {
-                                System.out.println("----------- " + timestamp + " ----------- ");
+                    this.context.schedule(1000, PunctuationType.STREAM_TIME, timestamp -> {
+                        try (final KeyValueIterator<String, ValueAndTimestamp<Integer>> iter = kvStore.all()) {
+                            System.out.println("----------- " + timestamp + " ----------- ");
 
-                                while (iter.hasNext()) {
-                                    KeyValue<String, ValueAndTimestamp<Integer>> entry = iter.next();
+                            while (iter.hasNext()) {
+                                final KeyValue<String, ValueAndTimestamp<Integer>> entry = iter.next();
 
-                                    System.out.println("[" + entry.key + ", " + entry.value.value() + "]:" + entry.value.timestamp());
+                                System.out.println("[" + entry.key + ", " + entry.value.value() + "]:" + entry.value.timestamp());
 
-                                    context.forward(entry.key,
-                                                    entry.value.value().toString(),
-                                                    To.all().withTimestamp(entry.value.timestamp()));
-                                }
+                                context.forward(entry.key,
+                                                entry.value.value().toString(),
+                                                To.all().withTimestamp(entry.value.timestamp()));
                             }
                         }
                     });
@@ -140,11 +136,11 @@ public final class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void process(String dummy, String line) {
-                    String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
+                public void process(final String dummy, final String line) {
+                    final String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
-                    for (String word : words) {
-                        ValueAndTimestamp<Integer> oldValue = this.kvStore.get(word);
+                    for (final String word : words) {
+                        final ValueAndTimestamp<Integer> oldValue = this.kvStore.get(word);
 
                         if (oldValue.value() == null) {
                             this.kvStore.put(word, 1, context.timestamp());
