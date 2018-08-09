@@ -44,6 +44,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableDoc, "false")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
+  // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes
   this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected val serverSaslProperties =
