@@ -244,6 +244,41 @@ public class KStreamImplTest {
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
     }
 
+
+    @Test
+    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final KStream<String, String> stream = kStream
+            .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                @Override
+                public KeyValue<? extends String, ? extends String> apply(final String key, final String value) {
+                    return KeyValue.pair(value, value);
+                }
+            });
+        stream.join(kStream,
+                    valueJoiner,
+                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+
+        final SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (final SourceNode sourceNode: topology.sources()) {
+            if (sourceNode.name().equals(originalSourceNode.name())) {
+                assertEquals(sourceNode.getTimestampExtractor(), null);
+            } else {
+                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+            }
+        }
+    }
+
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -260,8 +295,8 @@ public class KStreamImplTest {
         stream.join(
             kStream,
             valueJoiner,
-            JoinWindows.of(windowSize),
-            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withRetention(ofMillis(3 * windowSize))
+            JoinWindows.of(windowSize).grace(ofMillis(3*windowSize)),
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
         )
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
