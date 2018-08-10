@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -282,7 +283,17 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
             LogCaptureAppender.unregister(appender);
 
-            assertThat(getMetricByName(driver.metrics(), "late-event-drop-total", "stream-processor-node-metrics").metricValue(), equalTo(7.0));
+            final MetricName metricName = new MetricName(
+                "late-record-drop-total",
+                "stream-processor-node-metrics",
+                "The total number of occurrence of late-record-drop operations.",
+                mkMap(
+                    mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
+                )
+            );
+            assertThat(driver.metrics().get(metricName).metricValue(), equalTo(7.0));
             assertThat(appender.getMessages(), hasItems(
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10]",
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10]",
@@ -331,17 +342,17 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
             LogCaptureAppender.unregister(appender);
 
-            final Metric dropMetric = getMetricByNameFilterByTags(
-                driver.metrics(),
-                "late-event-drop-total",
+            final MetricName metricName = new MetricName(
+                "late-record-drop-total",
                 "stream-processor-node-metrics",
+                "The total number of occurrence of late-record-drop operations.",
                 mkMap(
                     mkEntry("client-id", "topology-test-driver-virtual-thread"),
                     mkEntry("task-id", "0_0"),
                     mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
                 )
             );
-            assertThat(dropMetric.metricValue(), equalTo(7.0));
+            assertThat(driver.metrics().get(metricName).metricValue(), equalTo(7.0));
             assertThat(appender.getMessages(), hasItems(
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10]",
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10]",
