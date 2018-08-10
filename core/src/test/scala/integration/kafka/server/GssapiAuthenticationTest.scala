@@ -71,8 +71,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
       override def run(): Unit = authenticate(numIterations)
     }))
     futures.foreach(_.get(60, TimeUnit.SECONDS))
-    assertEquals(0, TestUtils.totalMetricCount(servers.head, "failed-authentication-total"))
-    val successfulAuths = TestUtils.totalMetricCount(servers.head, "successful-authentication-total")
+    assertEquals(0, TestUtils.totalMetricValue(servers.head, "failed-authentication-total"))
+    val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
     assertTrue("Too few authentications: " + successfulAuths, successfulAuths > numIterations * numThreads)
   }
 

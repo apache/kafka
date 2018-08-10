@@ -374,7 +374,8 @@ public class SaslClientAuthenticator implements Authenticator {
             error += " Kafka Client will go to AUTHENTICATION_FAILED state.";
             //Unwrap the SaslException inside `PrivilegedActionException`
             Throwable cause = e.getCause();
-            // Treat transient Kerberos errors as non-fatal.
+            // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
+            // and all other failures as fatal SaslAuthenticationException.
             if (kerberosError != null && kerberosError.retriable)
                 throw new SaslException(error, cause);
             else
@@ -442,15 +443,20 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
+    /**
+     * Kerberos exceptions that may require special handling. The standard Kerberos error codes
+     * for these errors are retrieved using KrbException#errorCode() from the underlying Kerberos
+     * exception thrown during {@link SaslClient#evaluateChallenge(byte[])}.
+     */
     private enum KerberosError {
         // (Mechanism level: Server not found in Kerberos database (7) - UNKNOWN_SERVER)
         SERVER_NOT_FOUND(7, false),
-        // (Mechanism level: Request is a replay (34) - Request is a replay)
-        // Replay detection used to prevent DoS attacks can result in false positives, so retry on error.
-        REPLAY(34, true),
         // (Mechanism level: Ticket not yet valid (33) - Ticket not yet valid)])
         // This could be a small timing window.
-        TICKET_NOT_YET_VALID(33, true);
+        TICKET_NOT_YET_VALID(33, true),
+        // (Mechanism level: Request is a replay (34) - Request is a replay)
+        // Replay detection used to prevent DoS attacks can result in false positives, so retry on error.
+        REPLAY(34, true);
 
 
         private static final Class<?> KRB_EXCEPTION_CLASS;

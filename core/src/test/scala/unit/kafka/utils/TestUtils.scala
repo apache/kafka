@@ -1416,7 +1416,7 @@ object TestUtils extends Logging {
     }
   }
 
-  def totalMetricCount(server: KafkaServer, metricName: String): Long = {
+  def totalMetricValue(server: KafkaServer, metricName: String): Long = {
     val allMetrics = server.metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])

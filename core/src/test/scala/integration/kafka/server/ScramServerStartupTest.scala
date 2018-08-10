@@ -58,9 +58,9 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
   @Test
   def testAuthentications(): Unit = {
-    val successfulAuths = TestUtils.totalMetricCount(servers.head, "successful-authentication-total")
+    val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
     assertTrue("No successful authentications", successfulAuths > 0)
-    val failedAuths = TestUtils.totalMetricCount(servers.head, "failed-authentication-total")
+    val failedAuths = TestUtils.totalMetricValue(servers.head, "failed-authentication-total")
     assertEquals(0, failedAuths)
   }
 }
