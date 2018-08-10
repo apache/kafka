@@ -197,7 +197,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                                                            + name + " must be no smaller than its window size plus the grace period."
                                                            + " Got size=[" + windows.size() + "],"
                                                            + " grace=[" + windows.grace() + "],"
-                                                           + " retention=[" + windows.maintainMs()+ "]");
+                                                           + " retention=[" + windows.maintainMs() + "]");
                 }
 
                 supplier = Stores.persistentWindowStore(

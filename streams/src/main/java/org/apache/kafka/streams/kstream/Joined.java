@@ -18,9 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 
-import java.time.Duration;
-import java.util.Objects;
-
 /**
  * The {@code Joined} class represents optional params that can be passed to
  * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations.
