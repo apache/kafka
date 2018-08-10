@@ -27,13 +27,13 @@ import static org.junit.Assert.fail;
 
 public class JoinWindowsTest {
 
-    private static final long anySize = 123L;
-    private static final long anyOtherSize = 456L; // should be larger than anySize
+    private static final long ANY_SIZE = 123L;
+    private static final long ANY_OTHER_SIZE = 456L; // should be larger than anySize
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        final JoinWindows w1 = JoinWindows.of(anySize);
-        final JoinWindows w2 = JoinWindows.of(anySize);
+        final JoinWindows w1 = JoinWindows.of(ANY_SIZE);
+        final JoinWindows w2 = JoinWindows.of(ANY_SIZE);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -44,8 +44,8 @@ public class JoinWindowsTest {
         assertEquals(w2, w1);
         assertEquals(w1.hashCode(), w2.hashCode());
 
-        final JoinWindows w3 = JoinWindows.of(w2.afterMs).before(anyOtherSize);
-        final JoinWindows w4 = JoinWindows.of(anyOtherSize).after(w2.afterMs);
+        final JoinWindows w3 = JoinWindows.of(w2.afterMs).before(ANY_OTHER_SIZE);
+        final JoinWindows w4 = JoinWindows.of(ANY_OTHER_SIZE).after(w2.afterMs);
         assertEquals(w3, w4);
         assertEquals(w4, w3);
         assertEquals(w3.hashCode(), w4.hashCode());
@@ -67,17 +67,17 @@ public class JoinWindowsTest {
 
     @Test
     public void validWindows() {
-        JoinWindows.of(anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
-            .before(anySize)                    // [ -anySize ; anyOtherSize ]
-            .before(0)                          // [ 0 ; anyOtherSize ]
-            .before(-anySize)                   // [ anySize ; anyOtherSize ]
-            .before(-anyOtherSize);             // [ anyOtherSize ; anyOtherSize ]
+        JoinWindows.of(ANY_OTHER_SIZE)   // [ -anyOtherSize ; anyOtherSize ]
+                   .before(ANY_SIZE)                    // [ -anySize ; anyOtherSize ]
+                   .before(0)                          // [ 0 ; anyOtherSize ]
+                   .before(-ANY_SIZE)                   // [ anySize ; anyOtherSize ]
+                   .before(-ANY_OTHER_SIZE);             // [ anyOtherSize ; anyOtherSize ]
 
-        JoinWindows.of(anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
-            .after(anySize)                     // [ -anyOtherSize ; anySize ]
-            .after(0)                           // [ -anyOtherSize ; 0 ]
-            .after(-anySize)                    // [ -anyOtherSize ; -anySize ]
-            .after(-anyOtherSize);              // [ -anyOtherSize ; -anyOtherSize ]
+        JoinWindows.of(ANY_OTHER_SIZE)   // [ -anyOtherSize ; anyOtherSize ]
+                   .after(ANY_SIZE)                     // [ -anyOtherSize ; anySize ]
+                   .after(0)                           // [ -anyOtherSize ; 0 ]
+                   .after(-ANY_SIZE)                    // [ -anyOtherSize ; -anySize ]
+                   .after(-ANY_OTHER_SIZE);              // [ -anyOtherSize ; -anyOtherSize ]
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -87,9 +87,9 @@ public class JoinWindowsTest {
 
     @Test
     public void endTimeShouldNotBeBeforeStart() {
-        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final JoinWindows windowSpec = JoinWindows.of(ANY_SIZE);
         try {
-            windowSpec.after(-anySize - 1);
+            windowSpec.after(-ANY_SIZE - 1);
             fail("window end time should not be before window start time");
         } catch (final IllegalArgumentException e) {
             // expected
@@ -98,9 +98,9 @@ public class JoinWindowsTest {
 
     @Test
     public void startTimeShouldNotBeAfterEnd() {
-        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final JoinWindows windowSpec = JoinWindows.of(ANY_SIZE);
         try {
-            windowSpec.before(-anySize - 1);
+            windowSpec.before(-ANY_SIZE - 1);
             fail("window start time should not be after window end time");
         } catch (final IllegalArgumentException e) {
             // expected
@@ -110,7 +110,7 @@ public class JoinWindowsTest {
     @Deprecated
     @Test
     public void untilShouldSetMaintainDuration() {
-        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final JoinWindows windowSpec = JoinWindows.of(ANY_SIZE);
         final long windowSize = windowSpec.size();
         assertEquals(windowSize, windowSpec.until(windowSize).maintainMs());
     }
@@ -118,7 +118,7 @@ public class JoinWindowsTest {
     @Deprecated
     @Test
     public void retentionTimeMustNoBeSmallerThanWindowSize() {
-        final JoinWindows windowSpec = JoinWindows.of(anySize);
+        final JoinWindows windowSpec = JoinWindows.of(ANY_SIZE);
         final long windowSize = windowSpec.size();
         try {
             windowSpec.until(windowSize - 1);

@@ -19,11 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
@@ -244,7 +244,6 @@ public class KStreamImplTest {
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
     }
 
-
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -270,7 +269,7 @@ public class KStreamImplTest {
 
         final SourceNode originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode sourceNode: topology.sources()) {
+        for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertEquals(sourceNode.getTimestampExtractor(), null);
             } else {
@@ -286,25 +285,25 @@ public class KStreamImplTest {
         final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
         final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
-                        .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
-                            @Override
-                            public KeyValue<? extends String, ? extends String> apply(final String key, final String value) {
-                                return KeyValue.pair(value, value);
-                            }
-                        });
+            .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                @Override
+                public KeyValue<? extends String, ? extends String> apply(final String key, final String value) {
+                    return KeyValue.pair(value, value);
+                }
+            });
         stream.join(
             kStream,
             valueJoiner,
-            JoinWindows.of(windowSize).grace(ofMillis(3*windowSize)),
+            JoinWindows.of(windowSize).grace(ofMillis(3 * windowSize)),
             Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
         )
-            .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
         final SourceNode originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode sourceNode: topology.sources()) {
+        for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertEquals(sourceNode.getTimestampExtractor(), null);
             } else {
