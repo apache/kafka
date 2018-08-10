@@ -56,6 +56,11 @@ class ReplicaManagerTest {
   var zkClient: ZkClient = _
   var kafkaZkClient: KafkaZkClient = _
 
+  // Constants defined for readability
+  val zkVersion = 0
+  val correlationId = 0
+  var controllerEpoch = 0
+
   @Before
   def setUp() {
     zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -521,8 +526,6 @@ class ReplicaManagerTest {
     val controllerId = 0
     val controllerEpoch = 0
     var leaderEpoch = 1
-    val zkVersion = 0
-    val correlationId = 0
     val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
@@ -533,14 +536,21 @@ class ReplicaManagerTest {
     // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
     val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, topicPartition))
     partition.getOrCreateReplica(followerBrokerId)
-    partition.makeFollower(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava, zkVersion, aliveBrokerIds.asJava, false), correlationId)
+    partition.makeFollower(controllerId,
+      leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds),
+      correlationId)
 
-    // Make local partition a follower - because epoch increased by more than 1, truncation should trigger even though leader does not change
+    // Make local partition a follower - because epoch increased by more than 1, truncation should
+    // trigger even though leader does not change
     leaderEpoch += 2
-    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-      collection.immutable.Map(new TopicPartition(topic, topicPartition) -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava, zkVersion, aliveBrokerIds.asJava, false)).asJava,
-      Set(new Node(followerBrokerId, "host1", 0), new Node(leaderBrokerId, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0, (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
+    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+      controllerId, controllerEpoch,
+      collection.immutable.Map(new TopicPartition(topic, topicPartition) ->
+        leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
+      Set(new Node(followerBrokerId, "host1", 0),
+        new Node(leaderBrokerId, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
+      (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
     assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
     // Truncation should have happened once
@@ -557,10 +567,7 @@ class ReplicaManagerTest {
     val followerBrokerId = 0
     val leaderBrokerId = 1
     val controllerId = 0
-    val controllerEpoch = 0
     var leaderEpoch = 1
-    val zkVersion = 0
-    val correlationId = 0
     val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
@@ -571,31 +578,41 @@ class ReplicaManagerTest {
     // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
     val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, topicPartition))
     partition.getOrCreateReplica(followerBrokerId)
-    partition.makeFollower(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava, zkVersion, aliveBrokerIds.asJava, false), correlationId)
+    partition.makeFollower(controllerId,
+      leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds),
+      correlationId)
 
     // Make local partition a follower - because epoch did not change, truncation should not trigger
-    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-      collection.immutable.Map(new TopicPartition(topic, topicPartition) -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava, zkVersion, aliveBrokerIds.asJava, false)).asJava,
-      Set(new Node(followerBrokerId, "host1", 0), new Node(leaderBrokerId, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0, (_, followers) => assertTrue(followers.isEmpty))
+    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+      controllerId, controllerEpoch,
+      collection.immutable.Map(new TopicPartition(topic, topicPartition) ->
+        leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
+      Set(new Node(followerBrokerId, "host1", 0),
+        new Node(leaderBrokerId, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
+      (_, followers) => assertTrue(followers.isEmpty))
 
-    // Make local partition a follower - because epoch increased by only 1 and leader did not change, truncation should not trigger
+    // Make local partition a follower - because epoch increased by only 1 and leader did not change,
+    // truncation should not trigger
     leaderEpoch += 1
-    val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-      collection.immutable.Map(new TopicPartition(topic, topicPartition) -> new LeaderAndIsrRequest.PartitionState(controllerId, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava, zkVersion, aliveBrokerIds.asJava, false)).asJava,
-      Set(new Node(followerBrokerId, "host1", 0), new Node(leaderBrokerId, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, followers) => assertTrue(followers.isEmpty))
+    val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+      controllerId, controllerEpoch,
+      collection.immutable.Map(new TopicPartition(topic, topicPartition) ->
+        leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
+      Set(new Node(followerBrokerId, "host1", 0),
+        new Node(leaderBrokerId, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1,
+      (_, followers) => assertTrue(followers.isEmpty))
 
     // Truncation should not have happened
     EasyMock.verify(mockLogMgr)
   }
 
-  private def prepareReplicaManagerAndLogManager(
-                                                  topicPartition: Int,
-                                                  followerBrokerId: Int,
-                                                  leaderBrokerId: Int,
-                                                  countDownLatch: CountDownLatch,
-                                                  expectTruncation: Boolean) : (ReplicaManager, LogManager) = {
+  private def prepareReplicaManagerAndLogManager(topicPartition: Int,
+                                                 followerBrokerId: Int,
+                                                 leaderBrokerId: Int,
+                                                 countDownLatch: CountDownLatch,
+                                                 expectTruncation: Boolean) : (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
@@ -609,7 +626,8 @@ class ReplicaManagerTest {
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val mockLeaderEpochCache = EasyMock.createMock(classOf[LeaderEpochCache])
     EasyMock.expect(mockLeaderEpochCache.latestEpoch()).andReturn(leaderEpochFromLeader)
-    EasyMock.expect(mockLeaderEpochCache.endOffsetFor(leaderEpochFromLeader)).andReturn((leaderEpochFromLeader, localLogOffset))
+    EasyMock.expect(mockLeaderEpochCache.endOffsetFor(leaderEpochFromLeader))
+      .andReturn((leaderEpochFromLeader, localLogOffset))
     EasyMock.replay(mockLeaderEpochCache)
     val mockLog = new Log(
       dir = new File(new File(config.logDirs.head), s"$topic-0"),
@@ -622,7 +640,8 @@ class ReplicaManagerTest {
       maxProducerIdExpirationMs = 30000,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = new TopicPartition(topic, topicPartition),
-      producerStateManager = new ProducerStateManager(new TopicPartition(topic, topicPartition), new File(new File(config.logDirs.head), s"$topic-$topicPartition"), 30000),
+      producerStateManager = new ProducerStateManager(new TopicPartition(topic, topicPartition),
+        new File(new File(config.logDirs.head), s"$topic-$topicPartition"), 30000),
       logDirFailureChannel = mockLogDirFailureChannel) {
 
       override def leaderEpochCache: LeaderEpochCache = mockLeaderEpochCache
@@ -634,9 +653,11 @@ class ReplicaManagerTest {
     val mockLogMgr = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(mockLogMgr.liveLogDirs).andReturn(config.logDirs.map(new File(_).getAbsoluteFile)).anyTimes
     EasyMock.expect(mockLogMgr.currentDefaultConfig).andReturn(LogConfig())
-    EasyMock.expect(mockLogMgr.getOrCreateLog(new TopicPartition(topic, topicPartition), LogConfig(), isNew = false, isFuture = false)).andReturn(mockLog).anyTimes
+    EasyMock.expect(mockLogMgr.getOrCreateLog(new TopicPartition(topic, topicPartition),
+      LogConfig(), isNew = false, isFuture = false)).andReturn(mockLog).anyTimes
     if (expectTruncation) {
-      EasyMock.expect(mockLogMgr.truncateTo(Map(new TopicPartition(topic, topicPartition) -> offsetFromLeader), isFuture = false)).once
+      EasyMock.expect(mockLogMgr.truncateTo(Map(new TopicPartition(topic, topicPartition) -> offsetFromLeader),
+        isFuture = false)).once
     }
     EasyMock.replay(mockLogMgr)
 
@@ -660,19 +681,26 @@ class ReplicaManagerTest {
 
     // Mock network client to show leader offset of 5
     val quota = QuotaFactory.instantiate(config, metrics, time, "")
-    val blockingSend = new ReplicaFetcherMockBlockingSend(Map(new TopicPartition(topic, topicPartition) -> new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
+    val blockingSend = new ReplicaFetcherMockBlockingSend(Map(new TopicPartition(topic, topicPartition) ->
+      new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quota, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, Option(this.getClass.getName)) {
 
-      override protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
+      override protected def createReplicaFetcherManager(metrics: Metrics,
+                                                     time: Time,
+                                                     threadNamePrefix: Option[String],
+                                                     quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId, sourceBroker, config, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
+              sourceBroker, config, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+
               override def doWork() = {
-                // In case the thread starts before the partition is added by AbstractFetcherManager, add it here (it's a no-op if already added)
+                // In case the thread starts before the partition is added by AbstractFetcherManager,
+                // add it here (it's a no-op if already added)
                 addPartitions(Map(new TopicPartition(topic, topicPartition) -> 0L))
                 super.doWork()
 
@@ -687,6 +715,13 @@ class ReplicaManagerTest {
     }
 
     (replicaManager, mockLogMgr)
+  }
+
+  private def leaderAndIsrPartitionState(leaderEpoch: Int,
+                                         leaderBrokerId: Int,
+                                         aliveBrokerIds: Seq[Integer]) : LeaderAndIsrRequest.PartitionState = {
+    new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderBrokerId, leaderEpoch, aliveBrokerIds.asJava,
+      zkVersion, aliveBrokerIds.asJava, false)
   }
 
   private class CallbackResult[T] {

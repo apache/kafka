@@ -347,7 +347,7 @@ class Partition(val topic: String,
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
 
       // If the leader is unchanged and the epochs are no more than one change apart, indicate that no follower changes are required
-      // Otherwise, we missed a leader epoch update, so we may need to truncate the log by
+      // Otherwise, we missed a leader epoch update, which means the leader's log may have been truncated prior to the current epoch.
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && (leaderEpoch == oldLeaderEpoch || leaderEpoch == oldLeaderEpoch + 1)) {
         false
       }
