@@ -25,11 +25,9 @@ import java.util.Map;
 import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
 
 /**
- * The window specification interface for fixed size windows that is used to define window boundaries and window
- * maintain duration.
- * <p>
- * If not explicitly specified, the default maintain duration is 1 day.
- * For time semantics, see {@link TimestampExtractor}.
+ * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
+ *
+ * Grace period defines how long to wait on late events, where lateness is defined as (stream_time - record_timestamp).
  *
  * @param <W> type of the window instance
  * @see TimeWindows
@@ -51,6 +49,8 @@ public abstract class Windows<W extends Window> {
      * Reject late events that arrive more than {@code afterWindowEnd}
      * after the end of its window.
      *
+     * Lateness is defined as (stream_time - record_timestamp).
+     *
      * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
      */
@@ -66,7 +66,9 @@ public abstract class Windows<W extends Window> {
 
     /**
      * Return the window grace period (the time to admit
-     * late-arriving events after the end of the window.
+     * late-arriving events after the end of the window.)
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
      */
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public Duration grace() {

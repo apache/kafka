@@ -127,24 +127,25 @@ class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSup
                 }
             }
 
-            agg = aggregator.apply(key, value, agg);
-            final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
-            if (mergedWindow.end() <= closeTime) {
+            if (mergedWindow.end() > closeTime) {
+                if (!mergedWindow.equals(newSessionWindow)) {
+                    for (final KeyValue<Windowed<K>, Agg> session : merged) {
+                        store.remove(session.key);
+                        tupleForwarder.maybeForward(session.key, null, session.value);
+                    }
+                }
+
+                agg = aggregator.apply(key, value, agg);
+                final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
+                store.put(sessionKey, agg);
+                tupleForwarder.maybeForward(sessionKey, agg, null);
+            } else {
                 LOG.debug(
                     "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
                     key, context().topic(), context().partition(), context().offset(), context().timestamp(), mergedWindow.start(), mergedWindow.end(), closeTime
                 );
                 lateEventDropSensor.record();
-                return;
             }
-            if (!mergedWindow.equals(newSessionWindow)) {
-                for (final KeyValue<Windowed<K>, Agg> session : merged) {
-                    store.remove(session.key);
-                    tupleForwarder.maybeForward(session.key, null, session.value);
-                }
-            }
-            store.put(sessionKey, agg);
-            tupleForwarder.maybeForward(sessionKey, agg, null);
         }
 
     }
