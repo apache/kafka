@@ -1032,7 +1032,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // write some record to the topic
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
-    removeAllAcls()
 
     // use two consumers to write to two different groups
     val group2 = "other group"
@@ -1046,14 +1045,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     otherConsumer.subscribe(Collections.singleton(topic))
     consumeRecords(otherConsumer)
 
-
     val adminClient = createAdminClient()
 
     // first use cluster describe permission
     removeAllAcls()
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), Resource.ClusterResource)
     // it should list both groups (due to cluster describe permission)
-    assertEquals(2, adminClient.listConsumerGroups().all().get().size())
+    assertEquals(Set(group, group2), adminClient.listConsumerGroups().all().get().asScala.map(_.groupId()).toSet)
 
     // now replace cluster describe with group read permission
     removeAllAcls()
@@ -1064,7 +1062,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // now remove all acls and verify describe group access is required to list any group
     removeAllAcls()
-    assertFalse(adminClient.listConsumerGroups().errors().get().isEmpty)
+    val listGroupResult = adminClient.listConsumerGroups()
+    assertTrue(listGroupResult.errors().get().isEmpty)
+    assertTrue(listGroupResult.all().get().isEmpty)
     otherConsumer.close()
   }
 

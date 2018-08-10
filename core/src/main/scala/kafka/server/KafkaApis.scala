@@ -1239,16 +1239,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
     val (error, groups) = groupCoordinator.handleListGroups()
-    // the alternative where at least some Describe Group ACLs for current principal is needed for running ListGroups
     if (authorize(request.session, Describe, Resource.ClusterResource))
+      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new ListGroupsResponse(requestThrottleMs, error, groups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
     else {
       val filteredGroups = groups.filter(group => authorize(request.session, Describe, new Resource(Group, group.groupId, LITERAL)))
-      if (filteredGroups.isEmpty) {
-        sendResponseMaybeThrottle(request, requestThrottleMs =>
-          request.body[ListGroupsRequest].getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-      } else {
+      if (filteredGroups.isEmpty)
+        sendResponseMaybeThrottle(request, requestThrottleMs => new ListGroupsResponse(requestThrottleMs, Errors.NONE, List().asJava))
+      else {
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new ListGroupsResponse(requestThrottleMs, error, filteredGroups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
       }
