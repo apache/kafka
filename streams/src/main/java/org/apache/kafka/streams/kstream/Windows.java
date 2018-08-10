@@ -59,7 +59,7 @@ public abstract class Windows<W extends Window> {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        grace = validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds");
+        grace = validateMillisecondDuration(afterWindowEnd, "Grace period");
 
         return this;
     }

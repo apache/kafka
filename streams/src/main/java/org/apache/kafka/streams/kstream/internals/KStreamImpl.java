@@ -53,7 +53,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -821,37 +820,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final String joinName,
-                                                                                   final JoinWindows windows,
-                                                                                   final Duration joinedRetention,
-                                                                                   final Serde<K> keySerde,
-                                                                                   final Serde<V> valueSerde) {
-        if (joinedRetention != null) {
-            // new style windows: use Joined#retention and default segment interval
-            return Stores.windowStoreBuilder(
-                Stores.persistentWindowStore(
-                    joinName + "-store",
-                    joinedRetention.toMillis(),
-                    windows.size(),
-                    true
-                ),
-                keySerde,
-                valueSerde
-            );
-        } else {
-            // old style windows: use deprecated Windows#retention/segmentInterval
-            return Stores.windowStoreBuilder(
-                Stores.persistentWindowStore(
-                    joinName + "-store",
-                    windows.maintainMs(),
-                    windows.size(),
-                    true,
-                    windows.segmentInterval()
-                ),
-                keySerde,
-                valueSerde
-            );
-        }
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
+                                                                                 final JoinWindows windows,
+                                                                                 final Serde<K> keySerde,
+                                                                                 final Serde<V> valueSerde) {
+        return Stores.windowStoreBuilder(
+            Stores.persistentWindowStore(
+                joinName + "-store",
+                windows.size() + windows.grace().toMillis(),
+                windows.size(),
+                true
+            ),
+            keySerde,
+            valueSerde
+        );
     }
 
     private class KStreamImplJoin {
@@ -884,20 +866,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore = createWindowedStateStore(
-                joinThisName,
-                windows,
-                joined.retention(),
-                joined.keySerde(),
-                joined.valueSerde()
-            );
-            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore = createWindowedStateStore(
-                joinOtherName,
-                windows,
-                joined.retention(),
-                joined.keySerde(),
-                joined.otherValueSerde()
-            );
+            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
+                joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
+            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
+                joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
 
             final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 

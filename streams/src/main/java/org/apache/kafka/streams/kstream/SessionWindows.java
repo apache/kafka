@@ -135,7 +135,7 @@ public final class SessionWindows {
         return new SessionWindows(
             gapMs,
             maintainDurationMs,
-            validateMillisecondDuration(afterWindowEnd, "Grace period must be expressible in milliseconds")
+            validateMillisecondDuration(afterWindowEnd, "Grace period")
         );
     }
 

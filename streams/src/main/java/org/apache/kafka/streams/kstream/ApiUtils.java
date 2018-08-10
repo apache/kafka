@@ -21,13 +21,16 @@ import java.time.Duration;
 final class ApiUtils {
     private ApiUtils() {}
 
-    static Duration validateMillisecondDuration(final Duration duration, final String message) {
+    static Duration validateMillisecondDuration(final Duration duration, final String valueName) {
         try {
             //noinspection ResultOfMethodCallIgnored
             duration.toMillis();
             return duration;
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException(message, e);
+            throw new IllegalArgumentException(
+                valueName + " must be expressible in milliseconds (" + duration + " is too big)",
+                e
+            );
         }
     }
 }

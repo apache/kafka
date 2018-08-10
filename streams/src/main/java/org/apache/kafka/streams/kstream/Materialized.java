@@ -235,7 +235,7 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) {
         Objects.requireNonNull(retention, "Retention must not be null");
-        ApiUtils.validateMillisecondDuration(retention, "Retention must be expressible in milliseconds");
+        ApiUtils.validateMillisecondDuration(retention, "Retention");
         this.retention = retention;
         return this;
     }
