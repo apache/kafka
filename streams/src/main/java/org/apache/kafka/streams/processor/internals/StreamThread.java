@@ -861,7 +861,7 @@ public class StreamThread extends Thread {
                 } else {
                     numIterations++;
                 }
-            } while (totalProcessed > 0 && timeSinceLastPoll < (maxPollTimeMs >> 1));
+            } while (totalProcessed > 0 && timeSinceLastPoll < maxPollTimeMs / 2);
         }
 
         // even if there is not data to process in this iteration, still need to check if commit / punctuate is needed

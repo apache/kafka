@@ -201,8 +201,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
-        lastEnforcedProcess = time.milliseconds();
-
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
 
@@ -271,6 +269,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         processorContext.initialized();
+
+        lastEnforcedProcess = time.milliseconds();
+
         taskInitialized = true;
     }
 
