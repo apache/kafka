@@ -44,7 +44,7 @@ public class KStreamTransformTest {
     private String topicName = "topic";
 
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
     @Rule
     public final KStreamTestDriver kstreamDriver = new KStreamTestDriver();

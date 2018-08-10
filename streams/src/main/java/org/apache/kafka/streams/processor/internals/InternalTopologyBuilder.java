@@ -66,7 +66,10 @@ public class InternalTopologyBuilder {
     // state factories
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
 
-    // global state factories
+    // built global state stores
+    private final Map<String, StoreBuilder> globalStateBuilders = new LinkedHashMap<>();
+
+    // built global state stores
     private final Map<String, StateStore> globalStateStores = new LinkedHashMap<>();
 
     // all topics subscribed from source processors (without application-id prefix for internal topics)
@@ -334,9 +337,39 @@ public class InternalTopologyBuilder {
         }
     }
 
+    // public for testing only
     public synchronized final InternalTopologyBuilder setApplicationId(final String applicationId) {
         Objects.requireNonNull(applicationId, "applicationId can't be null");
         this.applicationId = applicationId;
+
+        return this;
+    }
+
+    public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
+        Objects.requireNonNull(config, "config can't be null");
+
+        // set application id
+        setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+
+        // maybe strip out caching layers
+        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) == 0L) {
+            for (final StateStoreFactory storeFactory : stateFactories.values()) {
+                storeFactory.builder.withCachingDisabled();
+            }
+
+            for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
+                storeBuilder.withCachingDisabled();
+            }
+        }
+
+        // build global state stores
+        for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
+            globalStateStores.put(storeBuilder.name(), storeBuilder.build());
+        }
+
+        // adjust the topology if optimization is turned on.
+        // TODO: to be removed post 2.0
+        adjust(config);
 
         return this;
     }
@@ -532,7 +565,7 @@ public class InternalTopologyBuilder {
                        processorName,
                        stateUpdateSupplier,
                        storeBuilder.name(),
-                       storeBuilder.build());
+                       storeBuilder);
     }
 
     private void validateTopicNotAlreadyRegistered(final String topic) {
@@ -560,7 +593,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final void connectSourceStoreAndTopic(final String sourceStoreName,
+    private void connectSourceStoreAndTopic(final String sourceStoreName,
                                                  final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
@@ -601,7 +634,7 @@ public class InternalTopologyBuilder {
         if (nodeFactories.containsKey(processorName)) {
             throw new TopologyException("Processor " + processorName + " is already added.");
         }
-        if (stateFactories.containsKey(storeName) || globalStateStores.containsKey(storeName)) {
+        if (stateFactories.containsKey(storeName) || globalStateBuilders.containsKey(storeName)) {
             throw new TopologyException("StateStore " + storeName + " is already added.");
         }
         if (loggingEnabled) {
@@ -620,7 +653,7 @@ public class InternalTopologyBuilder {
                                 final String processorName,
                                 final ProcessorSupplier stateUpdateSupplier,
                                 final String name,
-                                final KeyValueStore store) {
+                                final StoreBuilder<KeyValueStore> storeBuilder) {
         final String[] topics = {topic};
         final String[] predecessors = {sourceName};
         final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName,
@@ -639,13 +672,13 @@ public class InternalTopologyBuilder {
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
-        globalStateStores.put(name, store);
+        globalStateBuilders.put(name, storeBuilder);
         connectSourceStoreAndTopic(name, topic);
     }
 
     private void connectProcessorAndStateStore(final String processorName,
                                                final String stateStoreName) {
-        if (globalStateStores.containsKey(stateStoreName)) {
+        if (globalStateBuilders.containsKey(stateStoreName)) {
             throw new TopologyException("Global StateStore " + stateStoreName +
                     " can be used by a Processor without being specified; it should not be explicitly passed.");
         }
@@ -812,6 +845,8 @@ public class InternalTopologyBuilder {
      * @return ProcessorTopology
      */
     public synchronized ProcessorTopology buildGlobalStateTopology() {
+        Objects.requireNonNull(applicationId, "topology has not completed optimization");
+
         final Set<String> globalGroups = globalNodeGroups();
         if (globalGroups.isEmpty()) {
             return null;
@@ -833,6 +868,8 @@ public class InternalTopologyBuilder {
     }
 
     private ProcessorTopology build(final Set<String> nodeGroup) {
+        Objects.requireNonNull(applicationId, "topology has not completed optimization");
+
         final Map<String, ProcessorNode> processorMap = new LinkedHashMap<>();
         final Map<String, SourceNode> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode> topicSinkMap = new HashMap<>();
@@ -958,10 +995,14 @@ public class InternalTopologyBuilder {
      * @return map containing all global {@link StateStore}s
      */
     public Map<String, StateStore> globalStateStores() {
+        Objects.requireNonNull(applicationId, "topology has not completed optimization");
+
         return Collections.unmodifiableMap(globalStateStores);
     }
 
     public Set<String> allStateStoreName() {
+        Objects.requireNonNull(applicationId, "topology has not completed optimization");
+
         final Set<String> allNames = new HashSet<>(stateFactories.keySet());
         allNames.addAll(globalStateStores.keySet());
         return Collections.unmodifiableSet(allNames);
@@ -1044,7 +1085,7 @@ public class InternalTopologyBuilder {
 
     // Adjust the generated topology based on the configs.
     // Not exposed as public API and should be removed post 2.0
-    public void adjust(final StreamsConfig config) {
+    private void adjust(final StreamsConfig config) {
         final boolean enableOptimization20 = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
 
         if (enableOptimization20) {

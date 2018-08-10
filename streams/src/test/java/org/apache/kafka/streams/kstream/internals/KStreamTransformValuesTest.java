@@ -51,7 +51,7 @@ public class KStreamTransformValuesTest {
     private String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private ProcessorContext context;
 
