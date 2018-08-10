@@ -94,9 +94,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     /**
      * Check if tasks need to be enforced processing
      */
-    void maybeEnforceProcess() {
+    void maybeEnforceProcess(final long now) {
         for (final StreamTask task : running.values()) {
-            task.maybeEnforceProcess();
+            task.maybeEnforceProcess(now);
         }
     }
 

@@ -61,7 +61,7 @@ public class AssignedStreamsTasksTest {
     public void shouldInitializeNewTasks() {
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptySet());
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
         EasyMock.replay(t1);
 
         addAndInitTask();
@@ -75,13 +75,13 @@ public class AssignedStreamsTasksTest {
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptySet());
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
         EasyMock.expect(t2.initializeStateStores()).andReturn(true);
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
         final Set<TopicPartition> t2partitions = Collections.singleton(tp2);
         EasyMock.expect(t2.partitions()).andReturn(t2partitions);
-        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
 
         EasyMock.replay(t1, t2);
 
@@ -101,7 +101,7 @@ public class AssignedStreamsTasksTest {
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
-        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
 
         EasyMock.replay(t2);
 
@@ -145,7 +145,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseRestoringTasks() {
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptySet());
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
         t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -247,7 +247,7 @@ public class AssignedStreamsTasksTest {
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptyList());
     }
 
     @Test
@@ -342,7 +342,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess();
+        t1.maybeEnforceProcess(0L);
         EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(true);
         t1.process();
@@ -351,7 +351,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
-        assignedTasks.maybeEnforceProcess();
+        assignedTasks.maybeEnforceProcess(0L);
 
         try {
             assignedTasks.process();
@@ -365,13 +365,13 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldNotProcessUnprocessableTasks() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess();
+        t1.maybeEnforceProcess(0L);
         EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(false);
         EasyMock.replay(t1);
         addAndInitTask();
 
-        assignedTasks.maybeEnforceProcess();
+        assignedTasks.maybeEnforceProcess(0L);
 
         assertThat(assignedTasks.process(), equalTo(0));
 
@@ -381,7 +381,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldAlwaysProcessProcessableTasks() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess();
+        t1.maybeEnforceProcess(0L);
         EasyMock.expectLastCall();
         EasyMock.expect(t1.isProcessable()).andReturn(true);
         EasyMock.expect(t1.process()).andReturn(true).once();
@@ -389,7 +389,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.replay(t1);
 
         addAndInitTask();
-        assignedTasks.maybeEnforceProcess();
+        assignedTasks.maybeEnforceProcess(0L);
 
         assertThat(assignedTasks.process(), equalTo(1));
 
@@ -475,7 +475,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.hasStateStores()).andReturn(false).anyTimes();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList()).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptyList()).anyTimes();
         t1.suspend();
         EasyMock.expectLastCall();
     }

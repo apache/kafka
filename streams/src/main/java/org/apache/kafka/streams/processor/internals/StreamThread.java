@@ -839,7 +839,7 @@ public class StreamThread extends Thread {
         }
 
         if (taskManager.hasActiveRunningTasks()) {
-            taskManager.maybeEnforceProcess();
+            taskManager.maybeEnforceProcess(now);
 
             /*
              * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:

@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -111,7 +110,7 @@ public class StreamTaskTest {
     private final Long offset = 543L;
 
     private final ProcessorTopology topology = ProcessorTopology.withSources(
-        Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
+        Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
         mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
     );
 
@@ -128,7 +127,6 @@ public class StreamTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics();
-    private final Sensor skippedRecordsSensor = metrics.sensor("skipped-records");
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
@@ -157,7 +155,8 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE : StreamsConfig.AT_LEAST_ONCE)
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE : StreamsConfig.AT_LEAST_ONCE),
+            mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "100")
         )));
     }
 
@@ -485,22 +484,23 @@ public class StreamTaskTest {
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        task.maybeEnforceProcess();
+        task.maybeEnforceProcess(time.milliseconds());
         assertFalse(task.isProcessable());
 
-        task.maybeEnforceProcess();
+        task.maybeEnforceProcess(time.milliseconds() + 50L);
         assertFalse(task.isProcessable());
 
-        task.maybeEnforceProcess();
+        task.maybeEnforceProcess(time.milliseconds() + 101L);
+        assertTrue(task.isProcessable());
+
+        // after enforced, should reset the timer
+        task.maybeEnforceProcess(time.milliseconds() + 130L);
         assertFalse(task.isProcessable());
 
-        task.maybeEnforceProcess();
+        task.maybeEnforceProcess(time.milliseconds() + 201L);
         assertFalse(task.isProcessable());
 
-        task.maybeEnforceProcess();
-        assertFalse(task.isProcessable());
-
-        task.maybeEnforceProcess();
+        task.maybeEnforceProcess(time.milliseconds() + 202L);
         assertTrue(task.isProcessable());
     }
 
@@ -968,8 +968,8 @@ public class StreamTaskTest {
         final TopicPartition repartition = new TopicPartition("repartition", 1);
 
         final ProcessorTopology topology = ProcessorTopology.withRepartitionTopics(
-            Utils.<ProcessorNode>mkList(source1, source2),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(repartition.topic(), (SourceNode) source2)),
+            Utils.mkList(source1, source2),
+            mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
             Collections.singleton(repartition.topic())
         );
         consumer.assign(Arrays.asList(partition1, repartition));
@@ -1038,10 +1038,10 @@ public class StreamTaskTest {
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
-            Utils.<ProcessorNode>mkList(source1, source2),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2)),
+            Utils.mkList(source1, source2),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
             singletonList(stateStore),
-            logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.<String, String>emptyMap());
+            logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
 
         return new StreamTask(
             taskId00,
@@ -1060,10 +1060,10 @@ public class StreamTaskTest {
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
         final ProcessorTopology topology = ProcessorTopology.with(
-            Utils.<ProcessorNode>mkList(source1, source3),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source3)),
+            Utils.mkList(source1, source3),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
-            Collections.<String, String>emptyMap());
+            Collections.emptyMap());
 
         return new StreamTask(
             taskId00,
@@ -1082,7 +1082,7 @@ public class StreamTaskTest {
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-            Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
+            Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
@@ -1109,8 +1109,8 @@ public class StreamTaskTest {
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
     private StreamTask createTaskThatThrowsException() {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-            Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source3))
+            Utils.mkList(source1, source3, processorStreamTime, processorSystemTime),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3))
         );
 
         source1.addChild(processorStreamTime);

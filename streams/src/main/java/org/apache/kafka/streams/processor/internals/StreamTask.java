@@ -59,26 +59,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
-    private static final int WAIT_ON_PARTIAL_INPUT = 5;
-
+    private final Time time;
+    private final TaskMetrics taskMetrics;
     private final PartitionGroup partitionGroup;
+    private final RecordCollector recordCollector;
+    private final Producer<byte[], byte[]> producer;
     private final PartitionGroup.RecordInfo recordInfo;
+    private final Map<TopicPartition, Long> consumedOffsets;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
 
-    private final Map<TopicPartition, Long> consumedOffsets;
-    private final RecordCollector recordCollector;
-    private final Producer<byte[], byte[]> producer;
+    private final long maxTaskIdleMs;
     private final int maxBufferedSize;
 
-
-    private boolean commitRequested = false;
-    private boolean transactionInFlight = false;
-    private boolean enforcedProcess = false;
-    private int waitBeforeEnforceProcess = WAIT_ON_PARTIAL_INPUT;
-    private final Time time;
-    private final TaskMetrics taskMetrics;
     private Sensor closeSensor;
+    private long lastEnforcedProcess;
+    private boolean commitRequested = false;
+    private boolean enforcedProcess = false;
+    private boolean transactionInFlight = false;
 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
@@ -133,13 +131,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
 
             // add the metrics for enforced processing
-            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-process", Sensor.RecordingLevel.DEBUG, parent);
+            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-processing", Sensor.RecordingLevel.DEBUG, parent);
             taskEnforcedProcessSensor.add(
-                    new MetricName("enforced-process-rate", group, "The average number of occurrence of enforced-process per second.", tagMap),
+                    new MetricName("enforced-processing-rate", group, "The average number of occurrence of enforced-processing operation per second.", tagMap),
                     new Rate(TimeUnit.SECONDS, new Count())
             );
             taskEnforcedProcessSensor.add(
-                    new MetricName("enforced-process-total", group, "The total number of occurrence of enforced-process operations.", tagMap),
+                    new MetricName("enforced-processing-total", group, "The total number of occurrence of enforced-processing operations.", tagMap),
                     new Count()
             );
 
@@ -200,7 +198,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
+        maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+
+        lastEnforcedProcess = time.milliseconds();
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
@@ -292,12 +293,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return enforcedProcess || partitionGroup.allPartitionsBuffered();
     }
 
-    public void maybeEnforceProcess() {
+    public void maybeEnforceProcess(final long now) {
         if (partitionGroup.allPartitionsBuffered()) {
             enforcedProcess = false;
-        } else if (partitionGroup.numBuffered() > 0 && --waitBeforeEnforceProcess < 0) {
+        } else if (partitionGroup.numBuffered() > 0 && now - lastEnforcedProcess > maxTaskIdleMs) {
             taskMetrics.taskEnforcedProcessSensor.record();
-            waitBeforeEnforceProcess = WAIT_ON_PARTIAL_INPUT;
+            lastEnforcedProcess = now;
             enforcedProcess = true;
         } else {
             enforcedProcess = false;
