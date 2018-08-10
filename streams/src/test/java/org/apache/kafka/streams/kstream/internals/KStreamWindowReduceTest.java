@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -99,16 +100,16 @@ public class KStreamWindowReduceTest {
             driver.pipeInput(recordFactory.create("TOPIC", "k", "5", 5L));
             LogCaptureAppender.unregister(appender);
 
-            final Metric dropMetric = getMetricByNameFilterByTags(
-                driver.metrics(),
-                "late-event-drop-total",
+            final Metric dropMetric = driver.metrics().get(new MetricName(
+                "late-record-drop-total",
                 "stream-processor-node-metrics",
+                "The total number of occurrence of late-record-drop operations.",
                 mkMap(
                     mkEntry("client-id", "topology-test-driver-virtual-thread"),
                     mkEntry("task-id", "0_0"),
                     mkEntry("processor-node-id", "KSTREAM-REDUCE-0000000002")
                 )
-            );
+            ));
 
             assertThat(dropMetric.metricValue(), equalTo(5.0));
             assertThat(appender.getMessages(), hasItems(

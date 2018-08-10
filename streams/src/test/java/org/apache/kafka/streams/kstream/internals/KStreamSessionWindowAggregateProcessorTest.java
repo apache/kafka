@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
@@ -53,7 +54,6 @@ import java.util.List;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -353,16 +353,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("A", "1");
         LogCaptureAppender.unregister(appender);
 
-        final Metric dropMetric = getMetricByNameFilterByTags(
-            metrics.metrics(),
-            "late-event-drop-total",
+        final Metric dropMetric = metrics.metrics().get(new MetricName(
+            "late-record-drop-total",
             "stream-processor-node-metrics",
+            "The total number of occurrence of late-record-drop operations.",
             mkMap(
                 mkEntry("client-id", "test"),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
-        );
+        ));
         assertEquals(1.0, dropMetric.metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0) expiration=[10]"));
     }

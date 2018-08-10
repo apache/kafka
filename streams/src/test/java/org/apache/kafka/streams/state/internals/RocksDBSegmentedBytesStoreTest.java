@@ -58,6 +58,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -421,8 +423,31 @@ public class RocksDBSegmentedBytesStoreTest {
         LogCaptureAppender.unregister(appender);
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByName(metrics, "expired-window-event-drop-total", "stream-metrics-scope-metrics").metricValue());
-        assertNotEquals(0.0, getMetricByName(metrics, "expired-window-event-drop-rate", "stream-metrics-scope-metrics").metricValue());
+
+        final Metric dropTotal = metrics.get(new MetricName(
+            "expired-window-record-drop-total",
+            "stream-metrics-scope-metrics",
+            "The total number of occurrence of expired-window-record-drop operations.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("metrics-scope-id", "bytes-store")
+            )
+        ));
+
+        final Metric dropRate = metrics.get(new MetricName(
+            "expired-window-record-drop-rate",
+            "stream-metrics-scope-metrics",
+            "The average number of occurrence of expired-window-record-drop operation per second.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("metrics-scope-id", "bytes-store")
+            )
+        ));
+
+        assertEquals(1.0, dropTotal.metricValue());
+        assertNotEquals(0.0, dropRate.metricValue());
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Skipping record for expired segment."));
     }
