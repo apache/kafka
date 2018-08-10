@@ -24,9 +24,10 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
-import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
@@ -300,6 +301,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
 
         for (final Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
@@ -310,9 +312,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 continue;
             }
 
+            final SerializedInternal serialized = new SerializedInternal(getRepartitionSerdes(entry.getValue()));
+
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
-                                                                                      null,
-                                                                                       null);
+                                                                                      serialized.keySerde(),
+                                                                                      serialized.valueSerde());
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -379,6 +383,28 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             return keyChangingNode;
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private SerializedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+        Serde keySerde = null;
+        Serde valueSerde = null;
+
+        for (final OptimizableRepartitionNode repartitionNode : repartitionNodes) {
+            if (keySerde == null && repartitionNode.keySerde() != null) {
+                keySerde = repartitionNode.keySerde();
+            }
+
+            if (valueSerde == null && repartitionNode.valueSerde() != null) {
+                valueSerde = repartitionNode.valueSerde();
+            }
+
+            if (keySerde != null && valueSerde != null) {
+                break;
+            }
+        }
+
+        return new SerializedInternal(Serialized.with(keySerde, valueSerde));
     }
 
     private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,
