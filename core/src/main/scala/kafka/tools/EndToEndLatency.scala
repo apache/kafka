@@ -19,8 +19,7 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Arrays, Properties}
 
 import kafka.utils.Exit
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
