@@ -154,14 +154,14 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         expiredRecordSensor = metrics.storeLevelSensor(
             taskName,
             name(),
-            "expired-window-event-drop",
+            "expired-window-record-drop",
             Sensor.RecordingLevel.INFO
         );
         addInvocationRateAndCount(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            "expired-window-event-drop"
+            "expired-window-record-drop"
         );
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));

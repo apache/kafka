@@ -28,14 +28,14 @@ public class Sensors {
         final Sensor sensor = metrics.nodeLevelSensor(
             context.taskId().toString(),
             context.currentNode().name(),
-            "late-event-drop",
+            "late-record-drop",
             Sensor.RecordingLevel.INFO
         );
         StreamsMetricsImpl.addInvocationRateAndCount(
             sensor,
             "stream-processor-node-metrics",
-            metrics.tagMap("task-id", context.taskId().toString(), "processor-node" + "-id", context.currentNode().name()),
-            "late-event-drop"
+            metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", context.currentNode().name()),
+            "late-record-drop"
         );
         return sensor;
     }
