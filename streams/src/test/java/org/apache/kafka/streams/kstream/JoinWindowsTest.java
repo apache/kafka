@@ -130,7 +130,7 @@ public class JoinWindowsTest {
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        JoinWindows.of(3L).grace(Duration.ZERO);
+        JoinWindows.of(3L).grace(Duration.ZERO)
 
         try {
             JoinWindows.of(3L).grace(Duration.ofNanos(-1));

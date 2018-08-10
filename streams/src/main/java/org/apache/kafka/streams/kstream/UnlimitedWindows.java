@@ -97,7 +97,8 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * Throws an {@link IllegalArgumentException} because the retention time for unlimited windows is always infinite
      * and cannot be changed.
      *
-     * @throws IllegalArgumentException on every invocation
+     * @throws IllegalArgumentException on every invocation.
+     * @deprecated since 2.1.
      */
     @Override
     @Deprecated
@@ -110,6 +111,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * The retention time for unlimited windows in infinite and thus represented as {@link Long#MAX_VALUE}.
      *
      * @return the window retention time that is {@link Long#MAX_VALUE}
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
     @Override
     @Deprecated
@@ -124,7 +126,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException on every invocation
      */
     @Override
-    public Windows<UnlimitedWindow> grace(final Duration afterWindowEnd) {
+    public UnlimitedWindows grace(final Duration afterWindowEnd) {
         throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 

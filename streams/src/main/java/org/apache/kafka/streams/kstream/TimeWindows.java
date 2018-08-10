@@ -20,6 +20,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -120,6 +121,12 @@ public final class TimeWindows extends Windows<TimeWindow> {
         return sizeMs;
     }
 
+    @Override
+    public TimeWindows grace(final Duration afterWindowEnd) {
+        super.grace(afterWindowEnd);
+        return this;
+    }
+
     /**
      * @param durationMs the window retention time
      * @return itself
@@ -144,6 +151,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * For {@code TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
     @Override
     @Deprecated

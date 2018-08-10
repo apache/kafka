@@ -70,6 +70,9 @@ public abstract class Windows<W extends Window> {
      */
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public Duration grace() {
+        // NOTE: in the future, when we remove maintainMs,
+        // we should default the grace period to 24h to maintain the default behavior,
+        // or we can default to (24h - size) if you want to be super accurate.
         return grace != null ? grace : Duration.ofMillis(maintainMs() - size());
     }
 
@@ -80,10 +83,9 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
-     * @deprecated since 2.1. Use {@link Joined#withRetention(Duration)} or {@link Materialized#withRetention(Duration)}
+     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)}
      *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
-    // This should always get overridden to provide the correct return type and thus to avoid a cast
     @Deprecated
     public Windows<W> until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < 0) {
@@ -98,7 +100,7 @@ public abstract class Windows<W extends Window> {
      * Return the window maintain duration (retention time) in milliseconds.
      *
      * @return the window maintain duration
-     * @deprecated since 2.1. Use {@link Joined#retention()} or {@link Materialized#retention} instead.
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
     @Deprecated
     public long maintainMs() {

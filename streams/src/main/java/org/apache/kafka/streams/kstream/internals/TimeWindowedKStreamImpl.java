@@ -180,6 +180,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
             } else {
                 // old style retention: use deprecated Windows retention/segmentInterval.
+
+                // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
+                // to be (windows.size() + windows.grace()). This will yield the same default behavior.
                 supplier = Stores.persistentWindowStore(
                     materialized.storeName(),
                     windows.maintainMs(),
@@ -187,7 +190,6 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     false,
                     windows.segmentInterval()
                 );
-                // note:
             }
         }
         final StoreBuilder<WindowStore<K, VR>> builder = Stores.windowStoreBuilder(
