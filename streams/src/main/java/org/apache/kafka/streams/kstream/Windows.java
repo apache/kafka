@@ -22,8 +22,6 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import java.time.Duration;
 import java.util.Map;
 
-import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
-
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
  *
@@ -51,15 +49,15 @@ public abstract class Windows<W extends Window> {
      *
      * Lateness is defined as (stream_time - record_timestamp).
      *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
      */
-    public Windows<W> grace(final Duration afterWindowEnd) {
-        if (afterWindowEnd.isNegative()) {
+    public Windows<W> grace(final long millisAfterWindowEnd) {
+        if (millisAfterWindowEnd < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        grace = validateMillisecondDuration(afterWindowEnd, "Grace period");
+        grace = Duration.ofMillis(millisAfterWindowEnd);
 
         return this;
     }
@@ -71,11 +69,11 @@ public abstract class Windows<W extends Window> {
      * Lateness is defined as (stream_time - record_timestamp).
      */
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    public Duration grace() {
+    public long gracePeriodMs() {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return grace != null ? grace : Duration.ofMillis(maintainMs() - size());
+        return grace != null ? grace.toMillis() : maintainMs() - size();
     }
 
     /**
@@ -85,7 +83,7 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
-     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)}
+     * @deprecated since 2.1. Use {@link Materialized#withRetention(long)}
      *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     @Deprecated

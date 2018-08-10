@@ -182,13 +182,13 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             // to be (windows.inactivityGap() + windows.grace()). This will yield the same default behavior.
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs();
 
-            if ((windows.inactivityGap() + windows.grace().toMillis()) > retentionPeriod) {
+            if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the session store "
                                                        + materialized.storeName()
                                                        + " must be no smaller than the session inactivity gap plus the"
                                                        + " grace period."
                                                        + " Got gap=[" + windows.inactivityGap() + "],"
-                                                       + " grace=[" + windows.grace() + "],"
+                                                       + " grace=[" + windows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
             supplier = Stores.persistentSessionStore(

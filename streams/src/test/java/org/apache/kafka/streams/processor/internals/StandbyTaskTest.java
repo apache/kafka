@@ -233,8 +233,8 @@ public class StandbyTaskTest {
         builder
             .stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
-            .windowedBy(TimeWindows.of(60_000).grace(Duration.ZERO))
-            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(Duration.ofMinutes(2)));
+            .windowedBy(TimeWindows.of(60_000).grace(0L))
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(120_000L));
 
         builder.buildAndOptimizeTopology();
 

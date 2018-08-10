@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
-import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -39,6 +38,7 @@ public class WindowsTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
     public void shouldSetNumberOfSegments() {
         final int anySegmentSizeLargerThanOne = 5;
@@ -51,6 +51,7 @@ public class WindowsTest {
         );
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
     public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
@@ -60,28 +61,23 @@ public class WindowsTest {
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        new TestWindows().grace(Duration.ZERO);
+        new TestWindows().grace(0L);
 
         try {
-            new TestWindows().grace(Duration.ofNanos(-1));
+            new TestWindows().grace(-1L);
             fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
-
-        try {
-            new TestWindows().grace(Duration.ofSeconds(Long.MAX_VALUE));
-            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
         } catch (final IllegalArgumentException e) {
             //expected
         }
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test(expected = IllegalArgumentException.class)
     public void numberOfSegmentsMustBeAtLeastTwo() {
         new TestWindows().segments(1);
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test(expected = IllegalArgumentException.class)
     public void retentionTimeMustNotBeNegative() {
         new TestWindows().until(-1);

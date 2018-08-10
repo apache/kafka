@@ -46,7 +46,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -339,7 +338,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
-            SessionWindows.with(10L).grace(Duration.ofMillis(10L)),
+            SessionWindows.with(10L).grace(10L),
             STORE_NAME,
             initializer,
             aggregator,

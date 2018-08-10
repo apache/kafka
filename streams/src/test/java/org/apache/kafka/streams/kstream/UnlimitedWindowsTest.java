@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.junit.Test;
 
-import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -54,7 +53,7 @@ public class UnlimitedWindowsTest {
     @Test
     public void gracePeriodShouldNotBeSettable() {
         try {
-            UnlimitedWindows.of().grace(Duration.ZERO);
+            UnlimitedWindows.of().grace(0L);
             fail("should not be able to set grace period");
         } catch (final IllegalArgumentException e) {
             // expected

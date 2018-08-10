@@ -827,7 +827,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 joinName + "-store",
-                windows.size() + windows.grace().toMillis(),
+                windows.size() + windows.gracePeriodMs(),
                 windows.size(),
                 true
             ),

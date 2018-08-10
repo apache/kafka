@@ -20,7 +20,6 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -122,8 +121,8 @@ public final class TimeWindows extends Windows<TimeWindow> {
     }
 
     @Override
-    public TimeWindows grace(final Duration afterWindowEnd) {
-        super.grace(afterWindowEnd);
+    public TimeWindows grace(final long millisAfterWindowEnd) {
+        super.grace(millisAfterWindowEnd);
         return this;
     }
 

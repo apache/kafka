@@ -18,9 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
-import java.time.Duration;
-
-import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsNot.not;
@@ -45,18 +42,11 @@ public class SessionWindowsTest {
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        SessionWindows.with(3L).grace(Duration.ZERO);
+        SessionWindows.with(3L).grace(0L);
 
         try {
-            SessionWindows.with(3L).grace(Duration.ofNanos(-1));
+            SessionWindows.with(3L).grace(-1L);
             fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
-
-        try {
-            SessionWindows.with(3L).grace(ofSeconds(Long.MAX_VALUE));
-            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
         } catch (final IllegalArgumentException e) {
             //expected
         }
@@ -72,6 +62,7 @@ public class SessionWindowsTest {
         SessionWindows.with(0);
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated apis
     @Test
     public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
         final long windowGap = 2 * SessionWindows.with(1).maintainMs();
@@ -108,6 +99,6 @@ public class SessionWindowsTest {
 
     @Test
     public void shouldNotBeEqualWhenGraceIsDifferent() {
-        assertThat(SessionWindows.with(5).grace(Duration.ZERO), not(equalTo(SessionWindows.with(5).grace(ofSeconds(2)))));
+        assertThat(SessionWindows.with(5).grace(0L), not(equalTo(SessionWindows.with(5).grace(2L))));
     }
 }

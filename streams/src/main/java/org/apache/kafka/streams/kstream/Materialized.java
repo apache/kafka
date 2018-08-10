@@ -241,10 +241,11 @@ public class Materialized<K, V, S extends StateStore> {
      *
      * @return itself
      */
-    public Materialized<K, V, S> withRetention(final Duration retention) {
-        Objects.requireNonNull(retention, "Retention must not be null");
-        ApiUtils.validateMillisecondDuration(retention, "Retention");
-        this.retention = retention;
+    public Materialized<K, V, S> withRetention(final long retentionMs) {
+        if (retentionMs < 0) {
+            throw new IllegalArgumentException("Retention must not be negative.");
+        }
+        retention = Duration.ofMillis(retentionMs);
         return this;
     }
 }

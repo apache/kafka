@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -126,7 +125,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException on every invocation
      */
     @Override
-    public UnlimitedWindows grace(final Duration afterWindowEnd) {
+    public UnlimitedWindows grace(final long millisAfterWindowEnd) {
         throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 

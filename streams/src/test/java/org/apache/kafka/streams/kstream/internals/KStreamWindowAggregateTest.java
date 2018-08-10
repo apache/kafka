@@ -47,7 +47,6 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Properties;
 
-import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -317,7 +316,7 @@ public class KStreamWindowAggregateTest {
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5).grace(ofMillis(90L)))
+            .windowedBy(TimeWindows.of(10).advanceBy(5).grace(90L))
             .aggregate(
                 () -> "",
                 MockAggregator.toStringInstance("+"),

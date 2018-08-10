@@ -18,8 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
-import java.time.Duration;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
@@ -130,18 +128,11 @@ public class JoinWindowsTest {
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        JoinWindows.of(3L).grace(Duration.ZERO);
+        JoinWindows.of(3L).grace(0L);
 
         try {
-            JoinWindows.of(3L).grace(Duration.ofNanos(-1));
+            JoinWindows.of(3L).grace(-1L);
             fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
-
-        try {
-            JoinWindows.of(3L).grace(Duration.ofSeconds(Long.MAX_VALUE));
-            fail("should not accept durations longer than Long.MAX_VALUE milliseconds");
         } catch (final IllegalArgumentException e) {
             //expected
         }

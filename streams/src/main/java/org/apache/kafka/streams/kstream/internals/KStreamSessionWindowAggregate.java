@@ -104,7 +104,7 @@ class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSup
                 return;
             }
 
-            final long closeTime = internalProcessorContext.streamTime() - windows.grace().toMillis();
+            final long closeTime = internalProcessorContext.streamTime() - windows.gracePeriodMs();
 
             final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();

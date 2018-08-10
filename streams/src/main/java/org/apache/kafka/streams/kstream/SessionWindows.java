@@ -22,7 +22,6 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import java.time.Duration;
 import java.util.Objects;
 
-import static org.apache.kafka.streams.kstream.ApiUtils.validateMillisecondDuration;
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -124,28 +123,28 @@ public final class SessionWindows {
      * close times can lead to surprising results in which a too-late event is rejected and then
      * a subsequent event moves the window boundary forward.
      *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
      */
-    public SessionWindows grace(final Duration afterWindowEnd) {
-        if (afterWindowEnd.isNegative()) {
+    public SessionWindows grace(final long millisAfterWindowEnd) {
+        if (millisAfterWindowEnd < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
         return new SessionWindows(
             gapMs,
             maintainDurationMs,
-            validateMillisecondDuration(afterWindowEnd, "Grace period")
+            Duration.ofMillis(millisAfterWindowEnd)
         );
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    public Duration grace() {
+    public long gracePeriodMs() {
 
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - gapMs) if you want to be super accurate.
-        return grace != null ? grace : Duration.ofMillis(maintainMs() - inactivityGap());
+        return grace != null ? grace.toMillis() : maintainMs() - inactivityGap();
     }
 
     /**

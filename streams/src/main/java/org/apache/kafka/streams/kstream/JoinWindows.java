@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
-import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -135,8 +134,8 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     @Override
-    public JoinWindows grace(final Duration afterWindowEnd) {
-        super.grace(afterWindowEnd);
+    public JoinWindows grace(final long millisAfterWindowEnd) {
+        super.grace(millisAfterWindowEnd);
         return this;
     }
 
@@ -144,7 +143,7 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
-     * @deprecated since 2.1. Use {@link JoinWindows#grace(Duration)} instead.
+     * @deprecated since 2.1. Use {@link JoinWindows#grace(long)} instead.
      */
     @Override
     @Deprecated
@@ -162,7 +161,7 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
-     * @deprecated since 2.1. Use {@link JoinWindows#grace()} instead.
+     * @deprecated since 2.1. Use {@link JoinWindows#gracePeriodMs()} instead.
      */
     @Override
     @Deprecated

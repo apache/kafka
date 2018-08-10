@@ -57,10 +57,10 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -244,6 +244,7 @@ public class KStreamImplTest {
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
     }
 
+    @SuppressWarnings("deprecation") // specifically testing the deprecated variant
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -271,7 +272,7 @@ public class KStreamImplTest {
 
         for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertEquals(sourceNode.getTimestampExtractor(), null);
+                assertNull(sourceNode.getTimestampExtractor());
             } else {
                 assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
@@ -294,7 +295,7 @@ public class KStreamImplTest {
         stream.join(
             kStream,
             valueJoiner,
-            JoinWindows.of(windowSize).grace(ofMillis(3 * windowSize)),
+            JoinWindows.of(windowSize).grace(3L * windowSize),
             Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
         )
               .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
@@ -305,7 +306,7 @@ public class KStreamImplTest {
 
         for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertEquals(sourceNode.getTimestampExtractor(), null);
+                assertNull(sourceNode.getTimestampExtractor());
             } else {
                 assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }

@@ -99,7 +99,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             // first get the matching windows
             final long timestamp = context().timestamp();
-            final long closeTime = internalProcessorContext.streamTime() - windows.grace().toMillis();
+            final long closeTime = internalProcessorContext.streamTime() - windows.gracePeriodMs();
 
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
