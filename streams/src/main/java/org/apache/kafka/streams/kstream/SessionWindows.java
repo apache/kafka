@@ -141,7 +141,11 @@ public final class SessionWindows {
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public Duration grace() {
-        return grace != null ? grace : Duration.ofMillis(maintainMs());
+
+        // NOTE: in the future, when we remove maintainMs,
+        // we should default the grace period to 24h to maintain the default behavior,
+        // or we can default to (24h - gapMs) if you want to be super accurate.
+        return grace != null ? grace : Duration.ofMillis(maintainMs() - inactivityGap());
     }
 
     /**

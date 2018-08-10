@@ -171,6 +171,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 // new style retention: use Materialized retention and default segmentInterval
                 final long retentionPeriod = materialized.retention().toMillis();
 
+                if ((windows.size() + windows.grace().toMillis()) > retentionPeriod) {
+                    throw new IllegalArgumentException("The retention period of the window store "
+                                                           + name + " must be no smaller than its window size plus the grace period."
+                                                           + " Got size=[" + windows.size() + "],"
+                                                           + " grace=[" + windows.grace() + "],"
+                                                           + " retention=[" + retentionPeriod + "]");
+                }
+
                 supplier = Stores.persistentWindowStore(
                     materialized.storeName(),
                     retentionPeriod,
@@ -183,6 +191,15 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
                 // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
                 // to be (windows.size() + windows.grace()). This will yield the same default behavior.
+
+                if ((windows.size() + windows.grace().toMillis()) > windows.maintainMs()) {
+                    throw new IllegalArgumentException("The retention period of the window store "
+                                                           + name + " must be no smaller than its window size plus the grace period."
+                                                           + " Got size=[" + windows.size() + "],"
+                                                           + " grace=[" + windows.grace() + "],"
+                                                           + " retention=[" + windows.maintainMs()+ "]");
+                }
+
                 supplier = Stores.persistentWindowStore(
                     materialized.storeName(),
                     windows.maintainMs(),

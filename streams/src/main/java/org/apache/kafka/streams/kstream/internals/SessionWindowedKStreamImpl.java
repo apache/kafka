@@ -178,14 +178,18 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
+            // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
+            // to be (windows.inactivityGap() + windows.grace()). This will yield the same default behavior.
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs();
 
-            if (windows.inactivityGap() > retentionPeriod) {
+            if ((windows.inactivityGap() + windows.grace().toMillis()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the session store "
                                                        + materialized.storeName()
-                                                       + " must be no smaller than the session inactivity gap. "
-                                                       + "Got gap=[" + windows.inactivityGap()
-                                                       + "], retention=[" + retentionPeriod + "]");
+                                                       + " must be no smaller than the session inactivity gap plus the"
+                                                       + " grace period."
+                                                       + " Got gap=[" + windows.inactivityGap() + "],"
+                                                       + " grace=[" + windows.grace() + "],"
+                                                       + " retention=[" + retentionPeriod + "]");
             }
             supplier = Stores.persistentSessionStore(
                 materialized.storeName(),
