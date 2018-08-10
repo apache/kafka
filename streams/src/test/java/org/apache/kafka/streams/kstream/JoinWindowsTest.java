@@ -27,8 +27,8 @@ import static org.junit.Assert.fail;
 
 public class JoinWindowsTest {
 
-    private static long anySize = 123L;
-    private static long anyOtherSize = 456L; // should be larger than anySize
+    private static final long anySize = 123L;
+    private static final long anyOtherSize = 456L; // should be larger than anySize
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
@@ -130,7 +130,7 @@ public class JoinWindowsTest {
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        JoinWindows.of(3L).grace(Duration.ZERO)
+        JoinWindows.of(3L).grace(Duration.ZERO);
 
         try {
             JoinWindows.of(3L).grace(Duration.ofNanos(-1));
