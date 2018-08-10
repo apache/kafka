@@ -82,21 +82,18 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
+    // sends a dummy message to create the topic if it doesn't exist
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, Array[Byte]())).get()
+
     def finalise() {
       consumer.commitSync()
       producer.close()
       consumer.close()
     }
 
-    val topics = consumer.listTopics()
-    val tp = topics.get(topic)
-    if (tp == null) {
-      finalise()
-      throw new RuntimeException("The tested topic doesn't exist in the cluster")
-    }
-    val topicPartitions = tp.asScala
-      .map(pi => new TopicPartition(pi.topic(), pi.partition()))
-      .to[List].asJava
+
+    val topicPartitions = consumer.partitionsFor(topic).asScala
+      .map(p => new TopicPartition(p.topic(), p.partition())).asJava
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
     consumer.assignment().asScala.foreach(consumer.position)
