@@ -469,8 +469,8 @@ public class MetricsTest {
         MetricName countTotalMetricName = metrics.metricName("test.count.total", "grp1");
         s.add(new Meter(TimeUnit.SECONDS, rateMetricName, totalMetricName));
         s.add(new Meter(TimeUnit.SECONDS, new Count(), countRateMetricName, countTotalMetricName));
-        KafkaMetric totalMetric = metrics.metrics().get(metrics.metricName("test.total", "grp1"));
-        KafkaMetric countTotalMetric = metrics.metrics().get(metrics.metricName("test.count.total", "grp1"));
+        KafkaMetric totalMetric = metrics.metrics().get(totalMetricName);
+        KafkaMetric countTotalMetric = metrics.metrics().get(countTotalMetricName);
 
         int sum = 0;
         int count = cfg.samples() - 1;
@@ -488,8 +488,8 @@ public class MetricsTest {
         // prior to any time passing
         double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
 
-        KafkaMetric rateMetric = metrics.metrics().get(metrics.metricName("test.rate", "grp1"));
-        KafkaMetric countRateMetric = metrics.metrics().get(metrics.metricName("test.count.rate", "grp1"));
+        KafkaMetric rateMetric = metrics.metrics().get(rateMetricName);
+        KafkaMetric countRateMetric = metrics.metrics().get(countRateMetricName);
         assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, rateMetric.value(), EPS);
         assertEquals("Count rate(0...2) = 0.02666", count / elapsedSecs, countRateMetric.value(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
