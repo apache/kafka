@@ -70,7 +70,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
-        private Sensor lateEventDropSensor;
+        private Sensor lateRecordDropSensor;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -80,7 +80,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             metrics = (StreamsMetricsImpl) context.metrics();
 
-            lateEventDropSensor = Sensors.lateEventDropSensor(internalProcessorContext);
+            lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
 
             windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
@@ -124,7 +124,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
                         key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );
-                    lateEventDropSensor.record();
+                    lateRecordDropSensor.record();
                 }
             }
         }

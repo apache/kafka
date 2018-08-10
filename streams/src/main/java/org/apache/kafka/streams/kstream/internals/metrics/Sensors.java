@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 public class Sensors {
     private Sensors() {}
 
-    public static Sensor lateEventDropSensor(final InternalProcessorContext context) {
+    public static Sensor lateRecordDropSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
         final Sensor sensor = metrics.nodeLevelSensor(
             context.taskId().toString(),
