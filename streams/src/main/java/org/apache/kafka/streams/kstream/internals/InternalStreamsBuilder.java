@@ -23,8 +23,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,7 +60,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final BuildPriorityComparator buildPriorityComparator = new BuildPriorityComparator();
     private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
     private final Set<TableSourceNode> tableSourceNodes = new LinkedHashSet<>();
 
@@ -271,7 +269,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         maybePerformOptimizations(props);
 
-        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, buildPriorityComparator);
+        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(StreamsGraphNode::buildPriority));
 
         graphNodePriorityQueue.offer(root);
 
@@ -425,14 +423,5 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public StreamsGraphNode root() {
         return root;
-    }
-
-    private static class BuildPriorityComparator implements Comparator<StreamsGraphNode>, Serializable {
-
-        @Override
-        public int compare(final StreamsGraphNode o1,
-                           final StreamsGraphNode o2) {
-            return o1.buildPriority().compareTo(o2.buildPriority());
-        }
     }
 }
