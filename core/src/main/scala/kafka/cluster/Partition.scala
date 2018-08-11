@@ -23,14 +23,14 @@ import com.yammer.metrics.core.Gauge
 import kafka.api.{LeaderAndIsr, Request}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.KafkaController
-import kafka.log.{LogAppendInfo, LogConfig}
+import kafka.log.{LogAppendInfo, LogConfig, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.AdminZkClient
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
+import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException, ReplicaNotAvailableException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.MemoryRecords
@@ -47,15 +47,20 @@ import scala.collection.Map
 class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
-                replicaManager: ReplicaManager,
+                config: KafkaConfig,
+                zkClientParam: KafkaZkClient,
+                logManagerParam: LogManager,
+                metadataCache: MetadataCache,
+                delayedOperationManager: DelayedOperationManager,
+                isrManager: IsrManager,
                 val isOffline: Boolean = false) extends Logging with KafkaMetricsGroup {
 
   val topicPartition = new TopicPartition(topic, partitionId)
 
   // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
-  private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
-  private val logManager = if (!isOffline) replicaManager.logManager else null
-  private val zkClient = if (!isOffline) replicaManager.zkClient else null
+  private val localBrokerId = if (!isOffline) config.brokerId else -1
+  private val logManager = if (!isOffline) logManagerParam else null
+  private val zkClient = if (!isOffline) zkClientParam else null
   // allReplicasMap includes both assigned replicas and the future replica if there is ongoing replica movement
   private val allReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
@@ -175,7 +180,7 @@ class Partition(val topic: String,
         val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
         val config = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
         val log = logManager.getOrCreateLog(topicPartition, config, isNew, replicaId == Request.FutureLocalReplicaId)
-        val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent)
+        val checkpoint = logManager.highWatermarkCheckpoints(log.dir.getParent)
         val offsetMap = checkpoint.read()
         if (!offsetMap.contains(topicPartition))
           info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -362,9 +367,9 @@ class Partition(val topic: String,
   def updateReplicaLogReadResult(replica: Replica, logReadResult: LogReadResult): Boolean = {
     val replicaId = replica.brokerId
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
-    val oldLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
+    val oldLeaderLW = if (delayedOperationManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
     replica.updateLogReadResult(logReadResult)
-    val newLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
+    val newLeaderLW = if (delayedOperationManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
     // check if the LW of the partition has incremented
     // since the replica's logStartOffset may have incremented
     val leaderLWIncremented = newLeaderLW > oldLeaderLW
@@ -408,7 +413,7 @@ class Partition(val topic: String,
               s"to ${newInSyncReplicas.map(_.brokerId).mkString(",")}")
             // update ISR in ZK and cache
             updateIsr(newInSyncReplicas)
-            replicaManager.isrExpandRate.mark()
+            isrManager.isrExpandRate.mark()
           }
           // check if the HW of the partition can now be incremented
           // since the replica may already be in the ISR and its LEO has just incremented
@@ -478,7 +483,7 @@ class Partition(val topic: String,
    */
   private def maybeIncrementLeaderHW(leaderReplica: Replica, curTime: Long = time.milliseconds): Boolean = {
     val allLogEndOffsets = assignedReplicas.filter { replica =>
-      curTime - replica.lastCaughtUpTimeMs <= replicaManager.config.replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
+      curTime - replica.lastCaughtUpTimeMs <= config.replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
     }.map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
     val oldHighWatermark = leaderReplica.highWatermark
@@ -507,7 +512,7 @@ class Partition(val topic: String,
     if (!isLeaderReplicaLocal)
       throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     val logStartOffsets = allReplicas.collect {
-      case replica if replicaManager.metadataCache.isBrokerAlive(replica.brokerId) || replica.brokerId == Request.FutureLocalReplicaId => replica.logStartOffset
+      case replica if metadataCache.isBrokerAlive(replica.brokerId) || replica.brokerId == Request.FutureLocalReplicaId => replica.logStartOffset
     }
     CoreUtils.min(logStartOffsets, 0L)
   }
@@ -517,9 +522,9 @@ class Partition(val topic: String,
    */
   private def tryCompleteDelayedRequests() {
     val requestKey = new TopicPartitionOperationKey(topicPartition)
-    replicaManager.tryCompleteDelayedFetch(requestKey)
-    replicaManager.tryCompleteDelayedProduce(requestKey)
-    replicaManager.tryCompleteDelayedDeleteRecords(requestKey)
+    delayedOperationManager.tryCompleteDelayedFetch(requestKey)
+    delayedOperationManager.tryCompleteDelayedProduce(requestKey)
+    delayedOperationManager.tryCompleteDelayedDeleteRecords(requestKey)
   }
 
   def maybeShrinkIsr(replicaMaxLagTimeMs: Long) {
@@ -536,7 +541,7 @@ class Partition(val topic: String,
             updateIsr(newInSyncReplicas)
             // we may need to increment high watermark since ISR could be down to 1
 
-            replicaManager.isrShrinkRate.mark()
+            isrManager.isrShrinkRate.mark()
             maybeIncrementLeaderHW(leaderReplica)
           } else {
             false
@@ -635,7 +640,7 @@ class Partition(val topic: String,
 
           val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
           // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
+          delayedOperationManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
@@ -733,12 +738,12 @@ class Partition(val topic: String,
       controllerEpoch)
 
     if (updateSucceeded) {
-      replicaManager.recordIsrChange(topicPartition)
+      isrManager.recordIsrChange(topicPartition)
       inSyncReplicas = newIsr
       zkVersion = newVersion
       trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newIsr.mkString(","), zkVersion))
     } else {
-      replicaManager.failedIsrUpdatesRate.mark()
+      isrManager.failedIsrUpdatesRate.mark()
       info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))
     }
   }

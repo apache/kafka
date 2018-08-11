@@ -42,7 +42,7 @@ case class DeleteRecordsPartitionStatus(requiredOffset: Long,
  */
 class DelayedDeleteRecords(delayMs: Long,
                            deleteRecordsStatus:  Map[TopicPartition, DeleteRecordsPartitionStatus],
-                           replicaManager: ReplicaManager,
+                           partitionManager: PartitionManager,
                            responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -72,7 +72,7 @@ class DelayedDeleteRecords(delayMs: Long,
       trace(s"Checking delete records satisfaction for ${topicPartition}, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {
+        val (lowWatermarkReached, error, lw) = partitionManager.getPartition(topicPartition) match {
           case Some(partition) =>
             if (partition eq ReplicaManager.OfflinePartition) {
               (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)

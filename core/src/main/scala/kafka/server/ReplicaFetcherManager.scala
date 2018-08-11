@@ -18,18 +18,19 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
-class ReplicaFetcherManager(brokerConfig: KafkaConfig, protected val replicaManager: ReplicaManager, metrics: Metrics,
-                            time: Time, threadNamePrefix: Option[String] = None, quotaManager: ReplicationQuotaManager)
+class ReplicaFetcherManager(brokerConfig: KafkaConfig, zkClient: KafkaZkClient, partitionManager: PartitionManager, brokerTopicStats: BrokerTopicStats,
+                            metrics: Metrics, time: Time, threadNamePrefix: Option[String] = None, quotaManager: ReplicationQuotaManager, replicaAlterLogDirsManager: ReplicaAlterLogDirsManager)
       extends AbstractFetcherManager("ReplicaFetcherManager on broker " + brokerConfig.brokerId,
         "Replica", brokerConfig.numReplicaFetchers) {
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"${tp}:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, replicaManager, metrics, time, quotaManager)
+    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, zkClient, partitionManager, brokerTopicStats, metrics, time, quotaManager, replicaAlterLogDirsManager)
   }
 
   def shutdown() {

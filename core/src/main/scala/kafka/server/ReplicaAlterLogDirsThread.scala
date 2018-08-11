@@ -39,7 +39,8 @@ import scala.collection.{Map, Seq, Set, mutable}
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
                                 brokerConfig: KafkaConfig,
-                                replicaMgr: ReplicaManager,
+                                partitionManager: PartitionManager,
+                                messageFetcher: MessageFetcher,
                                 quota: ReplicationQuotaManager,
                                 brokerTopicStats: BrokerTopicStats)
   extends AbstractFetcherThread(name = name,
@@ -69,7 +70,7 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
-    replicaMgr.fetchMessages(
+    messageFetcher.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
       Request.FutureLocalReplicaId,
       request.minBytes,
@@ -90,8 +91,8 @@ class ReplicaAlterLogDirsThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
-    val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val futureReplica = partitionManager.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
+    val partition = partitionManager.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
     if (fetchOffset != futureReplica.logEndOffset.messageOffset)
@@ -110,9 +111,9 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
-    val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
-    val currentReplica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val futureReplica = partitionManager.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
+    val currentReplica = partitionManager.getReplicaOrException(topicPartition)
+    val partition = partitionManager.getPartition(topicPartition).get
     val logEndOffset: Long = currentReplica.logEndOffset.messageOffset
 
     if (logEndOffset < futureReplica.logEndOffset.messageOffset) {
@@ -142,7 +143,7 @@ class ReplicaAlterLogDirsThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
-    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
+    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = partitionManager.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
 
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
@@ -162,7 +163,7 @@ class ReplicaAlterLogDirsThread(name: String,
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
+        val (leaderEpoch, leaderOffset) = partitionManager.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>
@@ -192,8 +193,8 @@ class ReplicaAlterLogDirsThread(name: String,
 
     fetchedEpochs.foreach { case (topicPartition, epochOffset) =>
       try {
-        val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
-        val partition = replicaMgr.getPartition(topicPartition).get
+        val futureReplica = partitionManager.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
+        val partition = partitionManager.getPartition(topicPartition).get
 
         if (epochOffset.hasError) {
           info(s"Retrying leaderEpoch request for partition $topicPartition as the current replica reported an error: ${epochOffset.error}")
@@ -232,7 +233,7 @@ class ReplicaAlterLogDirsThread(name: String,
     if (maxPartitionOpt.nonEmpty) {
       val (topicPartition, partitionFetchState) = maxPartitionOpt.get
       try {
-        val logStartOffset = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId).logStartOffset
+        val logStartOffset = partitionManager.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId).logStartOffset
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset, fetchSize))
       } catch {
         case _: KafkaStorageException =>
