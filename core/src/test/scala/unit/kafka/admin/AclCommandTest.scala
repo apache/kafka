@@ -204,7 +204,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   @Test(expected = classOf[IllegalArgumentException])
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
-    AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+    val aclCommandService = new AclCommand.AuthorizerService(new AclCommandOptions(args))
+    aclCommandService.listAcls()
   }
 
   @Test
