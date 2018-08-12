@@ -465,8 +465,12 @@ public class MetricsTest {
         Sensor s = metrics.sensor("test.sensor", cfg);
         MetricName rateMetricName = metrics.metricName("test.rate", "grp1");
         MetricName totalMetricName = metrics.metricName("test.total", "grp1");
+        MetricName countRateMetricName = metrics.metricName("test.count.rate", "grp1");
+        MetricName countTotalMetricName = metrics.metricName("test.count.total", "grp1");
         s.add(new Meter(TimeUnit.SECONDS, rateMetricName, totalMetricName));
-        KafkaMetric totalMetric = metrics.metrics().get(metrics.metricName("test.total", "grp1"));
+        s.add(new Meter(TimeUnit.SECONDS, new Count(), countRateMetricName, countTotalMetricName));
+        KafkaMetric totalMetric = metrics.metrics().get(totalMetricName);
+        KafkaMetric countTotalMetric = metrics.metrics().get(countTotalMetricName);
 
         int sum = 0;
         int count = cfg.samples() - 1;
@@ -484,11 +488,21 @@ public class MetricsTest {
         // prior to any time passing
         double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
 
-        KafkaMetric rateMetric = metrics.metrics().get(metrics.metricName("test.rate", "grp1"));
+        KafkaMetric rateMetric = metrics.metrics().get(rateMetricName);
+        KafkaMetric countRateMetric = metrics.metrics().get(countRateMetricName);
         assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, rateMetric.value(), EPS);
+        assertEquals("Count rate(0...2) = 0.02666", count / elapsedSecs, countRateMetric.value(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
                 ((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
         assertEquals(sum, totalMetric.value(), EPS);
+        assertEquals(count, countTotalMetric.value(), EPS);
+
+        // Verify that rates are expired, but total is cumulative
+        time.sleep(cfg.timeWindowMs() * cfg.samples());
+        assertEquals(0, rateMetric.value(), EPS);
+        assertEquals(0, countRateMetric.value(), EPS);
+        assertEquals(sum, totalMetric.value(), EPS);
+        assertEquals(count, countTotalMetric.value(), EPS);
     }
 
     public static class ConstantMeasurable implements Measurable {
