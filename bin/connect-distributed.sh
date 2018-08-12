@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-        echo "USAGE: $0 [-daemon] connect-distributed.properties"
+        echo "USAGE: $0 [-daemon] connect-distributed.properties [--override property=value]*"
         exit 1
 fi
 

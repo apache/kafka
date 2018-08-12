@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.Random;
 
 import static org.apache.kafka.common.utils.Utils.formatAddress;
@@ -105,6 +106,16 @@ public class UtilsTest {
         assertEquals("", Utils.join(Collections.emptyList(), ","));
         assertEquals("1", Utils.join(Arrays.asList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
+    }
+
+    @Test
+    public void testLoadPropOverrides() throws IOException {
+        assertEquals(Collections.emptyMap(), Utils.loadPropOverrides(Collections.<String>emptyList()));
+
+        Properties props = new Properties();
+        props.setProperty("key1", "val12");
+        props.setProperty("key2", "val21");
+        assertEquals(props, Utils.loadPropOverrides(Arrays.asList(new String[] {"key1=val11", "key2=val21", "key1=val12"})));
     }
     
     @Test
