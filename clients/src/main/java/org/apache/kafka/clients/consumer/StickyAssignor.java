@@ -627,41 +627,41 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                                    Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
         String consumer = currentPartitionConsumer.get(partition);
 
-        // find the new consumer
-        String newConsumer = null;
+        // find the next consumer for partition
+        String nextConsumer = null;
         for (String anotherConsumer: sortedCurrentSubscriptions) {
             if (consumer2AllPotentialPartitions.get(anotherConsumer).contains(partition)) {
-                newConsumer = anotherConsumer;
+                nextConsumer = anotherConsumer;
                 break;
             }
         }
 
-        assert newConsumer != null;
+        assert nextConsumer != null;
 
         // find the correct partition movement considering the stickiness requirement
-        TopicPartition partitionToBeMoved = partitionMovements.getTheActualPartitionToBeMoved(partition, consumer, newConsumer);
-        processPartitionMovement(partitionToBeMoved, newConsumer, currentAssignment, sortedCurrentSubscriptions, currentPartitionConsumer);
+        TopicPartition partitionToBeMoved = partitionMovements.getTheActualPartitionToBeMoved(partition, consumer, nextConsumer);
+        processPartitionMovement(partitionToBeMoved, nextConsumer, currentAssignment, sortedCurrentSubscriptions, currentPartitionConsumer);
 
         return;
     }
 
     private void processPartitionMovement(TopicPartition partition,
-                                          String newConsumer,
+                                          String nextConsumer,
                                           Map<String, List<TopicPartition>> currentAssignment,
                                           TreeSet<String> sortedCurrentSubscriptions,
                                           Map<TopicPartition, String> currentPartitionConsumer) {
-        String oldConsumer = currentPartitionConsumer.get(partition);
+        String prevConsumer = currentPartitionConsumer.get(partition);
 
-        sortedCurrentSubscriptions.remove(oldConsumer);
-        sortedCurrentSubscriptions.remove(newConsumer);
+        sortedCurrentSubscriptions.remove(prevConsumer);
+        sortedCurrentSubscriptions.remove(nextConsumer);
 
-        partitionMovements.movePartition(partition, oldConsumer, newConsumer);
+        partitionMovements.movePartition(partition, prevConsumer, nextConsumer);
 
-        currentAssignment.get(oldConsumer).remove(partition);
-        currentAssignment.get(newConsumer).add(partition);
-        currentPartitionConsumer.put(partition, newConsumer);
-        sortedCurrentSubscriptions.add(newConsumer);
-        sortedCurrentSubscriptions.add(oldConsumer);
+        currentAssignment.get(prevConsumer).remove(partition);
+        currentAssignment.get(nextConsumer).add(partition);
+        currentPartitionConsumer.put(partition, nextConsumer);
+        sortedCurrentSubscriptions.add(nextConsumer);
+        sortedCurrentSubscriptions.add(prevConsumer);
     }
 
     boolean isSticky() {
@@ -800,23 +800,23 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             partitionMovementsForThisTopic.get(pair).add(partition);
         }
 
-        private void movePartition(TopicPartition partition, String oldConsumer, String newConsumer) {
-            ConsumerPair pair = new ConsumerPair(oldConsumer, newConsumer);
+        private void movePartition(TopicPartition partition, String prevConsumer, String nextConsumer) {
+            ConsumerPair pair = new ConsumerPair(prevConsumer, nextConsumer);
 
             if (partitionMovements.containsKey(partition)) {
                 // this partition has previously moved
                 ConsumerPair existingPair = removeMovementRecordOfPartition(partition);
-                assert existingPair.dstMemberId.equals(oldConsumer);
-                if (!existingPair.srcMemberId.equals(newConsumer)) {
+                assert existingPair.dstMemberId.equals(prevConsumer);
+                if (!existingPair.srcMemberId.equals(nextConsumer)) {
                     // the partition is not moving back to its previous consumer
-                    // return new ConsumerPair2(existingPair.src, newConsumer);
-                    addPartitionMovementRecord(partition, new ConsumerPair(existingPair.srcMemberId, newConsumer));
+                    // return new ConsumerPair2(existingPair.src, nextConsumer);
+                    addPartitionMovementRecord(partition, new ConsumerPair(existingPair.srcMemberId, nextConsumer));
                 }
             } else
                 addPartitionMovementRecord(partition, pair);
         }
 
-        private TopicPartition getTheActualPartitionToBeMoved(TopicPartition partition, String oldConsumer, String newConsumer) {
+        private TopicPartition getTheActualPartitionToBeMoved(TopicPartition partition, String prevConsumer, String nextConsumer) {
             String topic = partition.topic();
 
             if (!partitionMovementsByTopic.containsKey(topic))
@@ -824,12 +824,12 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             if (partitionMovements.containsKey(partition)) {
                 // this partition has previously moved
-                assert oldConsumer.equals(partitionMovements.get(partition).dstMemberId);
-                oldConsumer = partitionMovements.get(partition).srcMemberId;
+                assert prevConsumer.equals(partitionMovements.get(partition).dstMemberId);
+                prevConsumer = partitionMovements.get(partition).srcMemberId;
             }
 
             Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
-            ConsumerPair reversePair = new ConsumerPair(newConsumer, oldConsumer);
+            ConsumerPair reversePair = new ConsumerPair(nextConsumer, prevConsumer);
             if (!partitionMovementsForThisTopic.containsKey(reversePair))
                 return partition;
 

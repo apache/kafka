@@ -224,7 +224,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[OptionException])
-  def testDeleteWithUnrecognizedNewConsumerOption() {
+  def testDeleteWithUnrecognizedConsumerOption() {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
     getConsumerGroupService(cgcArgs)
   }

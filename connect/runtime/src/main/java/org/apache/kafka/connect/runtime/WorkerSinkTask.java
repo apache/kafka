@@ -470,14 +470,14 @@ class WorkerSinkTask extends WorkerTask {
 
         props.putAll(workerConfig.originalsWithPrefix("consumer."));
 
-        KafkaConsumer<byte[], byte[]> newConsumer;
+        KafkaConsumer<byte[], byte[]> consumer;
         try {
-            newConsumer = new KafkaConsumer<>(props);
+            consumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
             throw new ConnectException("Failed to create consumer", t);
         }
 
-        return newConsumer;
+        return consumer;
     }
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {

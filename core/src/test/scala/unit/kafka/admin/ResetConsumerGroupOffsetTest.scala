@@ -71,15 +71,15 @@ class TimeConversionTests {
   * - export/import
   */
 class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
-  
+
   val overridingProps = new Properties()
   val topic1 = "foo1"
   val topic2 = "foo2"
 
   override def generateConfigs: Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false)
-      .map(KafkaConfig.fromProps(_, overridingProps))  
-  } 
+      .map(KafkaConfig.fromProps(_, overridingProps))
+  }
 
   @Test
   def testResetOffsetsNotExistingGroup() {
@@ -337,7 +337,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[OptionException])
-  def testResetWithUnrecognizedNewConsumerOption() {
+  def testResetWithUnrecognizedConsumerOption() {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
     getConsumerGroupService(cgcArgs)
