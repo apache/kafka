@@ -126,7 +126,7 @@
         --consumer.config consumer.properties
         --producer.config producer.properties --whitelist my-topic
   </pre>
-  Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
+  Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '.*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
   <p>
   Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want
   to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
