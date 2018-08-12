@@ -550,8 +550,8 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -565,9 +565,9 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).once();
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         // second call should be no-op as the previous one is not done yet
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -583,8 +583,8 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 

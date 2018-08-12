@@ -428,7 +428,7 @@ public class TaskManager {
         return active.maybeCommit();
     }
 
-    void maybePurgeCommitedRecords() {
+    void maybePurgeCommittedRecords() {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.
