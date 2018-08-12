@@ -1245,12 +1245,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new ListGroupsResponse(requestThrottleMs, error, groups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
     else {
       val filteredGroups = groups.filter(group => authorize(request.session, Describe, new Resource(Group, group.groupId, LITERAL)))
-      if (filteredGroups.isEmpty)
-        sendResponseMaybeThrottle(request, requestThrottleMs => new ListGroupsResponse(requestThrottleMs, Errors.NONE, List().asJava))
-      else {
-        sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new ListGroupsResponse(requestThrottleMs, error, filteredGroups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
-      }
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ListGroupsResponse(requestThrottleMs, error, filteredGroups.map { group => new ListGroupsResponse.Group(group.groupId, group.protocolType) }.asJava))
     }
   }
 

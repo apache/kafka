@@ -1058,13 +1058,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     // it should list only one group now
     val groupList = adminClient.listConsumerGroups().all().get().asScala.toList
-    assertTrue(groupList.length == 1 && groupList.head.groupId == group)
+    assertEquals(1, groupList.length)
+    assertEquals(group, groupList.head.groupId)
 
     // now remove all acls and verify describe group access is required to list any group
     removeAllAcls()
     val listGroupResult = adminClient.listConsumerGroups()
-    assertTrue(listGroupResult.errors().get().isEmpty)
-    assertTrue(listGroupResult.all().get().isEmpty)
+    assertEquals(List(), listGroupResult.errors().get().asScala.toList)
+    assertEquals(List(), listGroupResult.all().get().asScala.toList)
     otherConsumer.close()
   }
 
