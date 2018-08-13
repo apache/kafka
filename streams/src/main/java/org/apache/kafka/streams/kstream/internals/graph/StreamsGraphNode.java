@@ -45,7 +45,7 @@ public abstract class StreamsGraphNode {
         return parentNodes;
     }
 
-    public String[] parentNodeNames() {
+    String[] parentNodeNames() {
         final String[] parentNames = new String[parentNodes.size()];
         int index = 0;
         for (final StreamsGraphNode parentNode : parentNodes) {
@@ -63,32 +63,24 @@ public abstract class StreamsGraphNode {
         return true;
     }
 
-    public void addParentNode(final StreamsGraphNode parentNode) {
-        parentNodes.add(parentNode);
-    }
-
     public Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 
     public void clearChildren() {
         for (final StreamsGraphNode childNode : childNodes) {
-            childNode.removeParent(this);
+            childNode.parentNodes.remove(this);
         }
         childNodes.clear();
     }
 
     public boolean removeChild(final StreamsGraphNode child) {
-        return childNodes.remove(child) && child.removeParent(this);
+        return childNodes.remove(child) && child.parentNodes.remove(this);
     }
 
-    public boolean removeParent(final StreamsGraphNode parentNode) {
-        return parentNodes.remove(parentNode);
-    }
-
-    public void addChildNode(final StreamsGraphNode childNode) {
+    public void addChild(final StreamsGraphNode childNode) {
         this.childNodes.add(childNode);
-        childNode.addParentNode(this);
+        childNode.parentNodes.add(this);
     }
 
     public String nodeName() {

@@ -44,7 +44,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -61,7 +60,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
     private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
-    private final Set<TableSourceNode> tableSourceNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -220,7 +218,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                       final StreamsGraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
-        parent.addChildNode(child);
+        parent.addChild(child);
         maybeAddNodeForOptimizationMetadata(child);
     }
 
@@ -248,9 +246,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 + node.getClass().getSimpleName());
         }
 
-        if (node instanceof TableSourceNode && !((TableSourceNode) node).isGlobalKTable()) {
-            tableSourceNodes.add((TableSourceNode) node);
-        } else if (node.isKeyChangingOperation()) {
+        if (node.isKeyChangingOperation()) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
             final StreamsGraphNode parentNode = getKeyChangingParentNode(node);
@@ -327,7 +323,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
                 // need to add children of key-changing node as children of optimized repartition
                 // in order to process records from re-partitioning
-                optimizedSingleRepartition.addChildNode(keyChangingNodeChild);
+                optimizedSingleRepartition.addChild(keyChangingNodeChild);
 
                 LOG.debug("Removing {} from {}  children {}", keyChangingNodeChild, keyChangingNode, keyChangingNode.children());
                 // now remove children from key-changing node
@@ -339,7 +335,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
                 for (final StreamsGraphNode repartitionNodeToBeReplacedChild : repartitionNodeToBeReplacedChildren) {
                     for (final StreamsGraphNode parentNode : parentsOfRepartitionNodeToBeReplaced) {
-                        parentNode.addChildNode(repartitionNodeToBeReplacedChild);
+                        parentNode.addChild(repartitionNodeToBeReplacedChild);
                     }
                 }
 
@@ -351,7 +347,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 LOG.debug("Updated node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
             }
 
-            keyChangingNode.addChildNode(optimizedSingleRepartition);
+            keyChangingNode.addChild(optimizedSingleRepartition);
             keyChangingOperationsToOptimizableRepartitionNodes.remove(entry.getKey());
         }
     }
