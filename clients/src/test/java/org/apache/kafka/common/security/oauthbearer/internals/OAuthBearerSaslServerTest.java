@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -36,9 +37,11 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler;
@@ -55,6 +58,32 @@ public class OAuthBearerSaslServerTest {
         tmp.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigText));
         CONFIGS = Collections.unmodifiableMap(tmp);
     }
+    static class OAuthBearerTokenMock implements OAuthBearerToken {
+        @Override
+        public String value() {
+            return null;
+        }
+
+        @Override
+        public Set<String> scope() {
+            return null;
+        }
+
+        @Override
+        public long lifetimeMs() {
+            return 0;
+        }
+
+        @Override
+        public String principalName() {
+            return null;
+        }
+
+        @Override
+        public Long startTimeMs() {
+            return null;
+        }
+    }
     private static final AuthenticateCallbackHandler LOGIN_CALLBACK_HANDLER;
     static {
         LOGIN_CALLBACK_HANDLER = new OAuthBearerUnsecuredLoginCallbackHandler();
@@ -62,10 +91,27 @@ public class OAuthBearerSaslServerTest {
                 JaasContext.loadClientContext(CONFIGS).configurationEntries());
     }
     private static final AuthenticateCallbackHandler VALIDATOR_CALLBACK_HANDLER;
+    private static final AuthenticateCallbackHandler EXTENSIONS_VALIDATOR_CALLBACK_HANDLER;
     static {
         VALIDATOR_CALLBACK_HANDLER = new OAuthBearerUnsecuredValidatorCallbackHandler();
         VALIDATOR_CALLBACK_HANDLER.configure(CONFIGS, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 JaasContext.loadClientContext(CONFIGS).configurationEntries());
+        EXTENSIONS_VALIDATOR_CALLBACK_HANDLER = new OAuthBearerUnsecuredValidatorCallbackHandler() {
+            @Override
+            public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+                for (Callback callback : callbacks) {
+                    if (callback instanceof OAuthBearerValidatorCallback) {
+                        OAuthBearerValidatorCallback validationCallback = (OAuthBearerValidatorCallback) callback;
+                        validationCallback.token(new OAuthBearerTokenMock());
+                    } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
+                        OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
+                        extensionsCallback.validateExtension("firstKey");
+                        extensionsCallback.validateExtension("secondKey");
+                    } else
+                        throw new UnsupportedCallbackException(callback);
+                }
+            }
+        };
     }
     private OAuthBearerSaslServer saslServer;
 
@@ -78,14 +124,21 @@ public class OAuthBearerSaslServerTest {
     public void noAuthorizationIdSpecified() throws Exception {
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(null));
+        // also asserts that no authentication error is thrown if OAuthBearerExtensionsValidatorCallback is not supported
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
     }
 
+    /**
+     * SASL Extensions that are validated by the callback handler should be accessible through the {@code #getNegotiatedProperty()} method
+     */
     @Test
     public void savesCustomExtensionAsNegotiatedProperty() throws Exception {
+        saslServer = new OAuthBearerSaslServer(EXTENSIONS_VALIDATOR_CALLBACK_HANDLER);
+
         Map<String, String> customExtensions = new HashMap<>();
         customExtensions.put("firstKey", "value1");
         customExtensions.put("secondKey", "value2");
+        customExtensions.put("nonRecognizableKey", "not-recognized");
 
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(null, false, customExtensions));
@@ -93,18 +146,56 @@ public class OAuthBearerSaslServerTest {
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
         assertEquals("value1", saslServer.getNegotiatedProperty("firstKey"));
         assertEquals("value2", saslServer.getNegotiatedProperty("secondKey"));
+        assertNull("Extensions not recognized by the server must be ignored", saslServer.getNegotiatedProperty("nonRecognizableKey"));
     }
 
+    /**
+     * SASL Extensions that were not recognized (neither validated nor invalidated)
+     * by the callback handler must not be accessible through the {@code #getNegotiatedProperty()} method
+     */
     @Test
-    public void returnsNullForNonExistentProperty() throws Exception {
+    public void unrecognizedExtensionsAreNotSaved() throws Exception {
+        saslServer = new OAuthBearerSaslServer(EXTENSIONS_VALIDATOR_CALLBACK_HANDLER);
         Map<String, String> customExtensions = new HashMap<>();
         customExtensions.put("firstKey", "value1");
+        customExtensions.put("secondKey", "value1");
+        customExtensions.put("thirdKey", "value1");
 
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(null, false, customExtensions));
 
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
-        assertNull(saslServer.getNegotiatedProperty("secondKey"));
+        assertNull(saslServer.getNegotiatedProperty("thirdKey"));
+    }
+
+    /**
+     * If the callback handler handles the `OAuthBearerExtensionsValidatorCallback`
+     *  and finds an invalid extension, it should throw an authentication exception
+     */
+    @Test(expected = SaslAuthenticationException.class)
+    public void throwsAuthenticationExceptionOnInvalidExtensions() throws Exception {
+        OAuthBearerUnsecuredValidatorCallbackHandler invalidHandler = new OAuthBearerUnsecuredValidatorCallbackHandler() {
+            @Override
+            public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+                for (Callback callback : callbacks) {
+                    if (callback instanceof OAuthBearerValidatorCallback) {
+                        OAuthBearerValidatorCallback validationCallback = (OAuthBearerValidatorCallback) callback;
+                        validationCallback.token(new OAuthBearerTokenMock());
+                    } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
+                        OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
+                        extensionsCallback.error("firstKey", "is not valid");
+                        extensionsCallback.error("secondKey", "is not valid either");
+                    } else
+                        throw new UnsupportedCallbackException(callback);
+                }
+            }
+        };
+        saslServer = new OAuthBearerSaslServer(invalidHandler);
+        Map<String, String> customExtensions = new HashMap<>();
+        customExtensions.put("firstKey", "value");
+        customExtensions.put("secondKey", "value");
+
+        saslServer.evaluateResponse(clientInitialResponse(null, false, customExtensions));
     }
 
     @Test
