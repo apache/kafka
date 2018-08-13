@@ -319,6 +319,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
                 final StreamsGraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNodes().contains(keyChangingNode));
 
+                if (keyChangingNodeChild == null) {
+                    throw new StreamsException(String.format("Found a null keyChangingChild node for %s", repartitionNodeToBeReplaced));
+                }
+
                 LOG.debug("Found the child node of the key changer {} from the repartition {}.", keyChangingNodeChild, repartitionNodeToBeReplaced);
 
                 // need to add children of key-changing node as children of optimized repartition
