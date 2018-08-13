@@ -142,8 +142,8 @@ public class SubscriptionInfo {
 
         buf.putInt(1); // version
         encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks, 1);
-        encodeTasks(buf, standbyTasks, 1);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
 
         return buf;
     }
@@ -161,11 +161,20 @@ public class SubscriptionInfo {
     }
 
     protected void encodeTasks(final ByteBuffer buf,
+                               final Collection<TaskId> taskIds) {
+        encodeTasks(buf, taskIds, false);
+    }
+    
+    protected void encodeTasks(final ByteBuffer buf,
                                final Collection<TaskId> taskIds,
-                               final int usedVersion) {
+                               final boolean versionGreaterThanFour) {
         buf.putInt(taskIds.size());
         for (final TaskId id : taskIds) {
-            id.writeTo(buf);
+            if (versionGreaterThanFour && !(id instanceof StreamTaskMetadata)) {
+                new StreamTaskMetadata(id, 0, 0).writeTo(buf);
+            } else {
+                id.writeTo(buf);
+            }
         }
     }
 
@@ -184,8 +193,8 @@ public class SubscriptionInfo {
 
         buf.putInt(2); // version
         encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks, 2);
-        encodeTasks(buf, standbyTasks, 2);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
         encodeUserEndPoint(buf, endPointBytes);
 
         return buf;
@@ -215,8 +224,8 @@ public class SubscriptionInfo {
         buf.putInt(3); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks, 3);
-        encodeTasks(buf, standbyTasks, 3);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
         encodeUserEndPoint(buf, endPointBytes);
 
         return buf;
@@ -239,8 +248,8 @@ public class SubscriptionInfo {
         buf.putInt(4); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks, 4);
-        encodeTasks(buf, standbyTasks, 4);
+        encodeTasks(buf, prevTasks, true);
+        encodeTasks(buf, standbyTasks, true);
         encodeUserEndPoint(buf, endPointBytes);
 
         return buf;

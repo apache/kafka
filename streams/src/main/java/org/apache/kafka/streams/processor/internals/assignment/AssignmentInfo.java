@@ -166,17 +166,33 @@ public class AssignmentInfo {
     }
 
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
+        this.encodeActiveAndStandbyTaskAssignment(out, false);
+    }
+
+    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, final boolean isVersionFourOrAbove) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
-            id.writeTo(out);
+            if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
+                System.out.println("Encoding new instance (active task)");
+                new StreamTaskMetadata(id, 0, 0).writeTo(out);
+            } else {
+                System.out.println("Encoding old instance (active task)");
+                id.writeTo(out);
+            }
         }
 
         // encode standby tasks
         out.writeInt(standbyTasks.size());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
-            id.writeTo(out);
+            if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
+                System.out.println("Creating mock metadata instance to write to OutputStream");
+                new StreamTaskMetadata(id, 0, 0).writeTo(out);
+            } else {
+                System.out.println("Encoding StreamTaskMetadata instance");
+                id.writeTo(out);
+            }
 
             final Set<TopicPartition> partitions = entry.getValue();
             writeTopicPartitions(out, partitions);
@@ -219,7 +235,7 @@ public class AssignmentInfo {
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
         out.writeInt(4);
         out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out);
+        encodeActiveAndStandbyTaskAssignment(out, true);
         encodePartitionsByHost(out);
         out.writeInt(errCode);
     }
