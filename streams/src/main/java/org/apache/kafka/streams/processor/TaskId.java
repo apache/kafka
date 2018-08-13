@@ -32,19 +32,11 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    /** Relevant information regarding TaskId */
-    public final StreamTaskMetadata metadata;
-
-    public TaskId(final int topicGroupId, final int partition) {
-        this(topicGroupId, partition, new StreamTaskMetadata(-1, -1));
-    }
 
     public TaskId(final int topicGroupId, 
-                  final int partition, 
-                  final StreamTaskMetadata metadata) {
+                  final int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        this.metadata = metadata;
     }
 
     public String toString() {
@@ -71,43 +63,25 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot write to output stream
      */
-    public void writeTo(final DataOutputStream out, final int usedVersion) throws IOException {
+    public void writeTo(final DataOutputStream out) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
-        if (usedVersion == 4) {
-            metadata.writeTo(out);
-        }
     }
 
     /**
      * @throws IOException if cannot read from input stream
      */
-    public static TaskId readFrom(final DataInputStream in, final int usedVersion) throws IOException {
-        final int groupId = in.readInt();
-        final int partition = in.readInt();
-        if (usedVersion == 4) {
-            final StreamTaskMetadata metadata = StreamTaskMetadata.readFrom(in);
-            return new TaskId(groupId, partition, metadata);
-        }
-        return new TaskId(groupId, partition);
+    public static TaskId readFrom(final DataInputStream in) throws IOException {
+        return new TaskId(in.readInt(), in.readInt());
     }
 
-    public void writeTo(final ByteBuffer buf, final int version) {
+    public void writeTo(final ByteBuffer buf) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        if (version == 4) {
-            metadata.writeTo(buf);
-        }
     }
 
-    public static TaskId readFrom(final ByteBuffer buf, final int version) {
-        final int groupId = buf.getInt();
-        final int partition = buf.getInt();
-        if (version == 4) {
-            final StreamTaskMetadata metadata = StreamTaskMetadata.readFrom(buf);
-            return new TaskId(groupId, partition, metadata);
-        }
-        return new TaskId(groupId, partition);
+    public static TaskId readFrom(final ByteBuffer buf) {
+        return new TaskId(buf.getInt(), buf.getInt());
     }
 
     @Override
@@ -118,9 +92,7 @@ public class TaskId implements Comparable<TaskId> {
         if (o instanceof TaskId) {
             final TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && 
-                   other.partition == this.partition && 
-                   other.numberOfInputPartitions() == numberOfInputPartitions() &&
-                   other.numberOfStateStores() == numberOfStateStores();
+                   other.partition == this.partition;
         } else {
             return false;
         }
@@ -136,13 +108,5 @@ public class TaskId implements Comparable<TaskId> {
     public int compareTo(final TaskId other) {
         final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
         return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
-    }
-
-    public int numberOfStateStores() {
-        return metadata.numberOfStateStores();
-    }
-
-    public int numberOfInputPartitions() {
-        return metadata.numberOfPartitions();
     }
 }

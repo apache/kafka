@@ -21,38 +21,49 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class StreamTaskMetadata {
+public class StreamTaskMetadata extends TaskId {
     private final int numberOfPartitions;
     private final int numberOfStateStores;
     
-    public StreamTaskMetadata(final int numberOfPartitions, final int numberOfStateStores) { 
+    public StreamTaskMetadata(final TaskId taskId,
+                              final int numberOfPartitions, 
+                              final int numberOfStateStores) { 
+        super(taskId.topicGroupId, taskId.partition);
         this.numberOfPartitions = numberOfPartitions;
         this.numberOfStateStores = numberOfStateStores;
     }
-    
+
     public int numberOfPartitions() {
         return numberOfPartitions;
     }
-    
+
     public int numberOfStateStores() {
         return numberOfStateStores;
     }
-    
+
+    @Override
     public void writeTo(final ByteBuffer buffer) {
+        buffer.putInt(topicGroupId);
+        buffer.putInt(partition);
         buffer.putInt(numberOfPartitions);
         buffer.putInt(numberOfStateStores);
     }
-    
+
     public static StreamTaskMetadata readFrom(final ByteBuffer buffer) {
-        return new StreamTaskMetadata(buffer.getInt(), buffer.getInt());
+        return new StreamTaskMetadata(TaskId.readFrom(buffer), 
+                                      buffer.getInt(), 
+                                      buffer.getInt());
     }
-    
+
+    @Override
     public void writeTo(final DataOutputStream stream) throws IOException {
         stream.writeInt(numberOfPartitions);
         stream.writeInt(numberOfStateStores);
     }
-    
+
     public static StreamTaskMetadata readFrom(final DataInputStream stream) throws IOException {
-        return new StreamTaskMetadata(stream.readInt(), stream.readInt());
+        return new StreamTaskMetadata(TaskId.readFrom(stream), 
+                                      stream.readInt(), 
+                                      stream.readInt());
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
@@ -161,21 +162,21 @@ public class AssignmentInfo {
 
     private void encodeVersionOne(final DataOutputStream out) throws IOException {
         out.writeInt(1); // version
-        encodeActiveAndStandbyTaskAssignment(out, 1);
+        encodeActiveAndStandbyTaskAssignment(out);
     }
 
-    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, final int usedVersion) throws IOException {
+    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
-            id.writeTo(out, usedVersion);
+            id.writeTo(out);
         }
 
         // encode standby tasks
         out.writeInt(standbyTasks.size());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
-            id.writeTo(out, usedVersion);
+            id.writeTo(out);
 
             final Set<TopicPartition> partitions = entry.getValue();
             writeTopicPartitions(out, partitions);
@@ -184,7 +185,7 @@ public class AssignmentInfo {
 
     private void encodeVersionTwo(final DataOutputStream out) throws IOException {
         out.writeInt(2); // version
-        encodeActiveAndStandbyTaskAssignment(out, 2);
+        encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
@@ -211,14 +212,14 @@ public class AssignmentInfo {
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
         out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out, 3);
+        encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
         out.writeInt(4);
         out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out, 4);
+        encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
         out.writeInt(errCode);
     }
@@ -282,7 +283,11 @@ public class AssignmentInfo {
         final int count = in.readInt();
         assignmentInfo.activeTasks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            assignmentInfo.activeTasks.add(TaskId.readFrom(in, usedVersion));
+            if (usedVersion == 4) {
+                assignmentInfo.activeTasks.add(StreamTaskMetadata.readFrom(in));
+            } else {
+                assignmentInfo.activeTasks.add(TaskId.readFrom(in));
+            }
         }
     }
 
@@ -292,7 +297,12 @@ public class AssignmentInfo {
         final int count = in.readInt();
         assignmentInfo.standbyTasks = new HashMap<>(count);
         for (int i = 0; i < count; i++) {
-            final TaskId id = TaskId.readFrom(in, usedVersion);
+            final TaskId id;
+            if (usedVersion == 4) {
+                id = StreamTaskMetadata.readFrom(in);
+            } else {
+                id = TaskId.readFrom(in);
+            }
             assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
         }
     }

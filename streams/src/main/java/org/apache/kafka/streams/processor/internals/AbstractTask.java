@@ -69,10 +69,9 @@ public abstract class AbstractTask implements Task {
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
-        this.id = new TaskId(id.topicGroupId, 
-                             id.partition, 
-                             new StreamTaskMetadata(topology.stateStores().size(),
-                                                    partitions.size()));
+        this.id = new StreamTaskMetadata(id,
+                                         partitions.size(),
+                                         topology.stateStores().size());
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;

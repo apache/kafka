@@ -782,23 +782,11 @@ public class StickyTaskAssignorTest {
 
     private void setStateStoreAndInputPartitionCount(final Map<TaskId, Integer> stateStoreCounts,
                                                      final Map<TaskId, Integer> inputPartitionCounts) {
-        final HashMap<TaskId, StreamTaskMetadata> streamMetadatas = new HashMap<>();
-        for (final Map.Entry<TaskId, Integer> stateStoreCount : stateStoreCounts.entrySet()) {
-            final StreamTaskMetadata metadata = new StreamTaskMetadata(inputPartitionCounts.get(stateStoreCount.getKey()), 
-                                                                       stateStoreCount.getValue());
-            streamMetadatas.put(stateStoreCount.getKey(), metadata);
-        }
-        task00 = new TaskId(task00.topicGroupId, task00.partition, streamMetadatas.get(task00));
-        streamMetadatas.remove(task00);
-        task01 = new TaskId(task01.topicGroupId, task01.partition, streamMetadatas.get(task01));
-        streamMetadatas.remove(task01);
-        task02 = new TaskId(task02.topicGroupId, task02.partition, streamMetadatas.get(task02));
-        streamMetadatas.remove(task02);
-        task03 = new TaskId(task03.topicGroupId, task03.partition, streamMetadatas.get(task03));
-        streamMetadatas.remove(task03);
-        task04 = new TaskId(task04.topicGroupId, task04.partition, streamMetadatas.get(task04));
-        streamMetadatas.remove(task04);
-        task05 = new TaskId(task05.topicGroupId, task05.partition, streamMetadatas.get(task05));
-        streamMetadatas.remove(task05);
+        task00 = new StreamTaskMetadata(task00, inputPartitionCounts.get(task00), stateStoreCounts.get(task00));
+        task01 = new StreamTaskMetadata(task01, inputPartitionCounts.get(task01), stateStoreCounts.get(task01));
+        task02 = new StreamTaskMetadata(task02, inputPartitionCounts.get(task02), stateStoreCounts.get(task02));
+        task03 = new StreamTaskMetadata(task03, inputPartitionCounts.get(task03), stateStoreCounts.get(task03));
+        task04 = new StreamTaskMetadata(task04, inputPartitionCounts.get(task04), stateStoreCounts.get(task04));
+        task05 = new StreamTaskMetadata(task05, inputPartitionCounts.get(task05), stateStoreCounts.get(task05));
     }
 }

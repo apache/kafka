@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -164,7 +165,7 @@ public class SubscriptionInfo {
                                final int usedVersion) {
         buf.putInt(taskIds.size());
         for (final TaskId id : taskIds) {
-            id.writeTo(buf, usedVersion);
+            id.writeTo(buf);
         }
     }
 
@@ -310,13 +311,21 @@ public class SubscriptionInfo {
         subscriptionInfo.prevTasks = new HashSet<>();
         final int numPrevTasks = data.getInt();
         for (int i = 0; i < numPrevTasks; i++) {
-            subscriptionInfo.prevTasks.add(TaskId.readFrom(data, usedVersion));
+            if (usedVersion == 4) {
+                subscriptionInfo.prevTasks.add(StreamTaskMetadata.readFrom(data));
+            } else {
+                subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
+            }
         }
 
         subscriptionInfo.standbyTasks = new HashSet<>();
         final int numStandbyTasks = data.getInt();
         for (int i = 0; i < numStandbyTasks; i++) {
-            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data, usedVersion));
+            if (usedVersion == 4) {
+                subscriptionInfo.standbyTasks.add(StreamTaskMetadata.readFrom(data));
+            } else {
+                subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
+            }
         }
     }
 
