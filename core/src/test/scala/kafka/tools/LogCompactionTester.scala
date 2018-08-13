@@ -20,7 +20,7 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.time.Duration
 import java.util.{Properties, Random}
 
@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -67,7 +68,7 @@ object LogCompactionTester {
       .ofType(classOf[java.lang.Long])
       .defaultsTo(Long.MaxValue)
     val messageCompressionOpt = parser.accepts("compression-type", "message compression type")
-      .withOptionalArg()
+      .withOptionalArg
       .describedAs("compressionType")
       .ofType(classOf[java.lang.String])
       .defaultsTo("none")
@@ -103,7 +104,7 @@ object LogCompactionTester {
     val options = parser.parse(args: _*)
 
     if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "An integration test for log cleaning.")
+      CommandLineUtils.printUsageAndDie(parser, "A tool to test log compaction. Valid options are: ")
 
     if (options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
@@ -121,26 +122,26 @@ object LogCompactionTester {
     val topicCount = options.valueOf(topicsOpt).intValue
     val sleepSecs = options.valueOf(sleepSecsOpt).intValue
 
-    val testId = new Random().nextLong()
+    val testId = new Random().nextLong
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
     createTopics(brokerUrl, topics.toSeq)
 
     println(s"Producing $messages messages..to topics ${topics.mkString(",")}")
-    val producedDataFile = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
+    val producedDataFilePath = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
     println(s"Sleeping for $sleepSecs seconds...")
     Thread.sleep(sleepSecs * 1000)
     println("Consuming messages...")
-    val consumedDataFile = consumeMessages(brokerUrl, topics)
+    val consumedDataFilePath = consumeMessages(brokerUrl, topics)
 
-    val producedLines = lineCount(producedDataFile)
-    val consumedLines = lineCount(consumedDataFile)
-    val reduction = 1.0 - consumedLines.toDouble / producedLines.toDouble
-    println("%d rows of data produced, %d rows of data consumed (%.1f%% reduction).".format(producedLines, consumedLines, 100 * reduction))
+    val producedLines = lineCount(producedDataFilePath)
+    val consumedLines = lineCount(consumedDataFilePath)
+    val reduction = 100 * (1.0 - consumedLines.toDouble / producedLines.toDouble)
+    println(f"$producedLines%d rows of data produced, $consumedLines%d rows of data consumed ($reduction%.1f%% reduction).")
 
     println("De-duplicating and validating output files...")
-    validateOutput(producedDataFile, consumedDataFile)
-    Utils.delete(producedDataFile)
-    Utils.delete(consumedDataFile)
+    validateOutput(producedDataFilePath.toFile, consumedDataFilePath.toFile)
+    Utils.delete(producedDataFilePath.toFile)
+    Utils.delete(consumedDataFilePath.toFile)
     //if you change this line, we need to update test_log_compaction_tool.py system test
     println("Data verification is completed")
   }
@@ -153,12 +154,13 @@ object LogCompactionTester {
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
       val newTopics = topics.map(name => new NewTopic(name, 1, 1).configs(topicConfigs.asJava)).asJava
-      adminClient.createTopics(newTopics).all.get()
+      adminClient.createTopics(newTopics).all.get
 
+      var allTopics: Seq[String] = Seq()
       TestUtils.waitUntilTrue(() => {
-        val newTopics = adminClient.listTopics.names.get()
-        topics.forall(topicName => newTopics.contains(topicName))
-      }, "timed out waiting for topics")
+        allTopics = adminClient.listTopics.names.get.asScala.toSeq
+        topics.forall(topicName => allTopics.contains(topicName))
+      }, s"timed out waiting for topics : ${topics.filter(topicName => !allTopics.contains(topicName))}")
 
     } finally adminClient.close()
   }
@@ -179,7 +181,7 @@ object LogCompactionTester {
     }
   }
 
-  def lineCount(file: File): Int = io.Source.fromFile(file).getLines.size
+  def lineCount(filPath: Path): Int = Files.readAllLines(filPath).size
 
   def validateOutput(producedDataFile: File, consumedDataFile: File) {
     val producedReader = externalSort(producedDataFile)
@@ -241,12 +243,12 @@ object LogCompactionTester {
     var line = reader.readLine()
     if (line == null)
       return null
-    var curr = new TestRecord(line)
+    var curr = TestRecord(line)
     while (true) {
       line = peekLine(reader)
       if (line == null)
         return curr
-      val next = new TestRecord(line)
+      val next = TestRecord(line)
       if (next == null || next.topicAndKey != curr.topicAndKey)
         return curr
       curr = next
@@ -263,8 +265,8 @@ object LogCompactionTester {
   }
 
   def externalSort(file: File): BufferedReader = {
-    val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", "--temporary-directory=" + System.getProperty("java.io.tmpdir"), file.getAbsolutePath)
-    val process = builder.start()
+    val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", "--temporary-directory=" + Files.createTempDirectory("log_compaction_test"), file.getAbsolutePath)
+    val process = builder.start
     new Thread() {
       override def run() {
         val exitCode = process.waitFor()
@@ -284,20 +286,18 @@ object LogCompactionTester {
                       messages: Long,
                       compressionType: String,
                       dups: Int,
-                      percentDeletes: Int): File = {
+                      percentDeletes: Int): Path = {
     val producerProps = new Properties
     producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
+    val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
     try {
       val rand = new Random(1)
       val keyCount = (messages / dups).toInt
       val producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt")
       println(s"Logging produce requests to $producedFilePath")
-      val producedWriter : BufferedWriter = Files.newBufferedWriter(producedFilePath, UTF_8)
+      val producedWriter: BufferedWriter = Files.newBufferedWriter(producedFilePath, UTF_8)
       for (i <- 0L until (messages * topics.length)) {
         val topic = topics((i % topics.length).toInt)
         val key = rand.nextInt(keyCount)
@@ -306,13 +306,13 @@ object LogCompactionTester {
           if (delete)
             new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
           else
-            new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
+            new ProducerRecord(topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
         producer.send(msg)
         producedWriter.write(TestRecord(topic, key, i, delete).toString)
         producedWriter.newLine()
       }
       producedWriter.close()
-      producedFilePath.toFile
+      producedFilePath
     } finally {
       producer.close()
     }
@@ -322,13 +322,11 @@ object LogCompactionTester {
     val consumerProps = new Properties
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
-    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
     consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    new KafkaConsumer[String, String](consumerProps)
+    new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
   }
 
-  def consumeMessages(brokerUrl: String, topics: Array[String]): File = {
+  def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
     val consumer = createConsumer(brokerUrl)
     consumer.subscribe(topics.seq.asJava)
     val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
@@ -341,16 +339,16 @@ object LogCompactionTester {
         val consumerRecords = consumer.poll(Duration.ofSeconds(20))
         if (!consumerRecords.isEmpty) {
           for (record <- consumerRecords.asScala) {
-            val delete = record.value() == null
-            val value = if (delete) -1L else record.value().toLong
-            consumedWriter.write(TestRecord(record.topic(), record.key.toInt, value, delete).toString)
-            consumedWriter.newLine()
+            val delete = record.value == null
+            val value = if (delete) -1L else record.value.toLong
+            consumedWriter.write(TestRecord(record.topic, record.key.toInt, value, delete).toString)
+            consumedWriter.newLine
           }
         } else {
           done = true
         }
       }
-      consumedFilePath.toFile
+      consumedFilePath
     } finally {
       consumedWriter.close()
       consumer.close()
@@ -360,14 +358,17 @@ object LogCompactionTester {
   def readString(buffer: ByteBuffer): String = {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
-    new String(bytes, UTF_8)
+    Utils.utf8(bytes)
   }
 
 }
 
 case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
   def this(pieces: Array[String]) = this(pieces(0), pieces(1).toInt, pieces(2).toLong, pieces(3) == "d")
-  def this(line: String) = this(line.split("\t"))
   override def toString = topic + "\t" + key + "\t" + value + "\t" + (if (delete) "d" else "u")
   def topicAndKey = topic + key
+}
+
+object TestRecord {
+  def apply(line: String): TestRecord = new TestRecord(line.split("\t"))
 }
