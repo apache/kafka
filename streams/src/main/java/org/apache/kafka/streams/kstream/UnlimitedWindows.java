@@ -129,23 +129,4 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
         throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 
-    @Override
-    public boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-
-        if (!(o instanceof UnlimitedWindows)) {
-            return false;
-        }
-
-        final UnlimitedWindows other = (UnlimitedWindows) o;
-        return startMs == other.startMs;
-    }
-
-    @Override
-    public int hashCode() {
-        return (int) (startMs ^ (startMs >>> 32));
-    }
-
 }

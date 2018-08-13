@@ -157,24 +157,4 @@ public final class TimeWindows extends Windows<TimeWindow> {
     public long maintainMs() {
         return Math.max(super.maintainMs(), sizeMs);
     }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-        if (!(o instanceof TimeWindows)) {
-            return false;
-        }
-        final TimeWindows other = (TimeWindows) o;
-        return sizeMs == other.sizeMs && advanceMs == other.advanceMs;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (sizeMs ^ (sizeMs >>> 32));
-        result = 31 * result + (int) (advanceMs ^ (advanceMs >>> 32));
-        return result;
-    }
-
 }

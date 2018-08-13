@@ -81,11 +81,6 @@ public class SessionWindowsTest {
         }
     }
 
-    @Test
-    public void shouldBeEqualWhenGapAndMaintainMsAreTheSame() {
-        assertThat(SessionWindows.with(5), equalTo(SessionWindows.with(5)));
-    }
-
     @Deprecated
     @Test
     public void shouldNotBeEqualWhenMaintainMsDifferent() {

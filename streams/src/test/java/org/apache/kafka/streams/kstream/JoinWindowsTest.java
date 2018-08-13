@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 
@@ -27,41 +26,6 @@ public class JoinWindowsTest {
 
     private static final long ANY_SIZE = 123L;
     private static final long ANY_OTHER_SIZE = 456L; // should be larger than anySize
-
-    @Test
-    public void shouldHaveSaneEqualsAndHashCode() {
-        final JoinWindows w1 = JoinWindows.of(ANY_SIZE);
-        final JoinWindows w2 = JoinWindows.of(ANY_SIZE);
-
-        // Reflexive
-        assertEquals(w1, w1);
-        assertEquals(w1.hashCode(), w1.hashCode());
-
-        // Symmetric
-        assertEquals(w1, w2);
-        assertEquals(w2, w1);
-        assertEquals(w1.hashCode(), w2.hashCode());
-
-        final JoinWindows w3 = JoinWindows.of(w2.afterMs).before(ANY_OTHER_SIZE);
-        final JoinWindows w4 = JoinWindows.of(ANY_OTHER_SIZE).after(w2.afterMs);
-        assertEquals(w3, w4);
-        assertEquals(w4, w3);
-        assertEquals(w3.hashCode(), w4.hashCode());
-
-        // Inequality scenarios
-        assertNotEquals("must be false for null", null, w1);
-        assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
-        assertNotEquals("must be false for different types", new Object(), w1);
-
-        final JoinWindows differentWindowSize = JoinWindows.of(w1.afterMs + 1);
-        assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
-
-        final JoinWindows differentWindowSize2 = JoinWindows.of(w1.afterMs).after(w1.afterMs + 1);
-        assertNotEquals("must be false when window sizes are different", differentWindowSize2, w1);
-
-        final JoinWindows differentWindowSize3 = JoinWindows.of(w1.afterMs).before(w1.beforeMs + 1);
-        assertNotEquals("must be false when window sizes are different", differentWindowSize3, w1);
-    }
 
     @Test
     public void validWindows() {

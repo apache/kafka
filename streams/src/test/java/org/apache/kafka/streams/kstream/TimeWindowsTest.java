@@ -22,7 +22,6 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 public class TimeWindowsTest {
@@ -51,38 +50,6 @@ public class TimeWindowsTest {
     public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
         final long windowSize = 2 * TimeWindows.of(1).maintainMs();
         assertEquals(windowSize, TimeWindows.of(windowSize).maintainMs());
-    }
-
-    @Test
-    public void shouldHaveSaneEqualsAndHashCode() {
-        final TimeWindows w1 = TimeWindows.of(ANY_SIZE);
-        final TimeWindows w2 = TimeWindows.of(w1.sizeMs);
-
-        // Reflexive
-        assertEquals(w1, w1);
-        assertEquals(w1.hashCode(), w1.hashCode());
-
-        // Symmetric
-        assertEquals(w1, w2);
-        assertEquals(w2, w1);
-        assertEquals(w1.hashCode(), w2.hashCode());
-
-        // Transitive
-        final TimeWindows w3 = TimeWindows.of(w2.sizeMs);
-        assertEquals(w2, w3);
-        assertEquals(w1, w3);
-        assertEquals(w1.hashCode(), w3.hashCode());
-
-        // Inequality scenarios
-        assertNotEquals("must be false for null", null, w1);
-        assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
-        assertNotEquals("must be false for different types", new Object(), w1);
-
-        final TimeWindows differentWindowSize = TimeWindows.of(w1.sizeMs + 1);
-        assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
-
-        final TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advanceMs - 1);
-        assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 
     @Test(expected = IllegalArgumentException.class)

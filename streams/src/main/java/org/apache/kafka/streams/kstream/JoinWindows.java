@@ -168,25 +168,4 @@ public final class JoinWindows extends Windows<Window> {
     public long maintainMs() {
         return Math.max(super.maintainMs(), size());
     }
-
-    @Override
-    public final boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-        if (!(o instanceof JoinWindows)) {
-            return false;
-        }
-
-        final JoinWindows other = (JoinWindows) o;
-        return beforeMs == other.beforeMs && afterMs == other.afterMs;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (beforeMs ^ (beforeMs >>> 32));
-        result = 31 * result + (int) (afterMs ^ (afterMs >>> 32));
-        return result;
-    }
-
 }
