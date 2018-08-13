@@ -862,7 +862,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
         NetworkReceive networkReceive = stagedDeque.poll();
         this.completedReceives.add(networkReceive);
-        this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+        this.sensors.recordBytesReceived(channel.id(), networkReceive.size());
     }
 
     // only for testing

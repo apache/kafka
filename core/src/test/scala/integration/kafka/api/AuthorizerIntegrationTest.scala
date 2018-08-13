@@ -1028,6 +1028,48 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def testListGroupApiWithAndWithoutListGroupAcls() {
+    // write some record to the topic
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+
+    // use two consumers to write to two different groups
+    val group2 = "other group"
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), Resource(Group, group2, LITERAL))
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
+    this.consumers.head.subscribe(Collections.singleton(topic))
+    consumeRecords(this.consumers.head)
+
+    val otherConsumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group2, securityProtocol = SecurityProtocol.PLAINTEXT)
+    otherConsumer.subscribe(Collections.singleton(topic))
+    consumeRecords(otherConsumer)
+
+    val adminClient = createAdminClient()
+
+    // first use cluster describe permission
+    removeAllAcls()
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), Resource.ClusterResource)
+    // it should list both groups (due to cluster describe permission)
+    assertEquals(Set(group, group2), adminClient.listConsumerGroups().all().get().asScala.map(_.groupId()).toSet)
+
+    // now replace cluster describe with group read permission
+    removeAllAcls()
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
+    // it should list only one group now
+    val groupList = adminClient.listConsumerGroups().all().get().asScala.toList
+    assertEquals(1, groupList.length)
+    assertEquals(group, groupList.head.groupId)
+
+    // now remove all acls and verify describe group access is required to list any group
+    removeAllAcls()
+    val listGroupResult = adminClient.listConsumerGroups()
+    assertEquals(List(), listGroupResult.errors().get().asScala.toList)
+    assertEquals(List(), listGroupResult.all().get().asScala.toList)
+    otherConsumer.close()
+  }
+
+  @Test
   def testDeleteGroupApiWithDeleteGroupAcl() {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)

@@ -18,11 +18,13 @@
 package kafka.tools
 
 import java.nio.charset.StandardCharsets
-import java.util.{Arrays, Collections, Properties}
+import java.time.Duration
+import java.util.{Arrays, Properties}
 
 import kafka.utils.Exit
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -69,9 +71,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
-
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-    consumer.subscribe(Collections.singletonList(topic))
 
     val producerProps = loadProps
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -82,16 +82,21 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
+    // sends a dummy message to create the topic if it doesn't exist
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, Array[Byte]())).get()
+
     def finalise() {
       consumer.commitSync()
       producer.close()
       consumer.close()
     }
 
-    //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
-    //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
-    consumer.seekToEnd(Collections.emptyList())
-    consumer.poll(0)
+
+    val topicPartitions = consumer.partitionsFor(topic).asScala
+      .map(p => new TopicPartition(p.topic(), p.partition())).asJava
+    consumer.assign(topicPartitions)
+    consumer.seekToEnd(topicPartitions)
+    consumer.assignment().asScala.foreach(consumer.position)
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -103,7 +108,7 @@ object EndToEndLatency {
 
       //Send message (of random bytes) synchronously then immediately poll for it
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
-      val recordIter = consumer.poll(timeout).iterator
+      val recordIter = consumer.poll(Duration.ofMillis(timeout)).iterator
 
       val elapsed = System.nanoTime - begin
 

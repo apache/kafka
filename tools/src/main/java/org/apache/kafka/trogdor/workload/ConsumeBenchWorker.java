@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.kafka.trogdor.task.TaskWorker;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
@@ -135,7 +136,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             long startBatchMs = startTimeMs;
             try {
                 while (messagesConsumed < spec.maxMessages()) {
-                    ConsumerRecords<byte[], byte[]> records = consumer.poll(50);
+                    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
                     if (records.isEmpty()) {
                         continue;
                     }
