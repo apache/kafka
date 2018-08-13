@@ -174,10 +174,8 @@ public class AssignmentInfo {
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
             if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
-                System.out.println("Encoding new instance (active task)");
                 new StreamTaskMetadata(id, 0, 0).writeTo(out);
             } else {
-                System.out.println("Encoding old instance (active task)");
                 id.writeTo(out);
             }
         }
@@ -187,10 +185,8 @@ public class AssignmentInfo {
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
             if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
-                System.out.println("Creating mock metadata instance to write to OutputStream");
                 new StreamTaskMetadata(id, 0, 0).writeTo(out);
             } else {
-                System.out.println("Encoding StreamTaskMetadata instance");
                 id.writeTo(out);
             }
 

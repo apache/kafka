@@ -797,7 +797,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
         Collections.sort(partitions, PARTITION_COMPARATOR);
 
-        System.out.println("Decoding using AssignmentInfo's decode, preparing...");
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != Error.NONE.code) {
             // set flag to shutdown streams app

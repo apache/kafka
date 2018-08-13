@@ -57,6 +57,8 @@ public class StreamTaskMetadata extends TaskId {
 
     @Override
     public void writeTo(final DataOutputStream stream) throws IOException {
+        stream.writeInt(topicGroupId);
+        stream.writeInt(partition);
         stream.writeInt(numberOfPartitions);
         stream.writeInt(numberOfStateStores);
     }
