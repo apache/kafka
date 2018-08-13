@@ -116,7 +116,7 @@ public class StreamTaskTest {
     );
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
+    private MockProducer<byte[], byte[]> producer;
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Duration.ZERO, stateRestoreListener, new LogContext("stream-task-test ")) {
@@ -621,7 +621,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             new NoOpRecordCollector() {
                 @Override
                 public void flush() {
@@ -972,7 +972,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             metrics.sensor("dummy"));
         task.initializeStateStores();
         task.initializeTopology();
@@ -1006,10 +1006,12 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysCommitIfEosEnabled() {
-        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
-                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
-
         task = createStatelessTask(createConfig(true));
+
+        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl("StreamTask",
+                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+        recordCollector.init(producer);
+
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
@@ -1041,7 +1043,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             metrics.sensor("dummy"));
     }
 
@@ -1063,7 +1065,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             metrics.sensor("dummy"));
     }
 
@@ -1089,7 +1091,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             metrics.sensor("dummy"));
     }
 
@@ -1116,7 +1118,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            producer,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
             metrics.sensor("dummy")) {
             @Override
             protected void flushState() {
