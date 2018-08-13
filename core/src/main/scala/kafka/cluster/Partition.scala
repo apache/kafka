@@ -326,12 +326,15 @@ class Partition(val topic: String,
 
   /**
    *  Make the local replica the follower by setting the new leader and ISR to empty
-   *  If the leader replica id does not change, return false to indicate the replica manager
+   *  If the leader replica id does not change and the new epoch is equal or one
+   *  greater (that is, no updates have been missed), return false to indicate to the
+    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(controllerId: Int, partitionStateInfo: LeaderAndIsrRequest.PartitionState, correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val newAssignedReplicas = partitionStateInfo.basePartitionState.replicas.asScala.map(_.toInt)
-      val newLeaderBrokerId: Int = partitionStateInfo.basePartitionState.leader
+      val newLeaderBrokerId = partitionStateInfo.basePartitionState.leader
+      val oldLeaderEpoch = leaderEpoch
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionStateInfo.basePartitionState.controllerEpoch
@@ -343,7 +346,9 @@ class Partition(val topic: String,
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
 
-      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId) {
+      // If the leader is unchanged and the epochs are no more than one change apart, indicate that no follower changes are required
+      // Otherwise, we missed a leader epoch update, which means the leader's log may have been truncated prior to the current epoch.
+      if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && (leaderEpoch == oldLeaderEpoch || leaderEpoch == oldLeaderEpoch + 1)) {
         false
       }
       else {
