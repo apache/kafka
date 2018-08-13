@@ -44,7 +44,7 @@ public abstract class Windows<W extends Window> {
     protected Windows() {}
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject late events that arrive more than {@code millisAfterWindowEnd}
      * after the end of its window.
      *
      * Lateness is defined as (stream_time - record_timestamp).
