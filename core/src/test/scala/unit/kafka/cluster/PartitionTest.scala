@@ -32,9 +32,11 @@ import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
+
 import scala.collection.JavaConverters._
 
 class PartitionTest {
@@ -205,6 +207,27 @@ class PartitionTest {
       partition.appendRecordsToFollowerOrFutureReplica(
            createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
     }
+  }
+
+  @Test
+  def testMakeFollowerWithNoLeaderIdChange(): Unit = {
+    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+
+    // Start off as follower
+    var partitionStateInfo = new LeaderAndIsrRequest.PartitionState(0, 1, 1, List[Integer](0, 1, 2).asJava, 1, List[Integer](0, 1, 2).asJava, false)
+    partition.makeFollower(0, partitionStateInfo, 0)
+
+    // Request with same leader and epoch increases by more than 1, perform become-follower steps
+    partitionStateInfo = new LeaderAndIsrRequest.PartitionState(0, 1, 3, List[Integer](0, 1, 2).asJava, 1, List[Integer](0, 1, 2).asJava, false)
+    assertTrue(partition.makeFollower(0, partitionStateInfo, 1))
+
+    // Request with same leader and epoch increases by only 1, skip become-follower steps
+    partitionStateInfo = new LeaderAndIsrRequest.PartitionState(0, 1, 4, List[Integer](0, 1, 2).asJava, 1, List[Integer](0, 1, 2).asJava, false)
+    assertFalse(partition.makeFollower(0, partitionStateInfo, 2))
+
+    // Request with same leader and same epoch, skip become-follower steps
+    partitionStateInfo = new LeaderAndIsrRequest.PartitionState(0, 1, 4, List[Integer](0, 1, 2).asJava, 1, List[Integer](0, 1, 2).asJava, false)
+    assertFalse(partition.makeFollower(0, partitionStateInfo, 2))
   }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
