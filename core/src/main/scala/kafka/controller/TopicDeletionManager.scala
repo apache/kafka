@@ -102,8 +102,12 @@ class TopicDeletionManager(controller: KafkaController,
    */
   def enqueueTopicsForDeletion(topics: Set[String]) {
     if (isDeleteTopicEnabled) {
-      topicsToBeDeleted ++= topics
       partitionsToBeDeleted ++= topics.flatMap(controllerContext.partitionsForTopic)
+      // move the respective partitions to OfflinePartition and NonExistentPartition state, so that the
+      // offlinePartitionCount is properly updated
+      controller.partitionStateMachine.handleStateChanges(partitionsToBeDeleted.toSeq, OfflinePartition)
+      controller.partitionStateMachine.handleStateChanges(partitionsToBeDeleted.toSeq, NonExistentPartition)
+      topicsToBeDeleted ++= topics
       resumeDeletions()
     }
   }
@@ -231,10 +235,6 @@ class TopicDeletionManager(controller: KafkaController,
     val replicasForDeletedTopic = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
     // controller will remove this replica from the state machine as well as its partition assignment cache
     controller.replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
-    val partitionsForDeletedTopic = controllerContext.partitionsForTopic(topic)
-    // move respective partition to OfflinePartition and NonExistentPartition state
-    controller.partitionStateMachine.handleStateChanges(partitionsForDeletedTopic.toSeq, OfflinePartition)
-    controller.partitionStateMachine.handleStateChanges(partitionsForDeletedTopic.toSeq, NonExistentPartition)
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     zkClient.deleteTopicZNode(topic)

@@ -44,11 +44,12 @@ import scala.collection.mutable
 class PartitionStateMachine(config: KafkaConfig,
                             stateChangeLogger: StateChangeLogger,
                             controllerContext: ControllerContext,
-                            topicDeletionManager: TopicDeletionManager,
                             zkClient: KafkaZkClient,
                             partitionState: mutable.Map[TopicPartition, PartitionState],
                             controllerBrokerRequestBatch: ControllerBrokerRequestBatch) extends Logging {
   private val controllerId = config.brokerId
+
+  private var topicDeletionManager: TopicDeletionManager = _
 
   this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
 
@@ -72,6 +73,10 @@ class PartitionStateMachine(config: KafkaConfig,
     partitionState.clear()
     offlinePartitionCount = 0
     info("Stopped partition state machine")
+  }
+
+  def setTopicDeletionManager(topicDeletionManager: TopicDeletionManager) {
+    this.topicDeletionManager = topicDeletionManager
   }
 
   /**
