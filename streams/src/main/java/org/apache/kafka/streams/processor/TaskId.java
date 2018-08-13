@@ -32,16 +32,19 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    /** The number of State Stores in the task. */
-    private int numberOfStateStores;
-    /** The number of Partitions in the task.*/
-    private int numberOfInputPartitions;
+    /** Relevant information regarding TaskId */
+    public final StreamTaskMetadata metadata;
 
     public TaskId(final int topicGroupId, final int partition) {
+        this(topicGroupId, partition, new StreamTaskMetadata(-1, -1));
+    }
+
+    public TaskId(final int topicGroupId, 
+                  final int partition, 
+                  final StreamTaskMetadata metadata) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        this.numberOfStateStores = 0;
-        this.numberOfInputPartitions = 0;
+        this.metadata = metadata;
     }
 
     public String toString() {
@@ -72,8 +75,7 @@ public class TaskId implements Comparable<TaskId> {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
         if (usedVersion == 4) {
-            out.writeInt(numberOfStateStores);
-            out.writeInt(numberOfInputPartitions);
+            metadata.writeTo(out);
         }
     }
 
@@ -81,30 +83,31 @@ public class TaskId implements Comparable<TaskId> {
      * @throws IOException if cannot read from input stream
      */
     public static TaskId readFrom(final DataInputStream in, final int usedVersion) throws IOException {
-        final TaskId taskId = new TaskId(in.readInt(), in.readInt());
+        final int groupId = in.readInt();
+        final int partition = in.readInt();
         if (usedVersion == 4) {
-            taskId.setNumberOfStateStores(in.readInt());
-            taskId.setNumberOfInputPartitions(in.readInt());
+            final StreamTaskMetadata metadata = StreamTaskMetadata.readFrom(in);
+            return new TaskId(groupId, partition, metadata);
         }
-        return taskId;
+        return new TaskId(groupId, partition);
     }
 
     public void writeTo(final ByteBuffer buf, final int version) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
         if (version == 4) {
-            buf.putInt(numberOfStateStores);
-            buf.putInt(numberOfInputPartitions);
+            metadata.writeTo(buf);
         }
     }
 
     public static TaskId readFrom(final ByteBuffer buf, final int version) {
-        final TaskId result = new TaskId(buf.getInt(), buf.getInt());
+        final int groupId = buf.getInt();
+        final int partition = buf.getInt();
         if (version == 4) {
-            result.setNumberOfStateStores(buf.getInt());
-            result.setNumberOfInputPartitions(buf.getInt());
+            final StreamTaskMetadata metadata = StreamTaskMetadata.readFrom(buf);
+            return new TaskId(groupId, partition, metadata);
         }
-        return result;
+        return new TaskId(groupId, partition);
     }
 
     @Override
@@ -114,9 +117,10 @@ public class TaskId implements Comparable<TaskId> {
 
         if (o instanceof TaskId) {
             final TaskId other = (TaskId) o;
-            return other.topicGroupId == this.topicGroupId && other.partition == this.partition && 
-                   other.numberOfInputPartitions == this.numberOfInputPartitions &&
-                   other.numberOfStateStores == this.numberOfStateStores;
+            return other.topicGroupId == this.topicGroupId && 
+                   other.partition == this.partition && 
+                   other.numberOfInputPartitions() == numberOfInputPartitions() &&
+                   other.numberOfStateStores() == numberOfStateStores();
         } else {
             return false;
         }
@@ -135,18 +139,10 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     public int numberOfStateStores() {
-        return numberOfStateStores;
-    }
-
-    public void setNumberOfStateStores(final int numberOfStateStores) {
-        this.numberOfStateStores = numberOfStateStores;
+        return metadata.numberOfStateStores();
     }
 
     public int numberOfInputPartitions() {
-        return numberOfInputPartitions;
-    }
-
-    public void setNumberOfInputPartitions(final int numberOfInputPartitions) {
-        this.numberOfInputPartitions = numberOfInputPartitions;
+        return metadata.numberOfPartitions();
     }
 }

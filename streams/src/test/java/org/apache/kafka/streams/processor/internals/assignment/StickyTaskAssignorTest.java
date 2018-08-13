@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,12 +42,12 @@ import static org.junit.Assert.assertTrue;
 
 public class StickyTaskAssignorTest {
 
-    private final TaskId task00 = new TaskId(0, 0);
-    private final TaskId task01 = new TaskId(0, 1);
-    private final TaskId task02 = new TaskId(0, 2);
-    private final TaskId task03 = new TaskId(0, 3);
-    private final TaskId task04 = new TaskId(0, 4);
-    private final TaskId task05 = new TaskId(0, 5);
+    private TaskId task00 = new TaskId(0, 0);
+    private TaskId task01 = new TaskId(0, 1);
+    private TaskId task02 = new TaskId(0, 2);
+    private TaskId task03 = new TaskId(0, 3);
+    private TaskId task04 = new TaskId(0, 4);
+    private TaskId task05 = new TaskId(0, 5);
 
     private final TaskId task10 = new TaskId(1, 0);
     private final TaskId task11 = new TaskId(1, 1);
@@ -781,11 +782,23 @@ public class StickyTaskAssignorTest {
 
     private void setStateStoreAndInputPartitionCount(final Map<TaskId, Integer> stateStoreCounts,
                                                      final Map<TaskId, Integer> inputPartitionCounts) {
+        final HashMap<TaskId, StreamTaskMetadata> streamMetadatas = new HashMap<>();
         for (final Map.Entry<TaskId, Integer> stateStoreCount : stateStoreCounts.entrySet()) {
-            stateStoreCount.getKey().setNumberOfStateStores(stateStoreCount.getValue());
+            final StreamTaskMetadata metadata = new StreamTaskMetadata(inputPartitionCounts.get(stateStoreCount.getKey()), 
+                                                                       stateStoreCount.getValue());
+            streamMetadatas.put(stateStoreCount.getKey(), metadata);
         }
-        for (final Map.Entry<TaskId, Integer> partitionCount : inputPartitionCounts.entrySet()) {
-            partitionCount.getKey().setNumberOfInputPartitions(partitionCount.getValue());
-        }
+        task00 = new TaskId(task00.topicGroupId, task00.partition, streamMetadatas.get(task00));
+        streamMetadatas.remove(task00);
+        task01 = new TaskId(task01.topicGroupId, task01.partition, streamMetadatas.get(task01));
+        streamMetadatas.remove(task01);
+        task02 = new TaskId(task02.topicGroupId, task02.partition, streamMetadatas.get(task02));
+        streamMetadatas.remove(task02);
+        task03 = new TaskId(task03.topicGroupId, task03.partition, streamMetadatas.get(task03));
+        streamMetadatas.remove(task03);
+        task04 = new TaskId(task04.topicGroupId, task04.partition, streamMetadatas.get(task04));
+        streamMetadatas.remove(task04);
+        task05 = new TaskId(task05.topicGroupId, task05.partition, streamMetadatas.get(task05));
+        streamMetadatas.remove(task05);
     }
 }
