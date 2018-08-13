@@ -191,7 +191,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent
      */
-    public int sendFetches() {
+    public synchronized int sendFetches() {
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
@@ -209,39 +209,43 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
-                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
-                            if (handler == null) {
-                                log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
-                                    fetchTarget.id());
-                                return;
+                            synchronized (Fetcher.this) {
+                                FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
+                                FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
+                                if (handler == null) {
+                                    log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
+                                            fetchTarget.id());
+                                    return;
+                                }
+                                if (!handler.handleResponse(response)) {
+                                    return;
+                                }
+
+                                Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
+                                FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
+
+                                for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
+                                    TopicPartition partition = entry.getKey();
+                                    long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
+                                    FetchResponse.PartitionData fetchData = entry.getValue();
+
+                                    log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                            isolationLevel, fetchOffset, partition, fetchData);
+                                    completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
+                                            resp.requestHeader().apiVersion()));
+                                }
+
+                                sensors.fetchLatency.record(resp.requestLatencyMs());
                             }
-                            if (!handler.handleResponse(response)) {
-                                return;
-                            }
-
-                            Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
-                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
-
-                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
-                                TopicPartition partition = entry.getKey();
-                                long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                FetchResponse.PartitionData fetchData = entry.getValue();
-
-                                log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
-                                        isolationLevel, fetchOffset, partition, fetchData);
-                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                        resp.requestHeader().apiVersion()));
-                            }
-
-                            sensors.fetchLatency.record(resp.requestLatencyMs());
                         }
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
-                            if (handler != null) {
-                                handler.handleError(e);
+                            synchronized (Fetcher.this) {
+                                FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
+                                if (handler != null) {
+                                    handler.handleError(e);
+                                }
                             }
                         }
                     });
