@@ -16,7 +16,7 @@
   * limitations under the License.
   */
 
-package integration.kafka.server
+package kafka.server
 
 import java.net.InetSocketAddress
 import java.util.Properties
@@ -45,11 +45,14 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private val numThreads = 10
   private val executor = Executors.newFixedThreadPool(numThreads)
   private val clientConfig: Properties = new Properties
+  private var serverAddr: InetSocketAddress = _
 
   @Before
   override def setUp() {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     super.setUp()
+    serverAddr = new InetSocketAddress("localhost",
+      servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
 
     clientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name)
     clientConfig.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
@@ -64,29 +67,49 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     closeSasl()
   }
 
+  /**
+   * Tests that Kerberos replay error `Request is a replay (34)` is not handled as an authentication exception
+   * since replay detection used to detect DoS attacks may occasionally reject valid concurrent requests.
+   */
   @Test
-  def testReplay(): Unit = {
-    val numIterations = 10
+  def testRequestIsAReplay(): Unit = {
+    val successfulAuthsPerThread = 10
     val futures = (0 until numThreads).map(_ => executor.submit(new Runnable {
-      override def run(): Unit = authenticate(numIterations)
+      override def run(): Unit = verifyRetriableFailuresDuringAuthentication(successfulAuthsPerThread)
     }))
     futures.foreach(_.get(60, TimeUnit.SECONDS))
     assertEquals(0, TestUtils.totalMetricValue(servers.head, "failed-authentication-total"))
     val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
-    assertTrue("Too few authentications: " + successfulAuths, successfulAuths > numIterations * numThreads)
+    assertTrue("Too few authentications: " + successfulAuths, successfulAuths > successfulAuthsPerThread * numThreads)
   }
 
-  private def authenticate(numIterations: Int): Unit = {
-    val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
-      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, true)
-    val serverAddr = new InetSocketAddress("localhost",
-      servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
+  /**
+   * Tests that Kerberos error `Server not found in Kerberos database (7)` is handled
+   * as a fatal authentication failure.
+   */
+  @Test
+  def testServerNotFoundInKerberosDatabase(): Unit = {
+    val jaasConfig = clientConfig.getProperty(SaslConfigs.SASL_JAAS_CONFIG)
+    val invalidServiceConfig = jaasConfig.replace("serviceName=\"kafka\"", "serviceName=\"invalid-service\"")
+    clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, invalidServiceConfig)
+    clientConfig.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "invalid-service")
+    verifyNonRetriableAuthenticationFailure()
+  }
 
-    val selector = NetworkTestUtils.createSelector(channelBuilder)
+  /**
+   * Verifies that any exceptions during authentication with the current `clientConfig` are
+   * notified with disconnect state `AUTHENTICATE` (and not `AUTHENTICATION_FAILED`). This
+   * is to ensure that NetworkClient doesn't handle this as a fatal authentication failure,
+   * but as a transient I/O exception. So Producer/Consumer/AdminClient will retry
+   * any operation based on their configuration until timeout and will not propagate
+   * the exception to the application.
+   */
+  private def verifyRetriableFailuresDuringAuthentication(numSuccessfulAuths: Int): Unit = {
+    val selector = createSelector()
     try {
-      var successfulAuths = 0
-      while (successfulAuths < numIterations) {
-        val nodeId = successfulAuths.toString
+      var actualSuccessfulAuths = 0
+      while (actualSuccessfulAuths < numSuccessfulAuths) {
+        val nodeId = actualSuccessfulAuths.toString
         selector.connect(nodeId, serverAddr, 1024, 1024)
         TestUtils.waitUntilTrue(() => {
           selector.poll(100)
@@ -97,11 +120,36 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
           selector.isChannelReady(nodeId) || disconnectState != null
         }, "Client not ready or disconnected within timeout")
         if (selector.isChannelReady(nodeId))
-          successfulAuths += 1
+          actualSuccessfulAuths += 1
         selector.close(nodeId)
       }
     } finally {
       selector.close()
     }
+  }
+
+  /**
+   * Verifies that authentication with the current `clientConfig` results in disconnection and that
+   * the disconnection is notified with disconnect state `AUTHENTICATION_FAILED`. This is to ensure
+   * that NetworkClient handles this as a fatal authentication failure that is propagated to
+   * applications by Producer/Consumer/AdminClient without retrying and waiting for timeout.
+   */
+  private def verifyNonRetriableAuthenticationFailure(): Unit = {
+    val selector = createSelector()
+    val nodeId = "1"
+    selector.connect(nodeId, serverAddr, 1024, 1024)
+    TestUtils.waitUntilTrue(() => {
+      selector.poll(100)
+      val disconnectState = selector.disconnected().get(nodeId)
+      if (disconnectState != null)
+        assertEquals(ChannelState.State.AUTHENTICATION_FAILED, disconnectState.state())
+      disconnectState != null
+    }, "Client not disconnected within timeout")
+  }
+
+  private def createSelector(): Selector = {
+    val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
+      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, true)
+    NetworkTestUtils.createSelector(channelBuilder)
   }
 }
