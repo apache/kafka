@@ -47,12 +47,12 @@ public class StreamTaskMetadata {
         return new StreamTaskMetadata(buffer.getInt(), buffer.getInt());
     }
     
-    public void writeTo(final DataOutputStream stream) throws IOException{
+    public void writeTo(final DataOutputStream stream) throws IOException {
         stream.writeInt(numberOfPartitions);
         stream.writeInt(numberOfStateStores);
     }
     
-    public static StreamTaskMetadata readFrom(final DataInputStream stream) throws IOException{
+    public static StreamTaskMetadata readFrom(final DataInputStream stream) throws IOException {
         return new StreamTaskMetadata(stream.readInt(), stream.readInt());
     }
 }
