@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.{BrokerEndPoint, Replica}
@@ -37,8 +38,8 @@ import java.util.concurrent.atomic.AtomicLong
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.EpochEndOffset
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse}
 
 import scala.math._
 
@@ -54,7 +55,7 @@ abstract class AbstractFetcherThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   type REQ <: FetchRequest
-  type PD <: PartitionData
+  type PD = FetchResponse.PartitionData[Records]
 
   private[server] val partitionStates = new PartitionStates[PartitionFetchState]
   private val partitionMapLock = new ReentrantLock
@@ -67,7 +68,8 @@ abstract class AbstractFetcherThread(name: String,
   /* callbacks to be defined in subclass */
 
   // process fetched data
-  protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD)
+  protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD,
+                                     records: MemoryRecords)
 
   // handle a partition whose offset is out of range and return a new fetch offset
   protected def handleOffsetOutOfRange(topicPartition: TopicPartition): Long
@@ -177,13 +179,13 @@ abstract class AbstractFetcherThread(name: String,
               partitionData.error match {
                 case Errors.NONE =>
                   try {
-                    val records = partitionData.toRecords
+                    val records = toMemoryRecords(partitionData.records)
                     val newOffset = records.batches.asScala.lastOption.map(_.nextOffset).getOrElse(
                       currentPartitionFetchState.fetchOffset)
 
                     fetcherLagStats.getAndMaybePut(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
-                    processPartitionData(topicPartition, currentPartitionFetchState.fetchOffset, partitionData)
+                    processPartitionData(topicPartition, currentPartitionFetchState.fetchOffset, partitionData, records)
 
                     val validBytes = records.validBytes
                     // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
@@ -227,7 +229,7 @@ abstract class AbstractFetcherThread(name: String,
 
                 case _ =>
                   error(s"Error for partition $topicPartition at offset ${currentPartitionFetchState.fetchOffset}",
-                    partitionData.exception.get)
+                    partitionData.error.exception)
                   partitionsWithError += topicPartition
               }
             })
@@ -400,6 +402,16 @@ abstract class AbstractFetcherThread(name: String,
     }.toMap
   }
 
+  private def toMemoryRecords(records: Records): MemoryRecords = {
+    records match {
+      case r: MemoryRecords => r
+      case r: FileRecords =>
+        val buffer = ByteBuffer.allocate(r.sizeInBytes)
+        r.readInto(buffer, 0)
+        MemoryRecords.readableRecords(buffer)
+    }
+  }
+
 }
 
 object AbstractFetcherThread {
@@ -409,13 +421,6 @@ object AbstractFetcherThread {
   trait FetchRequest {
     def isEmpty: Boolean
     def offset(topicPartition: TopicPartition): Long
-  }
-
-  trait PartitionData {
-    def error: Errors
-    def exception: Option[Throwable]
-    def toRecords: MemoryRecords
-    def highWatermark: Long
   }
 
 }
