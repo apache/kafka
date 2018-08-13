@@ -39,6 +39,8 @@ import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
+import scala.concurrent.TimeoutException
+import scala.util.{Failure, Success, Try}
 import scala.util.control.ControlThrowable
 
 /**
@@ -280,6 +282,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           consumerWrapper.commit()
           throw e
 
+        case _: TimeoutException =>
+          warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
+            s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG}")
+
         case _: CommitFailedException =>
           warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
             "another instance. If you see this regularly, it could indicate that you need to either increase " +
@@ -473,7 +479,14 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def commit() {
-      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))}.asJava)
+      val existingTopics: Set[String] = Try(consumer.listTopics) match {
+        case Success(allTopics) => allTopics.keySet.asInstanceOf[Set[String]]
+        case Failure(_) => Set.empty
+      }
+      if (existingTopics.nonEmpty)
+        consumer.commitSync(offsets.filterKeys(tp => existingTopics.contains(tp.topic)).map { case (tp, offset) => (tp, new OffsetAndMetadata(offset, "")) }.asJava)
+      else
+        consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset, "")) }.asJava)
       offsets.clear()
     }
   }
