@@ -239,6 +239,9 @@ public class Materialized<K, V, S extends StateStore> {
      * Overridden by pre-configured store suppliers
      * ({@link Materialized#as(SessionBytesStoreSupplier)} or {@link Materialized#as(WindowBytesStoreSupplier)}).
      *
+     * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
+     * from window-start through window-end, and for the entire grace period.
+     *
      * @return itself
      */
     public Materialized<K, V, S> withRetention(final long retentionMs) {
