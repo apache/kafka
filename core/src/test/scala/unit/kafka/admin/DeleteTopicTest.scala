@@ -22,7 +22,7 @@ import java.util.{Collections, Optional, Properties}
 
 import scala.collection.Seq
 import kafka.log.Log
-import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
+import kafka.zk.{DeleteTopicFlagZNode, TopicPartitionZNode, TopicZNode, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.jupiter.api.Assertions._
@@ -415,6 +415,62 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // topic test should have a leader
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
     assertTrue(leaderIdOpt.isDefined, "Leader should exist for topic test")
+  }
+
+  def testDeleteTopicAfterEnableZkDeleteTopicFlag() {
+    val topicPartition = new TopicPartition("test", 0)
+    val topic = topicPartition.topic
+    servers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)
+    // mark the topic for deletion
+    adminZkClient.deleteTopic("test")
+    TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
+      "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
+    // verify that topic test is untouched
+    assertTrue(servers.forall(_.getLogManager.getLog(topicPartition).isDefined))
+    // test the topic path exists
+    assertTrue(zkClient.pathExists(TopicZNode.path(topic)), "Topic path disappeared even when topic deletion is disabled")
+    // topic test should have a leader
+    val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for topic test")
+
+    // Set TopicDeletionFlag to true in zk and try delete topic again
+    zkClient.setTopicDeletionFlag("true")
+    TestUtils.waitUntilTrue(() =>
+      try {
+        zkClient.getTopicDeletionFlag.equalsIgnoreCase("true")
+      } catch {
+        case _: Throwable => false
+      },
+      "TopicDeletionFlag is not set")
+    TestUtils.waitUntilTrue( () => getController()._1.kafkaController.topicDeletionManager.isDeleteTopicEnabled,
+      "Delete topic is not enabled")
+    // mark the topic for deletion
+    adminZkClient.deleteTopic("test")
+    TestUtils.verifyTopicDeletion(zkClient, "test", 1, servers)
+
+    // Set TopicDeletionFlag to invalid value in zk
+    zkClient.setTopicDeletionFlag("flase")
+    TestUtils.waitUntilTrue(() =>
+      try {
+        zkClient.getTopicDeletionFlag.equalsIgnoreCase("true")
+      } catch {
+        case _: Throwable => false
+      },
+      "TopicDeletionFlag is not overwritten")
+
+    // delete TopicDeletionFlagPath in zk
+    zkClient.deletePath(DeleteTopicFlagZNode.path)
+    TestUtils.waitUntilTrue(() =>
+      try {
+        !zkClient.pathExists(DeleteTopicFlagZNode.path)
+      } catch {
+        case _: Throwable => false
+      },
+      "TopicDeletionFlagPath is not deleted")
+    TestUtils.waitUntilTrue(() =>
+      getController()._1.kafkaController.topicDeletionManager.isDeleteTopicEnabled == false,
+      "Topic deletion flag is not rest"
+    )
   }
 
   @Test

@@ -118,6 +118,7 @@ class KafkaController(val config: KafkaConfig,
   private val preferredReplicaElectionHandler = new PreferredReplicaElectionHandler(eventManager)
   private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(eventManager)
+  private val topicDeletionFlagHandler = new TopicDeletionFlagHandler(this, eventManager)
 
   @volatile private var activeControllerId = -1
   @volatile private var offlinePartitionCount = 0
@@ -237,7 +238,7 @@ class KafkaController(val config: KafkaConfig,
       isrChangeNotificationHandler)
     childChangeHandlers.foreach(zkClient.registerZNodeChildChangeHandler)
 
-    val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionReassignmentHandler)
+    val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionReassignmentHandler, topicDeletionFlagHandler)
     nodeChangeHandlers.foreach(zkClient.registerZNodeChangeHandlerAndCheckExistence)
 
     info("Deleting log dir event notifications")
@@ -478,6 +479,7 @@ class KafkaController(val config: KafkaConfig,
     zkClient.unregisterZNodeChildChangeHandler(topicChangeHandler.path)
     unregisterPartitionModificationsHandlers(partitionModificationsHandlers.keys.toSeq)
     zkClient.unregisterZNodeChildChangeHandler(topicDeletionHandler.path)
+    zkClient.unregisterZNodeChangeHandler(topicDeletionFlagHandler.path)
     // shutdown replica state machine
     replicaStateMachine.shutdown()
     zkClient.unregisterZNodeChildChangeHandler(brokerChangeHandler.path)
@@ -1744,7 +1746,7 @@ class KafkaController(val config: KafkaConfig,
       zkClient.deleteTopicDeletions(nonExistentTopics.toSeq, controllerContext.epochZkVersion)
     }
     topicsToBeDeleted --= nonExistentTopics
-    if (config.deleteTopicEnable) {
+    if (topicDeletionManager.isDeleteTopicEnabled) {
       if (topicsToBeDeleted.nonEmpty) {
         info(s"Starting topic deletion for topics ${topicsToBeDeleted.mkString(",")}")
         // mark topic ineligible for deletion if other state changes are in progress
@@ -1762,6 +1764,24 @@ class KafkaController(val config: KafkaConfig,
       // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
       info(s"Removing $topicsToBeDeleted since delete topic is disabled")
       zkClient.deleteTopicDeletions(topicsToBeDeleted.toSeq, controllerContext.epochZkVersion)
+    }
+  }
+
+  private def processTopicDeletionFlagChange(reset: Boolean): Unit = {
+    info("Process TopicDeletionFlagChange event")
+    if (!isActive) return
+    if (reset)
+      topicDeletionManager.resetDeleteTopicEnabled()
+    else {
+      val topicDeletionFlag = zkClient.getTopicDeletionFlag
+      if (!topicDeletionFlag.equalsIgnoreCase("true") && !topicDeletionFlag.equalsIgnoreCase("false")) {
+        info(s"Overwrite ${DeleteTopicFlagZNode.path} to ${topicDeletionManager.isDeleteTopicEnabled}")
+        zkClient.setTopicDeletionFlag(topicDeletionManager.isDeleteTopicEnabled.toString)
+      }
+      else {
+        info(s"Set isDeleteTopicEnabled flag to $topicDeletionFlag")
+        topicDeletionManager.isDeleteTopicEnabled = topicDeletionFlag.toBoolean
+      }
     }
   }
 
@@ -2508,6 +2528,8 @@ class KafkaController(val config: KafkaConfig,
           processListPartitionReassignments(partitions, callback)
         case UpdateFeatures(request, callback) =>
           processFeatureUpdates(request, callback)
+        case TopicDeletionFlagChange(reset) =>
+          processTopicDeletionFlagChange(reset)
         case PartitionReassignmentIsrChange(partition) =>
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
@@ -2577,6 +2599,19 @@ class TopicDeletionHandler(eventManager: ControllerEventManager) extends ZNodeCh
   override val path: String = DeleteTopicsZNode.path
 
   override def handleChildChange(): Unit = eventManager.put(TopicDeletion)
+}
+/**
+  * Listener for /topic_deletion_flag znode.
+  *   If the data of the znode is set to true/false, it will trigger the in memory isDeleteTopicEnabled to be set accordingly.
+  *   If the znode data cannot be converted to boolean, it will overwrite znode with the previous valid value.
+  *   If the znode path is deleted, it will reset the in memory isDeleteTopicEnabled to the config value.
+  */
+class TopicDeletionFlagHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
+  override val path: String = DeleteTopicFlagZNode.path
+
+  override def handleDataChange(): Unit = eventManager.put(TopicDeletionFlagChange())
+
+  override def handleDeletion(): Unit = eventManager.put(TopicDeletionFlagChange(true))
 }
 
 class PartitionReassignmentHandler(eventManager: ControllerEventManager) extends ZNodeChangeHandler {
@@ -2776,6 +2811,11 @@ case object IsrChangeNotification extends ControllerEvent {
 case class AlterIsrReceived(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
                             callback: AlterIsrCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
+  override def preempt(): Unit = {}
+}
+
+case class TopicDeletionFlagChange(reset: Boolean = false) extends ControllerEvent {
+  def state = ControllerState.TopicDeletionFlagChange
   override def preempt(): Unit = {}
 }
 
