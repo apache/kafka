@@ -405,6 +405,12 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+object DeleteTopicFlagZNode {
+  def path = "/topic_deletion_flag"
+  def encode(topicDeletionFlag: String): Array[Byte] = topicDeletionFlag.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = if (bytes != null) new String(bytes, UTF_8) else ""
+}
+
 /**
  * The znode for initiating a partition reassignment.
  * @deprecated Since 2.4, use the PartitionReassignment Kafka API instead.

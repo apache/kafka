@@ -20,6 +20,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+import org.apache.zookeeper.KeeperException.{NoNodeException, NodeExistsException}
 
 import scala.collection.Set
 
@@ -28,6 +29,8 @@ trait DeletionClient {
   def deleteTopicDeletions(topics: Seq[String], epochZkVersion: Int): Unit
   def mutePartitionModifications(topic: String): Unit
   def sendMetadataUpdate(partitions: Set[TopicPartition]): Unit
+  def createDeleteTopicFlagPath(): Unit
+  def getTopicDeletionFlag(): String
 }
 
 class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkClient) extends DeletionClient {
@@ -47,6 +50,14 @@ class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkCli
 
   override def sendMetadataUpdate(partitions: Set[TopicPartition]): Unit = {
     controller.sendUpdateMetadataRequest(controller.controllerContext.liveOrShuttingDownBrokerIds.toSeq, partitions)
+  }
+
+  override def createDeleteTopicFlagPath(): Unit = {
+    zkClient.createDeleteTopicFlagPath
+  }
+
+  override def getTopicDeletionFlag(): String = {
+    zkClient.getTopicDeletionFlag
   }
 }
 
@@ -89,11 +100,20 @@ class TopicDeletionManager(config: KafkaConfig,
                            partitionStateMachine: PartitionStateMachine,
                            client: DeletionClient) extends Logging {
   this.logIdent = s"[Topic Deletion Manager ${config.brokerId}] "
-  val isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
+  var isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
+
+  // Try to create the znode for delete topic flag
+  try {
+    client.createDeleteTopicFlagPath()
+  } catch {
+    case _: NodeExistsException =>
+  }
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
     info(s"Initializing manager with initial deletions: $initialTopicsToBeDeleted, " +
       s"initial ineligible deletions: $initialTopicsIneligibleForDeletion")
+
+    isDeleteTopicEnabled = getDeleteTopicEnabled()
 
     if (isDeleteTopicEnabled) {
       controllerContext.queueTopicDeletion(initialTopicsToBeDeleted)
@@ -354,5 +374,21 @@ class TopicDeletionManager(config: KafkaConfig,
         onTopicDeletion(Set(topic))
       }
     }
+  }
+
+  private def getDeleteTopicEnabled(): Boolean = {
+    try {
+      val deleteTopicFlag = client.getTopicDeletionFlag
+      if (deleteTopicFlag == null || (!deleteTopicFlag.equalsIgnoreCase("true") && !deleteTopicFlag.equalsIgnoreCase("false")))
+        isDeleteTopicEnabled
+      else deleteTopicFlag.toBoolean
+    } catch {
+      case _: NoNodeException => config.deleteTopicEnable
+    }
+  }
+
+  def resetDeleteTopicEnabled(): Unit = {
+    info("Reset isDeleteTopicEnabled flag to %s".format(config.deleteTopicEnable))
+    isDeleteTopicEnabled = config.deleteTopicEnable
   }
 }

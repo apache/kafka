@@ -794,6 +794,37 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Creates the delete topic flag znode.
+   * @throws KeeperException if there is an error while setting or creating the znode
+   */
+  def createDeleteTopicFlagPath(): Unit = {
+    createRecursive(DeleteTopicFlagZNode.path)
+  }
+
+  /**
+   * Get topic deletion flag in zookeeper.
+   * @return topic deletion flag in zookeeper.
+   */
+  def getTopicDeletionFlag: String = {
+    val getDataResponse = retryRequestUntilConnected(GetDataRequest(DeleteTopicFlagZNode.path))
+    getDataResponse.resultCode match {
+      case Code.OK => DeleteTopicFlagZNode.decode(getDataResponse.data)
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+  /**
+   * Set topic deletion flag in zookeeper.
+   */
+  def setTopicDeletionFlag(flag: String): Unit = {
+    val setDataResponse = retryRequestUntilConnected(SetDataRequest(DeleteTopicFlagZNode.path, DeleteTopicFlagZNode.encode(flag), -1))
+    setDataResponse.resultCode match {
+      case Code.OK =>
+      case _ => throw setDataResponse.resultException.get
+    }
+  }
+
+  /**
    * Remove the given topics from the topics marked for deletion.
    * @param topics the topics to remove.
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
