@@ -450,7 +450,10 @@ public class SaslClientAuthenticator implements Authenticator {
      */
     private enum KerberosError {
         // (Mechanism level: Server not found in Kerberos database (7) - UNKNOWN_SERVER)
+        // This is retriable, but included here to add extra logging for this case.
         SERVER_NOT_FOUND(7, false),
+        // (Mechanism level: Client not yet valid - try again later (21))
+        CLIENT_NOT_YET_VALID(21, true),
         // (Mechanism level: Ticket not yet valid (33) - Ticket not yet valid)])
         // This could be a small timing window.
         TICKET_NOT_YET_VALID(33, true),
