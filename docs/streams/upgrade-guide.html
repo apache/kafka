@@ -90,6 +90,14 @@
         We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
         See below for a detailed list of removed APIs.
     </p>
+    <h3><a id="streams_api_changes_210" href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
+    <p>
+        We updated <code>TopologyDescription</code> API to allow for better runtime checking.
+        Users are encouraged to use <code>#topicSet()</code> and <code>#topicPattern()</code> accordingly on <code>TopologyDescription.Source</code> nodes,
+        instead of using <code>#topics()</code>, which has since been deprecated. Similarly, use <code>#topic()</code> and <code>#topicNameExtractor()</code>
+        to get descriptions of <code>TopologyDescription.Sink</code> nodes. For more details, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-321%3A+Update+TopologyDescription+to+better+represent+Source+and+Sink+Nodes">KIP-321</a>.
+    </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>

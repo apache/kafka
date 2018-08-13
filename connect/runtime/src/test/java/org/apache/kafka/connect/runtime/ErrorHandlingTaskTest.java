@@ -65,6 +65,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -180,8 +181,8 @@ public class ErrorHandlingTaskTest {
         // bad json
         ConsumerRecord<byte[], byte[]> record2 = new ConsumerRecord<>(TOPIC, PARTITION2, FIRST_OFFSET, null, "{\"a\" 10}".getBytes());
 
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andReturn(records(record1));
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andReturn(records(record2));
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record1));
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record2));
 
         sinkTask.put(EasyMock.anyObject());
         EasyMock.expectLastCall().times(2);
