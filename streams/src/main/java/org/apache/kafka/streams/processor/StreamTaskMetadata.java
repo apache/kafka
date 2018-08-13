@@ -22,8 +22,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class StreamTaskMetadata extends TaskId {
-    private final int numberOfPartitions;
-    private final int numberOfStateStores;
+    public final int numberOfPartitions;
+    public final int numberOfStateStores;
     
     public StreamTaskMetadata(final TaskId taskId,
                               final int numberOfPartitions, 
@@ -67,5 +67,15 @@ public class StreamTaskMetadata extends TaskId {
         return new StreamTaskMetadata(TaskId.readFrom(stream), 
                                       stream.readInt(), 
                                       stream.readInt());
+    }
+
+    @Override
+    public boolean equals(Object metadata) {
+        return super.equals(metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
     }
 }
