@@ -60,6 +60,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
     private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
+    private final Set<StreamsGraphNode> mergeNodes = new HashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -253,6 +254,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             if (parentNode != null) {
                 keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
             }
+        } else if (node.isMergeNode()) {
+            mergeNodes.add(node);
         }
     }
 
@@ -297,6 +300,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
+        maybeUpdateKeyChangingRepartitionNodeMap();
 
         for (final Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
 
@@ -353,6 +357,33 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
             keyChangingNode.addChild(optimizedSingleRepartition);
             keyChangingOperationsToOptimizableRepartitionNodes.remove(entry.getKey());
+        }
+    }
+
+    private void maybeUpdateKeyChangingRepartitionNodeMap() {
+        final Map<StreamsGraphNode, Set<StreamsGraphNode>> mergeNodesToKeyChangers = new HashMap<>();
+        for (final StreamsGraphNode mergeNode : mergeNodes) {
+            mergeNodesToKeyChangers.put(mergeNode, new HashSet<>());
+            final Collection<StreamsGraphNode> keys = keyChangingOperationsToOptimizableRepartitionNodes.keySet();
+            for (final StreamsGraphNode key : keys) {
+                final StreamsGraphNode maybeParentKey = findParentNodeMatching(mergeNode, node -> node.parentNodes().contains(key));
+                if (maybeParentKey != null) {
+                    mergeNodesToKeyChangers.get(mergeNode).add(key);
+                }
+            }
+        }
+
+        for (final Map.Entry<StreamsGraphNode, Set<StreamsGraphNode>> entry : mergeNodesToKeyChangers.entrySet()) {
+            final StreamsGraphNode mergeKey = entry.getKey();
+            final Collection<StreamsGraphNode> keyChangingParents = entry.getValue();
+            final Set<OptimizableRepartitionNode> repartitionNodes = new HashSet<>();
+            for (final StreamsGraphNode keyChangingParent : keyChangingParents) {
+                repartitionNodes.addAll(keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingParent));
+                keyChangingOperationsToOptimizableRepartitionNodes.remove(keyChangingParent);
+            }
+
+            keyChangingOperationsToOptimizableRepartitionNodes.put(mergeKey, repartitionNodes);
+
         }
     }
 

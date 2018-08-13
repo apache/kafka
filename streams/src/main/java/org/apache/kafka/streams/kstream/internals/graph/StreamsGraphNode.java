@@ -32,6 +32,7 @@ public abstract class StreamsGraphNode {
     private final boolean repartitionRequired;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
+    private boolean mergeNode;
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
 
@@ -97,6 +98,14 @@ public abstract class StreamsGraphNode {
 
     public boolean isValueChangingOperation() {
         return valueChangingOperation;
+    }
+
+    public boolean isMergeNode() {
+        return mergeNode;
+    }
+
+    public void setMergeNode(final boolean mergeNode) {
+        this.mergeNode = mergeNode;
     }
 
     public void setValueChangingOperation(final boolean valueChangingOperation) {
