@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -206,7 +207,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = false;
     }
 
-    private void verifyProducerState() {
+    private synchronized void verifyProducerState() {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
@@ -244,7 +245,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
-        verifyProducerState();
+        if (this.closed) {
+            throw new IllegalStateException("MockProducer is already closed.");
+        }
+        if (this.producerFenced) {
+            throw new KafkaException("MockProducer is fenced.", new ProducerFencedException("Fenced"));
+        }
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
@@ -318,7 +324,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.closed;
     }
 
-    public void fenceProducer() {
+    public synchronized void fenceProducer() {
         verifyProducerState();
         verifyTransactionsInitialized();
         this.producerFenced = true;
