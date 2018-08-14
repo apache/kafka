@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -113,6 +115,10 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private Time time = Time.SYSTEM;
     private Map<String, String> moduleOptions = null;
     private boolean configured = false;
+
+    private static final Pattern DOUBLEQUOTE = Pattern.compile("\"", Pattern.LITERAL);
+
+    private static final Pattern BACKSLASH = Pattern.compile("\\", Pattern.LITERAL);
 
     /**
      * For testing
@@ -322,7 +328,8 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     }
 
     private String escape(String jsonStringValue) {
-        return jsonStringValue.replace("\"", "\\\"").replace("\\", "\\\\");
+        String replace1 = DOUBLEQUOTE.matcher(jsonStringValue).replaceAll(Matcher.quoteReplacement("\\\""));
+        return BACKSLASH.matcher(replace1).replaceAll(Matcher.quoteReplacement("\\\\"));
     }
 
     private String expClaimText(long lifetimeSeconds) {

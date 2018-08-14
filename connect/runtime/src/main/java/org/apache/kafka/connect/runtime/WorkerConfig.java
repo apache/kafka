@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -44,6 +45,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -338,7 +341,7 @@ public class WorkerConfig extends AbstractConfig {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<String>()
-                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
+                         : Arrays.asList(COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
