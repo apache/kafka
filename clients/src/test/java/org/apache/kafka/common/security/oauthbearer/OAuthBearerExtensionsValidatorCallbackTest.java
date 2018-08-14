@@ -75,6 +75,7 @@ public class OAuthBearerExtensionsValidatorCallbackTest {
 
         assertFalse(callback.validatedExtensions().containsKey("nothing"));
         assertFalse(callback.invalidExtensions().containsKey("nothing"));
+        assertEquals("nothing", callback.ignoredExtensions().get("nothing"));
     }
 
     @Test(expected = IllegalArgumentException.class)

@@ -22,10 +22,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public final class CollectionUtils {
 
     private CollectionUtils() {}
+
+    /**
+     * Given two maps (A, B), returns all the key-value pairs in A whose keys are not contained in B
+     */
+    public static <K, V> Map<K, V> subtractMap(Map<? extends K, ? extends V> minuend, Map<? extends K, ? extends V> subtrahend) {
+        return minuend.entrySet().stream()
+                .filter(entry -> !subtrahend.containsKey(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
     /**
      * group data by topic
