@@ -383,7 +383,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             keyChangingOperationsToOptimizableRepartitionNodes.put(mergeKey, repartitionNodes);
-
         }
     }
 
