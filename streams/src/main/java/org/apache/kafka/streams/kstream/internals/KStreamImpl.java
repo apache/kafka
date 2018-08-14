@@ -194,7 +194,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> mapProcessorNode = new ProcessorGraphNode<>(name,
                                                                                                    processorParameters,
-                                                                                     true);
+                                                                                                   true);
 
         mapProcessorNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, mapProcessorNode);
@@ -216,7 +216,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters<? super K, ? super V> processorParameters = new ProcessorParameters<>(new KStreamMapValues<>(mapper), name);
 
 
-        final ProcessorGraphNode<? super  K, ? super V> mapValuesProcessorNode = new ProcessorGraphNode<>(name,
+        final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode = new ProcessorGraphNode<>(name,
                                                                                                          processorParameters,
                                                                                                          repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, mapValuesProcessorNode);
@@ -235,7 +235,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> printNode = new ProcessorGraphNode<>(name,
                                                                                             processorParameters,
-                                                                            false);
+                                                                                            false);
         builder.addGraphNode(this.streamsGraphNode, printNode);
     }
 
@@ -250,7 +250,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> flatMapNode = new ProcessorGraphNode<>(name,
                                                                                               processorParameters,
-                                                                                true);
+                                                                                              true);
         flatMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, flatMapNode);
@@ -375,8 +375,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
         final ProcessorGraphNode<? super K, ? super V> foreachNode = new ProcessorGraphNode<>(name,
-                                                                              processorParameters,
-                                                                              repartitionRequired);
+                                                                                              processorParameters,
+                                                                                              repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, foreachNode);
     }
 
@@ -595,7 +595,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final String repartitionedSourceName = createRepartitionedSource(builder,
                                                                          keySerde,
                                                                          valSerde,
-                                                                          null,
+                                                                         null,
                                                                          name,
                                                                          optimizableRepartitionNodeBuilder);
 
@@ -716,9 +716,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(name,
-                                                                                  processorParameters,
-                                                                                  new String[]{},
-                                                                                  null);
+                                                                                        processorParameters,
+                                                                                        new String[] {},
+                                                                                        null);
         builder.addGraphNode(this.streamsGraphNode, streamTableJoinNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, false, streamTableJoinNode);
@@ -819,17 +819,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
-    private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
-                                                                                   final Serde<K> keySerde,
-                                                                                   final Serde<V> valueSerde,
-                                                                                   final String storeName) {
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
+                                                                                 final JoinWindows windows,
+                                                                                 final Serde<K> keySerde,
+                                                                                 final Serde<V> valueSerde) {
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
-                storeName,
-                windows.maintainMs(),
+                joinName + "-store",
+                windows.size() + windows.gracePeriodMs(),
                 windows.size(),
-                true,
-                windows.segmentInterval()
+                true
             ),
             keySerde,
             valueSerde
@@ -865,11 +865,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
-                createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
 
+            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
+                joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
             final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
-                createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
+                joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
 
             final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 

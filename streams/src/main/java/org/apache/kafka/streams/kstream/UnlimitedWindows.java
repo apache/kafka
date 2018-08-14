@@ -96,9 +96,11 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * Throws an {@link IllegalArgumentException} because the retention time for unlimited windows is always infinite
      * and cannot be changed.
      *
-     * @throws IllegalArgumentException on every invocation
+     * @throws IllegalArgumentException on every invocation.
+     * @deprecated since 2.1.
      */
     @Override
+    @Deprecated
     public UnlimitedWindows until(final long durationMs) {
         throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
     }
@@ -108,29 +110,23 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * The retention time for unlimited windows in infinite and thus represented as {@link Long#MAX_VALUE}.
      *
      * @return the window retention time that is {@link Long#MAX_VALUE}
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
     @Override
+    @Deprecated
     public long maintainMs() {
         return Long.MAX_VALUE;
     }
 
+    /**
+     * Throws an {@link IllegalArgumentException} because the window never ends and the
+     * grace period is therefore meaningless.
+     *
+     * @throws IllegalArgumentException on every invocation
+     */
     @Override
-    public boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-
-        if (!(o instanceof UnlimitedWindows)) {
-            return false;
-        }
-
-        final UnlimitedWindows other = (UnlimitedWindows) o;
-        return startMs == other.startMs;
-    }
-
-    @Override
-    public int hashCode() {
-        return (int) (startMs ^ (startMs >>> 32));
+    public UnlimitedWindows grace(final long millisAfterWindowEnd) {
+        throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 
 }

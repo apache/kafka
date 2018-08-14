@@ -25,6 +25,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
 
+import java.time.Duration;
+
 /**
  * {@code TimeWindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
  * It is an intermediate representation of a {@link KStream} in order to apply a windowed aggregation operation on the original
@@ -38,7 +40,9 @@ import org.apache.kafka.streams.state.WindowStore;
  * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
  * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
- * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
+ *
+ * New events are added to windows until their grace period ends (see {@link Windows#grace(Duration)}).
+ *
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
 

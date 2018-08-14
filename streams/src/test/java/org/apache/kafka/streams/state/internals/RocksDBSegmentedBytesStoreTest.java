@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,6 +29,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -55,11 +58,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 
@@ -88,22 +95,22 @@ public class RocksDBSegmentedBytesStoreTest {
         schema.init("topic");
 
         if (schema instanceof SessionKeySchema) {
-            windows[0] = new SessionWindow(10, 10);
-            windows[1] = new SessionWindow(500, 1000);
-            windows[2] = new SessionWindow(1000, 1500);
+            windows[0] = new SessionWindow(10L, 10L);
+            windows[1] = new SessionWindow(500L, 1000L);
+            windows[2] = new SessionWindow(1_000L, 1_500L);
             windows[3] = new SessionWindow(30_000L, 60_000L);
         }
         if (schema instanceof WindowKeySchema) {
-
-            windows[0] = timeWindowForSize(10, windowSizeForTimeWindow);
-            windows[1] = timeWindowForSize(500, windowSizeForTimeWindow);
-            windows[2] = timeWindowForSize(1000, windowSizeForTimeWindow);
+            windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
+            windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
+            windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
             windows[3] = timeWindowForSize(60_000L, windowSizeForTimeWindow);
         }
 
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
+            "metrics-scope",
             retention,
             segmentInterval,
             schema
@@ -276,6 +283,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
+            "metrics-scope",
             retention,
             segmentInterval,
             schema
@@ -312,6 +320,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
+            "metrics-scope",
             retention,
             segmentInterval,
             schema
@@ -400,6 +409,46 @@ public class RocksDBSegmentedBytesStoreTest {
         for (final Segment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
         }
+    }
+
+    @Test
+    public void shouldLogAndMeasureExpiredRecords() {
+        LogCaptureAppender.setClassLoggerToDebug(RocksDBSegmentedBytesStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        context.setStreamTime(Math.max(retention, segmentInterval) * 2);
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(5));
+
+        LogCaptureAppender.unregister(appender);
+
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+
+        final Metric dropTotal = metrics.get(new MetricName(
+            "expired-window-record-drop-total",
+            "stream-metrics-scope-metrics",
+            "The total number of occurrence of expired-window-record-drop operations.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("metrics-scope-id", "bytes-store")
+            )
+        ));
+
+        final Metric dropRate = metrics.get(new MetricName(
+            "expired-window-record-drop-rate",
+            "stream-metrics-scope-metrics",
+            "The average number of occurrence of expired-window-record-drop operation per second.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("metrics-scope-id", "bytes-store")
+            )
+        ));
+
+        assertEquals(1.0, dropTotal.metricValue());
+        assertNotEquals(0.0, dropRate.metricValue());
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
     private Set<String> segmentDirs() {
