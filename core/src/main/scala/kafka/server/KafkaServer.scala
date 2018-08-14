@@ -616,6 +616,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
 
+        // Clear all reconfigurable instances stored in DynamicBrokerConfig
+        config.dynamicConfig.clear()
+
         brokerState.newState(NotRunning)
 
         startupComplete.set(false)
