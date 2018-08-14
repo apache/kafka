@@ -23,14 +23,14 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.serialization.Serializer;
@@ -193,16 +193,26 @@ public class RecordCollectorImpl implements RecordCollector {
                 "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
         } catch (final Exception uncaughtException) {
-            throw new StreamsException(
-                String.format(EXCEPTION_MESSAGE,
-                              logPrefix,
-                              "an error caught",
-                              key,
-                              value,
-                              timestamp,
-                              topic,
-                              uncaughtException.getMessage()),
-                uncaughtException);
+            if (uncaughtException instanceof KafkaException &&
+                uncaughtException.getCause() instanceof ProducerFencedException) {
+                final KafkaException kafkaException = (KafkaException) uncaughtException;
+                // producer.send() call may throw a KafkaException which wraps a FencedException,
+                // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
+                throw (ProducerFencedException) kafkaException.getCause();
+            } else {
+                throw new StreamsException(
+                    String.format(
+                        EXCEPTION_MESSAGE,
+                        logPrefix,
+                        "an error caught",
+                        key,
+                        value,
+                        timestamp,
+                        topic,
+                        uncaughtException.getMessage()
+                    ),
+                    uncaughtException);
+            }
         }
     }
 
