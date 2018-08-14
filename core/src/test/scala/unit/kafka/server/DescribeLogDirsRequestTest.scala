@@ -26,9 +26,8 @@ import org.junit.Test
 import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
-  logDirCount = 2
-
-  override def numBrokers: Int = 1
+  override val logDirCount = 2
+  override val numBrokers: Int = 1
 
   val topic = "topic"
   val partitionNum = 2

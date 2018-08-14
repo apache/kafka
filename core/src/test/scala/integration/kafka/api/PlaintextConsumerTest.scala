@@ -977,16 +977,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // subscribe all consumers to all topics and validate the assignment
 
-    val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-    consumerGroup += createConsumer()
-    consumerGroup += createConsumer()
+    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    consumersInGroup += createConsumer()
+    consumersInGroup += createConsumer()
 
-    val consumerPollers = subscribeConsumers(consumerGroup, List(topic, topic1))
+    val consumerPollers = subscribeConsumers(consumersInGroup, List(topic, topic1))
     try {
       validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
       // add 2 more consumers and validate re-assignment
-      addConsumersToGroupAndWaitForGroupAssignment(2, consumerGroup, consumerPollers, List(topic, topic1), subscriptions)
+      addConsumersToGroupAndWaitForGroupAssignment(2, consumersInGroup, consumerPollers, List(topic, topic1), subscriptions)
 
       // add one more topic and validate partition re-assignment
       val topic2 = "topic2"

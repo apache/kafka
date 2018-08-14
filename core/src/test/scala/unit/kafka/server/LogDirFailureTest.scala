@@ -44,8 +44,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   val serverCount: Int = 2
   private val topic = "topic"
   private val partitionNum = 12
+  override val logDirCount = 3
 
-  this.logDirCount = 3
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 

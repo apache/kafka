@@ -38,8 +38,9 @@ import scala.collection.mutable
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
 abstract class IntegrationTestHarness extends KafkaServerTestHarness {
-  val serverCount: Int
-  var logDirCount: Int = 1
+  protected def serverCount: Int
+  protected def logDirCount: Int = 1
+
   val producerConfig = new Properties
   val consumerConfig = new Properties
   val serverConfig = new Properties
