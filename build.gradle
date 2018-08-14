@@ -1526,3 +1526,4 @@ task aggregatedJavadoc(type: Javadoc) {
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
   options.links "http://docs.oracle.com/javase/7/docs/api/"
 }
+
