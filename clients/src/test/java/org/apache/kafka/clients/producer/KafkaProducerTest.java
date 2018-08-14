@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.PartitionOutOfRangeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -375,7 +376,7 @@ public class KafkaProducerTest {
         try {
             producer.send(extendedRecord, null);
             fail("Expected KafkaException to be raised");
-        } catch (KafkaException e) {
+        } catch (PartitionOutOfRangeException e) {
             // expected
         }
         PowerMock.verify(metadata);
