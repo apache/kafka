@@ -1051,15 +1051,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def testListGroupApiWithAndWithoutListGroupAcls() {
     // write some record to the topic
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
-    sendRecords(1, tp)
+    val producer = createProducer()
+    sendRecords(producer, numRecords = 1, tp)
 
     // use two consumers to write to two different groups
     val group2 = "other group"
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), Resource(Group, group2, LITERAL))
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
-    this.consumers.head.subscribe(Collections.singleton(topic))
-    consumeRecords(this.consumers.head)
+    val consumer = createConsumer()
+    consumer.subscribe(Collections.singleton(topic))
+    consumeRecords(consumer)
 
     val otherConsumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group2, securityProtocol = SecurityProtocol.PLAINTEXT)
     otherConsumer.subscribe(Collections.singleton(topic))
