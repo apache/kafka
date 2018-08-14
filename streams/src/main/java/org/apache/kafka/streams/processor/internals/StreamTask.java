@@ -286,7 +286,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void resume() {
-        // nothing to do; new transaction will be started only after topology is initialized
         log.debug("Resuming");
         if (eosEnabled) {
             if (producer != null) {
