@@ -27,14 +27,14 @@ import java.util.Objects;
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
  * needs to validate the SASL extensions for the OAUTHBEARER mechanism
- * Callback handlers should use the {@link #validate(String)}
+ * Callback handlers should use the {@link #valid(String)}
  * method to communicate valid extensions back to the SASL server.
  * Callback handlers should use the
  * {@link #error(String, String)} method to communicate validation errors back to
  * the SASL Server.
  * As per RFC-7628 (https://tools.ietf.org/html/rfc7628#section-3.1), unknown extensions must be ignored by the server.
  * The callback handler implementation should simply ignore unknown extensions,
- * not calling {@link #error(String, String)} nor {@link #validate(String)}.
+ * not calling {@link #error(String, String)} nor {@link #valid(String)}.
  * Callback handlers should communicate other problems by raising an {@code IOException}.
  * <p>
  * The OAuth bearer token is provided in the callback for better context in extension validation.
@@ -84,7 +84,7 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
      * Validates a specific extension in the original {@code inputExtensions} map
      * @param extensionName - the name of the extension which was validated
      */
-    public void validate(String extensionName) {
+    public void valid(String extensionName) {
         if (!inputExtensions.map().containsKey(extensionName))
             throw new IllegalArgumentException(String.format("Extension %s was not found in the original extensions", extensionName));
         validatedExtensions.put(extensionName, inputExtensions.map().get(extensionName));

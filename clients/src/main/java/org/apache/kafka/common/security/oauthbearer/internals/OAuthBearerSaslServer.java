@@ -84,8 +84,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     @Override
     public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         if (response.length == 1 && response[0] == OAuthBearerSaslClient.BYTE_CONTROL_A && errorMessage != null) {
-            if (log.isDebugEnabled())
-                log.debug("Received %x01 response from client after it received our error");
+            log.debug("Received %x01 response from client after it received our error");
             throw new SaslAuthenticationException(errorMessage);
         }
         errorMessage = null;
@@ -154,14 +153,13 @@ public class OAuthBearerSaslServer implements SaslServer {
         try {
             callbackHandler.handle(new Callback[] {callback});
         } catch (IOException | UnsupportedCallbackException e) {
-            handleInternalError(e);
+            handleCallbackError(e);
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
             errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
                     callback.errorOpenIDConfiguration());
-            if (log.isDebugEnabled())
-                log.debug(errorMessage);
+            log.debug(errorMessage);
             return errorMessage.getBytes(StandardCharsets.UTF_8);
         }
         /*
@@ -178,8 +176,7 @@ public class OAuthBearerSaslServer implements SaslServer {
         tokenForNegotiatedProperty = token;
         this.extensions = new SaslExtensions(validExtensions);
         complete = true;
-        if (log.isDebugEnabled())
-            log.debug("Successfully authenticate User={}", token.principalName());
+        log.debug("Successfully authenticate User={}", token.principalName());
         return new byte[0];
     }
 
@@ -190,14 +187,13 @@ public class OAuthBearerSaslServer implements SaslServer {
         } catch (UnsupportedCallbackException e) {
             // backwards compatibility - no extensions will be added
         } catch (IOException e) {
-            handleInternalError(e);
+            handleCallbackError(e);
         }
         if (!extensionsCallback.invalidExtensions().isEmpty()) {
             String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are: %s",
                     extensionsCallback.invalidExtensions().size(),
                     Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
-            if (log.isDebugEnabled())
-                log.debug(errorMessage);
+            log.debug(errorMessage);
             throw new SaslAuthenticationException(errorMessage);
         }
 
@@ -215,10 +211,9 @@ public class OAuthBearerSaslServer implements SaslServer {
         return jsonErrorResponse;
     }
 
-    private void handleInternalError(Exception e) throws SaslException {
+    private void handleCallbackError(Exception e) throws SaslException {
         String msg = String.format("%s: %s", INTERNAL_ERROR_ON_SERVER, e.getMessage());
-        if (log.isDebugEnabled())
-            log.debug(msg, e);
+        log.debug(msg, e);
         throw new SaslException(msg);
     }
 

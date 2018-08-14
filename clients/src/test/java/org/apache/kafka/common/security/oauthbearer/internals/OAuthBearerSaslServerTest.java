@@ -25,7 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -41,6 +40,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidat
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenMock;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
@@ -57,32 +57,6 @@ public class OAuthBearerSaslServerTest {
         Map<String, Object> tmp = new HashMap<>();
         tmp.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigText));
         CONFIGS = Collections.unmodifiableMap(tmp);
-    }
-    static class OAuthBearerTokenMock implements OAuthBearerToken {
-        @Override
-        public String value() {
-            return null;
-        }
-
-        @Override
-        public Set<String> scope() {
-            return null;
-        }
-
-        @Override
-        public long lifetimeMs() {
-            return 0;
-        }
-
-        @Override
-        public String principalName() {
-            return null;
-        }
-
-        @Override
-        public Long startTimeMs() {
-            return null;
-        }
     }
     private static final AuthenticateCallbackHandler LOGIN_CALLBACK_HANDLER;
     static {
@@ -106,8 +80,8 @@ public class OAuthBearerSaslServerTest {
                         validationCallback.token(new OAuthBearerTokenMock());
                     } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
                         OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
-                        extensionsCallback.validate("firstKey");
-                        extensionsCallback.validate("secondKey");
+                        extensionsCallback.valid("firstKey");
+                        extensionsCallback.valid("secondKey");
                     } else
                         throw new UnsupportedCallbackException(callback);
                 }
@@ -167,7 +141,7 @@ public class OAuthBearerSaslServerTest {
 
     /**
      * If the callback handler handles the `OAuthBearerExtensionsValidatorCallback`
-     *  and finds an invalid extension, it should throw an authentication exception
+     *  and finds an invalid extension, SaslServer should throw an authentication exception
      */
     @Test(expected = SaslAuthenticationException.class)
     public void throwsAuthenticationExceptionOnInvalidExtensions() throws Exception {

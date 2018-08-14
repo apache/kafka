@@ -140,7 +140,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
                 }
             } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
                 OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
-                extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.validate(extensionName));
+                extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.valid(extensionName));
             } else
                 throw new UnsupportedCallbackException(callback);
         }
