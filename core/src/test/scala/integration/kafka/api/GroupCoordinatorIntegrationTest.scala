@@ -26,7 +26,6 @@ import java.util.Properties
 
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
@@ -40,8 +39,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
   @Test
   def testGroupCoordinatorPropagatesOfffsetsTopicCompressionCodec() {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-                                               securityProtocol = SecurityProtocol.PLAINTEXT)
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava

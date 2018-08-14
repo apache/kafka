@@ -33,9 +33,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
-
-  override val producerCount = 0
-  override val consumerCount = 0
   override val serverCount = 1
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
