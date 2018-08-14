@@ -193,7 +193,7 @@ public class OAuthBearerSaslServer implements SaslServer {
             handleInternalError(e);
         }
         if (!extensionsCallback.invalidExtensions().isEmpty()) {
-            String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are:%n%s",
+            String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are: %s",
                     extensionsCallback.invalidExtensions().size(),
                     Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
             if (log.isDebugEnabled())

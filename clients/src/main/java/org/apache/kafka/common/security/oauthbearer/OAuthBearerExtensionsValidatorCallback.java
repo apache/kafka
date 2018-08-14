@@ -27,11 +27,14 @@ import java.util.Objects;
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
  * needs to validate the SASL extensions for the OAUTHBEARER mechanism
- * Callback handlers should use the {@link #validateExtension(String)}
+ * Callback handlers should use the {@link #validate(String)}
  * method to communicate valid extensions back to the SASL server.
  * Callback handlers should use the
  * {@link #error(String, String)} method to communicate validation errors back to
  * the SASL Server.
+ * As per RFC-7628 (https://tools.ietf.org/html/rfc7628#section-3.1), unknown extensions must be ignored by the server.
+ * The callback handler implementation should simply ignore unknown extensions,
+ * not calling {@link #error(String, String)} nor {@link #validate(String)}.
  * Callback handlers should communicate other problems by raising an {@code IOException}.
  * <p>
  * The OAuth bearer token is provided in the callback for better context in extension validation.
@@ -40,14 +43,13 @@ import java.util.Objects;
  */
 public class OAuthBearerExtensionsValidatorCallback implements Callback {
     private final OAuthBearerToken token;
-    private final SaslExtensions extensions;
-    private final Map<String, String> validatedExtensions;
+    private final SaslExtensions inputExtensions;
+    private final Map<String, String> validatedExtensions = new HashMap<>();
     private final Map<String, String> invalidExtensions = new HashMap<>();
 
     public OAuthBearerExtensionsValidatorCallback(OAuthBearerToken token, SaslExtensions extensions) {
-        this.token = token;
-        this.extensions = extensions;
-        this.validatedExtensions = new HashMap<>();
+        this.token = Objects.requireNonNull(token);
+        this.inputExtensions = Objects.requireNonNull(extensions);
     }
 
     /**
@@ -60,8 +62,8 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
     /**
      * @return {@link SaslExtensions} consisting of the unvalidated extension names and values that were sent by the client
      */
-    public SaslExtensions extensions() {
-        return extensions;
+    public SaslExtensions inputExtensions() {
+        return inputExtensions;
     }
 
     /**
@@ -72,20 +74,20 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
     }
 
     /**
-     * @return A {@link Map} consisting of the name->error messages of extensions which failed validation
+     * @return An immutable {@link Map} consisting of the name->error messages of extensions which failed validation
      */
     public Map<String, String> invalidExtensions() {
-        return invalidExtensions;
+        return Collections.unmodifiableMap(invalidExtensions);
     }
 
     /**
-     * Validates a specific extension in the original {@code extensions} map
+     * Validates a specific extension in the original {@code inputExtensions} map
      * @param extensionName - the name of the extension which was validated
      */
-    public void validateExtension(String extensionName) {
-        if (!extensions.map().containsKey(extensionName))
+    public void validate(String extensionName) {
+        if (!inputExtensions.map().containsKey(extensionName))
             throw new IllegalArgumentException(String.format("Extension %s was not found in the original extensions", extensionName));
-        validatedExtensions.put(extensionName, extensions.map().get(extensionName));
+        validatedExtensions.put(extensionName, inputExtensions.map().get(extensionName));
     }
     /**
      * Set the error value for a specific extension key-value pair if validation has failed
@@ -97,7 +99,7 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
      */
     public void error(String invalidExtensionName, String errorMessage) {
         if (Objects.requireNonNull(invalidExtensionName).isEmpty())
-            throw new IllegalArgumentException("error status must not be empty");
+            throw new IllegalArgumentException("extension name must not be empty");
         this.invalidExtensions.put(invalidExtensionName, errorMessage);
     }
 }

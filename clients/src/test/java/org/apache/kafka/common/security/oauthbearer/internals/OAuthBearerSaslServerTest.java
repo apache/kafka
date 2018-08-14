@@ -96,6 +96,7 @@ public class OAuthBearerSaslServerTest {
         VALIDATOR_CALLBACK_HANDLER = new OAuthBearerUnsecuredValidatorCallbackHandler();
         VALIDATOR_CALLBACK_HANDLER.configure(CONFIGS, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 JaasContext.loadClientContext(CONFIGS).configurationEntries());
+        // only validate extensions "firstKey" and "secondKey"
         EXTENSIONS_VALIDATOR_CALLBACK_HANDLER = new OAuthBearerUnsecuredValidatorCallbackHandler() {
             @Override
             public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
@@ -105,8 +106,8 @@ public class OAuthBearerSaslServerTest {
                         validationCallback.token(new OAuthBearerTokenMock());
                     } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
                         OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
-                        extensionsCallback.validateExtension("firstKey");
-                        extensionsCallback.validateExtension("secondKey");
+                        extensionsCallback.validate("firstKey");
+                        extensionsCallback.validate("secondKey");
                     } else
                         throw new UnsupportedCallbackException(callback);
                 }
@@ -133,12 +134,9 @@ public class OAuthBearerSaslServerTest {
      */
     @Test
     public void savesCustomExtensionAsNegotiatedProperty() throws Exception {
-        saslServer = new OAuthBearerSaslServer(EXTENSIONS_VALIDATOR_CALLBACK_HANDLER);
-
         Map<String, String> customExtensions = new HashMap<>();
         customExtensions.put("firstKey", "value1");
         customExtensions.put("secondKey", "value2");
-        customExtensions.put("nonRecognizableKey", "not-recognized");
 
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(null, false, customExtensions));
@@ -146,7 +144,6 @@ public class OAuthBearerSaslServerTest {
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
         assertEquals("value1", saslServer.getNegotiatedProperty("firstKey"));
         assertEquals("value2", saslServer.getNegotiatedProperty("secondKey"));
-        assertNull("Extensions not recognized by the server must be ignored", saslServer.getNegotiatedProperty("nonRecognizableKey"));
     }
 
     /**
@@ -165,7 +162,7 @@ public class OAuthBearerSaslServerTest {
                 .evaluateResponse(clientInitialResponse(null, false, customExtensions));
 
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
-        assertNull(saslServer.getNegotiatedProperty("thirdKey"));
+        assertNull("Extensions not recognized by the server must be ignored", saslServer.getNegotiatedProperty("thirdKey"));
     }
 
     /**
