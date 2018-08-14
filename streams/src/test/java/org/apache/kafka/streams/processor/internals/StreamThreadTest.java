@@ -690,8 +690,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(2L));
     }
 
-    @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsSuspended() {
+    private StreamThread setupStreamThread() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
@@ -717,11 +716,31 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertThat(thread.tasks().size(), equalTo(1));
+        return thread;
+    }
+
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
 
         clientSupplier.producers.get(0).fenceProducer();
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         assertTrue(clientSupplier.producers.get(0).transactionInFlight());
+        assertFalse(clientSupplier.producers.get(0).transactionCommitted());
+        assertTrue(clientSupplier.producers.get(0).closed());
+        assertTrue(thread.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCloseTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
+
+        clientSupplier.producers.get(0).fenceProducerOnClose();
+        thread.rebalanceListener.onPartitionsRevoked(null);
+
+        assertFalse(clientSupplier.producers.get(0).transactionInFlight());
+        assertTrue(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertTrue(thread.tasks().isEmpty());
     }

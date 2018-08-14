@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -743,6 +745,19 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionForBeginTransaction() {
+        task = createStatelessTask(createConfig(true));
+        producer.fenceProducer();
+
+        try {
+            task.initializeTopology();
+            fail("Should have throws TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertTrue(expected.getCause() instanceof ProducerFencedException);
+        }
+    }
+
+    @Test
     public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
         task = createStatelessTask(createConfig(true));
 
@@ -792,6 +807,37 @@ public class StreamTaskTest {
         assertFalse(producer.sentOffsets());
         assertFalse(producer.transactionCommitted());
         assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionInSuspendWhenCommitting() {
+        task = createStatelessTask(createConfig(true));
+        producer.fenceProducer();
+
+        try {
+            task.suspend();
+            fail("Should have throws TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertTrue(expected.getCause() instanceof ProducerFencedException);
+        }
+
+        assertFalse(producer.transactionCommitted());
+    }
+
+    @Test
+    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionInSuspendWhenClosingProducer() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+
+        producer.fenceProducerOnClose();
+        try {
+            task.suspend();
+            fail("Should have throws TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertTrue(expected.getCause() instanceof ProducerFencedException);
+        }
+
+        assertTrue(producer.transactionCommitted());
     }
 
     @Test

@@ -559,10 +559,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                  final boolean isZombie) {
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
-            commit(false);
-            if (eosEnabled) {
-                recordCollector.close();
-                producer = null;
+            TaskMigratedException taskMigratedException = null;
+            try {
+                commit(false);
+            } finally {
+                if (eosEnabled) {
+                    try {
+                        recordCollector.close();
+                    } catch (final ProducerFencedException e) {
+                        taskMigratedException = new TaskMigratedException(this, e);
+                    } finally {
+                        producer = null;
+                    }
+                }
+            }
+            if (taskMigratedException != null) {
+                throw taskMigratedException;
             }
         } else {
             if (eosEnabled) {
@@ -581,6 +593,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                     // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
                 }
+            }
+            try {
+                if (!isZombie) {
+                    recordCollector.close();
+                }
+            } catch (final Throwable e) {
+                log.error("Failed to close producer due to the following error:", e);
             }
         }
     }
@@ -626,18 +645,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("Could not close state manager due to the following error:", e);
         }
 
-        try {
-            partitionGroup.close();
-            taskMetrics.removeAllSensors();
-        } finally {
-            try {
-                if (!isZombie) {
-                    recordCollector.close();
-                }
-            } catch (final Throwable e) {
-                log.error("Failed to close producer due to the following error:", e);
-            }
-        }
+        partitionGroup.close();
+        taskMetrics.removeAllSensors();
 
         closeSensor.record();
 
