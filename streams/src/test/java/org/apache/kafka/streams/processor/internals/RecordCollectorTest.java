@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -298,5 +299,28 @@ public class RecordCollectorTest {
             logContext,
             new AlwaysContinueProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @Test
+    public void shouldUnwrapAndThrowProducerFencedExceptionFromCallToSend() {
+        final MockProducer<byte[], byte[]> producer =
+            new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            producer,
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler()
+        );
+
+        producer.initTransactions();
+        producer.fenceProducer();
+
+        try {
+            collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+            fail("expected a ProducerFencedException");
+        } catch (ProducerFencedException pfe) {
+            // expected
+        }
     }
 }
