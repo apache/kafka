@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Meter, Histogram}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -35,6 +35,7 @@ import scala.collection.mutable
 class KafkaRequestHandler(id: Int,
                           brokerId: Int,
                           val aggregateIdleMeter: Meter,
+                          val aggregateIdlePercent: Histogram,
                           val totalHandlerThreads: AtomicInteger,
                           val requestChannel: RequestChannel,
                           apis: KafkaApis,
@@ -52,9 +53,7 @@ class KafkaRequestHandler(id: Int,
       val startSelectTime = time.nanoseconds
 
       val req = requestChannel.receiveRequest(300)
-      val endTime = time.nanoseconds
-      val idleTime = endTime - startSelectTime
-      aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
+      val endSelectTime = time.nanoseconds
 
       req match {
         case RequestChannel.ShutdownRequest =>
@@ -64,7 +63,7 @@ class KafkaRequestHandler(id: Int,
 
         case request: RequestChannel.Request =>
           try {
-            request.requestDequeueTimeNanos = endTime
+            request.requestDequeueTimeNanos = endSelectTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             apis.handle(request)
           } catch {
@@ -78,6 +77,13 @@ class KafkaRequestHandler(id: Int,
 
         case null => // continue
       }
+
+      val endExecutionTime = time.nanoseconds
+      val idleTime = endSelectTime - startSelectTime
+      val idlePercent = idleTime * 100 / (endExecutionTime - startSelectTime)
+
+      aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
+      aggregateIdlePercent.update(idlePercent)
     }
     shutdownComplete.countDown()
   }
@@ -99,8 +105,10 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               numThreads: Int) extends Logging with KafkaMetricsGroup {
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
-  /* a meter to track the average free capacity of the request handlers */
+  // To remove in 2.2
   private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+  /* a meter to track the average free capacity of the request handlers */
+  private val aggregateIdlePercent = newHistogram("RequestHandlerIdlePercent")
 
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
@@ -109,7 +117,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 
   def createHandler(id: Int): Unit = synchronized {
-    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
+    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, aggregateIdlePercent, threadPoolSize, requestChannel, apis, time)
     KafkaThread.daemon("kafka-request-handler-" + id, runnables(id)).start()
   }
 
