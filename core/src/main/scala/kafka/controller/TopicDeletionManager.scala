@@ -62,13 +62,12 @@ class TopicDeletionManager(controller: KafkaController,
   val controllerContext = controller.controllerContext
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
   val topicsToBeDeleted = mutable.Set.empty[String]
-  val partitionsToBeDeleted = mutable.Set.empty[TopicPartition]
+  val partitionsBeingDeleted = mutable.Set.empty[TopicPartition]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted ++= initialTopicsToBeDeleted
-      partitionsToBeDeleted ++= topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
       topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & topicsToBeDeleted
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
@@ -89,7 +88,7 @@ class TopicDeletionManager(controller: KafkaController,
   def reset() {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted.clear()
-      partitionsToBeDeleted.clear()
+      partitionsBeingDeleted.clear()
       topicsIneligibleForDeletion.clear()
     }
   }
@@ -102,11 +101,6 @@ class TopicDeletionManager(controller: KafkaController,
    */
   def enqueueTopicsForDeletion(topics: Set[String]) {
     if (isDeleteTopicEnabled) {
-      partitionsToBeDeleted ++= topics.flatMap(controllerContext.partitionsForTopic)
-      // move the respective partitions to OfflinePartition and NonExistentPartition state, so that the
-      // offlinePartitionCount is properly updated
-      controller.partitionStateMachine.handleStateChanges(partitionsToBeDeleted.toSeq, OfflinePartition)
-      controller.partitionStateMachine.handleStateChanges(partitionsToBeDeleted.toSeq, NonExistentPartition)
       topicsToBeDeleted ++= topics
       resumeDeletions()
     }
@@ -177,9 +171,9 @@ class TopicDeletionManager(controller: KafkaController,
       false
   }
 
-  def isPartitionToBeDeleted(topicAndPartition: TopicPartition) = {
+  def isPartitionBeingDeleted(topicPartition: TopicPartition) = {
     if (isDeleteTopicEnabled) {
-      partitionsToBeDeleted.contains(topicAndPartition)
+      partitionsBeingDeleted.contains(topicPartition)
     } else
       false
   }
@@ -236,7 +230,7 @@ class TopicDeletionManager(controller: KafkaController,
     // controller will remove this replica from the state machine as well as its partition assignment cache
     controller.replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     topicsToBeDeleted -= topic
-    partitionsToBeDeleted.retain(_.topic != topic)
+    spartitionsBeingDeleted.retain(_.topic != topic)
     zkClient.deleteTopicZNode(topic)
     zkClient.deleteTopicConfigs(Seq(topic))
     zkClient.deleteTopicDeletions(Seq(topic))
@@ -254,6 +248,17 @@ class TopicDeletionManager(controller: KafkaController,
     info(s"Topic deletion callback for ${topics.mkString(",")}")
     // send update metadata so that brokers stop serving data for topics to be deleted
     val partitions = topics.flatMap(controllerContext.partitionsForTopic)
+    val unseenPartitionsForDeletion = partitions -- partitionsBeingDeleted
+    /** Once a partition is added to the partitionsBeingDeleted variable,
+      * we stop monitoring its state changes in the offlinePartitionCount metric.
+      * Therefore if some partitions are already in OfflinePartition state,
+      * and recorded in the offlinePartitionCount state, we need to properly
+      * decrement their count in offlinePartitionCount before adding them to
+      * the partitionsBeingDeleted set.
+      */
+    controller.partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, OfflinePartition)
+    controller.partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, NonExistentPartition)
+    partitionsBeingDeleted ++= unseenPartitionsForDeletion
     controller.sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, partitions)
     topics.foreach { topic =>
       onPartitionDeletion(controllerContext.partitionsForTopic(topic))
@@ -283,9 +288,9 @@ class TopicDeletionManager(controller: KafkaController,
       val successfullyDeletedReplicas = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
       val replicasForDeletionRetry = aliveReplicasForTopic -- successfullyDeletedReplicas
       // move dead replicas directly to failed state
-      controller.replicaStateMachine.handleStateChanges(deadReplicasForTopic.toSeq, ReplicaDeletionIneligible)
+      controller.replicaStateMachine.handleStateChanges(deadReplicasForTopic.toSeq, ReplicaDeletionIneligible, new Callbacks())
       // send stop replica to all followers that are not in the OfflineReplica state so they stop sending fetch requests to the leader
-      controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry.toSeq, OfflineReplica)
+      controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry.toSeq, OfflineReplica, new Callbacks())
       debug(s"Deletion started for replicas ${replicasForDeletionRetry.mkString(",")}")
       controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry.toSeq, ReplicaDeletionStarted,
         new Callbacks(stopReplicaResponseCallback = (stopReplicaResponseObj, replicaId) =>

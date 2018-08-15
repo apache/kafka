@@ -313,7 +313,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     assertEquals(OfflinePartition, partitionState(partition))
   }
 
-  def prepareMockToElectLeaderForPartitions(partitions: Seq[TopicPartition]): Unit = {
+  private def prepareMockToElectLeaderForPartitions(partitions: Seq[TopicPartition]): Unit = {
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
     def prepareMockToGetTopicPartitionsStatesRaw(): Unit = {
       val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -327,15 +327,12 @@ class PartitionStateMachineTest extends JUnitSuite {
 
     def prepareMockToGetLogConfigs(): Unit = {
       val topicsForPartitionsWithNoLiveInSyncReplicas = Seq()
-      //val topicConfigs = topics.map{topic => (topic, LogConfig())}.toMap
       EasyMock.expect(mockZkClient.getLogConfigs(topicsForPartitionsWithNoLiveInSyncReplicas, config.originals()))
         .andReturn(Map.empty, Map.empty)
     }
     prepareMockToGetLogConfigs()
 
     def prepareMockToUpdateLeaderAndIsr(): Unit = {
-      //val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
-      //val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
       val updatedLeaderAndIsr = partitions.map { partition =>
         partition -> leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
       }.toMap
@@ -361,7 +358,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     }
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicQueuedUpForDeletion(topic)).andReturn(false)
+    EasyMock.expect(mockTopicDeletionManager.isPartitionBeingDeleted(EasyMock.anyObject[TopicPartition])).andReturn(false)
     EasyMock.expectLastCall().anyTimes()
     prepareMockToElectLeaderForPartitions(partitions)
     EasyMock.replay(mockZkClient, mockTopicDeletionManager)
@@ -418,10 +415,15 @@ class PartitionStateMachineTest extends JUnitSuite {
     def createMockReplicaStateMachine() = {
       val replicaStateMachine: ReplicaStateMachine = EasyMock.createMock(classOf[ReplicaStateMachine])
       EasyMock.expect(replicaStateMachine.areAllReplicasForTopicDeleted(topic)).andReturn(false).anyTimes()
-      EasyMock.expect(replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)).andReturn(true).anyTimes()
+      EasyMock.expect(replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)).andReturn(false).anyTimes()
       EasyMock.expect(replicaStateMachine.isAnyReplicaInState(topic, ReplicaDeletionIneligible)).andReturn(false).anyTimes()
       EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionIneligible)).andReturn(Set.empty).anyTimes()
       EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)).andReturn(Set.empty).anyTimes()
+      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)).andReturn(Set.empty).anyTimes()
+      EasyMock.expect(replicaStateMachine.handleStateChanges(EasyMock.anyObject[Seq[PartitionAndReplica]],
+        EasyMock.anyObject[ReplicaState], EasyMock.anyObject[Callbacks]))
+
+      EasyMock.expectLastCall().anyTimes()
       replicaStateMachine
     }
     val replicaStateMachine = createMockReplicaStateMachine()
@@ -434,6 +436,8 @@ class PartitionStateMachineTest extends JUnitSuite {
       EasyMock.expect(mockController.config).andReturn(customConfig).anyTimes()
       EasyMock.expect(mockController.partitionStateMachine).andReturn(partitionStateMachine).anyTimes()
       EasyMock.expect(mockController.replicaStateMachine).andReturn(replicaStateMachine).anyTimes()
+      EasyMock.expect(mockController.sendUpdateMetadataRequest(Seq.empty, partitions.toSet))
+      EasyMock.expectLastCall().anyTimes()
       mockController
     }
 
