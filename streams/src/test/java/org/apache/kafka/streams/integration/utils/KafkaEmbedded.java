@@ -189,6 +189,7 @@ public class KafkaEmbedded {
     public AdminClient createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
+        adminClientConfig.put(AdminClientConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         final Object listeners = effectiveConfig.get(KafkaConfig$.MODULE$.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
