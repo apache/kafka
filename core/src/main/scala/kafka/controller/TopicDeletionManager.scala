@@ -230,7 +230,7 @@ class TopicDeletionManager(controller: KafkaController,
     // controller will remove this replica from the state machine as well as its partition assignment cache
     controller.replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     topicsToBeDeleted -= topic
-    spartitionsBeingDeleted.retain(_.topic != topic)
+    partitionsBeingDeleted.retain(_.topic != topic)
     zkClient.deleteTopicZNode(topic)
     zkClient.deleteTopicConfigs(Seq(topic))
     zkClient.deleteTopicDeletions(Seq(topic))
