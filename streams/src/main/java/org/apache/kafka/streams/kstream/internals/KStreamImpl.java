@@ -219,6 +219,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode = new ProcessorGraphNode<>(name,
                                                                                                          processorParameters,
                                                                                                          repartitionRequired);
+        mapValuesProcessorNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, mapValuesProcessorNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, mapValuesProcessorNode);
@@ -274,6 +275,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorGraphNode<? super K, ? super V> flatMapValuesNode = new ProcessorGraphNode<>(name,
                                                                                                     processorParameters,
                                                                                                     repartitionRequired);
+        flatMapValuesNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, flatMapValuesNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, flatMapValuesNode);
@@ -343,7 +345,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                             processorParameters,
                                                                                             requireRepartitioning);
 
-
+        mergeNode.setMergeNode(true);
         builder.addGraphNode(Arrays.asList(this.streamsGraphNode, streamImpl.streamsGraphNode), mergeNode);
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning, mergeNode);
     }
@@ -491,6 +493,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                        stateStoreNames,
                                                                                        null,
                                                                                        repartitionRequired);
+        transformNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, transformNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, transformNode);
@@ -529,7 +532,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                       joiner,
                       windows,
                       joined,
-                      new KStreamImplJoin(false, false, this.streamsGraphNode));
+                      new KStreamImplJoin(false, false));
 
     }
 
@@ -545,7 +548,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true, this.streamsGraphNode));
+        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
     }
 
     private <V1, R> KStream<K, R> doJoin(final KStream<K, V1> other,
@@ -656,7 +659,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             joiner,
             windows,
             joined,
-            new KStreamImplJoin(true, false, this.streamsGraphNode)
+            new KStreamImplJoin(true, false)
         );
 
     }
@@ -840,14 +843,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         private final boolean leftOuter;
         private final boolean rightOuter;
-        private final StreamsGraphNode parentGraphNode;
+
 
         KStreamImplJoin(final boolean leftOuter,
-                        final boolean rightOuter,
-                        final StreamsGraphNode parentGraphNode) {
+                        final boolean rightOuter) {
             this.leftOuter = leftOuter;
             this.rightOuter = rightOuter;
-            this.parentGraphNode = parentGraphNode;
         }
 
         @SuppressWarnings("unchecked")
