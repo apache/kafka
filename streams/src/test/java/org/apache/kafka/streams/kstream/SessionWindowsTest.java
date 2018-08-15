@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 public class SessionWindowsTest {
@@ -76,5 +77,42 @@ public class SessionWindowsTest {
         } catch (final IllegalArgumentException e) {
             // expected
         }
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        assertEquals(SessionWindows.with(1), SessionWindows.with(1));
+        assertEquals(SessionWindows.with(1).hashCode(), SessionWindows.with(1).hashCode());
+
+        assertEquals(SessionWindows.with(1).grace(6), SessionWindows.with(1).grace(6));
+        assertEquals(SessionWindows.with(1).grace(6).hashCode(), SessionWindows.with(1).grace(6).hashCode());
+
+        assertEquals(SessionWindows.with(1).until(7), SessionWindows.with(1).until(7));
+        assertEquals(SessionWindows.with(1).until(7).hashCode(), SessionWindows.with(1).until(7).hashCode());
+
+        assertEquals(SessionWindows.with(1).grace(6).until(7), SessionWindows.with(1).grace(6).until(7));
+        assertEquals(SessionWindows.with(1).grace(6).until(7).hashCode(), SessionWindows.with(1).grace(6).until(7).hashCode());
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        assertNotEquals(SessionWindows.with(9), SessionWindows.with(1));
+        assertNotEquals(SessionWindows.with(9).hashCode(), SessionWindows.with(1).hashCode());
+
+        assertNotEquals(SessionWindows.with(1).grace(9), SessionWindows.with(1).grace(6));
+        assertNotEquals(SessionWindows.with(1).grace(9).hashCode(), SessionWindows.with(1).grace(6).hashCode());
+
+        assertNotEquals(SessionWindows.with(1).until(9), SessionWindows.with(1).until(7));
+        assertNotEquals(SessionWindows.with(1).until(9).hashCode(), SessionWindows.with(1).until(7).hashCode());
+
+
+        assertNotEquals(SessionWindows.with(2).grace(6).until(7), SessionWindows.with(1).grace(6).until(7));
+        assertNotEquals(SessionWindows.with(2).grace(6).until(7).hashCode(), SessionWindows.with(1).grace(6).until(7).hashCode());
+
+        assertNotEquals(SessionWindows.with(1).grace(0).until(7), SessionWindows.with(1).grace(6).until(7));
+        assertNotEquals(SessionWindows.with(1).grace(0).until(7).hashCode(), SessionWindows.with(1).grace(6).until(7).hashCode());
+
+        assertNotEquals(SessionWindows.with(1).grace(6).until(70), SessionWindows.with(1).grace(6).until(7));
+        assertNotEquals(SessionWindows.with(1).grace(6).until(70).hashCode(), SessionWindows.with(1).grace(6).until(7).hashCode());
     }
 }
