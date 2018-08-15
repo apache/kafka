@@ -27,6 +27,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
 import org.apache.kafka.common.utils.Time;
@@ -68,11 +69,14 @@ import org.slf4j.LoggerFactory;
  *      unsecuredValidatorAllowableClockSkewMs="3000";
  * };
  * </pre>
- * 
+ * It also recognizes {@link OAuthBearerExtensionsValidatorCallback} and validates every extension passed to it.
+ *
  * This class is the default when the SASL mechanism is OAUTHBEARER and no value
  * is explicitly set via the
  * {@code listener.name.sasl_[plaintext|ssl].oauthbearer.sasl.server.callback.handler.class}
  * broker configuration property.
+ * It is worth noting that this class is not suitable for production use due to the use of unsecured JWT tokens and
+ * validation of every given extension.
  */
 public class OAuthBearerUnsecuredValidatorCallbackHandler implements AuthenticateCallbackHandler {
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerUnsecuredValidatorCallbackHandler.class);
@@ -134,6 +138,9 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
                     validationCallback.error(failureScope != null ? "insufficient_scope" : "invalid_token",
                             failureScope, failureReason.failureOpenIdConfig());
                 }
+            } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
+                OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
+                extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.valid(extensionName));
             } else
                 throw new UnsupportedCallbackException(callback);
         }

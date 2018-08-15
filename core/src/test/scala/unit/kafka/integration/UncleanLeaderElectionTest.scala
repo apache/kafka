@@ -30,7 +30,6 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
@@ -269,11 +268,11 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   private def consumeAllMessages(topic: String, numMessages: Int): Seq[String] = {
     val brokerList = TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-    val props = new Properties
     // Don't rely on coordinator as it may be down when this method is called
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val consumer = TestUtils.createConsumer(brokerList, "group" + random.nextLong,
-      securityProtocol = SecurityProtocol.PLAINTEXT, valueDeserializer = new StringDeserializer, props = Some(props))
+    val consumer = TestUtils.createConsumer(brokerList,
+      groupId = "group" + random.nextLong,
+      enableAutoCommit = false,
+      valueDeserializer = new StringDeserializer)
     try {
       val tp = new TopicPartition(topic, partitionId)
       consumer.assign(Seq(tp).asJava)

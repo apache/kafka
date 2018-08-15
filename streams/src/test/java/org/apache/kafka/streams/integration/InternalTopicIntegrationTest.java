@@ -197,9 +197,13 @@ public class InternalTopicIntegrationTest {
                 return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
             }
         })
-                .groupBy(MockMapper.<String, String>selectValueMapper())
-                .windowedBy(TimeWindows.of(1000).until(2000))
-                .count(Materialized.<String, Long, WindowStore<org.apache.kafka.common.utils.Bytes, byte[]>>as("CountWindows"));
+            .groupBy(MockMapper.<String, String>selectValueMapper())
+            .windowedBy(TimeWindows.of(1000).grace(0L))
+            .count(
+                Materialized
+                    .<String, Long, WindowStore<org.apache.kafka.common.utils.Bytes, byte[]>>as("CountWindows")
+                    .withRetention(2_000L)
+            );
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
         streams.start();

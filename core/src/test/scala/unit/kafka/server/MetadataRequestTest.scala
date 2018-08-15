@@ -26,7 +26,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 import scala.collection.JavaConverters._
@@ -36,6 +36,11 @@ class MetadataRequestTest extends BaseRequestTest {
   override def propertyOverrides(properties: Properties) {
     properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
+  }
+
+  @Before
+  override def setUp(): Unit = {
+    doSetup(createOffsetsTopic = false)
   }
 
   @Test

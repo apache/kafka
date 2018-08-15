@@ -97,7 +97,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
  * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}. Note that there
- * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at
+ * are validations for the key/values in order to conform to the SASL/OAUTHBEARER standard
+ * (https://tools.ietf.org/html/rfc7628#section-3.1), including the reserved key at
  * {@link org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse#AUTH_KEY}.
  * The {@code OAuthBearerLoginModule} instance also asks its configured {@link AuthenticateCallbackHandler}
  * implementation to handle an instance of {@link SaslExtensionsCallback} and return an instance of {@link SaslExtensions}.

@@ -42,7 +42,10 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   }
 
   override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
-    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producers.head, consumers.head) {
+    val producer = createProducer()
+    val consumer = createConsumer()
+
+    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer) {
       override def userPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "O=A client,CN=localhost")
       override def quotaMetricTags(clientId: String): Map[String, String] = {
         Map("user" -> Sanitizer.sanitize(userPrincipal.getName), "client-id" -> clientId)

@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 
-import java.util.Objects;
+import java.time.Duration;
+
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -67,10 +69,13 @@ public final class SessionWindows {
 
     private final long gapMs;
     private final long maintainDurationMs;
+    private final Duration grace;
 
-    private SessionWindows(final long gapMs, final long maintainDurationMs) {
+
+    private SessionWindows(final long gapMs, final long maintainDurationMs, final Duration grace) {
         this.gapMs = gapMs;
         this.maintainDurationMs = maintainDurationMs;
+        this.grace = grace;
     }
 
     /**
@@ -86,7 +91,7 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
         final long oneDayMs = 24 * 60 * 60_000L;
-        return new SessionWindows(inactivityGapMs, oneDayMs);
+        return new SessionWindows(inactivityGapMs, oneDayMs, null);
     }
 
     /**
@@ -95,13 +100,50 @@ public final class SessionWindows {
      *
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than window gap
+     *
+     * @deprecated since 2.1. Use {@link Materialized#retention}
+     *             or directly configure the retention in a store supplier and use
+     *             {@link Materialized#as(SessionBytesStoreSupplier)}.
      */
+    @Deprecated
     public SessionWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < gapMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than window gap.");
         }
 
-        return new SessionWindows(gapMs, durationMs);
+        return new SessionWindows(gapMs, durationMs, null);
+    }
+
+    /**
+     * Reject late events that arrive more than {@code afterWindowEnd}
+     * after the end of its window.
+     *
+     * Note that new events may change the boundaries of session windows, so aggressive
+     * close times can lead to surprising results in which a too-late event is rejected and then
+     * a subsequent event moves the window boundary forward.
+     *
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
+    public SessionWindows grace(final long millisAfterWindowEnd) {
+        if (millisAfterWindowEnd < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
+        return new SessionWindows(
+            gapMs,
+            maintainDurationMs,
+            Duration.ofMillis(millisAfterWindowEnd)
+        );
+    }
+
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    public long gracePeriodMs() {
+
+        // NOTE: in the future, when we remove maintainMs,
+        // we should default the grace period to 24h to maintain the default behavior,
+        // or we can default to (24h - gapMs) if you want to be super accurate.
+        return grace != null ? grace.toMillis() : maintainMs() - inactivityGap();
     }
 
     /**
@@ -119,22 +161,11 @@ public final class SessionWindows {
      * For {@code SessionWindows} the maintain duration is at least as small as the window gap.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
+    @Deprecated
     public long maintainMs() {
         return Math.max(maintainDurationMs, gapMs);
     }
 
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final SessionWindows that = (SessionWindows) o;
-        return gapMs == that.gapMs &&
-                maintainDurationMs == that.maintainDurationMs;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(gapMs, maintainDurationMs);
-    }
 }

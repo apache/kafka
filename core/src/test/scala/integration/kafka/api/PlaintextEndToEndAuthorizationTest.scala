@@ -78,7 +78,8 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   @Test
   def testListenerName() {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
-    intercept[TopicAuthorizationException](sendRecords(1, tp))
+    val producer = createProducer()
+    intercept[TopicAuthorizationException](sendRecords(producer, numRecords = 1, tp))
 
     assertEquals(Some("CLIENT"), PlaintextEndToEndAuthorizationTest.clientListenerName)
     assertEquals(Some("SERVER"), PlaintextEndToEndAuthorizationTest.serverListenerName)

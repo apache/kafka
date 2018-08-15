@@ -33,9 +33,11 @@ import javax.security.sasl.SaslServerFactory;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,8 +84,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     @Override
     public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         if (response.length == 1 && response[0] == OAuthBearerSaslClient.BYTE_CONTROL_A && errorMessage != null) {
-            if (log.isDebugEnabled())
-                log.debug("Received %x01 response from client after it received our error");
+            log.debug("Received %x01 response from client after it received our error");
             throw new SaslAuthenticationException(errorMessage);
         }
         errorMessage = null;
@@ -152,17 +153,13 @@ public class OAuthBearerSaslServer implements SaslServer {
         try {
             callbackHandler.handle(new Callback[] {callback});
         } catch (IOException | UnsupportedCallbackException e) {
-            String msg = String.format("%s: %s", INTERNAL_ERROR_ON_SERVER, e.getMessage());
-            if (log.isDebugEnabled())
-                log.debug(msg, e);
-            throw new SaslException(msg);
+            handleCallbackError(e);
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
             errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
                     callback.errorOpenIDConfiguration());
-            if (log.isDebugEnabled())
-                log.debug(errorMessage);
+            log.debug(errorMessage);
             return errorMessage.getBytes(StandardCharsets.UTF_8);
         }
         /*
@@ -173,12 +170,34 @@ public class OAuthBearerSaslServer implements SaslServer {
             throw new SaslAuthenticationException(String.format(
                     "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
                     authorizationId, token.principalName()));
+
+        Map<String, String> validExtensions = processExtensions(token, extensions);
+
         tokenForNegotiatedProperty = token;
-        this.extensions = extensions;
+        this.extensions = new SaslExtensions(validExtensions);
         complete = true;
-        if (log.isDebugEnabled())
-            log.debug("Successfully authenticate User={}", token.principalName());
+        log.debug("Successfully authenticate User={}", token.principalName());
         return new byte[0];
+    }
+
+    private Map<String, String> processExtensions(OAuthBearerToken token, SaslExtensions extensions) throws SaslException {
+        OAuthBearerExtensionsValidatorCallback extensionsCallback = new OAuthBearerExtensionsValidatorCallback(token, extensions);
+        try {
+            callbackHandler.handle(new Callback[] {extensionsCallback});
+        } catch (UnsupportedCallbackException e) {
+            // backwards compatibility - no extensions will be added
+        } catch (IOException e) {
+            handleCallbackError(e);
+        }
+        if (!extensionsCallback.invalidExtensions().isEmpty()) {
+            String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are: %s",
+                    extensionsCallback.invalidExtensions().size(),
+                    Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
+            log.debug(errorMessage);
+            throw new SaslAuthenticationException(errorMessage);
+        }
+
+        return extensionsCallback.validatedExtensions();
     }
 
     private static String jsonErrorResponse(String errorStatus, String errorScope, String errorOpenIDConfiguration) {
@@ -190,6 +209,12 @@ public class OAuthBearerSaslServer implements SaslServer {
                     errorOpenIDConfiguration);
         jsonErrorResponse = String.format("%s}", jsonErrorResponse);
         return jsonErrorResponse;
+    }
+
+    private void handleCallbackError(Exception e) throws SaslException {
+        String msg = String.format("%s: %s", INTERNAL_ERROR_ON_SERVER, e.getMessage());
+        log.debug(msg, e);
+        throw new SaslException(msg);
     }
 
     public static String[] mechanismNamesCompatibleWithPolicy(Map<String, ?> props) {
