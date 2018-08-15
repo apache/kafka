@@ -19,6 +19,7 @@ package org.apache.kafka.common.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,6 +44,7 @@ import java.util.Set;
 public class PartitionStates<S> {
 
     private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
+    private final Set<TopicPartition> partitionSetView = Collections.unmodifiableSet(map.keySet());
 
     /* the number of partitions that are currently assigned available in a thread safe manner */
     private volatile int size = 0;
@@ -67,10 +69,11 @@ public class PartitionStates<S> {
     }
 
     /**
-     * Returns the partitions in random order.
+     * Returns an unmodifiable view of the partitions in random order.
+     * changes to this PartitionStates instance will be reflected in this view.
      */
     public Set<TopicPartition> partitionSet() {
-        return new HashSet<>(map.keySet());
+        return partitionSetView;
     }
 
     public void clear() {

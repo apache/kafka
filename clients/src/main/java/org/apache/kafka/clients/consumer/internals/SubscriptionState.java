@@ -264,6 +264,9 @@ public class SubscriptionState {
         assignedState(tp).seek(offset);
     }
 
+    /**
+     * @return an unmodifiable view of the currently assigned partitions
+     */
     public Set<TopicPartition> assignedPartitions() {
         return this.assignment.partitionSet();
     }
