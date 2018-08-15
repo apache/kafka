@@ -16,7 +16,7 @@ package kafka.api
 
 import java.io.File
 import java.{lang, util}
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Collections, Properties}
 
@@ -48,8 +48,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   override protected def interBrokerListenerName: ListenerName = new ListenerName("BROKER")
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  override val consumerCount: Int = 0
-  override val producerCount: Int = 0
   override val serverCount: Int = 2
 
   private val kafkaServerSaslMechanisms = Seq("SCRAM-SHA-256")
@@ -77,18 +75,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
       ScramLoginModule(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword).toString)
-    producerWithoutQuota = createProducer
-    producers += producerWithoutQuota
+    producerWithoutQuota = createProducer()
   }
 
   @After
   override def tearDown(): Unit = {
-    // Close producers and consumers without waiting for requests to complete
-    // to avoid waiting for throttled responses
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
-    producers.clear()
-    consumers.foreach(_.close(0, TimeUnit.MILLISECONDS))
-    consumers.clear()
     adminClients.foreach(_.close())
     super.tearDown()
   }
@@ -211,7 +202,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def addUser(user: String, leader: Int): GroupedUser = {
-
     val password = s"$user:secret"
     createScramCredentials(zkConnect, user, password)
     servers.foreach { server =>
@@ -222,26 +212,25 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val userGroup = group(user)
     val topic = s"${userGroup}_topic"
     val producerClientId = s"$user:producer-client-id"
-    val consumerClientId = s"$user:producer-client-id"
+    val consumerClientId = s"$user:consumer-client-id"
 
     producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val producer = createProducer
-    producers += producer
+    val producer = createProducer()
 
     consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
+    consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, s"$user-group")
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val consumer = createConsumer
-    consumers += consumer
+    val consumer = createConsumer()
 
     GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId, producer, consumer)
   }
 
   case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,
                          producerClientId: String, consumerClientId: String,
-                         producer: KafkaProducer[Array[Byte], Array[Byte]],
-                         consumer: KafkaConsumer[Array[Byte], Array[Byte]]) extends
+                         override val producer: KafkaProducer[Array[Byte], Array[Byte]],
+                         override val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) extends
     QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer) {
 
     override def userPrincipal: KafkaPrincipal = GroupedUserPrincipal(user, userGroup)

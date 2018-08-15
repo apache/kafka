@@ -51,6 +51,16 @@ public class UnlimitedWindowsTest {
     }
 
     @Test
+    public void gracePeriodShouldNotBeSettable() {
+        try {
+            UnlimitedWindows.of().grace(0L);
+            fail("should not be able to set grace period");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
         final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);

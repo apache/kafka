@@ -120,7 +120,7 @@ public class NioEchoServer extends Thread {
         waitForMetric("failed-authentication", failedAuthentications);
     }
 
-    private void waitForMetric(String name, final double expectedValue) throws InterruptedException {
+    public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
         final String totalName = name + "-total";
         final String rateName = name + "-rate";
         if (expectedValue == 0.0) {

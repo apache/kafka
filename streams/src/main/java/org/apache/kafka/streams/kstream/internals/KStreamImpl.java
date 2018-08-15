@@ -194,7 +194,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> mapProcessorNode = new ProcessorGraphNode<>(name,
                                                                                                    processorParameters,
-                                                                                     true);
+                                                                                                   true);
 
         mapProcessorNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, mapProcessorNode);
@@ -216,9 +216,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters<? super K, ? super V> processorParameters = new ProcessorParameters<>(new KStreamMapValues<>(mapper), name);
 
 
-        final ProcessorGraphNode<? super  K, ? super V> mapValuesProcessorNode = new ProcessorGraphNode<>(name,
+        final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode = new ProcessorGraphNode<>(name,
                                                                                                          processorParameters,
                                                                                                          repartitionRequired);
+        mapValuesProcessorNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, mapValuesProcessorNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, mapValuesProcessorNode);
@@ -235,7 +236,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> printNode = new ProcessorGraphNode<>(name,
                                                                                             processorParameters,
-                                                                            false);
+                                                                                            false);
         builder.addGraphNode(this.streamsGraphNode, printNode);
     }
 
@@ -250,7 +251,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final ProcessorGraphNode<? super K, ? super V> flatMapNode = new ProcessorGraphNode<>(name,
                                                                                               processorParameters,
-                                                                                true);
+                                                                                              true);
         flatMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, flatMapNode);
@@ -274,6 +275,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorGraphNode<? super K, ? super V> flatMapValuesNode = new ProcessorGraphNode<>(name,
                                                                                                     processorParameters,
                                                                                                     repartitionRequired);
+        flatMapValuesNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, flatMapValuesNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, flatMapValuesNode);
@@ -343,7 +345,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                             processorParameters,
                                                                                             requireRepartitioning);
 
-
+        mergeNode.setMergeNode(true);
         builder.addGraphNode(Arrays.asList(this.streamsGraphNode, streamImpl.streamsGraphNode), mergeNode);
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning, mergeNode);
     }
@@ -375,8 +377,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
         final ProcessorGraphNode<? super K, ? super V> foreachNode = new ProcessorGraphNode<>(name,
-                                                                              processorParameters,
-                                                                              repartitionRequired);
+                                                                                              processorParameters,
+                                                                                              repartitionRequired);
         builder.addGraphNode(this.streamsGraphNode, foreachNode);
     }
 
@@ -491,6 +493,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                        stateStoreNames,
                                                                                        null,
                                                                                        repartitionRequired);
+        transformNode.setValueChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, transformNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, transformNode);
@@ -529,7 +532,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                       joiner,
                       windows,
                       joined,
-                      new KStreamImplJoin(false, false, this.streamsGraphNode));
+                      new KStreamImplJoin(false, false));
 
     }
 
@@ -545,7 +548,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true, this.streamsGraphNode));
+        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
     }
 
     private <V1, R> KStream<K, R> doJoin(final KStream<K, V1> other,
@@ -595,7 +598,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final String repartitionedSourceName = createRepartitionedSource(builder,
                                                                          keySerde,
                                                                          valSerde,
-                                                                          null,
+                                                                         null,
                                                                          name,
                                                                          optimizableRepartitionNodeBuilder);
 
@@ -656,7 +659,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             joiner,
             windows,
             joined,
-            new KStreamImplJoin(true, false, this.streamsGraphNode)
+            new KStreamImplJoin(true, false)
         );
 
     }
@@ -716,9 +719,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(name,
-                                                                                  processorParameters,
-                                                                                  new String[]{},
-                                                                                  null);
+                                                                                        processorParameters,
+                                                                                        new String[] {},
+                                                                                        null);
         builder.addGraphNode(this.streamsGraphNode, streamTableJoinNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, false, streamTableJoinNode);
@@ -819,17 +822,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     }
 
-    private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
-                                                                                   final Serde<K> keySerde,
-                                                                                   final Serde<V> valueSerde,
-                                                                                   final String storeName) {
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
+                                                                                 final JoinWindows windows,
+                                                                                 final Serde<K> keySerde,
+                                                                                 final Serde<V> valueSerde) {
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
-                storeName,
-                windows.maintainMs(),
+                joinName + "-store",
+                windows.size() + windows.gracePeriodMs(),
                 windows.size(),
-                true,
-                windows.segmentInterval()
+                true
             ),
             keySerde,
             valueSerde
@@ -840,14 +843,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         private final boolean leftOuter;
         private final boolean rightOuter;
-        private final StreamsGraphNode parentGraphNode;
+
 
         KStreamImplJoin(final boolean leftOuter,
-                        final boolean rightOuter,
-                        final StreamsGraphNode parentGraphNode) {
+                        final boolean rightOuter) {
             this.leftOuter = leftOuter;
             this.rightOuter = rightOuter;
-            this.parentGraphNode = parentGraphNode;
         }
 
         @SuppressWarnings("unchecked")
@@ -865,11 +866,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
-                createWindowedStateStore(windows, joined.keySerde(), joined.valueSerde(), joinThisName + "-store");
 
+            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
+                joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
             final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
-                createWindowedStateStore(windows, joined.keySerde(), joined.otherValueSerde(), joinOtherName + "-store");
+                joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
 
             final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
