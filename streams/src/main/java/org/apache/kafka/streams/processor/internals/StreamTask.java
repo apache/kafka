@@ -557,7 +557,35 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
-        closeTopology(); // should we call this only on clean suspend?
+        try {
+            closeTopology(); // should we call this only on clean suspend?
+        } catch (final RuntimeException fatal) {
+            if (eosEnabled && !isZombie) {
+                if (transactionInFlight) {
+                    try {
+                        producer.abortTransaction();
+                    } catch (final ProducerFencedException ignore) {
+                        /* TODO
+                         * this should actually never happen atm as we guard the call to #abortTransaction
+                         * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
+                         * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
+                         * fixed and fall-back to this catch-and-swallow code
+                         */
+
+                        // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+                    }
+                    transactionInFlight = false;
+                }
+                try {
+                    recordCollector.close();
+                } catch (final Throwable e) {
+                    log.error("Failed to close producer due to the following error:", e);
+                } finally {
+                    producer = null;
+                }
+            }
+            throw fatal;
+        }
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
@@ -593,13 +621,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                     // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
                 }
-            }
-            try {
-                if (!isZombie) {
-                    recordCollector.close();
+                try {
+                    if (!isZombie) {
+                        recordCollector.close();
+                    }
+                } catch (final Throwable e) {
+                    log.error("Failed to close producer due to the following error:", e);
+                } finally {
+                    producer = null;
                 }
-            } catch (final Throwable e) {
-                log.error("Failed to close producer due to the following error:", e);
             }
         }
     }

@@ -553,7 +553,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContext() {
-        task = createTaskThatThrowsException();
+        task = createTaskThatThrowsException(false);
         task.initializeStateStores();
         task.initializeTopology();
         task.addRecords(partition2, singletonList(getConsumerRecord(partition2, 0)));
@@ -720,14 +720,182 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotCloseProducerOnCleanCloseWithEosDisabled() {
+        task = createStatelessTask(createConfig(false));
+        task.close(true, false);
+        task = null;
+
+        assertFalse(producer.closed());
+    }
+
+    @Test
+    public void shouldNotCloseProducerOnUncleanCloseWithEosDisabled() {
+        task = createStatelessTask(createConfig(false));
+        task.close(false, false);
+        task = null;
+
+        assertFalse(producer.closed());
+    }
+
+    @Test
+    public void shouldNotCloseProducerOnErrorDuringCleanCloseWithEosDisabled() {
+        task = createTaskThatThrowsException(false);
+
+        try {
+            task.close(true, false);
+            fail("should have thrown runtime exception");
+        } catch (final RuntimeException expected) {
+            task = null;
+        }
+
+        assertFalse(producer.closed());
+    }
+
+    @Test
+    public void shouldNotCloseProducerOnErrorDuringUncleanCloseWithEosDisabled() {
+        task = createTaskThatThrowsException(false);
+
+        task.close(false, false);
+        task = null;
+
+        assertFalse(producer.closed());
+    }
+
+    @Test
+    public void shouldCommitTransactionAndCloseProducerOnCleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+
+        task.close(true, false);
+        task = null;
+
+        assertTrue(producer.transactionCommitted());
+        assertFalse(producer.transactionInFlight());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAbortTransactionAndCloseProducerOnErrorDuringCleanCloseWithEosEnabled() {
+        task = createTaskThatThrowsException(true);
+        task.initializeTopology();
+
+        try {
+            task.close(true, false);
+            fail("should have thrown runtime exception");
+        } catch (final RuntimeException expected) {
+            task = null;
+        }
+
+        assertTrue(producer.transactionAborted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldOnlyCloseProducerIfFencedOnCommitDuringCleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        try {
+            task.close(true, false);
+            fail("should have thrown TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            task = null;
+            assertTrue(expected.getCause() instanceof ProducerFencedException);
+        }
+
+        assertFalse(producer.transactionCommitted());
+        assertTrue(producer.transactionInFlight());
+        assertFalse(producer.transactionAborted());
+        assertFalse(producer.transactionCommitted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldNotCloseProducerIfFencedOnCloseDuringCleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducerOnClose();
+
+        try {
+            task.close(true, false);
+            fail("should have thrown TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            task = null;
+            assertTrue(expected.getCause() instanceof ProducerFencedException);
+        }
+
+        assertTrue(producer.transactionCommitted());
+        assertFalse(producer.transactionInFlight());
+        assertFalse(producer.closed());
+    }
+
+    @Test
+    public void shouldAbortTransactionAndCloseProducerOnUncleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+
+        task.close(false, false);
+        task = null;
+
+        assertTrue(producer.transactionAborted());
+        assertFalse(producer.transactionInFlight());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAbortTransactionAndCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
+        task = createTaskThatThrowsException(true);
+        task.initializeTopology();
+
+        try {
+            task.close(false, false);
+            fail("should have thrown runtime exception");
+        } catch (final RuntimeException expected) {
+            task = null;
+        }
+
+        assertTrue(producer.transactionAborted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldOnlyCloseProducerIfFencedOnAbortDuringUncleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        task.close(false, false);
+        task = null;
+
+        assertTrue(producer.transactionInFlight());
+        assertFalse(producer.transactionAborted());
+        assertFalse(producer.transactionCommitted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAbortTransactionButNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducerOnClose();
+
+        task.close(false, false);
+        task = null;
+
+        assertTrue(producer.transactionAborted());
+        assertFalse(producer.closed());
+    }
+
+    @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() {
-        task = createTaskThatThrowsException();
+        task = createTaskThatThrowsException(false);
         task.initializeStateStores();
         task.initializeTopology();
         try {
             task.close(true, false);
             fail("should have thrown runtime exception");
-        } catch (final RuntimeException e) {
+        } catch (final RuntimeException expected) {
             task = null;
         }
         assertTrue(processorSystemTime.closed);
@@ -890,16 +1058,6 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionOnDirtyClosedIfEosEnabled() {
-        task = createStatelessTask(createConfig(true));
-        task.initializeTopology();
-        task.close(false, false);
-        task = null;
-
-        assertTrue(producer.transactionAborted());
-    }
-
-    @Test
     public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() {
         task = createStatelessTask(createConfig(true));
         task.close(false, true);
@@ -929,7 +1087,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushing() {
-        task = createTaskThatThrowsException();
+        task = createTaskThatThrowsException(false);
         task.initializeStateStores();
         task.initializeTopology();
 
@@ -943,7 +1101,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
-        final StreamTask task = createTaskThatThrowsException();
+        final StreamTask task = createTaskThatThrowsException(false);
 
         task.initializeStateStores();
         task.initializeTopology();
@@ -974,7 +1132,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
-        final StreamTask task = createTaskThatThrowsException();
+        final StreamTask task = createTaskThatThrowsException(false);
         try {
             task.close(false, false);
         } catch (final Exception e) {
@@ -1142,7 +1300,7 @@ public class StreamTaskTest {
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
-    private StreamTask createTaskThatThrowsException() {
+    private StreamTask createTaskThatThrowsException(final boolean enableEos) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
             Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source3))
@@ -1159,7 +1317,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             changelogReader,
-            createConfig(false),
+            createConfig(enableEos),
             streamsMetrics,
             stateDirectory,
             null,
