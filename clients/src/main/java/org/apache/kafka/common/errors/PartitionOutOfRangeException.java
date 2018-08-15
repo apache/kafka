@@ -19,7 +19,7 @@ package org.apache.kafka.common.errors;
 import org.apache.kafka.common.KafkaException;
 
 /**
- * Partition metadata was requested for a partition that does not exist for the topic
+ * Partition metadata was requested for a partition that is out of the range of partitions for its topic
  */
 public class PartitionOutOfRangeException extends KafkaException {
     private static final long serialVersionUID = 1L;
