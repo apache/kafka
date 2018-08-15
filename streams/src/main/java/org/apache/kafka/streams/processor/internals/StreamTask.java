@@ -560,32 +560,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
-            if (eosEnabled && !isZombie) {
-                if (transactionInFlight) {
-                    try {
-                        producer.abortTransaction();
-                    } catch (final ProducerFencedException ignore) {
-                        /* TODO
-                         * this should actually never happen atm as we guard the call to #abortTransaction
-                         * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
-                         * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
-                         * fixed and fall-back to this catch-and-swallow code
-                         */
-
-                        // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
-                    }
-                    transactionInFlight = false;
-                }
-                try {
-                    recordCollector.close();
-                } catch (final Throwable e) {
-                    log.error("Failed to close producer due to the following error:", e);
-                } finally {
-                    producer = null;
-                }
-            }
+            maybeAbortTransactionAndCloseRecordCollector(isZombie);
             throw fatal;
         }
+
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
@@ -605,31 +583,34 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw taskMigratedException;
             }
         } else {
-            if (eosEnabled) {
-                try {
-                    if (!isZombie && transactionInFlight) {
-                        producer.abortTransaction();
-                    }
-                    transactionInFlight = false;
-                } catch (final ProducerFencedException ignore) {
-                    /* TODO
-                     * this should actually never happen atm as we guard the call to #abortTransaction
-                     * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
-                     * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
-                     * fixed and fall-back to this catch-and-swallow code
-                     */
+            maybeAbortTransactionAndCloseRecordCollector(isZombie);
+        }
+    }
 
-                    // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+    private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
+        if (eosEnabled && !isZombie) {
+            try {
+                if (transactionInFlight) {
+                    producer.abortTransaction();
                 }
-                try {
-                    if (!isZombie) {
-                        recordCollector.close();
-                    }
-                } catch (final Throwable e) {
-                    log.error("Failed to close producer due to the following error:", e);
-                } finally {
-                    producer = null;
-                }
+                transactionInFlight = false;
+            } catch (final ProducerFencedException ignore) {
+                /* TODO
+                 * this should actually never happen atm as we guard the call to #abortTransaction
+                 * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
+                 * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
+                 * fixed and fall-back to this catch-and-swallow code
+                 */
+
+                // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+            }
+
+            try {
+                recordCollector.close();
+            } catch (final Throwable e) {
+                log.error("Failed to close producer due to the following error:", e);
+            } finally {
+                producer = null;
             }
         }
     }
