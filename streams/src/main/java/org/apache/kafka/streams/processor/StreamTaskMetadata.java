@@ -70,7 +70,7 @@ public class StreamTaskMetadata extends TaskId {
     }
 
     @Override
-    public boolean equals(Object metadata) {
+    public boolean equals(final Object metadata) {
         return super.equals(metadata);
     }
 
