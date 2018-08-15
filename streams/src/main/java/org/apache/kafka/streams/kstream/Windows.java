@@ -21,11 +21,15 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
  *
  * Grace period defines how long to wait on late events, where lateness is defined as (stream_time - record_timestamp).
+ *
+ * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
+ * since the equals and hashCode methods depend on mutable fields.
  *
  * @param <W> type of the window instance
  * @see TimeWindows
@@ -155,4 +159,36 @@ public abstract class Windows<W extends Window> {
      * @return the size of the specified windows
      */
     public abstract long size();
+
+    /**
+     * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
+     * since the equals and hashCode methods depend on mutable fields.
+     */
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final Windows<?> windows = (Windows<?>) o;
+        return maintainMs() == windows.maintainMs() &&
+            segments == windows.segments &&
+            Objects.equals(gracePeriodMs(), windows.gracePeriodMs());
+    }
+
+    /**
+     * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
+     * since the equals and hashCode methods depend on mutable fields.
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(maintainMs(), segments, gracePeriodMs());
+    }
+
+    @Override
+    public String toString() {
+        return "Windows{" +
+            "maintainDurationMs=" + maintainMs() +
+            ", segments=" + segments +
+            ", grace=" + gracePeriodMs() +
+            '}';
+    }
 }

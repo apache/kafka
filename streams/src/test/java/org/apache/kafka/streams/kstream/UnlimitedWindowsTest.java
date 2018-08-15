@@ -22,6 +22,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -83,6 +84,22 @@ public class UnlimitedWindowsTest {
         final long timestamp = w.startMs - 1;
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        assertEquals(UnlimitedWindows.of(), UnlimitedWindows.of());
+        assertEquals(UnlimitedWindows.of().hashCode(), UnlimitedWindows.of().hashCode());
+
+        assertEquals(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
+        assertEquals(UnlimitedWindows.of().startOn(1).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
+
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        assertNotEquals(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
+        assertNotEquals(UnlimitedWindows.of().startOn(9).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
     }
 
 }

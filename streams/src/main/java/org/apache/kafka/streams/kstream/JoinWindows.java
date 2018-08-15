@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The window specifications used for joins.
@@ -167,5 +168,29 @@ public final class JoinWindows extends Windows<Window> {
     @Deprecated
     public long maintainMs() {
         return Math.max(super.maintainMs(), size());
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        final JoinWindows that = (JoinWindows) o;
+        return beforeMs == that.beforeMs &&
+            afterMs == that.afterMs;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), beforeMs, afterMs);
+    }
+
+    @Override
+    public String toString() {
+        return "JoinWindows{" +
+            "beforeMs=" + beforeMs +
+            ", afterMs=" + afterMs +
+            ", super=" + super.toString() +
+            '}';
     }
 }

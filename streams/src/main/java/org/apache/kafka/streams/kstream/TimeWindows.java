@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The fixed-size time-based window specifications used for aggregations.
@@ -156,5 +157,29 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Deprecated
     public long maintainMs() {
         return Math.max(super.maintainMs(), sizeMs);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        final TimeWindows that = (TimeWindows) o;
+        return sizeMs == that.sizeMs &&
+            advanceMs == that.advanceMs;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), sizeMs, advanceMs);
+    }
+
+    @Override
+    public String toString() {
+        return "TimeWindows{" +
+            "sizeMs=" + sizeMs +
+            ", advanceMs=" + advanceMs +
+            ", super=" + super.toString() +
+            '}';
     }
 }
