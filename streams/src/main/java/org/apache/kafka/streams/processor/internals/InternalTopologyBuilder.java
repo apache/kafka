@@ -586,7 +586,7 @@ public class InternalTopologyBuilder {
     }
 
     private void connectSourceStoreAndTopic(final String sourceStoreName,
-                                                 final String topic) {
+                                            final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
