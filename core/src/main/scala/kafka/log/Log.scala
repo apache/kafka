@@ -1795,6 +1795,9 @@ class Log(@volatile var dir: File,
   private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
       val sortedNewSegments = newSegments.sortBy(_.baseOffset)
+      // Some old segments may have been removed from index and scheduled for async deletion after the caller reads segments
+      // but before this method is executed. We want to filter out those segments to avoid calling asyncDeleteSegment()
+      // multiple times for the same segment.
       val sortedOldSegments = oldSegments.filter(seg => segments.containsKey(seg.baseOffset)).sortBy(_.baseOffset)
 
       checkIfMemoryMappedBufferClosed()
