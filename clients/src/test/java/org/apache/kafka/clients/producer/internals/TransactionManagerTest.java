@@ -1810,7 +1810,6 @@ public class TransactionManagerTest {
         assertTrue(addOffsetsResult.isSuccessful());
     }
 
-
     @Test
     public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
         verifyAddPartitionsFailsWithPartitionLevelError(Errors.TOPIC_AUTHORIZATION_FAILED);
@@ -2413,7 +2412,7 @@ public class TransactionManagerTest {
         };
     }
 
-    private void prepareAddOffsetsToTxnResponse(Errors error,
+    private void prepareAddOffsetsToTxnResponse(final Errors error,
                                                 final String consumerGroupId,
                                                 final long producerId,
                                                 final short producerEpoch) {
