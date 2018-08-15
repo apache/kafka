@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
@@ -74,11 +73,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Test
   def testProducerWithAuthenticationFailure() {
-    verifyAuthenticationException(sendOneRecord(10000))
-    verifyAuthenticationException(producers.head.partitionsFor(topic))
+    val producer = createProducer()
+    verifyAuthenticationException(sendOneRecord(producer, maxWaitMs = 10000))
+    verifyAuthenticationException(producer.partitionsFor(topic))
 
     createClientCredential()
-    verifyWithRetry(sendOneRecord())
+    verifyWithRetry(sendOneRecord(producer))
   }
 
   @Test
@@ -97,14 +97,14 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Test
   def testConsumerWithAuthenticationFailure() {
-    val consumer = this.consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   @Test
   def testManualAssignmentConsumerWithAuthenticationFailure() {
-    val consumer = this.consumers.head
+    val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
@@ -112,11 +112,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   @Test
   def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
-    val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumers += consumer
+    val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
-
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
@@ -125,7 +123,8 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
     createClientCredential()
-    verifyWithRetry(sendOneRecord())
+    val producer = createProducer()
+    verifyWithRetry(sendOneRecord(producer))
     verifyWithRetry(assertEquals(1, consumer.poll(Duration.ofMillis(1000)).count))
   }
 
@@ -161,7 +160,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   def testConsumerGroupServiceWithAuthenticationFailure() {
     val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
 
     verifyAuthenticationException(consumerGroupService.listGroups)
@@ -173,7 +172,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     createClientCredential()
     val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
 
     verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
@@ -201,8 +200,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 
-  private def sendOneRecord(maxWaitMs: Long = 15000): Unit = {
-    val producer = this.producers.head
+  private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {
     val record = new ProducerRecord(tp.topic(), tp.partition(), 0L, "key".getBytes, "value".getBytes)
     val future = producer.send(record)
     producer.flush()
@@ -243,13 +241,6 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val txProducer = TestUtils.createProducer(brokerList,
-                                  securityProtocol = this.securityProtocol,
-                                  saslProperties = this.clientSaslProperties,
-                                  retries = 1000,
-                                  acks = -1,
-                                  props = Some(producerConfig))
-    producers += txProducer
-    txProducer
+    createProducer()
   }
 }

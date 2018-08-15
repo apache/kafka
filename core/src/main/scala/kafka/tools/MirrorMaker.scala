@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -32,7 +33,7 @@ import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, Consu
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.RecordBatch
@@ -50,7 +51,7 @@ import scala.util.control.ControlThrowable
  * @note For mirror maker, the following settings are set by default to make sure there is no data loss:
  *       1. use producer with following settings
  *            acks=all
- *            retries=max integer
+ *            delivery.timeout.ms=max integer
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
@@ -193,13 +194,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val sync = producerProps.getProperty("producer.type", "async").equals("sync")
       producerProps.remove("producer.type")
       // Defaults to no data loss settings.
-      maybeSetDefaultProperty(producerProps, ProducerConfig.RETRIES_CONFIG, Int.MaxValue.toString)
+      maybeSetDefaultProperty(producerProps, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Int.MaxValue.toString)
       maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
       maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
       maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
       // Always set producer key and value serializer to ByteArraySerializer.
-      producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-      producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+      producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+      producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
       producer = new MirrorMakerProducer(sync, producerProps)
 
       // Create consumers
@@ -452,7 +453,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // uncommitted record since last poll. Using one second as poll's timeout ensures that
         // offsetCommitIntervalMs, of value greater than 1 second, does not see delays in offset
         // commit.
-        recordIter = consumer.poll(1000).iterator
+        recordIter = consumer.poll(Duration.ofSeconds(1)).iterator
         if (!recordIter.hasNext)
           throw new NoRecordsException
       }

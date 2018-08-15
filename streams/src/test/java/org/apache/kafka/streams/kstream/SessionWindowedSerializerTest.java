@@ -43,7 +43,7 @@ public class SessionWindowedSerializerTest {
     @Test
     public void testWindowedKeySerializerNoArgConstructors() {
         sessionWindowedSerializer.configure(props, true);
-        Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
+        final Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
@@ -51,7 +51,7 @@ public class SessionWindowedSerializerTest {
     @Test
     public void testWindowedValueSerializerNoArgConstructors() {
         sessionWindowedSerializer.configure(props, false);
-        Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
+        final Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be ByteArraySerializer", inner instanceof ByteArraySerializer);
     }

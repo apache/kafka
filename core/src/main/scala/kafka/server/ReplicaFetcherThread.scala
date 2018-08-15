@@ -57,7 +57,6 @@ class ReplicaFetcherThread(name: String,
                                 includeLogTruncation = true) {
 
   type REQ = FetchRequest
-  type PD = PartitionData
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
@@ -110,10 +109,9 @@ class ReplicaFetcherThread(name: String,
   }
 
   // process fetched data
-  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD, records: MemoryRecords) {
     val replica = replicaMgr.getReplicaOrException(topicPartition)
     val partition = replicaMgr.getPartition(topicPartition).get
-    val records = partitionData.toRecords
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
@@ -235,16 +233,14 @@ class ReplicaFetcherThread(name: String,
       delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
-  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PD)] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest.underlying)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
         Nil
       } else {
-        fetchResponse.responseData.asScala.toSeq.map { case (key, value) =>
-          key -> new PartitionData(value)
-        }
+        fetchResponse.responseData.asScala.toSeq
       }
     } catch {
       case t: Throwable =>
@@ -403,23 +399,4 @@ object ReplicaFetcherThread {
     override def toString = underlying.toString
   }
 
-  private[server] class PartitionData(val underlying: FetchResponse.PartitionData[Records]) extends AbstractFetcherThread.PartitionData {
-
-    def error = underlying.error
-
-    def toRecords: MemoryRecords = {
-      underlying.records.asInstanceOf[MemoryRecords]
-    }
-
-    def highWatermark: Long = underlying.highWatermark
-
-    def logStartOffset: Long = underlying.logStartOffset
-
-    def exception: Option[Throwable] = error match {
-      case Errors.NONE => None
-      case e => Some(e.exception)
-    }
-
-    override def toString = underlying.toString
-  }
 }

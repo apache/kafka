@@ -23,14 +23,14 @@ public class Stamped<V> implements Comparable {
     public final V value;
     public final long timestamp;
 
-    public Stamped(V value, long timestamp) {
+    public Stamped(final V value, final long timestamp) {
         this.value = value;
         this.timestamp = timestamp;
     }
 
     @Override
-    public int compareTo(Object other) {
-        long otherTimestamp = ((Stamped<?>) other).timestamp;
+    public int compareTo(final Object other) {
+        final long otherTimestamp = ((Stamped<?>) other).timestamp;
 
         if (timestamp < otherTimestamp) return -1;
         else if (timestamp > otherTimestamp) return 1;
@@ -38,11 +38,11 @@ public class Stamped<V> implements Comparable {
     }
 
     @Override
-    public boolean equals(Object other) {
+    public boolean equals(final Object other) {
 
         if (other == null || getClass() != other.getClass()) return false;
 
-        long otherTimestamp = ((Stamped<?>) other).timestamp;
+        final long otherTimestamp = ((Stamped<?>) other).timestamp;
         return Long.compare(timestamp, otherTimestamp) == 0;
     }
 

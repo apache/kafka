@@ -38,6 +38,7 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIMemoryKeyValueStoreStoreNameIsNull() {
+        //noinspection ResultOfMethodCallIgnored
         Stores.inMemoryKeyValueStore(null);
     }
 
@@ -53,12 +54,12 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
-        Stores.persistentWindowStore(null, 0L, 0L, false, 60_000L);
+        Stores.persistentWindowStore(null, 0L, 0L, false, 0L);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
-        Stores.persistentWindowStore("anyName", -1L, 0L, false, 60_000L);
+        Stores.persistentWindowStore("anyName", -1L, 0L, false, 0L);
     }
 
     @Deprecated
@@ -74,7 +75,7 @@ public class StoresTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfSegmentIntervalIsTooSmall() {
-        Stores.persistentWindowStore("anyName", 1L, 1L, false, 59_999L);
+        Stores.persistentWindowStore("anyName", 1L, 1L, false, -1L);
     }
 
     @Test(expected = NullPointerException.class)
@@ -129,25 +130,31 @@ public class StoresTest {
 
     @Test
     public void shouldBuildWindowStore() {
-        final WindowStore<String, String> store = Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 3L, 3L, true),
-                                                                      Serdes.String(),
-                                                                      Serdes.String()).build();
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore("store", 3L, 3L, true),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 
     @Test
     public void shouldBuildKeyValueStore() {
-        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("name"),
-                                                                          Serdes.String(),
-                                                                          Serdes.String()).build();
+        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 
     @Test
     public void shouldBuildSessionStore() {
-        final SessionStore<String, String> store = Stores.sessionStoreBuilder(Stores.persistentSessionStore("name", 10),
-                                                                       Serdes.String(),
-                                                                       Serdes.String()).build();
+        final SessionStore<String, String> store = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore("name", 10),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 }

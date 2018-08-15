@@ -69,7 +69,7 @@ public class KStreamPeekTest {
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");
-        } catch (NullPointerException expected) {
+        } catch (final NullPointerException expected) {
             // do nothing
         }
     }

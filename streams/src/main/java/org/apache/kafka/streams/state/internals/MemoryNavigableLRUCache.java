@@ -27,12 +27,12 @@ import java.util.TreeMap;
 public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
 
-    public MemoryNavigableLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+    public MemoryNavigableLRUCache(final String name, final int maxCacheSize, final Serde<K> keySerde, final Serde<V> valueSerde) {
         super(name, maxCacheSize, keySerde, valueSerde);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(), new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap));
     }
@@ -53,7 +53,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
         private final Map<K, V> entries;
         private K lastKey;
 
-        public CacheIterator(Iterator<K> keys, Map<K, V> entries) {
+        public CacheIterator(final Iterator<K> keys, final Map<K, V> entries) {
             this.keys = keys;
             this.entries = entries;
         }

@@ -59,6 +59,7 @@ public class StreamsBuilderTest {
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.<Bytes, String>allGoodPredicate());
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -72,6 +73,7 @@ public class StreamsBuilderTest {
         final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic")
                 .filter(MockPredicate.<Bytes, String>allGoodPredicate(), Materialized.<Bytes, String, KeyValueStore<Bytes, byte[]>>as("store"));
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -84,6 +86,7 @@ public class StreamsBuilderTest {
     public void shouldAllowJoinUnmaterializedMapValuedKTable() {
         final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic").mapValues(MockMapper.<String>noOpValueMapper());
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -97,6 +100,7 @@ public class StreamsBuilderTest {
         final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic")
                 .mapValues(MockMapper.<String>noOpValueMapper(), Materialized.<Bytes, String, KeyValueStore<Bytes, byte[]>>as("store"));
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -110,6 +114,7 @@ public class StreamsBuilderTest {
         final KTable<Bytes, String> table1 = builder.table("table-topic1");
         final KTable<Bytes, String> table2 = builder.table("table-topic2");
         builder.<Bytes, String>stream("stream-topic").join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER), MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -122,7 +127,8 @@ public class StreamsBuilderTest {
     public void shouldAllowJoinMaterializedJoinedKTable() {
         final KTable<Bytes, String> table1 = builder.table("table-topic1");
         final KTable<Bytes, String> table2 = builder.table("table-topic2");
-        builder.<Bytes, String>stream("stream-topic").join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.<Bytes, String, KeyValueStore<Bytes, byte[]>>as("store")), MockValueJoiner.TOSTRING_JOINER);
+        builder.<Bytes, String>stream("stream-topic").join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.as("store")), MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -135,6 +141,7 @@ public class StreamsBuilderTest {
     public void shouldAllowJoinMaterializedSourceKTable() {
         final KTable<Bytes, String> table = builder.table("table-topic");
         builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
+        builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
@@ -312,10 +319,12 @@ public class StreamsBuilderTest {
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream(Collections.<String>emptyList());
+        builder.build();
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Arrays.<String>asList(null, null));
+        builder.build();
     }
 }

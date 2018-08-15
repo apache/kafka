@@ -20,12 +20,13 @@ package kafka.server
 import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
-import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
+import kafka.server.AbstractFetcherThread.FetchRequest
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
 import org.apache.kafka.common.requests.EpochEndOffset
+import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
@@ -92,16 +93,6 @@ class AbstractFetcherThreadTest {
     override def offset(topicPartition: TopicPartition): Long = offsets(topicPartition)
   }
 
-  class TestPartitionData(records: MemoryRecords = MemoryRecords.EMPTY) extends PartitionData {
-    override def error: Errors = Errors.NONE
-
-    override def toRecords: MemoryRecords = records
-
-    override def highWatermark: Long = 0L
-
-    override def exception: Option[Throwable] = None
-  }
-
   class DummyFetcherThread(name: String,
                            clientId: String,
                            sourceBroker: BrokerEndPoint,
@@ -109,18 +100,19 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = false) {
 
     type REQ = DummyFetchRequest
-    type PD = PartitionData
 
     override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
-                                      partitionData: PartitionData): Unit = {}
+                                      partitionData: PD,
+                                      records: MemoryRecords): Unit = {}
 
     override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = 0L
 
     override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {}
 
-    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] =
-      fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
+    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, PD)] =
+      fetchRequest.offsets.mapValues(_ => new PartitionData[Records](Errors.NONE, 0, 0, 0,
+        Seq.empty.asJava, MemoryRecords.EMPTY)).toSeq
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] =
       ResultWithPartitions(new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap), Set())
@@ -166,14 +158,17 @@ class AbstractFetcherThreadTest {
     @volatile var logEndOffset = 0L
     @volatile var fetchCount = 0
 
-    private val normalPartitionDataSet = List(
-      new TestPartitionData(MemoryRecords.withRecords(0L, CompressionType.NONE, new SimpleRecord("hello".getBytes()))),
-      new TestPartitionData(MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes())))
+    private val normalPartitionDataSet = List[PartitionData[Records]](
+      new PartitionData(Errors.NONE, 0L, 0L, 0L, Seq.empty.asJava,
+        MemoryRecords.withRecords(0L, CompressionType.NONE, new SimpleRecord("hello".getBytes))),
+      new PartitionData(Errors.NONE, 0L, 0L, 0L, Seq.empty.asJava,
+        MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes)))
     )
 
     override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
-                                      partitionData: PartitionData): Unit = {
+                                      partitionData: PD,
+                                      records: MemoryRecords): Unit = {
       // Throw exception if the fetchOffset does not match the fetcherThread partition state
       if (fetchOffset != logEndOffset)
         throw new RuntimeException(
@@ -181,14 +176,13 @@ class AbstractFetcherThreadTest {
             .format(topicPartition, fetchOffset, logEndOffset))
 
       // Now check message's crc
-      val records = partitionData.toRecords
       for (batch <- records.batches.asScala) {
         batch.ensureValid()
         logEndOffset = batch.nextOffset
       }
     }
 
-    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] = {
+    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, PD)] = {
       fetchCount += 1
       // Set the first fetch to get a corrupted message
       if (fetchCount == 1) {
@@ -199,7 +193,8 @@ class AbstractFetcherThreadTest {
         // flip some bits in the message to ensure the crc fails
         buffer.putInt(15, buffer.getInt(15) ^ 23422)
         buffer.putInt(30, buffer.getInt(30) ^ 93242)
-        fetchRequest.offsets.mapValues(_ => new TestPartitionData(records)).toSeq
+        fetchRequest.offsets.mapValues(_ => new PartitionData[Records](Errors.NONE, 0L, 0L, 0L,
+          Seq.empty.asJava, records)).toSeq
       } else {
         // Then, the following fetches get the normal data
         fetchRequest.offsets.mapValues(v => normalPartitionDataSet(v.toInt)).toSeq

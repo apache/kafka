@@ -31,7 +31,7 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
 
     private ExtendedDeserializer<T> inner;
 
-    public ChangedDeserializer(Deserializer<T> inner) {
+    public ChangedDeserializer(final Deserializer<T> inner) {
         this.inner = ensureExtended(inner);
     }
 
@@ -39,19 +39,19 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
         return inner;
     }
 
-    public void setInner(Deserializer<T> inner) {
+    public void setInner(final Deserializer<T> inner) {
         this.inner = ensureExtended(inner);
     }
 
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
         // do nothing
     }
 
     @Override
-    public Change<T> deserialize(String topic, Headers headers, byte[] data) {
+    public Change<T> deserialize(final String topic, final Headers headers, final byte[] data) {
 
-        byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
+        final byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
 
         System.arraycopy(data, 0, bytes, 0, bytes.length);
 
@@ -63,7 +63,7 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
     }
 
     @Override
-    public Change<T> deserialize(String topic, byte[] data) {
+    public Change<T> deserialize(final String topic, final byte[] data) {
         return deserialize(topic, null, data);
     }
 

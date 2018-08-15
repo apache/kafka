@@ -51,7 +51,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Properties props) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props, true), null);
     }
 
     /**
@@ -61,7 +61,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
     }
 
     /**
@@ -773,8 +773,6 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Get the metrics kept by the adminClient
-     *
-     * @return
      */
     public abstract Map<MetricName, ? extends Metric> metrics();
 }

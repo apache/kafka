@@ -35,19 +35,19 @@ public class JsonPOJODeserializer<T> implements Deserializer<T> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void configure(Map<String, ?> props, boolean isKey) {
+    public void configure(final Map<String, ?> props, final boolean isKey) {
         tClass = (Class<T>) props.get("JsonPOJOClass");
     }
 
     @Override
-    public T deserialize(String topic, byte[] bytes) {
+    public T deserialize(final String topic, final byte[] bytes) {
         if (bytes == null)
             return null;
 
-        T data;
+        final T data;
         try {
             data = objectMapper.readValue(bytes, tClass);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SerializationException(e);
         }
 

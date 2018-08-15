@@ -34,6 +34,7 @@ import java.util.concurrent.Future;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
@@ -64,8 +65,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String clientJaasConfPath;
     private String kerb5ConfPath;
 
-    private int retries;
-    private int requiredNumAcks = Integer.MAX_VALUE;
+    private int retries = Integer.MAX_VALUE;
+    private int requiredNumAcks = 1;
+    private int deliveryTimeoutMs = 120000;
     private boolean syncSend;
     private Producer<byte[], byte[]> producer;
     
@@ -95,6 +97,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
 
     public void setRetries(int retries) {
         this.retries = retries;
+    }
+
+    public int getDeliveryTimeoutMs() {
+        return deliveryTimeoutMs;
+    }
+
+    public void setDeliveryTimeoutMs(int deliveryTimeoutMs) {
+        this.deliveryTimeoutMs = deliveryTimeoutMs;
     }
 
     public String getCompressionType() {
@@ -205,10 +215,11 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             throw new ConfigException("Topic must be specified by the Kafka log4j appender");
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
-        if (requiredNumAcks != Integer.MAX_VALUE)
-            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
-        if (retries > 0)
-            props.put(RETRIES_CONFIG, retries);
+
+        props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
+        props.put(RETRIES_CONFIG, retries);
+        props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+
         if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL_CONFIG, securityProtocol);
         }

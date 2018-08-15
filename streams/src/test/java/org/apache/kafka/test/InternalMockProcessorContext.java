@@ -136,6 +136,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
+        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -206,7 +207,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
@@ -316,8 +317,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
-        List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-        for (KeyValue<byte[], byte[]> keyValue : changeLog) {
+        final List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+        for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
             records.add(keyValue);
         }
 
@@ -326,7 +327,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         restoreListener.onRestoreEnd(null, storeName, 0L);
     }
 
-    private StateRestoreListener getStateRestoreListener(StateRestoreCallback restoreCallback) {
+    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
         if (restoreCallback instanceof StateRestoreListener) {
             return (StateRestoreListener) restoreCallback;
         }
@@ -334,7 +335,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback restoreCallback) {
         if (restoreCallback instanceof BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) restoreCallback;
         }

@@ -87,11 +87,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      */
     int process() {
         int processed = 0;
+
         final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
         while (it.hasNext()) {
             final StreamTask task = it.next().getValue();
+
             try {
-                if (task.process()) {
+                if (task.isProcessable() && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
@@ -108,6 +110,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 throw e;
             }
         }
+
         return processed;
     }
 

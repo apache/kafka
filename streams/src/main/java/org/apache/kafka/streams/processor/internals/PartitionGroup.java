@@ -27,15 +27,23 @@ import java.util.Set;
 
 /**
  * A PartitionGroup is composed from a set of partitions. It also maintains the timestamp of this
- * group, hence the associated task as the min timestamp across all partitions in the group.
+ * group, a.k.a. the stream time of the associated task. It is defined as the maximum timestamp of
+ * all the records having been retrieved for processing from this PartitionGroup so far.
+ *
+ * We decide from which partition to retrieve the next record to process based on partitions' timestamps.
+ * The timestamp of a specific partition is initialized as UNKNOWN (-1), and is updated with the head record's timestamp
+ * if it is smaller (i.e. it should be monotonically increasing); when the partition's buffer becomes empty and there is
+ * no head record, the partition's timestamp will not be updated any more.
  */
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
-
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
+
     private long streamTime;
     private int totalBuffered;
+    private boolean allBuffered;
+
 
     public static class RecordInfo {
         RecordQueue queue;
@@ -53,11 +61,11 @@ public class PartitionGroup {
         }
     }
 
-
     PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues) {
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
+        allBuffered = false;
         streamTime = RecordQueue.NOT_KNOWN;
     }
 
@@ -79,17 +87,16 @@ public class PartitionGroup {
             if (record != null) {
                 --totalBuffered;
 
-                if (!queue.isEmpty()) {
+                if (queue.isEmpty()) {
+                    // if a certain queue has been drained, reset the flag
+                    allBuffered = false;
+                } else {
                     nonEmptyQueuesByTime.offer(queue);
                 }
 
-                // Since this was previously a queue with min timestamp,
-                // streamTime could only advance if this queue's time did.
-                if (queue.timestamp() > streamTime) {
-                    computeStreamTime();
-                }
+                // always update the stream time to the record's timestamp yet to be processed if it is larger
+                streamTime = Math.max(streamTime, record.timestamp);
             }
-
         }
 
         return record;
@@ -106,17 +113,18 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         final int oldSize = recordQueue.size();
-        final long oldTimestamp = recordQueue.timestamp();
         final int newSize = recordQueue.addRawRecords(rawRecords);
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
             nonEmptyQueuesByTime.offer(recordQueue);
-        }
 
-        // Adding to this queue could only advance streamTime if it was previously the queue with min timestamp (= streamTime)
-        if (oldTimestamp <= streamTime && recordQueue.timestamp() > streamTime) {
-            computeStreamTime();
+            // if all partitions now are non-empty, set the flag
+            // we do not need to update the stream time here since this task will definitely be
+            // processed next, and hence the stream time will be updated when we retrieved records by then
+            if (nonEmptyQueuesByTime.size() == this.partitionQueues.size()) {
+                allBuffered = true;
+            }
         }
 
         totalBuffered += newSize - oldSize;
@@ -136,18 +144,6 @@ public class PartitionGroup {
         return streamTime;
     }
 
-    private void computeStreamTime() {
-        // we should always return the smallest timestamp of all partitions
-        // to avoid group partition time goes backward
-        long timestamp = Long.MAX_VALUE;
-        for (final RecordQueue queue : partitionQueues.values()) {
-            if (queue.timestamp() < timestamp) {
-                timestamp = queue.timestamp();
-            }
-        }
-        this.streamTime = timestamp;
-    }
-
     /**
      * @throws IllegalStateException if the record's partition does not belong to this partition group
      */
@@ -165,7 +161,12 @@ public class PartitionGroup {
         return totalBuffered;
     }
 
+    boolean allPartitionsBuffered() {
+        return allBuffered;
+    }
+
     public void close() {
+        clear();
         partitionQueues.clear();
     }
 

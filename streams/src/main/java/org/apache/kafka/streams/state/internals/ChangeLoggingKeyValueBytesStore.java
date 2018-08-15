@@ -47,7 +47,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
         if (inner instanceof MemoryLRUCache) {
             ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {
                 @Override
-                public void apply(Bytes key, byte[] value) {
+                public void apply(final Bytes key, final byte[] value) {
                     // pass null to indicate removal
                     changeLogger.logChange(key, null);
                 }
@@ -78,7 +78,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         inner.putAll(entries);
-        for (KeyValue<Bytes, byte[]> entry : entries) {
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
             changeLogger.logChange(entry.key, entry.value);
         }
     }

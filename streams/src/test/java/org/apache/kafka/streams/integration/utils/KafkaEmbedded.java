@@ -110,7 +110,7 @@ public class KafkaEmbedded {
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
+        final Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
         return kafka.config().hostName() + ":" + kafka.boundPort(
             new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
     }
@@ -134,7 +134,7 @@ public class KafkaEmbedded {
         log.debug("Removing log dir at {} ...", logDir);
         try {
             Utils.delete(logDir);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
         tmpFolder.delete();

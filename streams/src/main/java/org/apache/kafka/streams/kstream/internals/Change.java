@@ -23,7 +23,7 @@ public class Change<T> {
     public final T newValue;
     public final T oldValue;
 
-    public Change(T newValue, T oldValue) {
+    public Change(final T newValue, final T oldValue) {
         this.newValue = newValue;
         this.oldValue = oldValue;
     }

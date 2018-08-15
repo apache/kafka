@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -119,12 +120,22 @@ public final class TimeWindows extends Windows<TimeWindow> {
         return sizeMs;
     }
 
+    @Override
+    public TimeWindows grace(final long millisAfterWindowEnd) {
+        super.grace(millisAfterWindowEnd);
+        return this;
+    }
+
     /**
      * @param durationMs the window retention time
      * @return itself
      * @throws IllegalArgumentException if {@code duration} is smaller than the window size
+     *
+     * @deprecated since 2.1. Use {@link Materialized#retention} or directly configure the retention in a store supplier
+     *             and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     @Override
+    @Deprecated
     public TimeWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < sizeMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
@@ -139,29 +150,11 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * For {@code TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
     @Override
+    @Deprecated
     public long maintainMs() {
         return Math.max(super.maintainMs(), sizeMs);
     }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-        if (!(o instanceof TimeWindows)) {
-            return false;
-        }
-        final TimeWindows other = (TimeWindows) o;
-        return sizeMs == other.sizeMs && advanceMs == other.advanceMs;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (sizeMs ^ (sizeMs >>> 32));
-        result = 31 * result + (int) (advanceMs ^ (advanceMs >>> 32));
-        return result;
-    }
-
 }
