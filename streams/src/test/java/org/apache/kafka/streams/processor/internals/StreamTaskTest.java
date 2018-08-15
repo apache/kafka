@@ -775,7 +775,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionAndCloseProducerOnErrorDuringCleanCloseWithEosEnabled() {
+    public void shouldNotAbortTransactionAndNotCloseProducerOnErrorDuringCleanCloseWithEosEnabled() {
         task = createTaskThatThrowsException(true);
         task.initializeTopology();
 
@@ -786,8 +786,8 @@ public class StreamTaskTest {
             task = null;
         }
 
-        assertTrue(producer.transactionAborted());
-        assertTrue(producer.closed());
+        assertTrue(producer.transactionInFlight());
+        assertFalse(producer.closed());
     }
 
     @Test
@@ -848,12 +848,7 @@ public class StreamTaskTest {
         task = createTaskThatThrowsException(true);
         task.initializeTopology();
 
-        try {
-            task.close(false, false);
-            fail("should have thrown runtime exception");
-        } catch (final RuntimeException expected) {
-            task = null;
-        }
+        task.close(false, false);
 
         assertTrue(producer.transactionAborted());
         assertTrue(producer.closed());

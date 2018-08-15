@@ -560,8 +560,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
-            maybeAbortTransactionAndCloseRecordCollector(isZombie);
-            throw fatal;
+            if (clean) {
+                throw fatal;
+            }
         }
 
         if (clean) {
