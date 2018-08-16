@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -53,6 +54,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer,
                                 final StreamPartitioner<? super K, ? super V> partitioner) {}
+
+        @Override
+        public void init(final Producer<byte[], byte[]> producer) {}
 
         @Override
         public void flush() {}

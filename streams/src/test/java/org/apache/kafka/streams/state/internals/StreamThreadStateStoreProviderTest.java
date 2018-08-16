@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -190,7 +191,12 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>())) {
+            new StreamTask.ProducerSupplier() {
+                @Override
+                public Producer<byte[], byte[]> get() {
+                    return clientSupplier.getProducer(new HashMap<String, Object>());
+                }
+            }) {
 
             @Override
             protected void updateOffsetLimits() {}

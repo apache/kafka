@@ -403,18 +403,22 @@ public class StreamThread extends Thread {
             taskCreatedSensor.record();
 
             return new StreamTask(
-                    taskId,
-                    partitions,
-                    builder.build(taskId.topicGroupId),
-                    consumer,
-                    storeChangelogReader,
-                    config,
-                    streamsMetrics,
-                    stateDirectory,
-                    cache,
-                    time,
-                    createProducer(taskId));
-
+                taskId,
+                partitions,
+                builder.build(taskId.topicGroupId),
+                consumer,
+                storeChangelogReader,
+                config,
+                streamsMetrics,
+                stateDirectory,
+                cache,
+                time,
+                new StreamTask.ProducerSupplier() {
+                    @Override
+                    public Producer<byte[], byte[]> get() {
+                        return createProducer(taskId);
+                    }
+                });
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {

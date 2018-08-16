@@ -47,7 +47,7 @@ import java.util.Map;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
-    private final Producer<byte[], byte[]> producer;
+    private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
     private final ProductionExceptionHandler productionExceptionHandler;
@@ -60,15 +60,18 @@ public class RecordCollectorImpl implements RecordCollector {
         "The exception handler chose to CONTINUE processing in spite of this error.";
     private volatile KafkaException sendException;
 
-    public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
-                               final String streamTaskId,
+    public RecordCollectorImpl(final String streamTaskId,
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler) {
-        this.producer = producer;
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
+    }
+
+    @Override
+    public void init(final Producer<byte[], byte[]> producer) {
+        this.producer = producer;
     }
 
     @Override
@@ -233,6 +236,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         producer.close();
+        producer = null;
         checkForException();
     }
 

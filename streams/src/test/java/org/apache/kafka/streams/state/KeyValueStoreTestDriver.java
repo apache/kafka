@@ -186,7 +186,7 @@ public class KeyValueStoreTestDriver<K, V> {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
-        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver", new LogContext("KeyValueStoreTestDriver "), new DefaultProductionExceptionHandler()) {
+        final RecordCollector recordCollector = new RecordCollectorImpl("KeyValueStoreTestDriver", new LogContext("KeyValueStoreTestDriver "), new DefaultProductionExceptionHandler()) {
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
@@ -214,6 +214,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
+        recordCollector.init(producer);
 
         File stateDir = TestUtils.tempDirectory();
         stateDir.mkdirs();

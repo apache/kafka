@@ -308,7 +308,12 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockTime,
-                producer);
+                new StreamTask.ProducerSupplier() {
+                    @Override
+                    public Producer<byte[], byte[]> get() {
+                        return producer;
+                    }
+                });
             task.initializeStateStores();
             task.initializeTopology();
         } else {
@@ -592,6 +597,10 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
+    }
+
+    private Producer<byte[], byte[]> get() {
+        return producer;
     }
 
     static class MockTime implements Time {

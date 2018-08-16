@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -236,18 +237,23 @@ public class ProcessorTopologyTestDriver {
 
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(TASK_ID,
-                                  partitionsByTopic.values(),
-                                  topology,
-                                  consumer,
-                                  new StoreChangelogReader(
-                                      createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      new MockStateRestoreListener(),
-                                      new LogContext("topology-test-driver ")),
-                                  config,
-                                  streamsMetrics, stateDirectory,
-                                  cache,
-                                  new MockTime(),
-                                  producer);
+                partitionsByTopic.values(),
+                topology,
+                consumer,
+                new StoreChangelogReader(
+                    createRestoreConsumer(topology.storeToChangelogTopic()),
+                    new MockStateRestoreListener(),
+                    new LogContext("topology-test-driver ")),
+                config,
+                streamsMetrics, stateDirectory,
+                cache,
+                new MockTime(),
+                new StreamTask.ProducerSupplier() {
+                    @Override
+                    public Producer<byte[], byte[]> get() {
+                        return producer;
+                    }
+                });
             task.initializeStateStores();
             task.initializeTopology();
         }

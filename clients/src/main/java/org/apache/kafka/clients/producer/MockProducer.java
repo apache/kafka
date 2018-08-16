@@ -69,6 +69,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionCommitted;
     private boolean transactionAborted;
     private boolean producerFenced;
+    private boolean producerFencedOnClose;
     private boolean sentOffsets;
     private long commitCount = 0L;
 
@@ -309,6 +310,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
+        if (producerFencedOnClose) {
+            throw new ProducerFencedException("MockProducer is fenced.");
+        }
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
@@ -323,6 +327,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyProducerState();
         verifyTransactionsInitialized();
         this.producerFenced = true;
+    }
+
+    public void fenceProducerOnClose() {
+        verifyProducerState();
+        verifyTransactionsInitialized();
+        this.producerFencedOnClose = true;
     }
 
     public boolean transactionInitialized() {
