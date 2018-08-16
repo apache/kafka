@@ -124,7 +124,7 @@ public abstract class AbstractResetIntegrationTest {
         commonClientConfig = new Properties();
         commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
 
-        Map<String, Object> sslConfig = getClientSslConfig();
+        final Map<String, Object> sslConfig = getClientSslConfig();
         if (sslConfig != null) {
             commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
@@ -176,7 +176,7 @@ public abstract class AbstractResetIntegrationTest {
         @Override
         public boolean conditionMet() {
             try {
-                ConsumerGroupDescription groupDescription = adminClient.describeConsumerGroups(Collections.singletonList(appID)).describedGroups().get(appID).get();
+                final ConsumerGroupDescription groupDescription = adminClient.describeConsumerGroups(Collections.singletonList(appID)).describedGroups().get(appID).get();
                 return groupDescription.members().isEmpty();
             } catch (final ExecutionException | InterruptedException e) {
                 return false;
@@ -205,18 +205,18 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     private void add10InputElements() throws java.util.concurrent.ExecutionException, InterruptedException {
-        List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
-                KeyValue.pair(1L, "bbb"),
-                KeyValue.pair(0L, "ccc"),
-                KeyValue.pair(1L, "ddd"),
-                KeyValue.pair(0L, "eee"),
-                KeyValue.pair(1L, "fff"),
-                KeyValue.pair(0L, "ggg"),
-                KeyValue.pair(1L, "hhh"),
-                KeyValue.pair(0L, "iii"),
-                KeyValue.pair(1L, "jjj"));
+        final List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
+                                                                   KeyValue.pair(1L, "bbb"),
+                                                                   KeyValue.pair(0L, "ccc"),
+                                                                   KeyValue.pair(1L, "ddd"),
+                                                                   KeyValue.pair(0L, "eee"),
+                                                                   KeyValue.pair(1L, "fff"),
+                                                                   KeyValue.pair(0L, "ggg"),
+                                                                   KeyValue.pair(1L, "hhh"),
+                                                                   KeyValue.pair(0L, "iii"),
+                                                                   KeyValue.pair(1L, "jjj"));
 
-        for (KeyValue<Long, String> record : records) {
+        for (final KeyValue<Long, String> record : records) {
             mockTime.sleep(10);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
@@ -332,7 +332,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
-        KeyValue<Long, String> badMessage = new KeyValue<>(-1L, "badRecord-ShouldBeSkipped");
+        final KeyValue<Long, String> badMessage = new KeyValue<>(-1L, "badRecord-ShouldBeSkipped");
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             INTERMEDIATE_USER_TOPIC,
             Collections.singleton(badMessage),
@@ -387,7 +387,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }
@@ -431,7 +431,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }
@@ -479,7 +479,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RESET
         final File resetFile = File.createTempFile("reset", ".csv");
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
+        try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
             writer.close();
         }

@@ -22,11 +22,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.auth.SimpleAclAuthorizer.{VersionedAcls, NoAcls}
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclChangeStore, ZkAclStore}
+import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclChangeStore, ZkAclStore, ZkVersion}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -48,7 +48,10 @@ object SimpleAclAuthorizer {
   //If set to true when no acls are found for a resource , authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
-  case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
+  case class VersionedAcls(acls: Set[Acl], zkVersion: Int) {
+    def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
+  }
+  val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
@@ -204,7 +207,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def removeAcls(resource: Resource): Boolean = {
     inWriteLock(lock) {
       val result = zkClient.deleteResource(resource)
-      updateCache(resource, VersionedAcls(Set(), 0))
+      updateCache(resource, NoAcls)
       updateAclChangedFlag(resource)
       result
     }
@@ -314,7 +317,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
       val (updateSucceeded, updateVersion) =
         if (newAcls.nonEmpty) {
-          zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
+          if (currentVersionedAcls.exists)
+            zkClient.conditionalSetAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
+          else
+            zkClient.createAclsForResourceIfNotExists(resource, newAcls)
         } else {
           trace(s"Deleting path for $resource because it had no ACLs remaining")
           (zkClient.conditionalDelete(resource, currentVersionedAcls.zkVersion), 0)

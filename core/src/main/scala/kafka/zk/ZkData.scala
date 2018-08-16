@@ -436,7 +436,8 @@ object ConsumerOffset {
 }
 
 object ZkVersion {
-  val NoVersion = -1
+  val MatchAnyVersion = -1 // if used in a conditional set, matches any version (the value should match ZooKeeper codebase)
+  val UnknownVersion = -2  // Version returned from get if node does not exist (internal constant for Kafka codebase, unused value in ZK)
 }
 
 object ZkStat {

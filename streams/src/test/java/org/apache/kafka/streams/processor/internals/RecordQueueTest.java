@@ -62,7 +62,6 @@ public class RecordQueueTest {
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
             null,
-            null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
             skippedRecordsSensor

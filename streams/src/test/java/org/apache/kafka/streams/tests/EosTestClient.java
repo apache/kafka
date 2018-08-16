@@ -89,7 +89,7 @@ public class EosTestClient extends SmokeTestUtil {
                 });
                 streams.setStateListener(new KafkaStreams.StateListener() {
                     @Override
-                    public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+                    public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
                         // don't remove this -- it's required test output
                         System.out.println(System.currentTimeMillis());
                         System.out.println("StateChange: " + oldState + " -> " + newState);

@@ -49,7 +49,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     streamThread.state() + ", not RUNNING");
         }
         final List<T> stores = new ArrayList<>();
-        for (Task streamTask : streamThread.tasks().values()) {
+        for (final Task streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {

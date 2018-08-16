@@ -58,7 +58,7 @@ public class SegmentedCacheFunctionTest {
 
         assertThat(buffer.getLong(), equalTo(segmentId));
 
-        byte[] actualKey = new byte[buffer.remaining()];
+        final byte[] actualKey = new byte[buffer.remaining()];
         buffer.get(actualKey);
         assertThat(Bytes.wrap(actualKey), equalTo(THE_KEY));
     }

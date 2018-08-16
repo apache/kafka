@@ -843,8 +843,7 @@ class GroupMetadataManagerTest {
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = _ => ()
-    group.add(member)
+    group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -873,8 +872,7 @@ class GroupMetadataManagerTest {
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = _ => ()
-    group.add(member)
+    group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -1372,8 +1370,7 @@ class GroupMetadataManagerTest {
     val subscription = new Subscription(List(topic).asJava)
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
-    member.awaitingJoinCallback = _ => ()
-    group.add(member)
+    group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -1519,8 +1516,6 @@ class GroupMetadataManagerTest {
   @Test
   def testOffsetExpirationOfSimpleConsumer() {
     val memberId = "memberId"
-    val clientId = "clientId"
-    val clientHost = "localhost"
     val topic = "foo"
     val topicPartition1 = new TopicPartition(topic, 0)
     val offset = 37
@@ -1534,7 +1529,6 @@ class GroupMetadataManagerTest {
     val startMs = time.milliseconds
     // old clients, expiry timestamp is explicitly set
     val tp1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
-    val tp2OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
     // new clients, no per-partition expiry timestamp, offsets of group expire together
     val offsets = immutable.Map(
       topicPartition1 -> tp1OffsetAndMetadata)

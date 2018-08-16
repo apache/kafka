@@ -22,7 +22,7 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Properties
 
-import kafka.integration.KafkaServerTestHarness
+import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
@@ -31,18 +31,17 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
-abstract class BaseRequestTest extends KafkaServerTestHarness {
+abstract class BaseRequestTest extends IntegrationTestHarness {
+  override val serverCount: Int = numBrokers
   private var correlationId = 0
 
   // If required, set number of brokers
   protected def numBrokers: Int = 3
 
-  protected def logDirCount: Int = 1
-
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
-  def generateConfigs = {
+  override def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),

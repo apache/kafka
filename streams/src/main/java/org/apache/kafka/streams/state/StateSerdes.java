@@ -145,7 +145,7 @@ public final class StateSerdes<K, V> {
      * @param rawKey  the key as raw bytes
      * @return        the key as typed object
      */
-    public K keyFrom(byte[] rawKey) {
+    public K keyFrom(final byte[] rawKey) {
         return keySerde.deserializer().deserialize(topic, rawKey);
     }
 
@@ -155,7 +155,7 @@ public final class StateSerdes<K, V> {
      * @param rawValue  the value as raw bytes
      * @return          the value as typed object
      */
-    public V valueFrom(byte[] rawValue) {
+    public V valueFrom(final byte[] rawValue) {
         return valueSerde.deserializer().deserialize(topic, rawValue);
     }
 
@@ -165,7 +165,7 @@ public final class StateSerdes<K, V> {
      * @param key  the key to be serialized
      * @return     the serialized key
      */
-    public byte[] rawKey(K key) {
+    public byte[] rawKey(final K key) {
         try {
             return keySerde.serializer().serialize(topic, key);
         } catch (final ClassCastException e) {
@@ -186,7 +186,7 @@ public final class StateSerdes<K, V> {
      * @param value  the value to be serialized
      * @return       the serialized value
      */
-    public byte[] rawValue(V value) {
+    public byte[] rawValue(final V value) {
         try {
             return valueSerde.serializer().serialize(topic, value);
         } catch (final ClassCastException e) {

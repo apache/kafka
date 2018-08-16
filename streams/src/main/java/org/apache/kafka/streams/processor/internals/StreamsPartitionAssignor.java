@@ -64,7 +64,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_THREE = 3;
     private final static int VERSION_FOUR = 4;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
-    protected Set<Integer> supportedVersions = new HashSet<>();
+    protected final Set<Integer> supportedVersions = new HashSet<>();
 
     private Logger log;
     private String logPrefix;
@@ -980,7 +980,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
-        private Logger log;
+        private final Logger log;
 
         CopartitionedTopicsValidator(final String logPrefix) {
             this.logPrefix = logPrefix;
@@ -997,7 +997,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
                     final Integer partitions = metadata.partitionCountForTopic(topic);
                     if (partitions == null) {
-                        String str = String.format("%sTopic not found: %s", logPrefix, topic);
+                        final String str = String.format("%sTopic not found: %s", logPrefix, topic);
                         log.error(str);
                         throw new IllegalStateException(str);
                     }

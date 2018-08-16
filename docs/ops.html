@@ -988,8 +988,18 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>connection-close-total</td>
+        <td>Total connections closed in the window.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>connection-creation-rate</td>
         <td>New connections established per second in the window.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>connection-creation-total</td>
+        <td>Total new connections established in the window.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -998,13 +1008,28 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>network-io-total</td>
+        <td>The total number of network operations (reads or writes) on all connections.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>outgoing-byte-rate</td>
         <td>The average number of outgoing bytes sent per second to all servers.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>outgoing-byte-total</td>
+        <td>The total number of outgoing bytes sent to all servers.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>request-rate</td>
         <td>The average number of requests sent per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>request-total</td>
+        <td>The total number of requests sent.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1023,13 +1048,28 @@
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>incoming-byte-total</td>
+        <td>Total bytes read off all sockets.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>response-rate</td>
-        <td>Responses received sent per second.</td>
+        <td>Responses received per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>response-total</td>
+        <td>Total responses received.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>select-rate</td>
         <td>Number of times the I/O layer checked for new I/O to perform per second.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>select-total</td>
+        <td>Total number of times the I/O layer checked for new I/O to perform.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1059,12 +1099,22 @@
       </tr>
       <tr>
         <td>successful-authentication-rate</td>
-        <td>Connections that were successfully authenticated using SASL or SSL.</td>
+        <td>Connections per second that were successfully authenticated using SASL or SSL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-total</td>
+        <td>Total connections that were successfully authenticated using SASL or SSL.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>failed-authentication-rate</td>
-        <td>Connections that failed authentication.</td>
+        <td>Connections per second that failed authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-authentication-total</td>
+        <td>Total connections that failed authentication.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -1087,8 +1137,18 @@
         <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
+        <td>outgoing-byte-total</td>
+        <td>The total number of outgoing bytes sent for a node.</td>
+        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
         <td>request-rate</td>
         <td>The average number of requests sent per second for a node.</td>
+        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>request-total</td>
+        <td>The total number of requests sent for a node.</td>
         <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
@@ -1103,7 +1163,12 @@
       </tr>
       <tr>
         <td>incoming-byte-rate</td>
-        <td>The average number of responses received per second for a node.</td>
+        <td>The average number of bytes received per second for a node.</td>
+        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>incoming-byte-total</td>
+        <td>The total number of bytes received for a node.</td>
         <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
@@ -1118,7 +1183,12 @@
       </tr>
       <tr>
         <td>response-rate</td>
-        <td>Responses received sent per second for a node.</td>
+        <td>Responses received per second for a node.</td>
+        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+      </tr>
+      <tr>
+        <td>response-total</td>
+        <td>Total responses received for a node.</td>
         <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
     </tbody>
@@ -1190,6 +1260,11 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>commit-total</td>
+        <td>The total number of commit calls</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>assigned-partitions</td>
         <td>The number of partitions currently assigned to this consumer</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
@@ -1202,6 +1277,11 @@
       <tr>
         <td>heartbeat-rate</td>
         <td>The average number of heartbeats per second</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>heartbeat-total</td>
+        <td>The total number of heartbeats</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -1220,6 +1300,11 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>join-total</td>
+        <td>The total number of group joins</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>sync-time-avg</td>
         <td>The average time taken for a group sync</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
@@ -1232,6 +1317,11 @@
       <tr>
         <td>sync-rate</td>
         <td>The number of group syncs per second</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>sync-total</td>
+        <td>The total number of group syncs</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>

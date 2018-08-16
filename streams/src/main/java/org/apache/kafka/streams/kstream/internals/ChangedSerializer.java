@@ -32,7 +32,7 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
 
     private ExtendedSerializer<T> inner;
 
-    public ChangedSerializer(Serializer<T> inner) {
+    public ChangedSerializer(final Serializer<T> inner) {
         this.inner = ensureExtended(inner);
     }
 
@@ -40,12 +40,12 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
         return inner;
     }
 
-    public void setInner(Serializer<T> inner) {
+    public void setInner(final Serializer<T> inner) {
         this.inner = ensureExtended(inner);
     }
 
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
         // do nothing
     }
 
@@ -54,8 +54,8 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
      * both values are not null
      */
     @Override
-    public byte[] serialize(String topic, Headers headers, Change<T> data) {
-        byte[] serializedKey;
+    public byte[] serialize(final String topic, final Headers headers, final Change<T> data) {
+        final byte[] serializedKey;
 
         // only one of the old / new values would be not null
         if (data.newValue != null) {
@@ -71,7 +71,7 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
             serializedKey = inner.serialize(topic, headers, data.oldValue);
         }
 
-        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
+        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + NEWFLAG_SIZE);
         buf.put(serializedKey);
         buf.put((byte) (data.newValue != null ? 1 : 0));
 
@@ -79,7 +79,7 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
     }
 
     @Override
-    public byte[] serialize(String topic, Change<T> data) {
+    public byte[] serialize(final String topic, final Change<T> data) {
         return serialize(topic, null, data);
     }
 

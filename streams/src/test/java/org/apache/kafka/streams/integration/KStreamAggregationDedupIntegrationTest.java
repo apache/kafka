@@ -93,7 +93,7 @@ public class KStreamAggregationDedupIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        String applicationId = "kgrouped-stream-test-" +
+        final String applicationId = "kgrouped-stream-test-" +
             testNo;
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
@@ -104,7 +104,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
-        KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
+        final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         groupedStream = stream
             .groupBy(
@@ -113,7 +113,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
         reducer = new Reducer<String>() {
             @Override
-            public String apply(String value1, String value2) {
+            public String apply(final String value1, final String value2) {
                 return value1 + ":" + value2;
             }
         };
@@ -140,14 +140,14 @@ public class KStreamAggregationDedupIntegrationTest {
 
         produceMessages(System.currentTimeMillis());
 
-        List<KeyValue<String, String>> results = receiveMessages(
+        final List<KeyValue<String, String>> results = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
             5);
 
         Collections.sort(results, new Comparator<KeyValue<String, String>>() {
             @Override
-            public int compare(KeyValue<String, String> o1, KeyValue<String, String> o2) {
+            public int compare(final KeyValue<String, String> o1, final KeyValue<String, String> o2) {
                 return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
             }
         });
@@ -172,9 +172,9 @@ public class KStreamAggregationDedupIntegrationTest {
 
     @Test
     public void shouldReduceWindowed() throws Exception {
-        long firstBatchTimestamp = System.currentTimeMillis() - 1000;
+        final long firstBatchTimestamp = System.currentTimeMillis() - 1000;
         produceMessages(firstBatchTimestamp);
-        long secondBatchTimestamp = System.currentTimeMillis();
+        final long secondBatchTimestamp = System.currentTimeMillis();
         produceMessages(secondBatchTimestamp);
         produceMessages(secondBatchTimestamp);
 
@@ -183,7 +183,7 @@ public class KStreamAggregationDedupIntegrationTest {
             .reduce(reducer, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduce-time-windows"))
             .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
                 @Override
-                public String apply(Windowed<String> windowedKey, String value) {
+                public String apply(final Windowed<String> windowedKey, final String value) {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
             })
@@ -191,12 +191,12 @@ public class KStreamAggregationDedupIntegrationTest {
 
         startStreams();
 
-        List<KeyValue<String, String>> windowedOutput = receiveMessages(
+        final List<KeyValue<String, String>> windowedOutput = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
             10);
 
-        Comparator<KeyValue<String, String>>
+        final Comparator<KeyValue<String, String>>
             comparator =
             new Comparator<KeyValue<String, String>>() {
                 @Override
@@ -207,8 +207,8 @@ public class KStreamAggregationDedupIntegrationTest {
             };
 
         Collections.sort(windowedOutput, comparator);
-        long firstBatchWindow = firstBatchTimestamp / 500 * 500;
-        long secondBatchWindow = secondBatchTimestamp / 500 * 500;
+        final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
+        final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
         assertThat(windowedOutput, is(
             Arrays.asList(
@@ -267,7 +267,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
 
-    private void produceMessages(long timestamp) throws Exception {
+    private void produceMessages(final long timestamp) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             streamOneInput,
             Arrays.asList(

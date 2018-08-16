@@ -27,8 +27,12 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**
-     * Put a key-value pair with the current record time as the timestamp
-     * into the corresponding window
+     * Use the current record timestamp as the {@code windowStartTimestamp} and
+     * delegate to {@link WindowStore#put(Object, Object, long)}.
+     *
+     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
+     * is unlikely to be the correct windowStartTimestamp in general.
+     *
      * @param key The key to associate the value to
      * @param value The value to update, it can be null;
      *              if the serialized bytes are also null it is interpreted as deletes
@@ -40,7 +44,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * Put a key-value pair with the given timestamp into the corresponding window
      * @param key The key to associate the value to
      * @param value The value; can be null
+     * @param windowStartTimestamp The timestamp of the beginning of the window to put the key/value into
      * @throws NullPointerException If null is used for key.
      */
-    void put(K key, V value, long timestamp);
+    void put(K key, V value, long windowStartTimestamp);
 }

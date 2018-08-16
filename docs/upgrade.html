@@ -33,12 +33,12 @@
     <li>The default value for the producer's <code>retries</code> config was changed to <code>Integer.MAX_VALUE</code>, as we introduced <code>delivery.timeout.ms</code>
         in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-91+Provide+Intuitive+User+Timeouts+in+The+Producer">KIP-91</a>,
         which sets an upper bound on the total time between sending a record and receiving acknowledgement from the broker. By default,
-        the delivery timeout is set to 2 minutes.
-    </li>
+        the delivery timeout is set to 2 minutes.</li>
     <li>By default, MirrorMaker now overrides <code>delivery.timeout.ms</code> to <code>Integer.MAX_VALUE</code> when
         configuring the producer. If you have overridden the value of <code>retries</code> in order to fail faster,
-        you will instead need to override <code>delivery.timeout.ms</code>.
-    </li>
+        you will instead need to override <code>delivery.timeout.ms</code>.</li>
+    <li>The <code>ListGroup</code> API now expects, as a recommended alternative, <code>Describe Group</code> access to the groups a user should be able to list.
+        Even though the old <code>Describe Cluster</code> access is still supported for backward compatibility, using it for this API is not advised.</li>
 </ol>
 
 

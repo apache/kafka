@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -187,7 +188,7 @@ public class TopologyTest {
     public void shouldNotAllowToAddProcessorWithNullParents() {
         topology.addSource("source", "topic-1");
         try {
-            topology.addProcessor("processor", new MockProcessorSupplier(), null);
+            topology.addProcessor("processor", new MockProcessorSupplier(), (String) null);
             fail("Should throw NullPointerException for processor when null parent names are provided");
         } catch (final NullPointerException expected) { }
     }
@@ -227,7 +228,7 @@ public class TopologyTest {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
-            topology.addSink("sink", "topic-2", null);
+            topology.addSink("sink", "topic-2", (String) null);
             fail("Should throw NullPointerException for sink when null parent names are provided");
         } catch (final NullPointerException expected) { }
     }
@@ -368,6 +369,23 @@ public class TopologyTest {
     @Test
     public void shouldDescribeEmptyTopology() {
         assertThat(topology.describe(), equalTo(expectedDescription));
+    }
+
+    @Test
+    public void sinkShouldReturnNullTopicWithDynamicRouting() {
+        final TopologyDescription.Sink expectedSinkNode
+                = new InternalTopologyBuilder.Sink("sink", (key, value, record) -> record.topic() + "-" + key);
+
+        assertThat(expectedSinkNode.topic(), equalTo(null));
+    }
+
+    @Test
+    public void sinkShouldReturnTopicNameExtractorWithDynamicRouting() {
+        final TopicNameExtractor topicNameExtractor = (key, value, record) -> record.topic() + "-" + key;
+        final TopologyDescription.Sink expectedSinkNode
+                = new InternalTopologyBuilder.Sink("sink", topicNameExtractor);
+
+        assertThat(expectedSinkNode.topicNameExtractor(), equalTo(topicNameExtractor));
     }
 
     @Test
@@ -627,6 +645,34 @@ public class TopologyTest {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1", 0);
         addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
         assertThat(topology.describe(), equalTo(expectedDescription));
+    }
+
+    @Test
+    public void topologyWithDynamicRoutingShouldDescribeExtractorClass() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+
+        final TopicNameExtractor topicNameExtractor = new TopicNameExtractor() {
+            @Override
+            public String extract(final Object key, final Object value, final RecordContext recordContext) {
+                return recordContext.topic() + "-" + key;
+            }
+
+            @Override
+            public String toString() {
+                return "anonymous topic name extractor. topic is [recordContext.topic()]-[key]";
+            }
+        };
+        builder.stream("input-topic").to(topicNameExtractor);
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+                "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
+                "      --> KSTREAM-SINK-0000000001\n" +
+                "    Sink: KSTREAM-SINK-0000000001 (extractor class: anonymous topic name extractor. topic is [recordContext.topic()]-[key])\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n\n",
+                describe.toString());
     }
 
     @Test
@@ -1048,13 +1094,13 @@ public class TopologyTest {
         for (int i = 1; i < sourceTopic.length; ++i) {
             allSourceTopics.append(", ").append(sourceTopic[i]);
         }
-        return new InternalTopologyBuilder.Source(sourceName, allSourceTopics.toString());
+        return new InternalTopologyBuilder.Source(sourceName, new HashSet<>(Arrays.asList(sourceTopic)), null);
     }
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final Pattern sourcePattern) {
         topology.addSource(null, sourceName, null, null, null, sourcePattern);
-        return new InternalTopologyBuilder.Source(sourceName, sourcePattern.toString());
+        return new InternalTopologyBuilder.Source(sourceName, null, sourcePattern);
     }
 
     private TopologyDescription.Processor addProcessor(final String processorName,

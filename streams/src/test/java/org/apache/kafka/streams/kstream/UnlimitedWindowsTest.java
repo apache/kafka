@@ -22,6 +22,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -51,28 +52,54 @@ public class UnlimitedWindowsTest {
     }
 
     @Test
+    public void gracePeriodShouldNotBeSettable() {
+        try {
+            UnlimitedWindows.of().grace(0L);
+            fail("should not be able to set grace period");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        }
+    }
+
+    @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        long timestamp = w.startMs + 1;
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final long timestamp = w.startMs + 1;
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
-        long timestamp = w.startMs - 1;
-        Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final long timestamp = w.startMs - 1;
+        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        assertEquals(UnlimitedWindows.of(), UnlimitedWindows.of());
+        assertEquals(UnlimitedWindows.of().hashCode(), UnlimitedWindows.of().hashCode());
+
+        assertEquals(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
+        assertEquals(UnlimitedWindows.of().startOn(1).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
+
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        assertNotEquals(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
+        assertNotEquals(UnlimitedWindows.of().startOn(9).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
     }
 
 }

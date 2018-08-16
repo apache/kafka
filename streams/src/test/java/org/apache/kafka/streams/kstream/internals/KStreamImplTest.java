@@ -19,11 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
@@ -60,6 +60,7 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -85,62 +86,62 @@ public class KStreamImplTest {
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
+        final KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
 
-        KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
+        final KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
-        KStream<String, String> stream1 =
+        final KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
                 @Override
-                public boolean test(String key, String value) {
+                public boolean test(final String key, final String value) {
                     return true;
                 }
             }).filterNot(new Predicate<String, String>() {
                 @Override
-                public boolean test(String key, String value) {
+                public boolean test(final String key, final String value) {
                     return false;
                 }
             });
 
-        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
+        final KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
             @Override
-            public Integer apply(String value) {
+            public Integer apply(final String value) {
                 return new Integer(value);
             }
         });
 
-        KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapper<String, Iterable<Integer>>() {
+        final KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapper<String, Iterable<Integer>>() {
             @Override
-            public Iterable<Integer> apply(String value) {
+            public Iterable<Integer> apply(final String value) {
                 return Collections.singletonList(new Integer(value));
             }
         });
 
-        KStream<String, Integer>[] streams2 = stream2.branch(
+        final KStream<String, Integer>[] streams2 = stream2.branch(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 },
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return true;
                     }
                 }
         );
 
-        KStream<String, Integer>[] streams3 = stream3.branch(
+        final KStream<String, Integer>[] streams3 = stream3.branch(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 },
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return true;
                     }
                 }
@@ -148,16 +149,16 @@ public class KStreamImplTest {
 
         final int anyWindowSize = 1;
         final Joined<String, Integer, Integer> joined = Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
-        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
+        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Integer apply(final Integer value1, final Integer value2) {
                 return value1 + value2;
             }
         }, JoinWindows.of(anyWindowSize), joined);
 
         streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Integer apply(final Integer value1, final Integer value2) {
                 return value1 + value2;
             }
         }, JoinWindows.of(anyWindowSize), joined);
@@ -182,13 +183,13 @@ public class KStreamImplTest {
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
-        KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
+        final KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
+        final KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null);
+        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null);
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
         assertEquals(processorTopology.source("topic-3").getTimestampExtractor(), null);
@@ -238,9 +239,44 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(input, "a", "v2"));
             driver.pipeInput(recordFactory.create(input, "b", "v1"));
         }
-        List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed, equalTo(Utils.mkList("a:v1", "a:v2")));
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
+    }
+
+    @SuppressWarnings("deprecation") // specifically testing the deprecated variant
+    @Test
+    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final KStream<String, String> stream = kStream
+            .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                @Override
+                public KeyValue<? extends String, ? extends String> apply(final String key, final String value) {
+                    return KeyValue.pair(value, value);
+                }
+            });
+        stream.join(kStream,
+                    valueJoiner,
+                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+
+        final SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (final SourceNode sourceNode : topology.sources()) {
+            if (sourceNode.name().equals(originalSourceNode.name())) {
+                assertNull(sourceNode.getTimestampExtractor());
+            } else {
+                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+            }
+        }
     }
 
     @Test
@@ -250,27 +286,27 @@ public class KStreamImplTest {
         final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
         final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
-                        .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
-                            @Override
-                            public KeyValue<? extends String, ? extends String> apply(String key, String value) {
-                                return KeyValue.pair(value, value);
-                            }
-                        });
-        stream.join(kStream,
-                    valueJoiner,
-                    JoinWindows.of(windowSize).until(3 * windowSize),
-                    Joined.with(Serdes.String(),
-                                Serdes.String(),
-                                Serdes.String()))
-                .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+            .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                @Override
+                public KeyValue<? extends String, ? extends String> apply(final String key, final String value) {
+                    return KeyValue.pair(value, value);
+                }
+            });
+        stream.join(
+            kStream,
+            valueJoiner,
+            JoinWindows.of(windowSize).grace(3L * windowSize),
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        )
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
         final SourceNode originalSourceNode = topology.source("topic-1");
 
-        for (SourceNode sourceNode: topology.sources()) {
+        for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertEquals(sourceNode.getTimestampExtractor(), null);
+                assertNull(sourceNode.getTimestampExtractor());
             } else {
                 assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }

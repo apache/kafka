@@ -690,8 +690,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(2L));
     }
 
-    @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
+    private StreamThread setupStreamThread() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
@@ -717,15 +716,32 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertThat(thread.tasks().size(), equalTo(1));
+        return thread;
+    }
 
-        thread.rebalanceListener.onPartitionsRevoked(null);
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
+
         clientSupplier.producers.get(0).fenceProducer();
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        try {
-            thread.runOnce(-1);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
+        thread.rebalanceListener.onPartitionsRevoked(null);
 
+        assertTrue(clientSupplier.producers.get(0).transactionInFlight());
+        assertFalse(clientSupplier.producers.get(0).transactionCommitted());
+        assertTrue(clientSupplier.producers.get(0).closed());
+        assertTrue(thread.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCloseTransactionWhenSuspendingTaks() {
+        final StreamThread thread = setupStreamThread();
+
+        clientSupplier.producers.get(0).fenceProducerOnClose();
+        thread.rebalanceListener.onPartitionsRevoked(null);
+
+        assertFalse(clientSupplier.producers.get(0).transactionInFlight());
+        assertTrue(clientSupplier.producers.get(0).transactionCommitted());
+        assertFalse(clientSupplier.producers.get(0).closed());
         assertTrue(thread.tasks().isEmpty());
     }
 
@@ -862,7 +878,7 @@ public class StreamThreadTest {
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition2, 10L));
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition2, 0L));
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
         checkpoint.write(Collections.singletonMap(partition2, 5L));
 
         for (long i = 0L; i < 10L; i++) {
@@ -1302,14 +1318,14 @@ public class StreamThreadTest {
                 testMetricName,
                 new Measurable() {
                     @Override
-                    public double measure(MetricConfig config, long now) {
+                    public double measure(final MetricConfig config, final long now) {
                         return 0;
                     }
                 },
                 null,
                 new MockTime());
         producer.setMockMetrics(testMetricName, testMetric);
-        Map<MetricName, Metric> producerMetrics = thread.producerMetrics();
+        final Map<MetricName, Metric> producerMetrics = thread.producerMetrics();
         assertEquals(testMetricName, producerMetrics.get(testMetricName).metricName());
     }
 
@@ -1317,7 +1333,7 @@ public class StreamThreadTest {
     public void adminClientMetricsVerification() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
+        final List<Node> cluster = Arrays.asList(broker1, broker2);
 
         final MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
 
@@ -1346,7 +1362,7 @@ public class StreamThreadTest {
                 testMetricName,
                 new Measurable() {
                     @Override
-                    public double measure(MetricConfig config, long now) {
+                    public double measure(final MetricConfig config, final long now) {
                         return 0;
                     }
                 },
@@ -1359,7 +1375,7 @@ public class StreamThreadTest {
         EasyMock.replay(taskManager, consumer);
 
         adminClient.setMockMetrics(testMetricName, testMetric);
-        Map<MetricName, Metric> adminClientMetrics = thread.adminClientMetrics();
+        final Map<MetricName, Metric> adminClientMetrics = thread.adminClientMetrics();
         assertEquals(testMetricName, adminClientMetrics.get(testMetricName).metricName());
     }
 }
