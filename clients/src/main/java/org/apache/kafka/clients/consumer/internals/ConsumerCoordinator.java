@@ -286,7 +286,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         log.info("Setting newly assigned partitions {}", subscriptions.assignedPartitions());
         try {
-            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
+            Set<TopicPartition> assigned = subscriptions.assignedPartitions();
             listener.onPartitionsAssigned(assigned);
         } catch (WakeupException | InterruptException e) {
             throw e;
@@ -452,7 +452,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        Set<TopicPartition> revoked = subscriptions.assignedPartitions(); //this is a copy
+        Set<TopicPartition> revoked = subscriptions.assignedPartitions();
         log.info("Revoking previously assigned partitions {}", revoked);
         try {
             listener.onPartitionsRevoked(revoked);

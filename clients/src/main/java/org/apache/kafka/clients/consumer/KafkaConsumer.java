@@ -842,14 +842,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
      * process of getting reassigned).
-     * The returned collection is an unmodifiable view of the consumer state.
      * @return The set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
         acquireAndEnsureOpen();
         try {
-            //TODO - should we return a (modifiable?) copy here or can we ditch the lock ?
-            return this.subscriptions.assignedPartitions();
+            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
         } finally {
             release();
         }
