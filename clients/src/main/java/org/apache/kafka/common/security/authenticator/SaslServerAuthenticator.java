@@ -49,6 +49,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
+import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
@@ -267,11 +268,9 @@ public class SaslServerAuthenticator implements Authenticator {
                     default:
                         break;
                 }
-            } catch (SaslException | AuthenticationException e) {
+            } catch (AuthenticationException e) {
                 // Exception will be propagated after response is sent to client
-                AuthenticationException authException = (e instanceof AuthenticationException) ?
-                        (AuthenticationException) e : new AuthenticationException("SASL authentication failed", e);
-                setSaslState(SaslState.FAILED, authException);
+                setSaslState(SaslState.FAILED, e);
             } catch (Exception e) {
                 // In the case of IOExceptions and other unexpected exceptions, fail immediately
                 saslState = SaslState.FAILED;
@@ -378,12 +377,20 @@ public class SaslServerAuthenticator implements Authenticator {
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
                 ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
-            } catch (SaslAuthenticationException | SaslException e) {
-                String errorMessage = e instanceof SaslAuthenticationException ? e.getMessage() :
-                    "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
-                        errorMessage));
+            } catch (SaslAuthenticationException e) {
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
                 throw e;
+            } catch (SaslException e) {
+                KerberosError kerberosError = KerberosError.fromException(e);
+                if (kerberosError != null && kerberosError.retriable()) {
+                    // Handle retriable Kerberos exceptions as I/O exceptions rather than authentication exceptions
+                    throw e;
+                } else {
+                    String errorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
+                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
+                            errorMessage));
+                    throw new SaslAuthenticationException(errorMessage, e);
+                }
             }
         }
     }

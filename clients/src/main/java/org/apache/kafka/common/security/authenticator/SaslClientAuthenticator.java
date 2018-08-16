@@ -42,7 +42,7 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +52,6 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.Principal;
@@ -376,7 +375,7 @@ public class SaslClientAuthenticator implements Authenticator {
             Throwable cause = e.getCause();
             // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
             // and all other failures as fatal SaslAuthenticationException.
-            if (kerberosError != null && kerberosError.retriable)
+            if (kerberosError != null && kerberosError.retriable())
                 throw new SaslException(error, cause);
             else
                 throw new SaslAuthenticationException(error, cause);
@@ -443,73 +442,4 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    /**
-     * Kerberos exceptions that may require special handling. The standard Kerberos error codes
-     * for these errors are retrieved using KrbException#errorCode() from the underlying Kerberos
-     * exception thrown during {@link SaslClient#evaluateChallenge(byte[])}.
-     */
-    private enum KerberosError {
-        // (Mechanism level: Server not found in Kerberos database (7) - UNKNOWN_SERVER)
-        // This is retriable, but included here to add extra logging for this case.
-        SERVER_NOT_FOUND(7, false),
-        // (Mechanism level: Client not yet valid - try again later (21))
-        CLIENT_NOT_YET_VALID(21, true),
-        // (Mechanism level: Ticket not yet valid (33) - Ticket not yet valid)])
-        // This could be a small timing window.
-        TICKET_NOT_YET_VALID(33, true),
-        // (Mechanism level: Request is a replay (34) - Request is a replay)
-        // Replay detection used to prevent DoS attacks can result in false positives, so retry on error.
-        REPLAY(34, true);
-
-
-        private static final Class<?> KRB_EXCEPTION_CLASS;
-        private static final Method KRB_EXCEPTION_RETURN_CODE_METHOD;
-
-        static {
-            try {
-                if (Java.isIbmJdk()) {
-                    KRB_EXCEPTION_CLASS = Class.forName("com.ibm.security.krb5.internal.KrbException");
-                } else {
-                    KRB_EXCEPTION_CLASS = Class.forName("sun.security.krb5.KrbException");
-                }
-                KRB_EXCEPTION_RETURN_CODE_METHOD = KRB_EXCEPTION_CLASS.getMethod("returnCode");
-            } catch (Exception e) {
-                throw new KafkaException("Kerberos exceptions could not be initialized", e);
-            }
-        }
-
-        private final int errorCode;
-        private final boolean retriable;
-
-        KerberosError(int errorCode, boolean retriable) {
-            this.errorCode = errorCode;
-            this.retriable = retriable;
-        }
-
-        private static KerberosError fromException(Exception exception) {
-            Throwable cause = exception.getCause();
-            while (cause != null && !KRB_EXCEPTION_CLASS.isInstance(cause)) {
-                cause = cause.getCause();
-            }
-            if (cause == null)
-                return null;
-            else {
-                try {
-                    Integer errorCode = (Integer) KRB_EXCEPTION_RETURN_CODE_METHOD.invoke(cause);
-                    return fromErrorCode(errorCode);
-                } catch (Exception e) {
-                    LOG.trace("Kerberos return code could not be determined from {} due to {}", exception, e);
-                    return null;
-                }
-            }
-        }
-
-        private static KerberosError fromErrorCode(int errorCode) {
-            for (KerberosError error : values()) {
-                if (error.errorCode == errorCode)
-                    return error;
-            }
-            return null;
-        }
-    }
 }
