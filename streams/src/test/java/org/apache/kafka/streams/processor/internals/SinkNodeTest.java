@@ -37,20 +37,22 @@ import static org.junit.Assert.fail;
 public class SinkNodeTest {
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+    private final RecordCollector recordCollector =  new RecordCollectorImpl(
+        null,
+        new LogContext("sinknode-test "),
+        new DefaultProductionExceptionHandler(),
+        new Metrics().sensor("skipped-records")
+    );
+
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(
         anyStateSerde,
-        new RecordCollectorImpl(
-            new MockProducer<>(true, anySerializer, anySerializer),
-            null,
-            new LogContext("sinknode-test "),
-            new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
-        )
+        recordCollector
     );
     private final SinkNode sink = new SinkNode<>("anyNodeName", new StaticTopicNameExtractor("any-output-topic"), anySerializer, anySerializer, null);
 
     @Before
     public void before() {
+        recordCollector.init(new MockProducer<>(true, anySerializer, anySerializer));
         sink.init(context);
     }
 
