@@ -990,16 +990,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // check ratio and if greater than desired ratio, trigger a rebalance for the topic partitions
       // that need to be on this broker
       if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
-        topicsNotInPreferredReplica.keys.foreach { topicPartition =>
-          // do this check only if the broker is live and there are no partitions being reassigned currently
-          // and preferred replica election is not in progress
-          if (controllerContext.isReplicaOnline(leaderBroker, topicPartition) &&
-            controllerContext.partitionsBeingReassigned.isEmpty &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
-            controllerContext.allTopics.contains(topicPartition.topic)) {
-            onPreferredReplicaElection(Set(topicPartition), isTriggeredByAutoRebalance = true)
-          }
-        }
+        // do this check only if the broker is live and there are no partitions being reassigned currently
+        // and preferred replica election is not in progress
+        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContext.isReplicaOnline(leaderBroker, tp) &&
+          controllerContext.partitionsBeingReassigned.isEmpty &&
+          !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
+          controllerContext.allTopics.contains(tp.topic))
+        onPreferredReplicaElection(candidatePartitions.toSet, isTriggeredByAutoRebalance = true)
       }
     }
   }
