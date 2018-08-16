@@ -27,11 +27,11 @@ public class DLQTest {
     private static final Logger log = LoggerFactory.getLogger(DLQTest.class);
 
     @ClassRule
-    public static EmbeddedConnectCluster CONNECT = new EmbeddedConnectCluster();
+    public static EmbeddedConnectCluster connectCluster = new EmbeddedConnectCluster();
 
     @Test
     public void startConnect() {
-
+        
     }
 
 }
