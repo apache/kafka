@@ -96,7 +96,7 @@ public class AbstractStreamTest {
         assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);
     }
 
-    private class ExtendedKStream<K, V> extends AbstractStream<K> {
+    private class ExtendedKStream<K, V> extends AbstractStream<K, V> {
 
         ExtendedKStream(final KStream<K, V> stream) {
             super((KStreamImpl<K, V>) stream);
@@ -104,11 +104,11 @@ public class AbstractStreamTest {
 
         KStream<K, V> randomFilter() {
             final String name = builder.newProcessorName("RANDOM-FILTER-");
-            final ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
-                                                                            new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
-                                                                            false);
+            final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(name,
+                new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
+                false);
             builder.addGraphNode(this.streamsGraphNode, processorNode);
-            return new KStreamImpl<>(name, sourceNodes, false, processorNode, builder);
+            return new KStreamImpl<K, V>(name, null, null, sourceNodes, false, processorNode, builder);
         }
     }
 

@@ -77,19 +77,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private boolean sendOldValues = false;
 
-    public KTableImpl(final InternalStreamsBuilder builder,
-                      final String name,
-                      final ProcessorSupplier<?, ?> processorSupplier,
-                      final Set<String> sourceNodes,
-                      final String queryableStoreName,
-                      final boolean isQueryable,
-                      final StreamsGraphNode streamsGraphNode) {
-        super(name, , , sourceNodes, streamsGraphNode, builder);
-        this.processorSupplier = processorSupplier;
-        this.queryableStoreName = queryableStoreName;
-        this.isQueryable = isQueryable;
-    }
-
     public KTableImpl(final String name,
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
@@ -500,11 +487,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorGraphNode<K1, V1> groupByMapNode = new ProcessorGraphNode<>(
-            selectName,
-            processorParameters,
-            false
-        );
+        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters, false);
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
@@ -515,7 +498,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return new KGroupedTableImpl<>(
             builder,
             selectName,
-            this.name,
+            sourceNodes,
             serializedInternal.keySerde(),
             serializedInternal.valueSerde(),
             groupByMapNode

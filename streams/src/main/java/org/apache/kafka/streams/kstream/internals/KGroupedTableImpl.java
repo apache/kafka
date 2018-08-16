@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The implementation class of {@link KGroupedTable}.
@@ -55,11 +56,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
-                      final String sourceName,
+                      final Set<String> sourceNodes,
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, Collections.singleton(sourceName), streamsGraphNode, builder);
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
     }
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,

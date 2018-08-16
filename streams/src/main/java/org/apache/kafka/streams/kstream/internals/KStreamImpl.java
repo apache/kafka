@@ -441,7 +441,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         to(topicExtractor, new ProducedInternal<>(produced));
     }
 
-    @SuppressWarnings("unchecked")
     private void to(final TopicNameExtractor<K, V> topicExtractor, final ProducedInternal<K, V> produced) {
         final String name = builder.newProcessorName(SINK_NAME);
 

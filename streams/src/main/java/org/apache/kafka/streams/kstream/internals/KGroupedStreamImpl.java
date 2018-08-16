@@ -185,14 +185,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         );
     }
 
-    private <KR, T> KTable<KR, T> doAggregate(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
-                                              final String functionName,
-                                              final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier,
+                                         final String functionName,
+                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(
-            aggregateSupplier,
             functionName,
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
-            materializedInternal.isQueryable()
-        );
+            aggregateSupplier,
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde(),
+            materializedInternal.valueSerde());
     }
 }
