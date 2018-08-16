@@ -65,7 +65,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
     protected void before() throws IOException {
         kafkaCluster.before();
         start();
-        log.info("Started connect at {} with kafka cluster at {}", restUrl(), kafkaCluster().bootstrapServers());
+        log.info("Started connect at {} with kafka cluster at {}", restUrl(), kafka().bootstrapServers());
     }
 
     @Override
@@ -83,7 +83,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
 
     public void start() throws IOException {
         log.info("Starting standalone connect cluster..");
-        workerProps.put("bootstrap.servers", kafkaCluster().bootstrapServers());
+        workerProps.put("bootstrap.servers", kafka().bootstrapServers());
         workerProps.put("rest.host.name", "localhost");
 
         putIfAbsent(workerProps, "key.converter", "org.apache.kafka.connect.json.JsonConverter");
@@ -126,7 +126,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
         return advertisedUrl;
     }
 
-    public EmbeddedKafkaCluster kafkaCluster() {
+    public EmbeddedKafkaCluster kafka() {
         return kafkaCluster;
     }
 }
