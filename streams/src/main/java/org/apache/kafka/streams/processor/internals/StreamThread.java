@@ -433,7 +433,7 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                createProducer(taskId)
+                () -> createProducer(taskId)
             );
         }
 

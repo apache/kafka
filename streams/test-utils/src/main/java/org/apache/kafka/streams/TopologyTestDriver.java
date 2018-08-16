@@ -338,7 +338,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                producer);
+                () -> producer);
             task.initializeStateStores();
             task.initializeTopology();
             context = (InternalProcessorContext) task.context();
@@ -677,6 +677,10 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
+    }
+
+    private Producer<byte[], byte[]> get() {
+        return producer;
     }
 
     static class MockTime implements Time {

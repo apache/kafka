@@ -51,7 +51,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
     private final String logPrefix;
     private final Sensor skippedRecordsSensor;
-    private final Producer<byte[], byte[]> producer;
+    private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
 
@@ -61,17 +61,20 @@ public class RecordCollectorImpl implements RecordCollector {
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
     private volatile KafkaException sendException;
 
-    public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
-                               final String streamTaskId,
+    public RecordCollectorImpl(final String streamTaskId,
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler,
                                final Sensor skippedRecordsSensor) {
-        this.producer = producer;
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
         this.skippedRecordsSensor = skippedRecordsSensor;
+    }
+
+    @Override
+    public void init(final Producer<byte[], byte[]> producer) {
+        this.producer = producer;
     }
 
     @Override
@@ -247,6 +250,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         producer.close();
+        producer = null;
         checkForException();
     }
 
