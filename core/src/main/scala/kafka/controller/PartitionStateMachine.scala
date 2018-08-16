@@ -139,7 +139,7 @@ class PartitionStateMachine(config: KafkaConfig,
   }
 
   private def updateControllerMetrics(partition: TopicPartition, currentState: PartitionState, targetState: PartitionState) : Unit = {
-    if (!topicDeletionManager.isPartitionBeingDeleted(partition)) {
+    if (!topicDeletionManager.isTopicBeingDeleted(partition.topic)) {
       if (currentState != OfflinePartition && targetState == OfflinePartition) {
         offlinePartitionCount = offlinePartitionCount + 1
       } else if (currentState == OfflinePartition && targetState != OfflinePartition) {

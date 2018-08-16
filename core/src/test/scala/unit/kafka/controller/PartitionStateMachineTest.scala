@@ -358,7 +358,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     }
 
-    EasyMock.expect(mockTopicDeletionManager.isPartitionBeingDeleted(EasyMock.anyObject[TopicPartition])).andReturn(false)
+    EasyMock.expect(mockTopicDeletionManager.isTopicBeingDeleted(topic)).andReturn(false)
     EasyMock.expectLastCall().anyTimes()
     prepareMockToElectLeaderForPartitions(partitions)
     EasyMock.replay(mockZkClient, mockTopicDeletionManager)
@@ -372,7 +372,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   }
 
   /**
-    * This method tests if topic deletion is disabled, then changing partitions' state to OfflinePartition makes no change
+    * This method tests if a topic is being deleted, then changing partitions' state to OfflinePartition makes no change
     * to the offlinePartitionCount
     */
   @Test
@@ -381,7 +381,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val topic = "test"
     val partitions = partitionIds.map(new TopicPartition("test", _))
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicQueuedUpForDeletion(topic)).andReturn(true)
+    EasyMock.expect(mockTopicDeletionManager.isTopicBeingDeleted(topic)).andReturn(true)
     EasyMock.expectLastCall().anyTimes()
     EasyMock.replay(mockTopicDeletionManager)
 
