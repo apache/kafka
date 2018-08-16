@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 
 import java.time.Duration;
+import java.util.Objects;
 
 
 /**
@@ -111,7 +112,7 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than window gap.");
         }
 
-        return new SessionWindows(gapMs, durationMs, null);
+        return new SessionWindows(gapMs, durationMs, grace);
     }
 
     /**
@@ -168,4 +169,28 @@ public final class SessionWindows {
         return Math.max(maintainDurationMs, gapMs);
     }
 
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final SessionWindows that = (SessionWindows) o;
+        return gapMs == that.gapMs &&
+            maintainDurationMs == that.maintainDurationMs &&
+            Objects.equals(grace, that.grace);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(gapMs, maintainDurationMs, grace);
+    }
+
+    @Override
+    public String toString() {
+        return "SessionWindows{" +
+            "gapMs=" + gapMs +
+            ", maintainDurationMs=" + maintainDurationMs +
+            ", grace=" + grace +
+            '}';
+    }
 }

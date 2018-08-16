@@ -68,7 +68,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
-    private final Producer<byte[], byte[]> producer;
+    private final ProducerSupplier producerSupplier;
+    private Producer<byte[], byte[]> producer;
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
@@ -149,19 +150,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    public StreamTask(final TaskId id,
-                      final Collection<TopicPartition> partitions,
-                      final ProcessorTopology topology,
-                      final Consumer<byte[], byte[]> consumer,
-                      final ChangelogReader changelogReader,
-                      final StreamsConfig config,
-                      final StreamsMetricsImpl metrics,
-                      final StateDirectory stateDirectory,
-                      final ThreadCache cache,
-                      final Time time,
-                      final Producer<byte[], byte[]> producer,
-                      final Sensor closeSensor) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null, closeSensor);
+    public interface ProducerSupplier {
+        Producer<byte[], byte[]> get();
     }
 
     public StreamTask(final TaskId id,
@@ -174,13 +164,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final Producer<byte[], byte[]> producer,
+                      final ProducerSupplier producerSupplier,
+                      final Sensor closeSensor) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, closeSensor);
+    }
+
+    public StreamTask(final TaskId id,
+                      final Collection<TopicPartition> partitions,
+                      final ProcessorTopology topology,
+                      final Consumer<byte[], byte[]> consumer,
+                      final ChangelogReader changelogReader,
+                      final StreamsConfig config,
+                      final StreamsMetricsImpl metrics,
+                      final StateDirectory stateDirectory,
+                      final ThreadCache cache,
+                      final Time time,
+                      final ProducerSupplier producerSupplier,
                       final RecordCollector recordCollector,
                       final Sensor closeSensor) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
-        this.producer = producer;
+        this.producerSupplier = producerSupplier;
+        this.producer = producerSupplier.get();
         this.closeSensor = closeSensor;
         this.taskMetrics = new TaskMetrics(id, metrics);
 
@@ -188,7 +194,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         if (recordCollector == null) {
             this.recordCollector = new RecordCollectorImpl(
-                producer,
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
@@ -197,6 +202,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } else {
             this.recordCollector = recordCollector;
         }
+        this.recordCollector.init(this.producer);
+
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -279,8 +286,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void resume() {
-        // nothing to do; new transaction will be started only after topology is initialized
         log.debug("Resuming");
+        if (eosEnabled) {
+            if (producer != null) {
+                throw new IllegalStateException("Task producer should be null.");
+            }
+            producer = producerSupplier.get();
+            producer.initTransactions();
+            recordCollector.init(producer);
+        }
     }
 
     /**
@@ -525,7 +539,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void suspend() {
         log.debug("Suspending");
-        suspend(true);
+        suspend(true, false);
     }
 
     /**
@@ -541,10 +555,64 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void suspend(final boolean clean) {
-        closeTopology(); // should we call this only on clean suspend?
+    void suspend(final boolean clean,
+                 final boolean isZombie) {
+        try {
+            closeTopology(); // should we call this only on clean suspend?
+        } catch (final RuntimeException fatal) {
+            if (clean) {
+                throw fatal;
+            }
+        }
+
         if (clean) {
-            commit(false);
+            TaskMigratedException taskMigratedException = null;
+            try {
+                commit(false);
+            } finally {
+                if (eosEnabled) {
+                    try {
+                        recordCollector.close();
+                    } catch (final ProducerFencedException e) {
+                        taskMigratedException = new TaskMigratedException(this, e);
+                    } finally {
+                        producer = null;
+                    }
+                }
+            }
+            if (taskMigratedException != null) {
+                throw taskMigratedException;
+            }
+        } else {
+            maybeAbortTransactionAndCloseRecordCollector(isZombie);
+        }
+    }
+
+    private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
+        if (eosEnabled && !isZombie) {
+            try {
+                if (transactionInFlight) {
+                    producer.abortTransaction();
+                }
+                transactionInFlight = false;
+            } catch (final ProducerFencedException ignore) {
+                /* TODO
+                 * this should actually never happen atm as we guard the call to #abortTransaction
+                 * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
+                 * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
+                 * fixed and fall-back to this catch-and-swallow code
+                 */
+
+                // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+            }
+
+            try {
+                recordCollector.close();
+            } catch (final Throwable e) {
+                log.error("Failed to close producer due to the following error:", e);
+            } finally {
+                producer = null;
+            }
         }
     }
 
@@ -589,37 +657,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("Could not close state manager due to the following error:", e);
         }
 
-        try {
-            partitionGroup.close();
-            taskMetrics.removeAllSensors();
-        } finally {
-            if (eosEnabled) {
-                if (!clean) {
-                    try {
-                        if (!isZombie && transactionInFlight) {
-                            producer.abortTransaction();
-                        }
-                        transactionInFlight = false;
-                    } catch (final ProducerFencedException ignore) {
-                        /* TODO
-                         * this should actually never happen atm as we guard the call to #abortTransaction
-                         * -> the reason for the guard is a "bug" in the Producer -- it throws IllegalStateException
-                         * instead of ProducerFencedException atm. We can remove the isZombie flag after KAFKA-5604 got
-                         * fixed and fall-back to this catch-and-swallow code
-                         */
-
-                        // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
-                    }
-                }
-                try {
-                    if (!isZombie) {
-                        recordCollector.close();
-                    }
-                } catch (final Throwable e) {
-                    log.error("Failed to close producer due to the following error:", e);
-                }
-            }
-        }
+        partitionGroup.close();
+        taskMetrics.removeAllSensors();
 
         closeSensor.record();
 
@@ -630,7 +669,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     /**
      * <pre>
-     * - {@link #suspend(boolean) suspend(clean)}
+     * - {@link #suspend(boolean, boolean) suspend(clean)}
      *   - close topology
      *   - if (clean) {@link #commit()}
      *     - flush state and producer
@@ -653,7 +692,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         RuntimeException firstException = null;
         try {
-            suspend(clean);
+            suspend(clean, isZombie);
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;

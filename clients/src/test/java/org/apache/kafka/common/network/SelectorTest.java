@@ -418,7 +418,9 @@ public class SelectorTest {
             selector.mute(id);
             for (int i = 0; i <= maxStagedReceives; i++) {
                 selector.send(createSend(id, String.valueOf(i)));
-                selector.poll(1000);
+                do {
+                    selector.poll(1000);
+                } while (selector.completedSends().isEmpty());
             }
 
             selector.unmute(id);
