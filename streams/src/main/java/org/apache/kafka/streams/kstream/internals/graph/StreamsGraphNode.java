@@ -140,6 +140,8 @@ public abstract class StreamsGraphNode {
         return "StreamsGraphNode{" +
                "nodeName='" + nodeName + '\'' +
                ", buildPriority=" + buildPriority +
-               " parentNodes=" + Arrays.toString(parentNames) + '}';
+               ", valueChangingOperation=" + valueChangingOperation +
+               ", mergeNode=" + mergeNode +
+               ", parentNodes=" + Arrays.toString(parentNames) + '}';
     }
 }
