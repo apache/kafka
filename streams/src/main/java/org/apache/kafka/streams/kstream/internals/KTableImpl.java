@@ -48,7 +48,7 @@ import java.util.Set;
  * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
-public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
+public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<K, V> {
 
     static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
@@ -76,8 +76,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private final boolean isQueryable;
 
     private boolean sendOldValues = false;
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
 
     public KTableImpl(final InternalStreamsBuilder builder,
                       final String name,
@@ -86,28 +84,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final String queryableStoreName,
                       final boolean isQueryable,
                       final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
+        super(name, , , sourceNodes, streamsGraphNode, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
-        this.keySerde = null;
-        this.valSerde = null;
         this.isQueryable = isQueryable;
     }
 
-    public KTableImpl(final InternalStreamsBuilder builder,
-                      final String name,
-                      final ProcessorSupplier<?, ?> processorSupplier,
+    public KTableImpl(final String name,
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
                       final boolean isQueryable,
-                      final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
+                      final ProcessorSupplier<?, ?> processorSupplier,
+                      final StreamsGraphNode streamsGraphNode,
+                      final InternalStreamsBuilder builder) {
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.isQueryable = isQueryable;
     }
 
@@ -150,15 +144,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
 
         return new KTableImpl<>(
-            builder,
-            name,
-            processorSupplier,
-            this.keySerde,
-            this.valSerde,
-            sourceNodes,
-            shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
-            shouldMaterialize,
-            tableNode
+            name, this.keySerde, this.valSerde, sourceNodes, shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName, shouldMaterialize, processorSupplier, tableNode, builder
         );
     }
 
@@ -224,13 +210,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(
-            builder,
             name,
-            processorSupplier,
+            keySerde,
+            null,           // value serdes cannot be inherited
             sourceNodes,
             shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
             shouldMaterialize,
-            tableNode
+            processorSupplier,
+            tableNode,
+            builder
         );
     }
 
@@ -315,13 +303,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(
-            builder,
             name,
-            processorSupplier,
+            materialized != null ? materialized.keySerde() : null,
+            materialized != null ? materialized.valueSerde() : null,
             sourceNodes,
             shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
             shouldMaterialize,
-            tableNode);
+            processorSupplier,
+            tableNode,
+            builder);
     }
 
     @Override
@@ -341,7 +331,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         builder.addGraphNode(this.streamsGraphNode, toStreamNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, false, toStreamNode);
+        return new KStreamImpl<>(name, keySerde, valSerde, sourceNodes, false, toStreamNode, builder);
     }
 
     @Override
@@ -412,7 +402,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
 
         return buildJoin(
-            (AbstractStream<K>) other,
+            (AbstractStream<K, VO>) other,
             joiner,
             leftOuter,
             rightOuter,
@@ -422,8 +412,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private <V1, R> KTable<K, R> buildJoin(final AbstractStream<K> other,
+    private <V1, R> KTable<K, R> buildJoin(final AbstractStream<K, V1> other,
                                            final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                            final boolean leftOuter,
                                            final boolean rightOuter,
@@ -457,29 +446,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
         }
 
-        final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-            new KTableImpl<K, V, R>(
-                builder,
-                joinThisName,
-                joinThis,
-                sourceNodes,
-                this.queryableStoreName,
-                false,
-                null
-            ),
-            new KTableImpl<K, V1, R>(
-                builder,
-                joinOtherName,
-                joinOther,
-                ((KTableImpl<K, ?, ?>) other).sourceNodes,
-                ((KTableImpl<K, ?, ?>) other).queryableStoreName,
-                false,
-                null
-            ),
-            internalQueryableName
-        );
+        final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(joinThis, joinOther, internalQueryableName);
 
-        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
+        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, Change<V>, Change<V1>, Change<R>> kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
 
         // only materialize if specified in Materialized
         if (materializedInternal != null) {
@@ -487,9 +456,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
         kTableJoinNodeBuilder.withNodeName(joinMergeName);
 
-        final ProcessorParameters joinThisProcessorParameters = new ProcessorParameters(joinThis, joinThisName);
-        final ProcessorParameters joinOtherProcessorParameters = new ProcessorParameters(joinOther, joinOtherName);
-        final ProcessorParameters joinMergeProcessorParameters = new ProcessorParameters(joinMerge, joinMergeName);
+        final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K, Change<V1>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K, Change<R>> joinMergeProcessorParameters = new ProcessorParameters<>(joinMerge, joinMergeName);
 
         kTableJoinNodeBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParameters)
             .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
@@ -499,17 +468,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             .withOtherJoinSideNodeName(((KTableImpl) other).name)
             .withThisJoinSideNodeName(name);
 
-        final KTableKTableJoinNode kTableKTableJoinNode = kTableJoinNodeBuilder.build();
+        final KTableKTableJoinNode<K, Change<V>, Change<V1>, Change<R>> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
-        return new KTableImpl<>(
-            builder,
+        return new KTableImpl<K, Change<R>, R>(
             joinMergeName,
-            joinMerge,
+            materializedInternal != null ? materializedInternal.keySerde() : null,
+            materializedInternal != null ? materializedInternal.valueSerde() : null,
             allSourceNodes,
             internalQueryableName,
             internalQueryableName != null,
-            kTableKTableJoinNode
+            joinMerge,
+            kTableKTableJoinNode,
+            builder
         );
     }
 
@@ -526,7 +497,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final String selectName = builder.newProcessorName(SELECT_NAME);
 
         final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
+        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
         final ProcessorGraphNode<K1, V1> groupByMapNode = new ProcessorGraphNode<>(
@@ -538,7 +509,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
         this.enableSendingOldValues();
+
         final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
+
         return new KGroupedTableImpl<>(
             builder,
             selectName,

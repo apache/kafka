@@ -40,10 +40,8 @@ import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
-public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implements SessionWindowedKStream<K, V> {
+public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> implements SessionWindowedKStream<K, V> {
     private final SessionWindows windows;
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Merger<K, Long> countMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
 
@@ -55,11 +53,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                final Serde<V> valSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.aggregateBuilder = aggregateBuilder;
     }
 

@@ -108,7 +108,7 @@ public class AbstractStreamTest {
                                                                             new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
                                                                             false);
             builder.addGraphNode(this.streamsGraphNode, processorNode);
-            return new KStreamImpl<>(builder, name, sourceNodes, false, processorNode);
+            return new KStreamImpl<>(name, sourceNodes, false, processorNode, builder);
         }
     }
 
