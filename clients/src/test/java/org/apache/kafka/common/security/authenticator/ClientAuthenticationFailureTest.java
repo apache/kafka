@@ -73,7 +73,7 @@ public class ClientAuthenticationFailureTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         values.add(new Object[]{0});
-        values.add(new Object[]{500});
+        values.add(new Object[]{200});
         return values;
     }
 

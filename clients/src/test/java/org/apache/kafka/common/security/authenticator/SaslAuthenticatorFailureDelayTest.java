@@ -81,7 +81,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(value = Parameterized.class)
 public class SaslAuthenticatorFailureDelayTest {
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static MockTime time = new MockTime();
+    private static MockTime time = new MockTime(20);
 
     private NioEchoServer server;
     private Selector selector;
