@@ -140,6 +140,8 @@ public abstract class StreamsGraphNode {
         return "StreamsGraphNode{" +
                "nodeName='" + nodeName + '\'' +
                ", buildPriority=" + buildPriority +
+               ", repartitionRequired=" + repartitionRequired +
+               ", hasWrittenToTopology=" + hasWrittenToTopology +
                ", keyChangingOperation=" + keyChangingOperation +
                ", valueChangingOperation=" + valueChangingOperation +
                ", mergeNode=" + mergeNode +
