@@ -452,7 +452,7 @@ class WorkerSinkTask extends WorkerTask {
         
         for (Entry<String, String> connectorProp : taskConfig.entrySet()) {
             if (connectorProp.getKey().startsWith("consumer.")) {
-                props.put(connectorProp.getKey().substring(9), connectorProp.getValue());
+                props.put(connectorProp.getKey().substring("consumer.".length()), connectorProp.getValue());
             }
         }
 
