@@ -46,12 +46,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import kafka.api.Request;
 import kafka.server.KafkaServer;
@@ -370,19 +369,25 @@ public class IntegrationTestUtils {
                         readKeyValues(topic, consumer, waitTime, expectedRecords.size());
                 accumData.addAll(readData);
 
-                final Map<K, List<V>> finalData = new HashMap<>();
+                final int accumLastIndex = accumData.size() - 1;
+                final int expectedLastIndex = expectedRecords.size() - 1;
 
-                for (final KeyValue<K, V> keyValue : accumData) {
-                    final List<V> keyData = finalData.computeIfAbsent(keyValue.key, k -> new ArrayList<>());
-                    keyData.add(keyValue.value);
-                }
+                final int startIndex = accumData.indexOf(expectedRecords.get(0));
 
-                for (final KeyValue<K, V> keyValue : expectedRecords) {
-                    if (!finalData.get(keyValue.key).contains(keyValue.value))
-                        return false;
-                }
+                // we can ignore records that arrive before our first expected value
+                final List<KeyValue<K, V>> accumDataSubList = accumData.subList(startIndex, accumData.size());
 
-                return true;
+                // filter out all intermediate records we don't want
+                final List<KeyValue<K, V>> accumulatedActual = accumDataSubList.stream().filter(expectedRecords::contains).collect(Collectors.toList());
+
+                // need this check as filtering above could have removed the last record from accumData, but it did not
+                // equal the last expected record
+                final boolean lastRecordsMatch = accumData.get(accumLastIndex).equals(expectedRecords.get(expectedLastIndex));
+
+                // returns true only if the remaining records in both lists are the same and in the same order
+                // and the last record received matches the last expected record
+                return accumulatedActual.equals(expectedRecords) && lastRecordsMatch;
+
             };
             final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
