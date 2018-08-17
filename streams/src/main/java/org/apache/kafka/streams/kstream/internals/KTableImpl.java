@@ -129,10 +129,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-
-        return new KTableImpl<>(
-            name, this.keySerde, this.valSerde, sourceNodes, shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName, shouldMaterialize, processorSupplier, tableNode, builder
-        );
+        return new KTableImpl<>(name,
+                                keySerde,
+                                valSerde,
+                                sourceNodes,
+                                shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
+                                shouldMaterialize,
+                                processorSupplier,
+                                tableNode,
+                                builder);
     }
 
     @Override

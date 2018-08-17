@@ -132,8 +132,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         addGraphNode(root, tableSourceNode);
 
-        return new KTableImpl<>(name, consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeBuilder.name(), materialized.isQueryable(), processorSupplier, tableSourceNode, this
-        );
+        return new KTableImpl<>(name,
+                                consumed.keySerde(),
+                                consumed.valueSerde(),
+                                Collections.singleton(source),
+                                storeBuilder.name(),
+                                materialized.isQueryable(),
+                                processorSupplier,
+                                tableSourceNode,
+                                this);
     }
 
     @SuppressWarnings("unchecked")

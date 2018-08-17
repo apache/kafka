@@ -124,7 +124,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
         return aggregateBuilder.build(
             REDUCE_NAME,
-            materialize(materializedInternal), new KStreamSessionWindowAggregate<>(
+            materialize(materializedInternal),
+            new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
                 aggregateBuilder.reduceInitializer,
