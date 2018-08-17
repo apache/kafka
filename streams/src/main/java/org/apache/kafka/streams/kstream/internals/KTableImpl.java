@@ -129,9 +129,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // we preserve the key following the order of 1) materialized, 2) parent
+        // we preserve the value following the order of 1) materialized, 2) parent
         return new KTableImpl<>(name,
-                                keySerde,
-                                valSerde,
+                                materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
+                                materializedInternal != null && materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : valSerde,
                                 sourceNodes,
                                 shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
                                 shouldMaterialize,
@@ -201,10 +203,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // we preserve the key following the order of 1) materialized, 2) parent, 3) null
+        // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
             name,
-            keySerde,
-            null,           // value serdes cannot be inherited
+            materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
+            materializedInternal != null ? materializedInternal.valueSerde() : null,
             sourceNodes,
             shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
             shouldMaterialize,
@@ -294,9 +298,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // we preserve the key following the order of 1) materialized, 2) parent, 3) null
+        // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
             name,
-            materialized != null ? materialized.keySerde() : null,
+            materialized != null && materialized.keySerde() != null ? materialized.keySerde() : keySerde,
             materialized != null ? materialized.valueSerde() : null,
             sourceNodes,
             shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
