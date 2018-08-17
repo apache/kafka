@@ -372,13 +372,8 @@ public class IntegrationTestUtils {
                 final int accumLastIndex = accumData.size() - 1;
                 final int expectedLastIndex = expectedRecords.size() - 1;
 
-                final int startIndex = accumData.indexOf(expectedRecords.get(0));
-
-                // we can ignore records that arrive before our first expected value
-                final List<KeyValue<K, V>> accumDataSubList = accumData.subList(startIndex, accumData.size());
-
                 // filter out all intermediate records we don't want
-                final List<KeyValue<K, V>> accumulatedActual = accumDataSubList.stream().filter(expectedRecords::contains).collect(Collectors.toList());
+                final List<KeyValue<K, V>> accumulatedActual = accumData.stream().filter(expectedRecords::contains).collect(Collectors.toList());
 
                 // need this check as filtering above could have removed the last record from accumData, but it did not
                 // equal the last expected record
