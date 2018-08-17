@@ -53,7 +53,7 @@ import static org.junit.Assert.assertFalse;
 public class StreamsBuilderTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
@@ -61,7 +61,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
@@ -75,7 +75,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
@@ -88,7 +88,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
@@ -102,7 +102,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
@@ -116,7 +116,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER), MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), equalTo(Utils.mkSet(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
@@ -130,7 +130,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.as("store")), MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(3));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), equalTo(Collections.singleton("store")));
@@ -143,7 +143,7 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
         assertThat(topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
@@ -284,11 +284,11 @@ public class StreamsBuilderTest {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
         final Topology topology = builder.build();
-        final Properties props = StreamsTestUtils.minimalStreamsConfig();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.adjust(new StreamsConfig(props));
+        internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
 
         assertThat(internalTopologyBuilder.build().storeToChangelogTopic(), equalTo(Collections.singletonMap("store", "topic")));
 

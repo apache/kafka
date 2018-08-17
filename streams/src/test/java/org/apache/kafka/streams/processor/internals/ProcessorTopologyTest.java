@@ -102,8 +102,6 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testTopologyMetadata() {
-        topology.setApplicationId("X");
-
         topology.addSource("source-1", "topic-1");
         topology.addSource("source-2", "topic-2", "topic-3");
         topology.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
@@ -111,7 +109,7 @@ public class ProcessorTopologyTest {
         topology.addSink("sink-1", "topic-3", "processor-1");
         topology.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").build();
 
         assertEquals(6, processorTopology.processors().size());
 
