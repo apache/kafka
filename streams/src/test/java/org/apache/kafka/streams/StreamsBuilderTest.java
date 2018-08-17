@@ -59,9 +59,6 @@ public class StreamsBuilderTest {
     public void shouldNotThrowNullPointerIfOptimizationsNotSpecified() {
         final Properties properties = new Properties();
 
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost");
-
         final StreamsBuilder builder = new StreamsBuilder();
         builder.build(properties);
     }

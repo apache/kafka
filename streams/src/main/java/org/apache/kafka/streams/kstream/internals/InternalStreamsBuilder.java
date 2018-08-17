@@ -292,9 +292,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void maybePerformOptimizations(final Properties props) {
 
-        final StreamsConfig config = props != null ? new StreamsConfig(props) : null;
-
-        if (config != null && config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE)) {
+        if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION))) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             maybeOptimizeRepartitionOperations();
         }
