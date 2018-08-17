@@ -17,11 +17,16 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.util.MonitorableSinkConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class DLQTest {
 
@@ -31,7 +36,7 @@ public class DLQTest {
     public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster();
 
     @Test
-    public void startConnect() {
+    public void startConnect() throws InterruptedException {
         // create test topic
         connect.kafka().createTopic("test-topic");
 
@@ -46,5 +51,23 @@ public class DLQTest {
         for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consumeNRecords(2000, 5000, "test-topic")) {
             log.info("Consumed record ({}, {}) from topic {}", recs.key(), new String(recs.value()), recs.topic());
         }
+
+        log.info("Connect endpoint: {}", connect.restUrl());
+
+        Map<String, String> confs = new HashMap<>();
+        confs.put("connector.class", "MonitorableSink");
+        confs.put("task.max", "2");
+        confs.put("topics", "test-topic");
+        confs.put("key.converter", StringConverter.class.getName());
+        confs.put("value.converter", StringConverter.class.getName());
+
+        connect.startConnector("simple-conn", confs);
+
+        while (MonitorableSinkConnector.COUNTER.get() < 2000) {
+            Thread.sleep(500);
+        }
+
+        log.info("Connector read {} records from topic", MonitorableSinkConnector.COUNTER.get());
+        connect.deleteConnector("simple-conn");
     }
 }

@@ -18,13 +18,16 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -36,6 +39,9 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class EmbeddedConnectCluster extends ExternalResource {
 
@@ -51,6 +57,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
     private File offsetsDirectory;
     private Connect connect;
     private URI advertisedUrl;
+    private Herder herder;
 
     public EmbeddedConnectCluster() {
         // this empty map will be populated with defaults before starting Connect.
@@ -106,8 +113,30 @@ public class EmbeddedConnectCluster extends ExternalResource {
 
         Worker worker = new Worker(workerId, kafkaCluster.time(), plugins, config, new FileOffsetBackingStore());
 
-        connect = new Connect(new StandaloneHerder(worker, ConnectUtils.lookupKafkaClusterId(config)), rest);
+        herder = new StandaloneHerder(worker, ConnectUtils.lookupKafkaClusterId(config));
+        connect = new Connect(herder, rest);
         connect.start();
+    }
+
+    public void startConnector(String connName, Map<String, String> connConfig) {
+        connConfig.put("name", connName);
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        herder.putConnectorConfig(connName, connConfig, true, cb);
+        try {
+            cb.get(60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void deleteConnector(String connName) {
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        herder.deleteConnectorConfig(connName, cb);
+        try {
+            cb.get(60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void putIfAbsent(Map<String, String> props, String propertyKey, String propertyValue) {
