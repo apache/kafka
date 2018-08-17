@@ -113,7 +113,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
           val disconnectState = selector.disconnected().get(nodeId)
           // Verify that disconnect state is not AUTHENTICATION_FAILED
           if (disconnectState != null)
-            assertEquals(ChannelState.State.AUTHENTICATE, disconnectState.state())
+            assertEquals(s"Authentication failed with exception ${disconnectState.exception()}",
+              ChannelState.State.AUTHENTICATE, disconnectState.state())
           selector.isChannelReady(nodeId) || disconnectState != null
         }, "Client not ready or disconnected within timeout")
         if (selector.isChannelReady(nodeId))
