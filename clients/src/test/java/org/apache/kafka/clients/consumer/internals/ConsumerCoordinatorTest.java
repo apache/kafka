@@ -2188,13 +2188,13 @@ public class ConsumerCoordinatorTest {
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            this.assigned = new HashSet<>(partitions);
+            this.assigned = partitions;
             assignedCount++;
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            this.revoked = new HashSet<>(partitions);
+            this.revoked = partitions;
             revokedCount++;
         }
 
