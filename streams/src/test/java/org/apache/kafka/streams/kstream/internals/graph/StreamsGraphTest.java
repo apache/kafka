@@ -97,6 +97,8 @@ public class StreamsGraphTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
 
         final KStream<String, String> inputStream = builder.stream("input");
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
@@ -113,6 +115,8 @@ public class StreamsGraphTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
 
         final KStream<String, String> inputStream = builder.stream("input");
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
