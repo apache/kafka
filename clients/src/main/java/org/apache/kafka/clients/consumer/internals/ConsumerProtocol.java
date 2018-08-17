@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -107,16 +106,7 @@ public class ConsumerProtocol {
         checkVersionCompatibility(version);
         Struct struct = ASSIGNMENT_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
-            }
-        }
-        return new PartitionAssignor.Assignment(partitions, userData);
+        return new PartitionAssignor.Assignment(CollectionUtils.getTopicPartitionFromStruct(struct, TOPIC_PARTITIONS_KEY_NAME), userData);
     }
 
     public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
