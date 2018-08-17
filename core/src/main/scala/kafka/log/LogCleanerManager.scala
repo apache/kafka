@@ -61,7 +61,8 @@ private[log] class LogCleaningException(val log: Log,
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
-                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+                                     val logDirFailureChannel: LogDirFailureChannel,
+                                     val retentionCheckMs: Long) extends Logging with KafkaMetricsGroup {
   import LogCleanerManager._
 
 
@@ -86,6 +87,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
+
+  /* last time the cleaner threads check logs for retention*/
+  private var lastRetentionCheckTime: Long = Time.SYSTEM.milliseconds()
 
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
@@ -246,12 +250,17 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     */
   def deletableLogs(): Iterable[(TopicPartition, Log)] = {
     inLock(lock) {
-      val toClean = logs.filter { case (topicPartition, log) =>
-        !inProgress.contains(topicPartition) && log.config.compact &&
-          !isUncleanablePartition(log, topicPartition)
+      val now = Time.SYSTEM.milliseconds()
+      if (now - lastRetentionCheckTime >= retentionCheckMs) {
+        lastRetentionCheckTime = now
+        val toClean = logs.filter { case (topicPartition, log) =>
+          !inProgress.contains(topicPartition) && log.config.compact && !isUncleanablePartition(log, topicPartition)
+        }
+        toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
+        toClean
       }
-      toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
-      toClean
+      else
+        Iterable.empty
     }
 
   }
@@ -507,6 +516,7 @@ private case class OffsetsToClean(firstDirtyOffset: Long,
 
 private[log] object LogCleanerManager extends Logging {
 
+
   def isCompactAndDelete(log: Log): Boolean = {
     log.config.compact && log.config.delete
   }
@@ -550,9 +560,7 @@ private[log] object LogCleanerManager extends Logging {
       val checkpointDirtyOffset = lastCleanOffset.getOrElse(logStartOffset)
 
       if (checkpointDirtyOffset < logStartOffset) {
-        // Don't bother with the warning if compact and delete are enabled.
-        if (!isCompactAndDelete(log))
-          warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset " +
+        debug(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset " +
             s"since the checkpointed offset $checkpointDirtyOffset is invalid.")
         (logStartOffset, true)
       } else if (checkpointDirtyOffset > log.logEndOffset) {

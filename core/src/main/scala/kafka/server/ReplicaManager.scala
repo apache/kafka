@@ -586,7 +586,6 @@ class ReplicaManager(val config: KafkaConfig,
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderForPartitionException |
                    _: OffsetOutOfRangeException |
-                   _: PolicyViolationException |
                    _: KafkaStorageException) =>
             (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
           case t: Throwable =>
