@@ -1562,7 +1562,8 @@ class Log(@volatile private var _dir: File,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
+      nextSegmentOpt.exists(_.baseOffset <= logStartOffset) ||
+        (nextSegmentOpt.isEmpty && logEndOffset == logStartOffset)
     }
 
     deleteOldSegments(shouldDelete, StartOffsetBreach)

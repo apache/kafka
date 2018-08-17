@@ -484,7 +484,7 @@ class LogManager(logDirs: Seq[File],
                          unit = TimeUnit.MILLISECONDS)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, retentionCheckMs, time = time)
       _cleaner.startup()
     }
   }

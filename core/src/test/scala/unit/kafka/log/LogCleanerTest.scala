@@ -1725,6 +1725,7 @@ class LogCleanerTest {
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, Log](),
       logDirFailureChannel = new LogDirFailureChannel(1),
+      0L,
       time = time)
 
     def checkGauge(name: String): Unit = {
