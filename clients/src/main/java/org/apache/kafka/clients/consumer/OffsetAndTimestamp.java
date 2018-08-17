@@ -52,7 +52,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || !(o instanceof OffsetAndTimestamp))
+        if (!(o instanceof OffsetAndTimestamp))
             return false;
         OffsetAndTimestamp other = (OffsetAndTimestamp) o;
         return this.timestamp == other.timestamp() && this.offset == other.offset();

@@ -679,11 +679,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         info.leader(), tp);
             } else {
                 Node node = info.leader();
-                Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
-                if (topicData == null) {
-                    topicData = new HashMap<>();
-                    timestampsToSearchByNode.put(node, topicData);
-                }
+                Map<TopicPartition, Long> topicData = timestampsToSearchByNode.computeIfAbsent(node, k -> new HashMap<>());
                 topicData.put(entry.getKey(), entry.getValue());
             }
         }
@@ -1205,12 +1201,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
                     partition.abortedTransactions.size(),
-                    new Comparator<FetchResponse.AbortedTransaction>() {
-                        @Override
-                        public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
-                            return Long.compare(o1.firstOffset, o2.firstOffset);
-                        }
-                    }
+                    Comparator.comparingLong(o -> o.firstOffset)
             );
             abortedTransactions.addAll(partition.abortedTransactions);
             return abortedTransactions;

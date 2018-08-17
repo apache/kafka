@@ -197,6 +197,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
 
+    @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
@@ -458,17 +459,16 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (!hasIdenticalListElements(partition2AllPotentialConsumers.values()))
             return false;
 
-        if (!hasIdenticalListElements(consumer2AllPotentialPartitions.values()))
-            return false;
-
-        return true;
+        return hasIdenticalListElements(consumer2AllPotentialPartitions.values());
     }
 
     /**
-     * @return the consumer to which the given partition is assigned. The assignment should improve the overall balance
+     * TODO: return value
+     * If it necessary, then return. The return value of this method is never used so far, so remove it.
+     * Return the consumer to which the given partition is assigned. The assignment should improve the overall balance
      * of the partition assignments to consumers.
      */
-    private String assignPartition(TopicPartition partition,
+    private void assignPartition(TopicPartition partition,
                                    TreeSet<String> sortedCurrentSubscriptions,
                                    Map<String, List<TopicPartition>> currentAssignment,
                                    Map<String, List<TopicPartition>> consumer2AllPotentialPartitions,
@@ -479,10 +479,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 currentAssignment.get(consumer).add(partition);
                 currentPartitionConsumer.put(partition, consumer);
                 sortedCurrentSubscriptions.add(consumer);
-                return consumer;
             }
         }
-        return null;
     }
 
     private boolean canParticipateInReassignment(TopicPartition partition,
@@ -525,7 +523,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                          Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
                          Map<TopicPartition, String> currentPartitionConsumer) {
         boolean initializing = currentAssignment.get(sortedCurrentSubscriptions.last()).isEmpty();
-        boolean reassignmentPerformed = false;
+        boolean reassignmentPerformed;
 
         // assign all unassigned partitions
         for (TopicPartition partition: unassignedPartitions) {
@@ -641,8 +639,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // find the correct partition movement considering the stickiness requirement
         TopicPartition partitionToBeMoved = partitionMovements.getTheActualPartitionToBeMoved(partition, consumer, newConsumer);
         processPartitionMovement(partitionToBeMoved, newConsumer, currentAssignment, sortedCurrentSubscriptions, currentPartitionConsumer);
-
-        return;
     }
 
     private void processPartitionMovement(TopicPartition partition,
@@ -915,6 +911,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             this.dstMemberId = dstMemberId;
         }
 
+        @Override
         public String toString() {
             return this.srcMemberId + "->" + this.dstMemberId;
         }

@@ -106,6 +106,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
                 Iterator<ConsumerRecord<K, V>> current;
 
+                @Override
                 public ConsumerRecord<K, V> makeNext() {
                     while (current == null || !current.hasNext()) {
                         if (iters.hasNext())

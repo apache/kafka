@@ -51,11 +51,7 @@ public final class CollectionUtils {
         for (Map.Entry<TopicPartition, ? extends T> entry: data.entrySet()) {
             String topic = entry.getKey().topic();
             int partition = entry.getKey().partition();
-            Map<Integer, T> topicData = dataByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new HashMap<>();
-                dataByTopic.put(topic, topicData);
-            }
+            Map<Integer, T> topicData = dataByTopic.computeIfAbsent(topic, k -> new HashMap<>());
             topicData.put(partition, entry.getValue());
         }
         return dataByTopic;
@@ -70,11 +66,7 @@ public final class CollectionUtils {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp: partitions) {
             String topic = tp.topic();
-            List<Integer> topicData = partitionsByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new ArrayList<>();
-                partitionsByTopic.put(topic, topicData);
-            }
+            List<Integer> topicData = partitionsByTopic.computeIfAbsent(topic, k -> new ArrayList<>());
             topicData.add(tp.partition());
         }
         return  partitionsByTopic;
