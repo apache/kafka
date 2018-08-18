@@ -239,7 +239,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     try {
-      produceMessage(servers, topic, "third")
+      produceMessage(servers, topic, "third", deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
       fail("Message produced while leader is down should fail, but it succeeded")
     } catch {
       case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
@@ -318,7 +318,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     try {
-      produceMessage(servers, topic, "third")
+      produceMessage(servers, topic, "third", deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
       fail("Message produced while leader is down should fail, but it succeeded")
     } catch {
       case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
@@ -330,7 +330,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val adminClient = createAdminClient()
     val newProps = new Properties
     newProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
-    TestUtils.alterTopicConfigs(topic, adminClient, newProps).all.get
+    TestUtils.alterTopicConfigs(adminClient, topic, newProps).all.get
     adminClient.close()
 
     // wait until new leader is (uncleanly) elected
