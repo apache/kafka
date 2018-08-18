@@ -239,7 +239,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
       fail("Message produced while leader is down should fail, but it succeeded")
     } catch {
       case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
@@ -318,7 +318,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
       fail("Message produced while leader is down should fail, but it succeeded")
     } catch {
       case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected

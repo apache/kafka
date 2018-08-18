@@ -203,7 +203,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
-    eventManager.put(TopicUncleanLeaderElectionEnable(topic))
+    if (isActive) {
+      eventManager.put(TopicUncleanLeaderElectionEnable(topic))
+    }
   }
 
   private def state: ControllerState = eventManager.state
