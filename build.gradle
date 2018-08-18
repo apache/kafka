@@ -109,12 +109,12 @@ ext {
 
 apply from: file('wrapper.gradle')
 
-if (new File('.git').exists()) {
+if (file('.git').exists()) {
   apply from: file('gradle/rat.gradle')
   rat {
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    def repo = Grgit.open(project.file('.'))
+    def repo = Grgit.open(project.getRootDir())
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
@@ -359,7 +359,7 @@ subprojects {
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+    configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = '8.10'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
@@ -442,6 +442,12 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
     }
   }
+}
+
+def checkstyleConfigProperties(configFileName) {
+  [importControlFile: "$rootDir/checkstyle/$configFileName",
+   suppressionsFile: "$rootDir/checkstyle/suppressions.xml",
+   headerFile: "$rootDir/checkstyle/java.header"]
 }
 
 // Aggregates all jacoco results into the root project directory
@@ -775,7 +781,7 @@ project(':core') {
   systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
 
   checkstyle {
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+    configProperties = checkstyleConfigProperties("import-control-core.xml")
   }
 }
 
@@ -791,7 +797,7 @@ project(':examples') {
   }
 
   checkstyle {
-    configProperties = [importControlFile: "$rootDir/checkstyle/import-control-core.xml"]
+    configProperties = checkstyleConfigProperties("import-control-core.xml")
   }
 }
 
