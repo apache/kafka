@@ -184,7 +184,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
         for (final TopicPartition topicPartition : records.keySet()) {
-            results.put(topicPartition, new ArrayList<>());
+            results.put(topicPartition, new ArrayList<ConsumerRecord<K, V>>());
         }
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
