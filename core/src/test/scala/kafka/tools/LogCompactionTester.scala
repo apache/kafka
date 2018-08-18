@@ -217,12 +217,12 @@ object LogCompactionTester {
     var line = reader.readLine()
     if (line == null)
       return null
-    var curr = TestRecord(line)
+    var curr = TestRecord.parse(line)
     while (true) {
       line = peekLine(reader)
       if (line == null)
         return curr
-      val next = TestRecord(line)
+      val next = TestRecord.parse(line)
       if (next == null || next.topicAndKey != curr.topicAndKey)
         return curr
       curr = next
@@ -341,9 +341,7 @@ case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
 }
 
 object TestRecord {
-  def apply(line: String): TestRecord = parse(line)
-
-  private def parse(line: String): TestRecord = {
+  def parse(line: String): TestRecord = {
     val components = line.split("\t")
     new TestRecord(components(0), components(1).toInt, components(2).toLong, components(3) == "d")
   }
