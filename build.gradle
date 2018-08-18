@@ -109,7 +109,7 @@ ext {
 
 apply from: file('wrapper.gradle')
 
-if (new File('.git').exists()) {
+if (file('.git').exists()) {
   apply from: file('gradle/rat.gradle')
   rat {
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
