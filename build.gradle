@@ -574,7 +574,8 @@ project(':core') {
 
     compileOnly libs.log4j
 
-    testCompile project(':clients').sourceSets.test.output
+    testCompile project(path: ':clients', configuration: 'testOutput')
+
     testCompile libs.bcpkix
     testCompile libs.easymock
     testCompile(libs.apacheda) {
@@ -775,7 +776,6 @@ project(':core') {
       include('*.jar')
     }
     into "$buildDir/dependant-testlibs"
-    from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 
@@ -807,6 +807,7 @@ project(':clients') {
 
   configurations {
     jacksonDatabindConfig
+    testOutput.extendsFrom (testCompile)
   }
 
   // add jacksonDatabindConfig as provided scope config with high priority (1000)
@@ -870,6 +871,16 @@ project(':clients') {
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
     }
+  }
+
+
+  task jarTest (type: Jar, dependsOn: testClasses) {
+    from sourceSets.test.output
+    classifier = 'test'
+  }
+
+  artifacts {
+    testOutput jarTest
   }
 
   clean.doFirst {
