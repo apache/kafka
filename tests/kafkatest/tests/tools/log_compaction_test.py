@@ -63,4 +63,4 @@ class LogCompactionTest(Test):
         self.start_test_log_compaction_tool(security_protocol)
 
         # Verify that compacted data verification completed in LogCompactionTester
-        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=120, err_msg="Timed out waiting to complete compaction")
+        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=180, err_msg="Timed out waiting to complete compaction")

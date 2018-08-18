@@ -25,14 +25,12 @@ import java.time.Duration
 import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
-import kafka.log.Log
 import kafka.utils._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.Utils
 
@@ -96,20 +94,11 @@ object LogCompactionTester {
       .describedAs("ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
-    val dumpOpt = parser.accepts("dump", "Dump the message contents of a topic partition that contains test data from this test to standard out.")
-      .withRequiredArg
-      .describedAs("directory")
-      .ofType(classOf[String])
 
     val options = parser.parse(args: _*)
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "A tool to test log compaction. Valid options are: ")
-
-    if (options.has(dumpOpt)) {
-      dumpLog(new File(options.valueOf(dumpOpt)))
-      Exit.exit(0)
-    }
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, numMessagesOpt)
 
@@ -156,29 +145,14 @@ object LogCompactionTester {
       val newTopics = topics.map(name => new NewTopic(name, 1, 1).configs(topicConfigs.asJava)).asJava
       adminClient.createTopics(newTopics).all.get
 
-      var allTopics: Seq[String] = Seq()
+      var pendingTopics: Seq[String] = Seq()
       TestUtils.waitUntilTrue(() => {
-        allTopics = adminClient.listTopics.names.get.asScala.toSeq
-        topics.forall(topicName => allTopics.contains(topicName))
-      }, s"timed out waiting for topics : ${topics.filter(topicName => !allTopics.contains(topicName))}")
+        val allTopics = adminClient.listTopics.names.get.asScala.toSeq
+        pendingTopics = topics.filter(topicName => !allTopics.contains(topicName))
+        pendingTopics.isEmpty
+      }, s"timed out waiting for topics : $pendingTopics")
 
     } finally adminClient.close()
-  }
-
-  def dumpLog(dir: File) {
-    require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
-    for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
-      val fileRecords = FileRecords.open(new File(dir, file))
-      for (entry <- fileRecords.records.asScala) {
-        val key = readString(entry.key)
-        val content =
-          if (!entry.hasValue)
-            null
-          else
-            readString(entry.value)
-        println(s"offset = $entry.offset, key = $key, content = $content")
-      }
-    }
   }
 
   def lineCount(filPath: Path): Int = Files.readAllLines(filPath).size
@@ -291,7 +265,7 @@ object LogCompactionTester {
     producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
+    val producer = new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer)
     try {
       val rand = new Random(1)
       val keyCount = (messages / dups).toInt
@@ -323,7 +297,7 @@ object LogCompactionTester {
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
+    new KafkaConsumer(consumerProps, new StringDeserializer, new StringDeserializer)
   }
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
@@ -356,19 +330,21 @@ object LogCompactionTester {
   }
 
   def readString(buffer: ByteBuffer): String = {
-    val bytes = new Array[Byte](buffer.remaining)
-    buffer.get(bytes)
-    Utils.utf8(bytes)
+    Utils.utf8(buffer)
   }
 
 }
 
 case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
-  def this(pieces: Array[String]) = this(pieces(0), pieces(1).toInt, pieces(2).toLong, pieces(3) == "d")
   override def toString = topic + "\t" + key + "\t" + value + "\t" + (if (delete) "d" else "u")
   def topicAndKey = topic + key
 }
 
 object TestRecord {
-  def apply(line: String): TestRecord = new TestRecord(line.split("\t"))
+  def apply(line: String): TestRecord = parse(line)
+
+  private def parse(line: String): TestRecord = {
+    val components = line.split("\t")
+    new TestRecord(components(0), components(1).toInt, components(2).toLong, components(3) == "d")
+  }
 }
