@@ -56,7 +56,7 @@ class ReplicaFetcherThread(name: String,
                                 isInterruptible = false,
                                 includeLogTruncation = true) {
 
-  type REQ = kafka.server.ReplicaFetcherThread.FetchRequest
+  type REQ = FetchRequest
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
@@ -233,7 +233,7 @@ class ReplicaFetcherThread(name: String,
       delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
-  protected def fetch(fetchRequest: kafka.server.ReplicaFetcherThread.FetchRequest): Seq[(TopicPartition, PD)] = {
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PD)] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest.underlying)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
@@ -270,7 +270,7 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[kafka.server.ReplicaFetcherThread.FetchRequest] = {
+  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     val builder = fetchSessionHandler.newBuilder()
@@ -298,7 +298,7 @@ class ReplicaFetcherThread(name: String,
     if (fetchMetadataSupported) {
       requestBuilder.metadata(fetchData.metadata())
     }
-    ResultWithPartitions(new kafka.server.ReplicaFetcherThread.FetchRequest(fetchData.sessionPartitions(), requestBuilder), partitionsWithError)
+    ResultWithPartitions(new FetchRequest(fetchData.sessionPartitions(), requestBuilder), partitionsWithError)
   }
 
   /**
