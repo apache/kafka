@@ -14,18 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.processor.internals;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class StreamTaskMetadata extends TaskId {
+import org.apache.kafka.streams.processor.TaskId;
+
+public class TaskMetadata extends TaskId {
     public final int numberOfPartitions;
     public final int numberOfStateStores;
     
-    public StreamTaskMetadata(final TaskId taskId,
+    public TaskMetadata(final TaskId taskId,
                               final int numberOfPartitions, 
                               final int numberOfStateStores) { 
         super(taskId.topicGroupId, taskId.partition);
@@ -49,8 +51,8 @@ public class StreamTaskMetadata extends TaskId {
         buffer.putInt(numberOfStateStores);
     }
 
-    public static StreamTaskMetadata readFrom(final ByteBuffer buffer) {
-        return new StreamTaskMetadata(TaskId.readFrom(buffer), 
+    public static TaskMetadata readFrom(final ByteBuffer buffer) {
+        return new TaskMetadata(TaskId.readFrom(buffer), 
                                       buffer.getInt(), 
                                       buffer.getInt());
     }
@@ -63,8 +65,8 @@ public class StreamTaskMetadata extends TaskId {
         stream.writeInt(numberOfStateStores);
     }
 
-    public static StreamTaskMetadata readFrom(final DataInputStream stream) throws IOException {
-        return new StreamTaskMetadata(TaskId.readFrom(stream), 
+    public static TaskMetadata readFrom(final DataInputStream stream) throws IOException {
+        return new TaskMetadata(TaskId.readFrom(stream), 
                                       stream.readInt(), 
                                       stream.readInt());
     }

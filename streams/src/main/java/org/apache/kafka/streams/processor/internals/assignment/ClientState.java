@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskMetadata;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -77,15 +77,15 @@ public class ClientState {
     public void assign(final TaskId taskId, final boolean active) {
         if (active) {
             activeTasks.add(taskId);
-            if (taskId instanceof StreamTaskMetadata) {
-                final StreamTaskMetadata metadata = (StreamTaskMetadata) taskId;
+            if (taskId instanceof TaskMetadata) {
+                final TaskMetadata metadata = (TaskMetadata) taskId;
                 numberOfActiveStateStores += metadata.numberOfStateStores();
                 numberOfActivePartitions += metadata.numberOfPartitions();
             }
         } else {
             standbyTasks.add(taskId);
-            if (taskId instanceof StreamTaskMetadata) {
-                final StreamTaskMetadata metadata  = (StreamTaskMetadata) taskId;
+            if (taskId instanceof TaskMetadata) {
+                final TaskMetadata metadata  = (TaskMetadata) taskId;
                 numberOfStandbyStateStores += metadata.numberOfStateStores();
             }
         }

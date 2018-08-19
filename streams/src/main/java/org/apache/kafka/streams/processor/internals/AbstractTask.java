@@ -30,7 +30,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -69,9 +68,9 @@ public abstract class AbstractTask implements Task {
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
-        this.id = new StreamTaskMetadata(id,
-                                         partitions.size(),
-                                         topology.stateStores().size());
+        this.id = new TaskMetadata(id,
+                                   partitions.size(),
+                                   topology.stateStores().size());
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;

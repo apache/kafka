@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.StreamTaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskMetadata;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -173,8 +173,8 @@ public class AssignmentInfo {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
-            if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
-                new StreamTaskMetadata(id, 0, 0).writeTo(out);
+            if (isVersionFourOrAbove && !(id instanceof TaskMetadata)) {
+                new TaskMetadata(id, 0, 0).writeTo(out);
             } else {
                 id.writeTo(out);
             }
@@ -184,8 +184,8 @@ public class AssignmentInfo {
         out.writeInt(standbyTasks.size());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
-            if (isVersionFourOrAbove && !(id instanceof StreamTaskMetadata)) {
-                new StreamTaskMetadata(id, 0, 0).writeTo(out);
+            if (isVersionFourOrAbove && !(id instanceof TaskMetadata)) {
+                new TaskMetadata(id, 0, 0).writeTo(out);
             } else {
                 id.writeTo(out);
             }
@@ -296,7 +296,7 @@ public class AssignmentInfo {
         assignmentInfo.activeTasks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             if (usedVersion == 4) {
-                assignmentInfo.activeTasks.add(StreamTaskMetadata.readFrom(in));
+                assignmentInfo.activeTasks.add(TaskMetadata.readFrom(in));
             } else {
                 assignmentInfo.activeTasks.add(TaskId.readFrom(in));
             }
@@ -311,7 +311,7 @@ public class AssignmentInfo {
         for (int i = 0; i < count; i++) {
             final TaskId id;
             if (usedVersion == 4) {
-                id = StreamTaskMetadata.readFrom(in);
+                id = TaskMetadata.readFrom(in);
             } else {
                 id = TaskId.readFrom(in);
             }

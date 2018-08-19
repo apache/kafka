@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.StreamTaskMetadata;
+import org.apache.kafka.streams.processor.internals.TaskMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,8 +170,8 @@ public class SubscriptionInfo {
                                final boolean versionGreaterThanFour) {
         buf.putInt(taskIds.size());
         for (final TaskId id : taskIds) {
-            if (versionGreaterThanFour && !(id instanceof StreamTaskMetadata)) {
-                new StreamTaskMetadata(id, 0, 0).writeTo(buf);
+            if (versionGreaterThanFour && !(id instanceof TaskMetadata)) {
+                new TaskMetadata(id, 0, 0).writeTo(buf);
             } else {
                 id.writeTo(buf);
             }
@@ -321,7 +321,7 @@ public class SubscriptionInfo {
         final int numPrevTasks = data.getInt();
         for (int i = 0; i < numPrevTasks; i++) {
             if (usedVersion == 4) {
-                subscriptionInfo.prevTasks.add(StreamTaskMetadata.readFrom(data));
+                subscriptionInfo.prevTasks.add(TaskMetadata.readFrom(data));
             } else {
                 subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
             }
@@ -331,7 +331,7 @@ public class SubscriptionInfo {
         final int numStandbyTasks = data.getInt();
         for (int i = 0; i < numStandbyTasks; i++) {
             if (usedVersion == 4) {
-                subscriptionInfo.standbyTasks.add(StreamTaskMetadata.readFrom(data));
+                subscriptionInfo.standbyTasks.add(TaskMetadata.readFrom(data));
             } else {
                 subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
             }
