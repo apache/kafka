@@ -112,12 +112,12 @@ class LogCleanerTest extends JUnitSuite {
                       topicPartition = topicPartition,
                       producerStateManager = producerStateManager,
                       logDirFailureChannel = new LogDirFailureChannel(10)) {
-      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+      override def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
           throw new IllegalStateException("Log segment deletion timed out")
         }
-        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+        super.replaceSegments(newSegment, oldSegments, isRecoveredSwapFile)
       }
     }
 

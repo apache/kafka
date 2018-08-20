@@ -1657,6 +1657,8 @@ class Log(@volatile var dir: File,
    */
   private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
+      val existingOldSegments = oldSegments.filter(seg => segments.containsKey(seg.baseOffset))
+
       checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
@@ -1665,7 +1667,7 @@ class Log(@volatile var dir: File,
       addSegment(newSegment)
 
       // delete the old files
-      for (seg <- oldSegments if segments.containsKey(seg.baseOffset)) {
+      for (seg <- existingOldSegments) {
         // remove the index entry
         if (seg.baseOffset != newSegment.baseOffset)
           segments.remove(seg.baseOffset)
