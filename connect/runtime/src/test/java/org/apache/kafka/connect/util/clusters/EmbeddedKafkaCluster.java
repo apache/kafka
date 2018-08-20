@@ -68,7 +68,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private EmbeddedZookeeper zookeeper = null;
     private ListenerName listenerName = new ListenerName("PLAINTEXT");
-    private KafkaProducer<byte[], byte[]> dlqProducer;
+    private KafkaProducer<byte[], byte[]> producer;
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig) {
@@ -117,13 +117,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        dlqProducer = new KafkaProducer<>(producerProps);
+        producer = new KafkaProducer<>(producerProps);
     }
 
     private void stop() {
 
         try {
-            dlqProducer.close();
+            producer.close();
         } catch (Exception e) {
             log.error("Could not shutdown producer ", e);
         }
@@ -212,7 +212,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public void produce(String topic, String key, String value) {
-        dlqProducer.send(new ProducerRecord<>(topic, key == null ? null : key.getBytes(), value == null ? null : value.getBytes()));
+        producer.send(new ProducerRecord<>(topic, key == null ? null : key.getBytes(), value == null ? null : value.getBytes()));
     }
 
     public AdminClient createAdminClient() {
