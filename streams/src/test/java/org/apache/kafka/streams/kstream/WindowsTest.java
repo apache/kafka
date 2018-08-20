@@ -40,37 +40,8 @@ public class WindowsTest {
             return 0;
         }
 
-        /**
-         * Reject late events that arrive more than {@code millisAfterWindowEnd}
-         * after the end of its window.
-         *
-         * Lateness is defined as (stream_time - record_timestamp).
-         *
-         * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
-         * @return this updated builder
-         */
-        public Windows grace(final long millisAfterWindowEnd) {
-            if (millisAfterWindowEnd < 0) {
-                throw new IllegalArgumentException("Grace period must not be negative.");
-            }
-
-            grace = Duration.ofMillis(millisAfterWindowEnd);
-
-            return this;
-        }
-
-        /**
-         * Return the window grace period (the time to admit
-         * late-arriving events after the end of the window.)
-         *
-         * Lateness is defined as (stream_time - record_timestamp).
-         */
-        @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
         public long gracePeriodMs() {
-            // NOTE: in the future, when we remove maintainMs,
-            // we should default the grace period to 24h to maintain the default behavior,
-            // or we can default to (24h - size) if you want to be super accurate.
-            return grace != null ? grace.toMillis() : maintainMs() - size();
+            return 0L;
         }
     }
 
@@ -92,19 +63,6 @@ public class WindowsTest {
     public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
         assertEquals(anyNotNegativeRetentionTime, new TestWindows().until(anyNotNegativeRetentionTime).maintainMs());
-    }
-
-
-    @Test
-    public void gracePeriodShouldEnforceBoundaries() {
-        new TestWindows().grace(0L);
-
-        try {
-            new TestWindows().grace(-1L);
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs

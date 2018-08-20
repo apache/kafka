@@ -141,6 +141,15 @@ public final class TimeWindows extends Windows<TimeWindow> {
         return sizeMs;
     }
 
+    /**
+     * Reject late events that arrive more than {@code millisAfterWindowEnd}
+     * after the end of its window.
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
+     *
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final long millisAfterWindowEnd) {
         if (millisAfterWindowEnd < 0) {

@@ -154,6 +154,15 @@ public final class JoinWindows extends Windows<Window> {
         return beforeMs + afterMs;
     }
 
+    /**
+     * Reject late events that arrive more than {@code millisAfterWindowEnd}
+     * after the end of its window.
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
+     *
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows grace(final long millisAfterWindowEnd) {
         if (millisAfterWindowEnd < 0) {
