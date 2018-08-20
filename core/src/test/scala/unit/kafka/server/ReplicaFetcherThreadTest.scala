@@ -52,10 +52,10 @@ class ReplicaFetcherThreadTest {
                                             replicaMgr: ReplicaManager,
                                             metrics: Metrics,
                                             time: Time,
-                                            quota: ReplicationQuotaManager,
+                                            quota: ReplicaQuota,
                                             leaderEndpointBlockingSend: Option[BlockingSend] = None)
     extends ReplicaFetcherThread(name: String, fetcherId: Int, sourceBroker: BrokerEndPoint, brokerConfig: KafkaConfig,
-      replicaMgr: ReplicaManager, metrics: Metrics, time: Time, quota: ReplicationQuotaManager,
+      replicaMgr: ReplicaManager, metrics: Metrics, time: Time, quota: ReplicaQuota,
       leaderEndpointBlockingSend: Option[BlockingSend]) {
     override protected def topicSupportsEpochRequest(tp: TopicPartition): Boolean = true
   }

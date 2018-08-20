@@ -346,14 +346,15 @@ class ReplicaFetcherThread(name: String,
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
     val (partitionsWithCache, partitionsWithoutCache) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
-
-    debug(s"Build leaderEpoch request $partitionsWithCache")
-
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionsWithCache
       .map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
       .partition { case (_, latestEpoch ) => latestEpoch != UNDEFINED_EPOCH }
 
-    ResultWithPartitions(partitionsWithEpoch, (partitionsWithoutCache.keys ++ partitionsWithoutEpoch.keys).toSet)
+    // partitions for which it makes sense to request epoch
+    val partitionsWithError = (partitionsWithoutCache.keys ++ partitionsWithoutEpoch.keys).filter { tp => topicSupportsEpochRequest(tp) }.toSet
+    debug(s"Build leaderEpoch request: Partitions with epoch: $partitionsWithEpoch; Partitions without epoch: $partitionsWithError")
+
+    ResultWithPartitions(partitionsWithEpoch, partitionsWithError)
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
