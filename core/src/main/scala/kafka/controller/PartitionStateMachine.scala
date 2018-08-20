@@ -97,6 +97,14 @@ class PartitionStateMachine(config: KafkaConfig,
    * state. This is called on a successful controller election and on broker changes
    */
   def triggerOnlinePartitionStateChange() {
+    triggerOnlinePartitionStateChange(partitionState.toMap)
+  }
+
+  def triggerOnlinePartitionStateChange(topic: String) {
+    triggerOnlinePartitionStateChange(partitionState.filterKeys(p => p.topic.equals(topic)).toMap)
+  }
+
+  def triggerOnlinePartitionStateChange(partitionState: Map[TopicPartition, PartitionState]) {
     // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
     // that belong to topics to be deleted
     val partitionsToTrigger = partitionState.filter { case (partition, partitionState) =>

@@ -943,10 +943,15 @@ object TestUtils extends Logging {
     values
   }
 
-  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers))
-    producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
-    producer.close()
+  def produceMessage(servers: Seq[KafkaServer], topic: String, message: String,
+                     deliveryTimeoutMs: Int = 30 * 1000, requestTimeoutMs: Int = 20 * 1000) {
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
+    try {
+      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+    } finally {
+      producer.close()
+    }
   }
 
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
@@ -1303,6 +1308,13 @@ object TestUtils extends Logging {
     } else {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
     }
+    adminClient.alterConfigs(configs)
+  }
+
+  def alterTopicConfigs(adminClient: AdminClient, topic: String, topicConfigs: Properties): AlterConfigsResult = {
+    val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
+    val newConfig = new Config(configEntries)
+    val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
     adminClient.alterConfigs(configs)
   }
 
