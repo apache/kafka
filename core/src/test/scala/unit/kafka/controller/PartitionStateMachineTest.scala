@@ -358,7 +358,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     }
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicBeingDeleted(topic)).andReturn(false)
+    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(false)
     EasyMock.expectLastCall().anyTimes()
     prepareMockToElectLeaderForPartitions(partitions)
     EasyMock.replay(mockZkClient, mockTopicDeletionManager)
@@ -381,7 +381,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val topic = "test"
     val partitions = partitionIds.map(new TopicPartition("test", _))
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicBeingDeleted(topic)).andReturn(true)
+    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(true)
     EasyMock.expectLastCall().anyTimes()
     EasyMock.replay(mockTopicDeletionManager)
 

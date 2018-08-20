@@ -62,7 +62,7 @@ class TopicDeletionManager(controller: KafkaController,
   val controllerContext = controller.controllerContext
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
   val topicsToBeDeleted = mutable.Set.empty[String]
-  /** The following topicsBeingDeleted variable is used to properly update the offlinePartitionCount metric.
+  /** The following topicsWithDeletionStarted variable is used to properly update the offlinePartitionCount metric.
     * When a topic is going through deletion, we don't want to keep track of its partition state
     * changes in the offlinePartitionCount metric, see the PartitionStateMachine#updateControllerMetrics
     * for detailed logic. This goal means if some partitions of a topic are already
@@ -76,13 +76,13 @@ class TopicDeletionManager(controller: KafkaController,
     * transition to or out of the OfflinePartition state.
     *
     * Hence we decide to change partition states to NonExistentPartition only when the actual deletion have started.
-    * For topics whose deletion have actually started, we keep track of them in the following topicsBeingDeleted
-    * variable. And once a topic is in the topicsBeingDeleted set, we are sure there will no longer
+    * For topics whose deletion have actually started, we keep track of them in the following topicsWithDeletionStarted
+    * variable. And once a topic is in the topicsWithDeletionStarted set, we are sure there will no longer
     * be partition reassignments to any of its partitions, and only then it's safe to move its partitions to
-    * NonExistentPartition state. Once a topic is in the topicsBeingDeleted set, we will stop monitoring
+    * NonExistentPartition state. Once a topic is in the topicsWithDeletionStarted set, we will stop monitoring
     * its partition state changes in the offlinePartitionCount metric
     */
-  val topicsBeingDeleted = mutable.Set.empty[String]
+  val topicsWithDeletionStarted = mutable.Set.empty[String]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
@@ -108,7 +108,7 @@ class TopicDeletionManager(controller: KafkaController,
   def reset() {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted.clear()
-      topicsBeingDeleted.clear()
+      topicsWithDeletionStarted.clear()
       topicsIneligibleForDeletion.clear()
     }
   }
@@ -191,9 +191,9 @@ class TopicDeletionManager(controller: KafkaController,
       false
   }
 
-  def isTopicBeingDeleted(topic: String) = {
+  def isTopicWithDeletionStarted(topic: String) = {
     if (isDeleteTopicEnabled) {
-      topicsBeingDeleted.contains(topic)
+      topicsWithDeletionStarted.contains(topic)
     } else
       false
   }
@@ -250,7 +250,7 @@ class TopicDeletionManager(controller: KafkaController,
     // controller will remove this replica from the state machine as well as its partition assignment cache
     controller.replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     topicsToBeDeleted -= topic
-    topicsBeingDeleted -= topic
+    topicsWithDeletionStarted -= topic
     zkClient.deleteTopicZNode(topic)
     zkClient.deleteTopicConfigs(Seq(topic))
     zkClient.deleteTopicDeletions(Seq(topic))
@@ -268,14 +268,14 @@ class TopicDeletionManager(controller: KafkaController,
     info(s"Topic deletion callback for ${topics.mkString(",")}")
     // send update metadata so that brokers stop serving data for topics to be deleted
     val partitions = topics.flatMap(controllerContext.partitionsForTopic)
-    val unseenTopicsForDeletion = topics -- topicsBeingDeleted
+    val unseenTopicsForDeletion = topics -- topicsWithDeletionStarted
     if (unseenTopicsForDeletion.nonEmpty) {
       val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(controllerContext.partitionsForTopic)
       controller.partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, OfflinePartition)
       controller.partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, NonExistentPartition)
       // adding of unseenTopicsForDeletion to topicsBeingDeleted must be done after the partition state changes
       // to make sure the offlinePartitionCount metric is properly updated
-      topicsBeingDeleted ++= unseenTopicsForDeletion
+      topicsWithDeletionStarted ++= unseenTopicsForDeletion
     }
 
     controller.sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, partitions)
