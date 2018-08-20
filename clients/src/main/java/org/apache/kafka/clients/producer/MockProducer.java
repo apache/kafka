@@ -206,7 +206,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = false;
     }
 
-    private void verifyProducerState() {
+    private synchronized void verifyProducerState() {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
@@ -319,7 +319,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.closed;
     }
 
-    public void fenceProducer() {
+    public synchronized void fenceProducer() {
         verifyProducerState();
         verifyTransactionsInitialized();
         this.producerFenced = true;
