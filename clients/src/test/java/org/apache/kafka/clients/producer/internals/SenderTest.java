@@ -85,6 +85,18 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.easymock.EasyMock.anyBoolean;
+import static org.easymock.EasyMock.anyInt;
+import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.geq;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -2021,6 +2033,37 @@ public class SenderTest {
         sender.run(time.milliseconds()); // run again and must not send anything.
         assertEquals(0, client.inFlightRequestCount());
         assertEquals(0, sender.inFlightBatches(tp0).size());
+    }
+
+    @Test
+    public void testResetNextBatchExpiry() throws Exception {
+        MockClient delegateClient = new MockClient(time);
+        client = mock(MockClient.class);
+        expect(client.ready(anyObject(), anyLong())).andDelegateTo(delegateClient).anyTimes();
+        expect(
+            client.newClientRequest(
+                anyString(), anyObject(), anyLong(), anyBoolean(), anyInt(), anyObject()))
+            .andDelegateTo(delegateClient).anyTimes();
+        client.send(anyObject(), anyLong());
+        expectLastCall().andDelegateTo(delegateClient).anyTimes();
+        expect(client.poll(eq(0L), anyLong())).andDelegateTo(delegateClient).times(1);
+        expect(client.poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong()))
+            .andDelegateTo(delegateClient)
+            .times(1);
+        expect(client.poll(geq(1L), anyLong())).andDelegateTo(delegateClient).times(1);
+        replay(client);
+
+        setupWithTransactionState(null);
+
+        accumulator.append(
+            tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT);
+
+        sender.run(time.milliseconds());
+        sender.run(time.milliseconds());
+        time.setCurrentTimeMs(time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
+        sender.run(time.milliseconds());
+
+        verify(client);
     }
 
     private class MatchingBufferPool extends BufferPool {
