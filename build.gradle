@@ -775,6 +775,9 @@ project(':core') {
       include('*.jar')
     }
     into "$buildDir/dependant-testlibs"
+    //By default gradle does not handle test dependencies between the sub-projects
+    //This line is to include clients project test jar to dependant-testlibs
+    from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 
