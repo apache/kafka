@@ -19,9 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
-import java.time.Duration;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
@@ -43,42 +41,7 @@ public abstract class Windows<W extends Window> {
     private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
     @Deprecated public int segments = 3;
 
-    private Duration grace;
-
     protected Windows() {}
-
-    /**
-     * Reject late events that arrive more than {@code millisAfterWindowEnd}
-     * after the end of its window.
-     *
-     * Lateness is defined as (stream_time - record_timestamp).
-     *
-     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
-     * @return this updated builder
-     */
-    public Windows<W> grace(final long millisAfterWindowEnd) {
-        if (millisAfterWindowEnd < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
-
-        grace = Duration.ofMillis(millisAfterWindowEnd);
-
-        return this;
-    }
-
-    /**
-     * Return the window grace period (the time to admit
-     * late-arriving events after the end of the window.)
-     *
-     * Lateness is defined as (stream_time - record_timestamp).
-     */
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    public long gracePeriodMs() {
-        // NOTE: in the future, when we remove maintainMs,
-        // we should default the grace period to 24h to maintain the default behavior,
-        // or we can default to (24h - size) if you want to be super accurate.
-        return grace != null ? grace.toMillis() : maintainMs() - size();
-    }
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
@@ -106,6 +69,7 @@ public abstract class Windows<W extends Window> {
      * @return the window maintain duration
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public long maintainMs() {
         return maintainDurationMs;
@@ -161,34 +125,10 @@ public abstract class Windows<W extends Window> {
     public abstract long size();
 
     /**
-     * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
-     * since the equals and hashCode methods depend on mutable fields.
+     * Return the window grace period (the time to admit
+     * late-arriving events after the end of the window.)
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
      */
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final Windows<?> windows = (Windows<?>) o;
-        return maintainMs() == windows.maintainMs() &&
-            segments == windows.segments &&
-            Objects.equals(gracePeriodMs(), windows.gracePeriodMs());
-    }
-
-    /**
-     * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
-     * since the equals and hashCode methods depend on mutable fields.
-     */
-    @Override
-    public int hashCode() {
-        return Objects.hash(maintainMs(), segments, gracePeriodMs());
-    }
-
-    @Override
-    public String toString() {
-        return "Windows{" +
-            "maintainDurationMs=" + maintainMs() +
-            ", segments=" + segments +
-            ", grace=" + gracePeriodMs() +
-            '}';
-    }
+    public abstract long gracePeriodMs();
 }

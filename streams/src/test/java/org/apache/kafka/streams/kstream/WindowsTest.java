@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -27,6 +28,8 @@ public class WindowsTest {
 
     private class TestWindows extends Windows {
 
+        private Duration grace;
+
         @Override
         public Map windowsFor(final long timestamp) {
             return null;
@@ -35,6 +38,39 @@ public class WindowsTest {
         @Override
         public long size() {
             return 0;
+        }
+
+        /**
+         * Reject late events that arrive more than {@code millisAfterWindowEnd}
+         * after the end of its window.
+         *
+         * Lateness is defined as (stream_time - record_timestamp).
+         *
+         * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+         * @return this updated builder
+         */
+        public Windows grace(final long millisAfterWindowEnd) {
+            if (millisAfterWindowEnd < 0) {
+                throw new IllegalArgumentException("Grace period must not be negative.");
+            }
+
+            grace = Duration.ofMillis(millisAfterWindowEnd);
+
+            return this;
+        }
+
+        /**
+         * Return the window grace period (the time to admit
+         * late-arriving events after the end of the window.)
+         *
+         * Lateness is defined as (stream_time - record_timestamp).
+         */
+        @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+        public long gracePeriodMs() {
+            // NOTE: in the future, when we remove maintainMs,
+            // we should default the grace period to 24h to maintain the default behavior,
+            // or we can default to (24h - size) if you want to be super accurate.
+            return grace != null ? grace.toMillis() : maintainMs() - size();
         }
     }
 
