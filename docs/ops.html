@@ -229,6 +229,69 @@
   Deletion of requested consumer groups ('my-group', 'my-other-group') was successful.
   </pre>
 
+  <p>
+  To reset offsets of a consumer group, "--reset-offsets" option can be used.
+  This option supports one consumer group at the time. It requires defining following scopes: --all-topics or --topic. One scope must be selected, unless you use '--from-file' scenario. Also, first make sure that the consumer instances are inactive.
+  See  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-122%3A+Add+Reset+Consumer+Group+Offsets+tooling">KIP-122</a> for more details.
+
+  <p>
+  It has 3 execution options:
+  <ul>
+    <li>
+      (default) to display which offsets to reset.
+    </li>
+    <li>
+      --execute : to execute --reset-offsets process.
+    </li>
+    <li>
+      --export : to export the results to a CSV format.
+    </li>
+  </ul>
+
+  <p>
+  --reset-offsets also has following scenarios to choose from (atleast one scenario must be selected):
+  <ul>
+    <li>
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+    </li>
+    <li>
+      --to-earliest : Reset offsets to earliest offset.
+    </li>
+    <li>
+      --to-latest : Reset offsets to latest offset.
+    </li>
+    <li>
+      --shift-by &lt;Long: number-of-offsets&gt; : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.
+    </li>
+    <li>
+      --from-file : Reset offsets to values defined in CSV file.
+    </li>
+    <li>
+      --to-current : Resets offsets to current offset.
+    </li>
+    <li>
+      --by-duration &lt;String: duration&gt; : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'
+    </li>
+    <li>
+      --to-offset : Reset offsets to a specific offset.
+    </li>
+  </ul>
+
+  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is 
+  of 15, then, offset at 10 will actually be selected.
+
+  <p>
+  For example, to reset offsets of a consumer group to the latest offset:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+
+  TOPIC                          PARTITION  NEW-OFFSET
+  topic1                         0          0
+  </pre>
+
+  <p>
+
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
 
