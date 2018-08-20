@@ -90,12 +90,27 @@ public class Materialized<K, V, S extends StateStore> {
      * Materialize a {@link StateStore} with the given name.
      *
      * @param storeName  the name of the underlying {@link KTable} state store; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'.
-     * @param <K>       key type of the store
-     * @param <V>       value type of the store
-     * @param <S>       type of the {@link StateStore}
+     *                   alphanumerics, '.', '_' and '-'.
+     * @param keySerde   the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                   serde from configs will be used
+     * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                   serde from configs will be used
+     * @param <K>        key type of the store
+     * @param <V>        value type of the store
+     * @param <S>        type of the {@link StateStore}
      * @return a new {@link Materialized} instance with the given storeName
      */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final String storeName,
+                                                                        final Serde<K> keySerde,
+                                                                        final Serde<V> valueSerde) {
+        Topic.validate(storeName);
+        return new Materialized<K, V, S>(storeName).withKeySerde(keySerde).withValueSerde(valueSerde);
+    }
+
+    /**
+     * @deprecated Use {@link #as(String, Serde, Serde)} instead.
+     */
+    @Deprecated
     public static <K, V, S extends StateStore> Materialized<K, V, S> as(final String storeName) {
         Topic.validate(storeName);
         return new Materialized<>(storeName);
@@ -108,11 +123,28 @@ public class Materialized<K, V, S extends StateStore> {
      * Window stores are required to retain windows at least as long as (window size + window grace period).
      * Stores constructed via {@link org.apache.kafka.streams.state.Stores} already satisfy this contract.
      *
-     * @param supplier the {@link WindowBytesStoreSupplier} used to materialize the store
-     * @param <K>      key type of the store
-     * @param <V>      value type of the store
+     * @param supplier   the {@link WindowBytesStoreSupplier} used to materialize the store
+     * @param keySerde   the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                   serde from configs will be used
+     * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                   serde from configs will be used
+     * @param <K>        key type of the store
+     * @param <V>        value type of the store
      * @return a new {@link Materialized} instance with the given supplier
      */
+    public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> as(final WindowBytesStoreSupplier supplier,
+                                                                           final Serde<K> keySerde,
+                                                                           final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
+        return new Materialized<K, V, WindowStore<Bytes, byte[]>>(supplier)
+                .withKeySerde(keySerde)
+                .withValueSerde(valueSerde);
+    }
+
+    /**
+     * @deprecated Use {@link #as(WindowBytesStoreSupplier, Serde, Serde)} instead.
+     */
+    @Deprecated
     public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> as(final WindowBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
@@ -125,12 +157,29 @@ public class Materialized<K, V, S extends StateStore> {
      * Session stores are required to retain windows at least as long as (session inactivity gap + session grace period).
      * Stores constructed via {@link org.apache.kafka.streams.state.Stores} already satisfy this contract.
      *
-     * @param supplier the {@link SessionBytesStoreSupplier} used to materialize the store
-     * @param <K>      key type of the store
-     * @param <V>      value type of the store
+     * @param supplier   the {@link SessionBytesStoreSupplier} used to materialize the store
+     * @param keySerde   the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                   serde from configs will be used
+     * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                   serde from configs will be used
+     * @param <K>        key type of the store
+     * @param <V>        value type of the store
      * @return a new {@link Materialized} instance with the given sup
      * plier
      */
+    public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> as(final SessionBytesStoreSupplier supplier,
+                                                                            final Serde<K> keySerde,
+                                                                            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
+        return new Materialized<K, V, SessionStore<Bytes, byte[]>>(supplier)
+                .withKeySerde(keySerde)
+                .withValueSerde(valueSerde);
+    }
+
+    /**
+     * @deprecated Use {@link #as(SessionBytesStoreSupplier, Serde, Serde)} instead.
+     */
+    @Deprecated
     public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> as(final SessionBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
@@ -139,11 +188,28 @@ public class Materialized<K, V, S extends StateStore> {
     /**
      * Materialize a {@link KeyValueStore} using the provided {@link KeyValueBytesStoreSupplier}.
      *
-     * @param supplier the {@link KeyValueBytesStoreSupplier} used to materialize the store
-     * @param <K>      key type of the store
-     * @param <V>      value type of the store
+     * @param supplier   the {@link KeyValueBytesStoreSupplier} used to materialize the store
+     * @param keySerde   the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                   serde from configs will be used
+     * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                   serde from configs will be used
+     * @param <K>        key type of the store
+     * @param <V>        value type of the store
      * @return a new {@link Materialized} instance with the given supplier
      */
+    public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> as(final KeyValueBytesStoreSupplier supplier,
+                                                                             final Serde<K> keySerde,
+                                                                             final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
+        return new Materialized<K, V, KeyValueStore<Bytes, byte[]>>(supplier)
+                .withKeySerde(keySerde)
+                .withValueSerde(valueSerde);
+    }
+
+    /**
+     * @deprecated Use {@link #as(KeyValueBytesStoreSupplier, Serde, Serde)} instead.
+     */
+    @Deprecated
     public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> as(final KeyValueBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         return new Materialized<>(supplier);
@@ -153,13 +219,13 @@ public class Materialized<K, V, S extends StateStore> {
      * Materialize a {@link StateStore} with the provided key and value {@link Serde}s.
      * An internal name will be used for the store.
      *
-     * @param keySerde      the key {@link Serde} to use. If the {@link Serde} is null, then the default key
-     *                      serde from configs will be used
-     * @param valueSerde    the value {@link Serde} to use. If the {@link Serde} is null, then the default value
-     *                      serde from configs will be used
-     * @param <K>           key type
-     * @param <V>           value type
-     * @param <S>           store type
+     * @param keySerde   the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                   serde from configs will be used
+     * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                   serde from configs will be used
+     * @param <K>        key type
+     * @param <V>        value type
+     * @param <S>        store type
      * @return a new {@link Materialized} instance with the given key and value serdes
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> with(final Serde<K> keySerde,
@@ -237,7 +303,8 @@ public class Materialized<K, V, S extends StateStore> {
      * Configure retention period for window and session stores. Ignored for key/value stores.
      *
      * Overridden by pre-configured store suppliers
-     * ({@link Materialized#as(SessionBytesStoreSupplier)} or {@link Materialized#as(WindowBytesStoreSupplier)}).
+     * ({@link Materialized#as(SessionBytesStoreSupplier, Serde, Serde)} or
+     * {@link Materialized#as(WindowBytesStoreSupplier, Serde, Serde)}).
      *
      * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
      * from window-start through window-end, and for the entire grace period.
