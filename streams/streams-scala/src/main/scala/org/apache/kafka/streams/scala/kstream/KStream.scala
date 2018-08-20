@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
-import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier, TopicNameExtractor}
+import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -84,10 +84,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with new key and value (possibly both of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#map`
    */
-  def map[KR, VR](mapper: (K, V) => (KR, VR)): KStream[KR, VR] = {
-    val kvMapper = mapper.tupled andThen tuple2ToKeyValue
-    inner.map[KR, VR](((k: K, v: V) => kvMapper(k, v)).asKeyValueMapper)
-  }
+  def map[KR, VR](mapper: (K, V) => (KR, VR)): KStream[KR, VR] =
+    inner.map[KR, VR](mapper.asKeyValueMapper)
 
   /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -124,7 +122,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#flatMap`
    */
   def flatMap[KR, VR](mapper: (K, V) => Iterable[(KR, VR)]): KStream[KR, VR] = {
-    val kvMapper = mapper.tupled andThen (iter => iter.map(tuple2ToKeyValue).asJava)
+    val kvMapper = mapper.tupled.andThen(_.map(tuple2ToKeyValue).asJava)
     inner.flatMap[KR, VR](((k: K, v: V) => kvMapper(k, v)).asKeyValueMapper)
   }
 
@@ -173,7 +171,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#foreach`
    */
   def foreach(action: (K, V) => Unit): Unit =
-    inner.foreach((k: K, v: V) => action(k, v))
+    inner.foreach(action.asForeachAction)
 
   /**
    * Creates an array of `KStream` from this stream by branching the records in the original stream based on
