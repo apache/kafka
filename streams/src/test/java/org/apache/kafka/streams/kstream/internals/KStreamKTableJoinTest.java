@@ -72,7 +72,7 @@ public class KStreamKTableJoinTest {
         table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
-        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         driver = new TopologyTestDriver(builder.build(), props, 0L);
 
         processor = supplier.theCapturedProcessor();

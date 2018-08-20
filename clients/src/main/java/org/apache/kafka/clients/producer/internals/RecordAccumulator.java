@@ -273,6 +273,10 @@ public final class RecordAccumulator {
         return result;
     }
 
+    public void resetNextBatchExpiryTime() {
+        nextBatchExpiryTimeMs = Long.MAX_VALUE;
+    }
+
     public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
         if (batch.createdMs + deliveryTimeoutMs  > 0) {
             // the non-negative check is to guard us against potential overflow due to setting

@@ -37,7 +37,7 @@ import org.junit.Test;
 
 import java.util.Properties;
 
-import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
+import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -182,7 +182,7 @@ public class AbstractProcessorContextTest {
     private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;
         static {
-            config = minimalStreamsConfig();
+            config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
             config.put("user.supplied.config", "user-suppplied-value");

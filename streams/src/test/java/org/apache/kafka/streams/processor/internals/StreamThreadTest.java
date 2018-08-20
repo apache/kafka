@@ -696,8 +696,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
-    @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
+    private StreamThread setupStreamThread() {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
@@ -723,15 +722,19 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertThat(thread.tasks().size(), equalTo(1));
+        return thread;
+    }
 
+    @Test
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCloseTransactionWhenSuspendingTasks() {
+        final StreamThread thread = setupStreamThread();
+
+        clientSupplier.producers.get(0).fenceProducerOnClose();
         thread.rebalanceListener.onPartitionsRevoked(null);
-        clientSupplier.producers.get(0).fenceProducer();
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        try {
-            thread.runOnce();
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
 
+        assertFalse(clientSupplier.producers.get(0).transactionInFlight());
+        assertTrue(clientSupplier.producers.get(0).transactionCommitted());
+        assertFalse(clientSupplier.producers.get(0).closed());
         assertTrue(thread.tasks().isEmpty());
     }
 

@@ -64,24 +64,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private static final long GAP_MS = 5 * 60 * 1000L;
     private static final String STORE_NAME = "session-store";
 
-    private final Initializer<Long> initializer = new Initializer<Long>() {
-        @Override
-        public Long apply() {
-            return 0L;
-        }
-    };
-    private final Aggregator<String, String, Long> aggregator = new Aggregator<String, String, Long>() {
-        @Override
-        public Long apply(final String aggKey, final String value, final Long aggregate) {
-            return aggregate + 1;
-        }
-    };
-    private final Merger<String, Long> sessionMerger = new Merger<String, Long>() {
-        @Override
-        public Long apply(final String aggKey, final Long aggOne, final Long aggTwo) {
-            return aggOne + aggTwo;
-        }
-    };
+    private final Initializer<Long> initializer = () -> 0L;
+    private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
+    private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final KStreamSessionWindowAggregate<String, String, Long> sessionAggregator =
         new KStreamSessionWindowAggregate<>(
             SessionWindows.with(GAP_MS),
@@ -96,7 +81,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private InternalMockProcessorContext context;
     private Metrics metrics;
 
-
     @Before
     public void initializeStore() {
         final File stateDir = TestUtils.tempDirectory();
@@ -107,7 +91,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             Serdes.String(),
             Serdes.String(),
             metrics,
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 100000, metrics)
         ) {

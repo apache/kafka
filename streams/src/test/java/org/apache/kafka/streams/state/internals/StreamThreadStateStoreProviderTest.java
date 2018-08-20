@@ -96,8 +96,7 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        topology.setApplicationId(applicationId);
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder(applicationId).build();
 
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime());
@@ -124,7 +123,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -190,7 +189,7 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>()),
+            () -> clientSupplier.getProducer(new HashMap<>()),
             metrics.sensor("dummy")) {
             @Override
             protected void updateOffsetLimits() {}

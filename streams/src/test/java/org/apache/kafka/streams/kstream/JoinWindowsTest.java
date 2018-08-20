@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 
@@ -102,4 +103,94 @@ public class JoinWindowsTest {
         }
     }
 
+    @Test
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        assertEquals(JoinWindows.of(3), JoinWindows.of(3));
+        assertEquals(JoinWindows.of(3).hashCode(), JoinWindows.of(3).hashCode());
+
+        assertEquals(JoinWindows.of(3).after(2), JoinWindows.of(3).after(2));
+        assertEquals(JoinWindows.of(3).after(2).hashCode(), JoinWindows.of(3).after(2).hashCode());
+
+        assertEquals(JoinWindows.of(3).before(2), JoinWindows.of(3).before(2));
+        assertEquals(JoinWindows.of(3).before(2).hashCode(), JoinWindows.of(3).before(2).hashCode());
+
+        assertEquals(JoinWindows.of(3).grace(2), JoinWindows.of(3).grace(2));
+        assertEquals(JoinWindows.of(3).grace(2).hashCode(), JoinWindows.of(3).grace(2).hashCode());
+
+        assertEquals(JoinWindows.of(3).until(60), JoinWindows.of(3).until(60));
+        assertEquals(JoinWindows.of(3).until(60).hashCode(), JoinWindows.of(3).until(60).hashCode());
+
+        assertEquals(
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertEquals(
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+        // JoinWindows is a little weird in that before and after set the same fields as of.
+        assertEquals(
+            JoinWindows.of(9).before(1).after(2).grace(3).until(60),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertEquals(
+            JoinWindows.of(9).before(1).after(2).grace(3).until(60).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        assertNotEquals(JoinWindows.of(9), JoinWindows.of(3));
+        assertNotEquals(JoinWindows.of(9).hashCode(), JoinWindows.of(3).hashCode());
+
+        assertNotEquals(JoinWindows.of(3).after(9), JoinWindows.of(3).after(2));
+        assertNotEquals(JoinWindows.of(3).after(9).hashCode(), JoinWindows.of(3).after(2).hashCode());
+
+        assertNotEquals(JoinWindows.of(3).before(9), JoinWindows.of(3).before(2));
+        assertNotEquals(JoinWindows.of(3).before(9).hashCode(), JoinWindows.of(3).before(2).hashCode());
+
+        assertNotEquals(JoinWindows.of(3).grace(9), JoinWindows.of(3).grace(2));
+        assertNotEquals(JoinWindows.of(3).grace(9).hashCode(), JoinWindows.of(3).grace(2).hashCode());
+
+        assertNotEquals(JoinWindows.of(3).until(90), JoinWindows.of(3).until(60));
+        assertNotEquals(JoinWindows.of(3).until(90).hashCode(), JoinWindows.of(3).until(60).hashCode());
+
+
+        assertNotEquals(
+            JoinWindows.of(3).before(9).after(2).grace(3).until(60),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertNotEquals(
+            JoinWindows.of(3).before(9).after(2).grace(3).until(60).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(9).grace(3).until(60),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(9).grace(3).until(60).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(2).grace(9).until(60),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(2).grace(9).until(60).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(2).grace(3).until(90),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60)
+        );
+        assertNotEquals(
+            JoinWindows.of(3).before(1).after(2).grace(3).until(90).hashCode(),
+            JoinWindows.of(3).before(1).after(2).grace(3).until(60).hashCode()
+        );
+    }
 }

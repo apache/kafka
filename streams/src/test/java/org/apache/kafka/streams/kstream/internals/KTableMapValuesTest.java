@@ -51,7 +51,7 @@ public class KTableMapValuesTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

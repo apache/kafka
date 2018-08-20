@@ -41,7 +41,7 @@ public class KStreamSelectKeyTest {
     private String topicName = "topic_key_select";
 
     private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(topicName, new StringSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     @Test
     public void testSelectKey() {

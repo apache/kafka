@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The unlimited window specifications used for aggregations.
@@ -129,4 +130,25 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
         throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
     }
 
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        final UnlimitedWindows that = (UnlimitedWindows) o;
+        return startMs == that.startMs;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), startMs);
+    }
+
+    @Override
+    public String toString() {
+        return "UnlimitedWindows{" +
+            "startMs=" + startMs +
+            ", super=" + super.toString() +
+            '}';
+    }
 }
