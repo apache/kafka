@@ -18,16 +18,16 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
+import kafka.utils.MockTime
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.serialization.{LongDeserializer, LongSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.scala.utils.StreamToTableJoinTestData
 import org.apache.kafka.test.TestUtils
-import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
 import org.scalatest.junit.JUnitSuite
@@ -103,9 +103,6 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
 
     streams.close()
-
-    import collection.JavaConverters._
-    assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 
   @Test def testShouldCountClicksPerRegionJava(): Unit = {
@@ -165,12 +162,8 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite wit
     val streams: KafkaStreamsJ = new KafkaStreamsJ(builder.build(), streamsConfiguration)
 
     streams.start()
-
-    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
-      produceNConsume(userClicksTopicJ, userRegionsTopicJ, outputTopicJ)
-
+    produceNConsume(userClicksTopicJ, userRegionsTopicJ, outputTopicJ)
     streams.close()
-    assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 
   private def getStreamsConfiguration(): Properties = {
