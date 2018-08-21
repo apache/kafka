@@ -303,11 +303,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    public boolean isProcessable() {
+    boolean isProcessable() {
         return enforcedProcess || partitionGroup.allPartitionsBuffered();
     }
 
-    public void maybeEnforceProcess(final long now) {
+    void maybeEnforceProcess(final long now) {
         if (partitionGroup.allPartitionsBuffered()) {
             enforcedProcess = false;
         } else if (partitionGroup.numBuffered() > 0 && now - lastEnforcedProcess > maxTaskIdleMs) {
