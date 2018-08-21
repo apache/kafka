@@ -40,6 +40,12 @@ object FunctionConversions {
     }
   }
 
+  implicit class ForeachActionFromFunction[K, V](val fa: (K, V) => Unit) extends AnyVal {
+    def asForeachAction: ForeachAction[K, V] = new ForeachAction[K, V] {
+      override def apply(key: K, value: V): Unit = fa(key, value)
+    }
+  }
+
   implicit class MapperFromFunction[T, U, VR](val f: (T, U) => VR) extends AnyVal {
     def asKeyValueMapper: KeyValueMapper[T, U, VR] = new KeyValueMapper[T, U, VR] {
       override def apply(key: T, value: U): VR = f(key, value)
