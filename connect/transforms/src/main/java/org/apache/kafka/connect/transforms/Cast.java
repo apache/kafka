@@ -174,7 +174,6 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 } else {
                     builder.field(field.name(), field.schema());
                 }
-
             }
         }
 

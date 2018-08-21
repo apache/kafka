@@ -337,6 +337,19 @@ public class CastTest {
         assertEquals(42, ((Struct) transformed.value()).get("string"));
         assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
         assertNull(((Struct) transformed.value()).get("optional"));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.INT16_SCHEMA.type(), transformedSchema.field("int8").schema().type());
+        assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("int16").schema().type());
+        assertEquals(Schema.INT64_SCHEMA.type(), transformedSchema.field("int32").schema().type());
+        assertEquals(Schema.BOOLEAN_SCHEMA.type(), transformedSchema.field("int64").schema().type());
+        assertEquals(Schema.FLOAT64_SCHEMA.type(), transformedSchema.field("float32").schema().type());
+        assertEquals(Schema.BOOLEAN_SCHEMA.type(), transformedSchema.field("float64").schema().type());
+        assertEquals(Schema.INT8_SCHEMA.type(), transformedSchema.field("boolean").schema().type());
+        assertEquals(Schema.INT32_SCHEMA.type(), transformedSchema.field("string").schema().type());
+        assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("optional").schema().type());
+        // The following fields are not changed
+        assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
     }
 
     @SuppressWarnings("unchecked")
