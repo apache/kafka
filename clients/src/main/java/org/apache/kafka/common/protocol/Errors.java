@@ -96,6 +96,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
@@ -200,11 +201,6 @@ public enum Errors {
     INVALID_FETCH_SESSION_EPOCH(71, "The fetch session epoch is invalid", InvalidFetchSessionEpochException::new),
     LISTENER_NOT_FOUND(72, "There is no listener on the leader broker that matches the listener on which metadata request was processed", ListenerNotFoundException::new),;
 
-    @FunctionalInterface
-    private interface ApiExceptionBuilder {
-        ApiException build(String message);
-    }
-
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
     private static Map<Class<?>, Errors> classToError = new HashMap<>();
@@ -219,13 +215,13 @@ public enum Errors {
     }
 
     private final short code;
-    private final ApiExceptionBuilder builder;
+    private final Function<String, ApiException> builder;
     private final ApiException exception;
 
-    Errors(int code, String defaultExceptionString, ApiExceptionBuilder builder) {
+    Errors(int code, String defaultExceptionString, Function<String, ApiException> builder) {
         this.code = (short) code;
         this.builder = builder;
-        this.exception = builder.build(defaultExceptionString);
+        this.exception = builder.apply(defaultExceptionString);
     }
 
     /**
@@ -247,7 +243,7 @@ public enum Errors {
             return exception;
         }
         // Return an exception with the given error message.
-        return builder.build(message);
+        return builder.apply(message);
     }
 
     /**
