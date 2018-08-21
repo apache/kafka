@@ -108,6 +108,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     //close one connection
     conns.head.close()
+    TestUtils.waitUntilTrue(() => connectionCount == (maxConnectionsPerIPOverride - 1), "connection is not closed")
     // send should succeed
     sendProduceRequest()
   }
