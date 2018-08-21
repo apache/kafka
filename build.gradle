@@ -1021,6 +1021,7 @@ project(':streams:streams-scala') {
     testCompile project(':core').sourceSets.test.output
     testCompile project(':streams').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':streams:test-utils')
 
     testCompile libs.junit
     testCompile libs.scalatest
