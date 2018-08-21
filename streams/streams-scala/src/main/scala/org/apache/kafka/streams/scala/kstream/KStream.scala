@@ -173,7 +173,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#foreach`
    */
   def foreach(action: (K, V) => Unit): Unit =
-    inner.foreach((k: K, v: V) => action(k, v))
+    inner.foreach(action.asForeachAction)
 
   /**
    * Creates an array of `KStream` from this stream by branching the records in the original stream based on
@@ -575,5 +575,5 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#peek`
    */
   def peek(action: (K, V) => Unit): KStream[K, V] =
-    inner.peek((k: K, v: V) => action(k, v))
+    inner.peek(action.asForeachAction)
 }
