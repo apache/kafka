@@ -54,6 +54,6 @@ public class WindowedSerdes {
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
     static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
-        return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
+        return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
     }
 }
