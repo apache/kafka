@@ -135,7 +135,7 @@ public class StreamsMetricsImplTest {
         final KafkaMetric totalMetric = metrics.metric(totalMetricName);
 
         for (int i = 0; i < 10; i++) {
-            assertEquals(i, totalMetric.measurable().measure(config, time.milliseconds()), 0.0001);
+            assertEquals(i, Math.round(totalMetric.measurable().measure(config, time.milliseconds())));
             sensor.record(latency, time.milliseconds());
         }
 
