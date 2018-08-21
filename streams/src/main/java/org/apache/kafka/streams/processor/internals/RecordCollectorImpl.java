@@ -124,6 +124,16 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
                 log.warn("{} Timeout exception caught when sending record to topic {} attempt {}", logPrefix, topic, attempt);
                 Utils.sleep(SEND_RETRY_BACKOFF);
+            } catch (final Exception uncaughtException) {
+                if (uncaughtException instanceof KafkaException &&
+                    uncaughtException.getCause() instanceof ProducerFencedException) {
+                    final KafkaException kafkaException = (KafkaException) uncaughtException;
+                    // producer.send() call may throw a KafkaException which wraps a FencedException,
+                    // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
+                    throw (ProducerFencedException) kafkaException.getCause();
+                } else {
+                    throw uncaughtException;
+                }
             }
 
         }
