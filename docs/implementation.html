@@ -235,8 +235,8 @@
         that it can resume from those offsets in the event of a restart. Kafka provides the option to store all the offsets for
         a given consumer group in a designated broker (for that group) called the group coordinator.  i.e., any consumer instance
         in that consumer group should send its offset commits and fetches to that group coordinator (broker). Consumer groups are
-        assigned to coordinators based on their group names. A consumer can look up its coordinator by issuing a GroupCoordinatorRequest
-        to any Kafka broker and reading the GroupCoordinatorResponse which will contain the coordinator details. The consumer
+        assigned to coordinators based on their group names. A consumer can look up its coordinator by issuing a FindCoordinatorRequest
+        to any Kafka broker and reading the FindCoordinatorResponse which will contain the coordinator details. The consumer
         can then proceed to commit or fetch offsets from the coordinator broker. In case the coordinator moves, the consumer will
         need to rediscover the coordinator. Offset commits can be done automatically or manually by consumer instance.
     </p>
@@ -252,7 +252,8 @@
     <p>
     When the coordinator receives an offset fetch request, it simply returns the last committed offset vector from the offsets cache.
         In case coordinator was just started or if it just became the coordinator for a new set of consumer groups (by becoming a leader for a partition of the offsets topic),
-        it may need to load the offsets topic partition into the cache.
+        it may need to load the offsets topic partition into the cache. In this case, the offset fetch will fail with an
+        CoordinatorLoadInProgressException and the consumer may retry the OffsetFetchRequest after backing off.
     </p>
 
     <h4><a id="impl_zookeeper" href="#impl_zookeeper">ZooKeeper Directories</a></h4>
