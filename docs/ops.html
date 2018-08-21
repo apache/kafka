@@ -127,12 +127,7 @@
         --producer.config producer.properties --whitelist my-topic
   </pre>
   Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
-  <p>
-  Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want
-  to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
-  However, <code>--blacklist</code> is not supported when the new consumer has been enabled (i.e. when <code>bootstrap.servers</code>
-  has been defined in the consumer configuration).
-  <p>
+
   Combining mirroring with the configuration <code>auto.create.topics.enable=true</code> makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
 
   <h4><a id="basic_ops_consumer_lag" href="#basic_ops_consumer_lag">Checking consumer position</a></h4>
@@ -140,29 +135,15 @@
   <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
 
-  Note: This will only show information about consumers that use the Java consumer API (non-ZooKeeper-based consumers).
-
   TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
   my-topic                       0          2               4               2          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
   my-topic                       1          2               3               1          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
   my-topic                       2          2               3               1          consumer-2-42c1abd4-e3b2-425d-a8bb-e1ea49b29bb2   /127.0.0.1                     consumer-2
   </pre>
 
-  This tool also works with ZooKeeper-based consumers:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --describe --group my-group
-
-  Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).
-
-  TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID
-  my-topic                       0          2               4               2          my-group_consumer-1
-  my-topic                       1          2               3               1          my-group_consumer-1
-  my-topic                       2          2               3               1          my-group_consumer-2
-  </pre>
-
   <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
-  With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. When using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> (where the broker handles coordination of partition handling and rebalance), the group can be deleted manually, or automatically when the last committed offset for that group expires. Manual deletion works only if the group does not have any active members.
+  With the ConsumerGroupCommand tool, we can list, describe, or delete the consumer groups. The consumer group can be deleted manually, or automatically when the last committed offset for that group expires. Manual deletion works only if the group does not have any active members.
 
   For example, to list all consumer groups across all topics:
 
@@ -186,7 +167,7 @@
   topic3          2          243655          398812          155157          consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4
   </pre>
 
-  There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group that uses the new consumer API:
+  There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group:
   <ul>
     <li>--members: This option provides the list of all active members in the consumer group.
       <pre class="brush: bash;">
@@ -225,7 +206,6 @@
   <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group my-group --group my-other-group
 
-  Note: This will not show information about old Zookeeper-based consumers.
   Deletion of requested consumer groups ('my-group', 'my-other-group') was successful.
   </pre>
 
@@ -660,14 +640,8 @@
   <h3><a id="config" href="#config">6.3 Kafka Configuration</a></h3>
 
   <h4><a id="clientconfig" href="#clientconfig">Important Client Configurations</a></h4>
-  The most important old Scala producer configurations control
-  <ul>
-      <li>acks</li>
-      <li>compression</li>
-      <li>sync vs async production</li>
-      <li>batch size (for async producers)</li>
-  </ul>
-  The most important new Java producer configurations control
+
+  The most important producer configurations are:
   <ul>
       <li>acks</li>
       <li>compression</li>
@@ -805,7 +779,7 @@
 
   <h3><a id="monitoring" href="#monitoring">6.6 Monitoring</a></h3>
 
-  Kafka uses Yammer Metrics for metrics reporting in the server and Scala clients. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
+  Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
   All Kafka rate metrics have a corresponding cumulative count metric with suffix <code>-total</code>. For example,
   <code>records-consumed-rate</code> has a corresponding metric named <code>records-consumed-total</code>.
@@ -985,10 +959,7 @@
       </tr>
       <tr>
         <td>Number of messages the consumer lags behind the producer by. Published by the consumer, not broker.</td>
-        <td>
-          <p><em>Old consumer:</em> kafka.consumer:type=ConsumerFetcherManager,name=MaxLag,clientId=([-.\w]+)</p>
-          <p><em>New consumer:</em> kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max</p>
-        </td>
+        <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max</td>
         <td></td>
       </tr>
       <tr>
@@ -1295,11 +1266,11 @@
   <!--#include virtual="generated/producer_metrics.html" -->
 
 
-  <h4><a id="new_consumer_monitoring" href="#new_consumer_monitoring">New consumer monitoring</a></h4>
+  <h4><a id="consumer_monitoring" href="#consumer_monitoring">consumer monitoring</a></h4>
 
-  The following metrics are available on new consumer instances.
+  The following metrics are available on consumer instances.
 
-  <h5><a id="new_consumer_group_monitoring" href="#new_consumer_group_monitoring">Consumer Group Metrics</a></h5>
+  <h5><a id="consumer_group_monitoring" href="#consumer_group_monitoring">Consumer Group Metrics</a></h5>
   <table class="data-table">
     <tbody>
       <tr>
@@ -1395,7 +1366,7 @@
     </tbody>
   </table>
 
-  <h5><a id="new_consumer_fetch_monitoring" href="#new_consumer_fetch_monitoring">Consumer Fetch Metrics</a></h5>
+  <h5><a id="consumer_fetch_monitoring" href="#consumer_fetch_monitoring">Consumer Fetch Metrics</a></h5>
 
   <!--#include virtual="generated/consumer_metrics.html" -->
 
