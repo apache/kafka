@@ -174,7 +174,7 @@ def save_prefs(prefs):
     """Save preferences"""
     print("Saving preferences to %s" % PREFS_FILE)
     with open(PREFS_FILE, 'w') as prefs_fp:
-        prefs = json.dump(prefs, prefs_fp)
+        json.dump(prefs, prefs_fp)
 
 def get_jdk(prefs, version):
     """
@@ -285,7 +285,7 @@ if not user_ok("""Requirements:
       signing.keyId=your-gpgkeyId
       signing.password=your-gpg-passphrase
       signing.secretKeyRingFile=/Users/your-id/.gnupg/secring.gpg (if you are using GPG 2.1 and beyond, then this file will no longer exist anymore, and you have to manually create it from the new private key directory with "gpg --export-secret-keys -o ~/.gnupg/secring.gpg")
-8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e., 
+8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e.,
        <server>
           <id>apache.releases.https</id>
           <username>your-apache-id</username>
