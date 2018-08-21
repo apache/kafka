@@ -293,7 +293,7 @@ object AclCommand extends Logging {
     if (opts.options.has(opts.forceOpt))
         return true
     println(msg)
-    StdIn.readChar().equals('y')
+    StdIn.readLine().equalsIgnoreCase("y")
   }
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[Acl]]): Unit = {
