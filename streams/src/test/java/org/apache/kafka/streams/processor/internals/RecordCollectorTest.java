@@ -25,6 +25,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -41,6 +42,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class RecordCollectorTest {
 
@@ -144,6 +146,23 @@ public class RecordCollectorTest {
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         final Long offset = collector.offsets().get(new TopicPartition("topic1", 0));
         assertEquals(Long.valueOf(0L), offset);
+    }
+
+    @Test
+    public void shouldUnwrapAndThrowProducerFencedExceptionFromCallToSend() {
+        final MockProducer<byte[], byte[]> producer =
+            new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
+        final RecordCollector collector = new RecordCollectorImpl(producer, "test", logContext);
+
+        producer.initTransactions();
+        producer.fenceProducer();
+
+        try {
+            collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+            fail("expected a ProducerFencedException");
+        } catch (ProducerFencedException pfe) {
+            // expected
+        }
     }
 
     @SuppressWarnings("unchecked")
