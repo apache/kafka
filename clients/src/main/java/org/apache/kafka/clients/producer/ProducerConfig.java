@@ -112,9 +112,9 @@ public class ProducerConfig extends AbstractConfig {
             + "prior to sending, the time to await acknowledgement from the broker (if expected), and the time allowed "
             + "for retriable send failures. The producer may report failure to send a record earlier than this config if "
             + "either an unrecoverable error is encountered, the retries have been exhausted, "
-            + "or the record is added to a batch which reached an earlier delivery expiration deadline."
-            + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "/<code> "
-            + "and <code>" + LINGER_MS_CONFIG + "</code>. ";
+            + "or the record is added to a batch which reached an earlier delivery expiration deadline. "
+            + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "</code> "
+            + "and <code>" + LINGER_MS_CONFIG + "</code>.";
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
