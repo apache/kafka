@@ -90,7 +90,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
           } catch {
             case e: ControllerMovedException =>
               info(s"Controller moved to another broker when processing $controllerEvent. Trigger controller move listener immediately", e)
-              controllerMovedListener
+              controllerMovedListener.apply()
             case e: Throwable => error(s"Error processing event $controllerEvent", e)
           }
 

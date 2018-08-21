@@ -600,8 +600,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
               onPartitionReassignment(tp, reassignedPartitionContext)
             } catch {
               case e: ControllerMovedException =>
-                error(s"Controller moved to another broker when " +
-                  s"handling reassignment of partition $tp to new replicas ${newReplicas.mkString(",")}", e)
+                error(s"Error completing reassignment of partition $tp because controller has moved to another broker", e)
                 throw e
               case e: Throwable =>
                 error(s"Error completing reassignment of partition $tp", e)
@@ -624,7 +623,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       partitionStateMachine.handleStateChanges(partitions.toSeq, OnlinePartition, Option(PreferredReplicaPartitionLeaderElectionStrategy))
     } catch {
       case e: ControllerMovedException =>
-        error("Controller moved to another broker during preferred replica leader election")
+        error(s"Error completing preferred replica leader election for partitions ${partitions.mkString(",")} because controller has moved to another broker.", e)
         throw e
       case e: Throwable => error(s"Error completing preferred replica leader election for partitions ${partitions.mkString(",")}", e)
     } finally {
@@ -658,7 +657,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       case _ =>
         throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
     }
-    info(s"Epoch incremented to ${controllerContext.epoch} and epoch version is now ${controllerContext.epochZkVersion}")
+    info(s"Epoch incremented to ${controllerContext.epoch} and epoch zk version is now ${controllerContext.epochZkVersion}")
   }
 
   private def initializeControllerContext() {
@@ -1532,11 +1531,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
       activeControllerId = zkClient.getControllerId.getOrElse(-1)
       if (wasActiveBeforeChange && !isActive) {
-        val curControllerEpoch = zkClient.getControllerEpoch
-        if (curControllerEpoch.isDefined) {
-          info(s"Previous: [ControllerEpoch = ${controllerContext.epoch}, ZkVersion=${controllerContext.epochZkVersion}]. " +
-            s"Current: [ControllerEpoch = ${curControllerEpoch.get._1}], ZkVersion=${curControllerEpoch.get._2.getVersion}")
-        }
         onControllerResignation()
       }
       elect()

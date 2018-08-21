@@ -190,7 +190,7 @@ class ZooKeeperClient(connectString: String,
             override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
               callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs)))
           }, ctx.orNull)
-        else {
+        else
           zooKeeper.multi(Seq(zkVersionCheck.get.checkOp, Op.create(path, data, acl.asJava, createMode)).asJava, new MultiCallback {
             override def processResult(rc: Int, multiOpPath: String, ctx: scala.Any, opResults: util.List[OpResult]): Unit = {
               val (zkCheckResultCode, requestOpResult) = getMultiOpResults(opResults)
@@ -201,7 +201,6 @@ class ZooKeeperClient(connectString: String,
               callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs), zkCheckResultCode))
             }
           }, ctx.orNull)
-        }
       case SetDataRequest(path, data, version, ctx, zkVersionCheck) =>
         if (zkVersionCheck.isEmpty)
           zooKeeper.setData(path, data, version, new StatCallback {
