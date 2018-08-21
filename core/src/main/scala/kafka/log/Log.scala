@@ -1608,7 +1608,9 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Perform an asynchronous delete on the given file if it exists (otherwise do nothing)
+   * Perform an asynchronous delete on the given file.
+   *
+   * This method assumes that the file exists and the method is not thread-safe.
    *
    * This method does not need to convert IOException (thrown from changeFileSuffixes) to KafkaStorageException because
    * it is either called before all logs are loaded or the caller will catch and handle IOException
@@ -1655,6 +1657,8 @@ class Log(@volatile var dir: File,
    */
   private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
     lock synchronized {
+      val existingOldSegments = oldSegments.filter(seg => segments.containsKey(seg.baseOffset))
+
       checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
@@ -1663,7 +1667,7 @@ class Log(@volatile var dir: File,
       addSegment(newSegment)
 
       // delete the old files
-      for (seg <- oldSegments) {
+      for (seg <- existingOldSegments) {
         // remove the index entry
         if (seg.baseOffset != newSegment.baseOffset)
           segments.remove(seg.baseOffset)
