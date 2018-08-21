@@ -25,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
+
 /**
  * The fixed-size time-based window specifications used for aggregations.
  * <p>
@@ -53,7 +55,6 @@ import java.util.Objects;
  */
 public final class TimeWindows extends Windows<TimeWindow> {
 
-    private static final long DEFAULT_MAINTAIN_DURATION_MS = 24 * 60 * 60 * 1000L; // default: one day
     private final long maintainDurationMs;
 
     /** The size of the windows in milliseconds. */
@@ -81,8 +82,11 @@ public final class TimeWindows extends Windows<TimeWindow> {
                         final Duration grace,
                         final long maintainDurationMs,
                         final int segments) {
-        this(sizeMs, advanceMs, grace, maintainDurationMs);
-        this.segments = segments;
+        super(segments);
+        this.sizeMs = sizeMs;
+        this.advanceMs = advanceMs;
+        this.grace = grace;
+        this.maintainDurationMs = maintainDurationMs;
     }
 
     /**
@@ -101,7 +105,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         if (sizeMs <= 0) {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
         }
-        return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_MAINTAIN_DURATION_MS);
+        return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_RETENTION_MS);
     }
 
     /**

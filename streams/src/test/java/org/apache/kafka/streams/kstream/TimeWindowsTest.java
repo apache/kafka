@@ -21,6 +21,8 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
+import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
@@ -150,77 +152,49 @@ public class TimeWindowsTest {
 
     @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
-        assertEquals(TimeWindows.of(3), TimeWindows.of(3));
-        assertEquals(TimeWindows.of(3).hashCode(), TimeWindows.of(3).hashCode());
+        verifyEquality(TimeWindows.of(3), TimeWindows.of(3));
 
-        assertEquals(TimeWindows.of(3).advanceBy(1), TimeWindows.of(3).advanceBy(1));
-        assertEquals(TimeWindows.of(3).advanceBy(1).hashCode(), TimeWindows.of(3).advanceBy(1).hashCode());
+        verifyEquality(TimeWindows.of(3).advanceBy(1), TimeWindows.of(3).advanceBy(1));
 
-        assertEquals(TimeWindows.of(3).grace(1), TimeWindows.of(3).grace(1));
-        assertEquals(TimeWindows.of(3).grace(1).hashCode(), TimeWindows.of(3).grace(1).hashCode());
+        verifyEquality(TimeWindows.of(3).grace(1), TimeWindows.of(3).grace(1));
 
-        assertEquals(TimeWindows.of(3).until(4), TimeWindows.of(3).until(4));
-        assertEquals(TimeWindows.of(3).until(4).hashCode(), TimeWindows.of(3).until(4).hashCode());
+        verifyEquality(TimeWindows.of(3).until(4), TimeWindows.of(3).until(4));
 
-        assertEquals(
+        verifyEquality(
             TimeWindows.of(3).advanceBy(1).grace(1).until(4),
             TimeWindows.of(3).advanceBy(1).grace(1).until(4)
-        );
-        assertEquals(
-            TimeWindows.of(3).advanceBy(1).grace(1).until(4).hashCode(),
-            TimeWindows.of(3).advanceBy(1).grace(1).until(4).hashCode()
         );
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
-        assertNotEquals(TimeWindows.of(9), TimeWindows.of(3));
-        assertNotEquals(TimeWindows.of(9).hashCode(), TimeWindows.of(3).hashCode());
+        verifyInEquality(TimeWindows.of(9), TimeWindows.of(3));
 
-        assertNotEquals(TimeWindows.of(3).advanceBy(2), TimeWindows.of(3).advanceBy(1));
-        assertNotEquals(TimeWindows.of(3).advanceBy(2).hashCode(), TimeWindows.of(3).advanceBy(1).hashCode());
+        verifyInEquality(TimeWindows.of(3).advanceBy(2), TimeWindows.of(3).advanceBy(1));
 
-        assertNotEquals(TimeWindows.of(3).grace(2), TimeWindows.of(3).grace(1));
-        assertNotEquals(TimeWindows.of(3).grace(2).hashCode(), TimeWindows.of(3).grace(1).hashCode());
+        verifyInEquality(TimeWindows.of(3).grace(2), TimeWindows.of(3).grace(1));
 
-        assertNotEquals(TimeWindows.of(3).until(9), TimeWindows.of(3).until(4));
-        assertNotEquals(TimeWindows.of(3).until(9).hashCode(), TimeWindows.of(3).until(4).hashCode());
+        verifyInEquality(TimeWindows.of(3).until(9), TimeWindows.of(3).until(4));
 
 
-        assertNotEquals(
+        verifyInEquality(
             TimeWindows.of(4).advanceBy(2).grace(2).until(4),
             TimeWindows.of(3).advanceBy(2).grace(2).until(4)
         );
-        assertNotEquals(
-            TimeWindows.of(4).advanceBy(2).grace(2).until(4).hashCode(),
-            TimeWindows.of(3).advanceBy(2).grace(2).until(4).hashCode()
-        );
 
-        assertNotEquals(
+        verifyInEquality(
             TimeWindows.of(3).advanceBy(1).grace(2).until(4),
             TimeWindows.of(3).advanceBy(2).grace(2).until(4)
-        );
-        assertNotEquals(
-            TimeWindows.of(3).advanceBy(1).grace(2).until(4).hashCode(),
-            TimeWindows.of(3).advanceBy(2).grace(2).until(4).hashCode()
         );
 
         assertNotEquals(
             TimeWindows.of(3).advanceBy(2).grace(1).until(4),
             TimeWindows.of(3).advanceBy(2).grace(2).until(4)
         );
-        assertNotEquals(
-            TimeWindows.of(3).advanceBy(2).grace(1).until(4).hashCode(),
-            TimeWindows.of(3).advanceBy(2).grace(2).until(4).hashCode()
-        );
 
         assertNotEquals(
             TimeWindows.of(3).advanceBy(2).grace(2).until(9),
             TimeWindows.of(3).advanceBy(2).grace(2).until(4)
-        );
-        assertNotEquals(
-            TimeWindows.of(3).advanceBy(2).grace(2).until(9).hashCode(),
-            TimeWindows.of(3).advanceBy(2).grace(2).until(4).hashCode()
         );
     }
 }

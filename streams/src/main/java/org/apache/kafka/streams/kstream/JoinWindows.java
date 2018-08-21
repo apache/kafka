@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
+
 /**
  * The window specifications used for joins.
  * <p>
@@ -66,7 +68,6 @@ import java.util.Objects;
  */
 public final class JoinWindows extends Windows<Window> {
 
-    private static final long DEFAULT_MAINTAIN_DURATION_MS = 24 * 60 * 60 * 1000L; // default: one day
     private final long maintainDurationMs;
 
     /** Maximum time difference for tuples that are before the join tuple. */
@@ -92,8 +93,14 @@ public final class JoinWindows extends Windows<Window> {
                         final Duration grace,
                         final long maintainDurationMs,
                         final int segments) {
-        this(beforeMs, afterMs, grace, maintainDurationMs);
-        this.segments = segments;
+        super(segments);
+        if (beforeMs + afterMs < 0) {
+            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
+        }
+        this.afterMs = afterMs;
+        this.beforeMs = beforeMs;
+        this.grace = grace;
+        this.maintainDurationMs = maintainDurationMs;
     }
 
     /**
@@ -105,7 +112,7 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if {@code timeDifferenceMs} is negative
      */
     public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, null, DEFAULT_MAINTAIN_DURATION_MS);
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, null, DEFAULT_RETENTION_MS);
     }
 
     /**

@@ -63,7 +63,6 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return a new unlimited window that starts at {@code startMs}
      * @throws IllegalArgumentException if the start time is negative
      */
-    @SuppressWarnings("WeakerAccess") // intentionally public - this warning probably means we need an integration test
     public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
         if (startMs < 0) {
             throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");

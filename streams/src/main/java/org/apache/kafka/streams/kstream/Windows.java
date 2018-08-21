@@ -21,6 +21,8 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
+
 /**
  * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
  *
@@ -38,10 +40,15 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
+    private long maintainDurationMs = DEFAULT_RETENTION_MS;
     @Deprecated public int segments = 3;
 
     protected Windows() {}
+
+    @SuppressWarnings("deprecation") // remove this constructor when we remove segments.
+    Windows(final int segments) {
+        this.segments = segments;
+    }
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
