@@ -217,7 +217,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                  security_config=self.security_config, num_nodes=self.num_nodes)
 
-        configs = dict( l.rstrip().split('=') for l in config_template.split('\n')
+        configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
 
         #load specific test override configs
