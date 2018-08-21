@@ -514,11 +514,15 @@ public class StreamThread extends Thread {
     static class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
 
         private final Sensor commitTimeSensor;
+        private final Sensor commitThroughputSensor;
         private final Sensor pollTimeSensor;
         private final Sensor processTimeSensor;
+        private final Sensor processThroughputSensor;
         private final Sensor punctuateTimeSensor;
+        private final Sensor punctuateThroughputSensor;
         private final Sensor taskCreatedSensor;
         private final Sensor tasksClosedSensor;
+
 
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
@@ -526,7 +530,8 @@ public class StreamThread extends Thread {
 
             commitTimeSensor = threadLevelSensor("commit-latency", Sensor.RecordingLevel.INFO);
             addAvgMaxLatency(commitTimeSensor, group, tagMap(), "commit");
-            addInvocationRateAndCount(commitTimeSensor, group, tagMap(), "commit");
+            commitThroughputSensor = threadLevelSensor("commit-throughput", Sensor.RecordingLevel.INFO);
+            addInvocationRateAndCount(commitThroughputSensor, group, tagMap(), "commit", true);
 
             pollTimeSensor = threadLevelSensor("poll-latency", Sensor.RecordingLevel.INFO);
             addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
@@ -536,11 +541,13 @@ public class StreamThread extends Thread {
 
             processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
             addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
-            addInvocationRateAndCount(processTimeSensor, group, tagMap(), "process");
+            processThroughputSensor = threadLevelSensor("process-throughput", Sensor.RecordingLevel.INFO);
+            addInvocationRateAndCount(processThroughputSensor, group, tagMap(), "process", true);
 
             punctuateTimeSensor = threadLevelSensor("punctuate-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(punctuateTimeSensor, group, tagMap(), "punctuate");
             addInvocationRateAndCount(punctuateTimeSensor, group, tagMap(), "punctuate");
+            punctuateThroughputSensor = threadLevelSensor("punctuate-throughput", Sensor.RecordingLevel.INFO);
+            addInvocationRateAndCount(punctuateThroughputSensor, group, tagMap(), "punctuate", true);
 
             taskCreatedSensor = threadLevelSensor("task-created", Sensor.RecordingLevel.INFO);
             taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
@@ -833,6 +840,7 @@ public class StreamThread extends Thread {
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, timerStartedMs);
+                streamsMetrics.processThroughputSensor.record(totalProcessed, timerStartedMs);
                 processedBeforeCommit = adjustRecordsProcessedBeforeCommit(
                         recordsProcessedBeforeCommit,
                         totalProcessed,
@@ -957,6 +965,7 @@ public class StreamThread extends Thread {
             processed = taskManager.process();
             if (processed > 0) {
                 streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, timerStartedMs);
+                streamsMetrics.processThroughputSensor.record(processed, timerStartedMs);
             }
             totalProcessedSinceLastMaybeCommit += processed;
 
@@ -971,6 +980,7 @@ public class StreamThread extends Thread {
             final int committed = taskManager.maybeCommitActiveTasks();
             if (committed > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+                streamsMetrics.commitThroughputSensor.record(committed, timerStartedMs);
             }
         } while (processed != 0);
 
@@ -984,6 +994,7 @@ public class StreamThread extends Thread {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
             streamsMetrics.punctuateTimeSensor.record(computeLatency() / (double) punctuated, timerStartedMs);
+            streamsMetrics.punctuateThroughputSensor.record(punctuated, timerStartedMs);
         }
     }
 
@@ -1035,6 +1046,7 @@ public class StreamThread extends Thread {
             final int committed = taskManager.commitAll();
             if (committed > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+                streamsMetrics.commitThroughputSensor.record(committed, timerStartedMs);
 
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();

@@ -18,13 +18,11 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.*;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -382,6 +380,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                  final String group,
                                                  final Map<String, String> tags,
                                                  final String operation) {
+        addInvocationRateAndCount(sensor, group, tags, operation, false);
+    }
+
+    public static void addInvocationRateAndCount(final Sensor sensor,
+                                                 final String group,
+                                                 final Map<String, String> tags,
+                                                 final String operation,
+                                                 final boolean sumRecordings) {
+        SampledStat rateCounter;
+        MeasurableStat totalCounter;
+        if (sumRecordings) {
+            rateCounter = new Rate.SampledTotal();
+            totalCounter = new Total();
+        } else {
+            rateCounter = new Count();
+            totalCounter = new CumulativeCount();
+        }
+
         sensor.add(
             new MetricName(
                 operation + "-rate",
@@ -389,7 +405,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 "The average number of occurrence of " + operation + " operation per second.",
                 tags
             ),
-            new Rate(TimeUnit.SECONDS, new Count())
+            new Rate(TimeUnit.SECONDS, rateCounter)
         );
         sensor.add(
             new MetricName(
@@ -398,7 +414,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 "The total number of occurrence of " + operation + " operations.",
                 tags
             ),
-            new Count()
+            totalCounter
         );
     }
 
