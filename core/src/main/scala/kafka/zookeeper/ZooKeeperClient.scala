@@ -31,7 +31,6 @@ import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.OpResult.{CheckResult, CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
-import org.apache.zookeeper.ZooDefs.OpCode
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._

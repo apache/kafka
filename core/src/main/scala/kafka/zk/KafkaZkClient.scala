@@ -35,12 +35,9 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
-import org.apache.zookeeper.OpResult.{CheckResult, ErrorResult, SetDataResult}
-import org.apache.zookeeper.ZooDefs.OpCode
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, Op, ZooKeeper}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 
