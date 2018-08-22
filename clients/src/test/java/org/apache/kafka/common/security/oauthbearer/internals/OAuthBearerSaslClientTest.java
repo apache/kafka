@@ -90,13 +90,14 @@ public class OAuthBearerSaslClientTest extends EasyMockSupport {
 
                         @Override
                         public String principalName() {
-                           return "principalName";
+                            return "principalName";
                         }
 
                         @Override
                         public Long startTimeMs() {
                             return null;
-                        }});
+                        }
+                    });
                 else if (callback instanceof SaslExtensionsCallback) {
                     if (toThrow)
                         throw new ConfigException(errorMessage);
