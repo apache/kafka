@@ -30,6 +30,10 @@ public class WindowedSerdes {
         public TimeWindowedSerde(final Serde<T> inner) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
         }
+
+        public TimeWindowedSerde(final Serde<T> inner, final long windowSize) {
+            super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer(), windowSize));
+        }
     }
 
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
@@ -46,14 +50,21 @@ public class WindowedSerdes {
     /**
      * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
      */
-    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
+    static public <T> TimeWindowedSerde<T> timeWindowedSerdeFrom(final Class<T> type) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
+    }
+
+    /**
+     * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
+     */
+    static public <T> TimeWindowedSerde<T> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
+        return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize);
     }
 
     /**
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
-    static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
+    static public <T> SessionWindowedSerde<T> sessionWindowedSerdeFrom(final Class<T> type) {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
     }
 }
