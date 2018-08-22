@@ -38,6 +38,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -598,6 +600,10 @@ public class TopologyTestDriver implements Closeable {
         return null;
     }
 
+    public StateStore getStateStore(final Materialized<?, ?, ?> materialized) {
+        return getStateStore(new MaterializedInternal<>(materialized).storeName());
+    }
+
     /**
      * Get the {@link KeyValueStore} with the given name.
      * The store can be a "regular" or global store.
@@ -616,6 +622,10 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
+    }
+
+    public <K, V> KeyValueStore<K, V> getKeyValueStore(final Materialized<K, V, ?> materialized) {
+        return getKeyValueStore(new MaterializedInternal<>(materialized).storeName());
     }
 
     /**
@@ -638,6 +648,10 @@ public class TopologyTestDriver implements Closeable {
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
     }
 
+    public <K, V> WindowStore<K, V> getWindowStore(final Materialized<K, V, ?> materialized) {
+        return getWindowStore(new MaterializedInternal<>(materialized).storeName());
+    }
+
     /**
      * Get the {@link SessionStore} with the given name.
      * The store can be a "regular" or global store.
@@ -656,6 +670,9 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
+    }
+    public <K, V> SessionStore<K, V> getSessionStore(final Materialized<K, V, ?> materialized) {
+        return getSessionStore(new MaterializedInternal<>(materialized).storeName());
     }
 
     /**

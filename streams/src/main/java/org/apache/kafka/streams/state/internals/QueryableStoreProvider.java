@@ -50,7 +50,7 @@ public class QueryableStoreProvider {
     public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
-            return queryableStoreType.create(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(globalStoreProvider)), storeName);
+            return queryableStoreType.create(new WrappingStoreProvider(Collections.singletonList(globalStoreProvider)), storeName);
         }
         final List<T> allStores = new ArrayList<>();
         for (final StateStoreProvider storeProvider : storeProviders) {

@@ -136,7 +136,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"))
     testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"))
     testDriver.readRecord[String, Long](sinkTopic).value shouldBe 2
-    testDriver.getKeyValueStore[String, Long](stateStore).get("1") shouldBe 2
+    testDriver.getKeyValueStore(materialized).get("1") shouldBe 2
 
     testDriver.readRecord[String, Long](sinkTopic) shouldBe null
 
