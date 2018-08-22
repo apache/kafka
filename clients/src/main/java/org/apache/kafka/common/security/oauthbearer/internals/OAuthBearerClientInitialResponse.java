@@ -21,11 +21,14 @@ import org.apache.kafka.common.utils.Utils;
 
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class OAuthBearerClientInitialResponse {
+    private static final SaslExtensions NO_SASL_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
+
     static final String SEPARATOR = "\u0001";
 
     private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
@@ -78,7 +81,7 @@ public class OAuthBearerClientInitialResponse {
     public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         this.tokenValue = tokenValue;
         this.authorizationId = authorizationId == null ? "" : authorizationId;
-        this.saslExtensions = validateExtensions(extensions);
+        this.saslExtensions = extensions != null ? validateExtensions(extensions) : NO_SASL_EXTENSIONS;
     }
 
     public SaslExtensions extensions() {
