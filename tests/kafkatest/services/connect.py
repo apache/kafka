@@ -40,7 +40,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "connect.stderr")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
-    EXTERNAL_FILE = os.path.join(PERSISTENT_ROOT, "connect-file-external.properties")
+    EXTERNAL_CONFIGS_FILE = os.path.join(PERSISTENT_ROOT, "connect-external-configs.properties")
     CONNECT_REST_PORT = 8083
 
     # Currently the Connect worker supports waiting on three modes:
@@ -158,7 +158,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def clean_node(self, node):
         node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
         self.security_config.clean_node(node)
-        all_files = " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE, self.EXTERNAL_FILE] + self.config_filenames() + self.files)
+        all_files = " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE, self.EXTERNAL_CONFIGS_FILE] + self.config_filenames() + self.files)
         node.account.ssh("rm -rf " + all_files, allow_fail=False)
 
     def config_filenames(self):
@@ -277,7 +277,7 @@ class ConnectStandaloneService(ConnectServiceBase):
 
         self.security_config.setup_node(node)
         if self.external_config_template_func:
-            node.account.create_file(self.EXTERNAL_FILE, self.external_config_template_func(node))
+            node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
@@ -324,7 +324,7 @@ class ConnectDistributedService(ConnectServiceBase):
 
         self.security_config.setup_node(node)
         if self.external_config_template_func:
-            node.account.create_file(self.EXTERNAL_FILE, self.external_config_template_func(node))
+            node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
