@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
@@ -332,9 +331,9 @@ public class ThreadCache {
     static class DirtyEntry {
         private final Bytes key;
         private final byte[] newValue;
-        private final ProcessorRecordContext recordContext;
+        private final LRUCacheEntry recordContext;
 
-        DirtyEntry(final Bytes key, final byte[] newValue, final ProcessorRecordContext recordContext) {
+        DirtyEntry(final Bytes key, final byte[] newValue, final LRUCacheEntry recordContext) {
             this.key = key;
             this.newValue = newValue;
             this.recordContext = recordContext;
@@ -348,7 +347,7 @@ public class ThreadCache {
             return newValue;
         }
 
-        public ProcessorRecordContext recordContext() {
+        public LRUCacheEntry entry() {
             return recordContext;
         }
     }

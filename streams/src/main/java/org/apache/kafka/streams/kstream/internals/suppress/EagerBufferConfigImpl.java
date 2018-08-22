@@ -20,13 +20,13 @@ import org.apache.kafka.streams.kstream.Suppressed;
 
 import java.util.Objects;
 
-public class EagerBufferConfigImpl extends BufferConfigImpl {
+public class EagerBufferConfigImpl extends BufferConfigInternal {
 
-    private final long maxKeys;
+    private final long maxRecords;
     private final long maxBytes;
 
-    public EagerBufferConfigImpl(final long maxKeys, final long maxBytes) {
-        this.maxKeys = maxKeys;
+    public EagerBufferConfigImpl(final long maxRecords, final long maxBytes) {
+        this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
     }
 
@@ -37,12 +37,12 @@ public class EagerBufferConfigImpl extends BufferConfigImpl {
 
     @Override
     public Suppressed.BufferConfig withMaxBytes(final long byteLimit) {
-        return new EagerBufferConfigImpl(maxKeys, byteLimit);
+        return new EagerBufferConfigImpl(maxRecords, byteLimit);
     }
 
     @Override
-    public long maxKeys() {
-        return maxKeys;
+    public long maxRecords() {
+        return maxRecords;
     }
 
     @Override
@@ -60,17 +60,17 @@ public class EagerBufferConfigImpl extends BufferConfigImpl {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final EagerBufferConfigImpl that = (EagerBufferConfigImpl) o;
-        return maxKeys == that.maxKeys &&
+        return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxKeys, maxBytes);
+        return Objects.hash(maxRecords, maxBytes);
     }
 
     @Override
     public String toString() {
-        return "EagerBufferConfigImpl{maxKeys=" + maxKeys + ", maxBytes=" + maxBytes + '}';
+        return "EagerBufferConfigImpl{maxKeys=" + maxRecords + ", maxBytes=" + maxBytes + '}';
     }
 }
