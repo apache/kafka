@@ -39,6 +39,7 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.source.SourceTask.SourcePartitionAndOffset;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -72,7 +73,7 @@ class WorkerSourceTask extends WorkerTask {
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
-    private KafkaProducer<byte[], byte[]> producer;
+    private final KafkaProducer<byte[], byte[]> producer;
     private final OffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
@@ -86,7 +87,7 @@ class WorkerSourceTask extends WorkerTask {
     // A second buffer is used while an offset flush is running
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean flushing;
-    private CountDownLatch stopRequestedLatch;
+    private final CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
     private boolean finishedStart = false;
@@ -222,11 +223,17 @@ class WorkerSourceTask extends WorkerTask {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
-                if (toSend == null)
-                    continue;
-                log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
-                if (!sendRecords())
-                    stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
+
+                if (toSend != null) {
+                    log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
+                    if (!sendRecords())
+                        stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
+                }
+
+                SourcePartitionAndOffset sourcePartitionAndOffset = task.getSourcePartitionAndOffset();
+                if (sourcePartitionAndOffset != null) {
+                    offsetWriter.offset(sourcePartitionAndOffset.getSourcePartition(), sourcePartitionAndOffset.getSourceOffset());
+                }
             }
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
