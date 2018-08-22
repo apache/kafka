@@ -24,7 +24,7 @@ import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
-import kafka.security.auth.SimpleAclAuthorizer.{VersionedAcls, NoAcls}
+import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
@@ -35,8 +35,9 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
+import org.apache.zookeeper.OpResult.{CheckResult, ErrorResult}
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
@@ -1638,8 +1639,15 @@ object KafkaZkClient {
   }
 
   def maybeThrowControllerMoveException(response: AsyncResponse): Unit = {
-    val zkVersionCheckResultCode = response.zkVersionCheckResultCode
-    if (zkVersionCheckResultCode != Code.OK)
-      throw new ControllerMovedException(s"Controller epoch zkVersion check fails. ZkErrorCode=${zkVersionCheckResultCode}")
+    response.zkVersionCheckResult match {
+      case Some(zkVersionCheckResult) => 
+        val zkVersionCheck = zkVersionCheckResult.zkVersionCheck
+        if (zkVersionCheckResult.opResult.getType == ZooDefs.OpCode.error && 
+          zkVersionCheck.checkPath.equals(ControllerEpochZNode.path)) {
+          // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
+          throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${zkVersionCheck.expectedZkVersion}")
+        }
+      case None =>
+    }
   }
 }
