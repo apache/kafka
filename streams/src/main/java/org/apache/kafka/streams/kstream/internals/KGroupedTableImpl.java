@@ -93,6 +93,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return new KTableImpl<>(builder,
                                 funcName,
                                 aggregateSupplier,
+                                materialized.keySerde(),
+                                materialized.valueSerde(),
                                 Collections.singleton(sourceName),
                                 materialized.storeName(),
                                 materialized.isQueryable(),

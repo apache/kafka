@@ -88,7 +88,6 @@ public class SuppressionIntegrationTest {
     private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
     private static final long TIMEOUT_MS = 30_000L;
 
-    @Ignore
     @Test
     public void shouldSuppressIntermediateEventsWithEmitAfter() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithEmitAfter";
@@ -220,7 +219,6 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldSuppressIntermediateEventsWithRecordLimit() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithKeyLimit";
@@ -279,7 +277,6 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldSuppressIntermediateEventsWithBytesLimit() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithBytesLimit";
@@ -339,7 +336,6 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
         final String testId = "-shouldSupportFinalResultsForTimeWindows";

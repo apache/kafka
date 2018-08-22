@@ -103,7 +103,7 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void intermediateSuppressionShouldBufferAndEmitLater() {
         final KTableSuppressProcessor<String, Long> processor =
             new KTableSuppressProcessor<>(
@@ -138,7 +138,7 @@ public class KTableSuppressProcessorTest {
     }
 
 
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void finalResultsSuppressionShouldBufferAndEmitAtGraceExpiration() {
         final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
             finalResults(ofMillis(1L)),
@@ -170,7 +170,7 @@ public class KTableSuppressProcessorTest {
      * it will still buffer events and emit only after the end of the window.
      * As opposed to emitting immediately the way regular suppresion would with a time limit of 0.
      */
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void finalResultsWithZeroGraceShouldStillBufferUntilTheWindowEnd() {
         final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
             finalResults(ofMillis(0)),
