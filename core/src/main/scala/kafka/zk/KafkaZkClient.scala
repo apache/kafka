@@ -24,7 +24,7 @@ import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
-import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
+import kafka.security.auth.SimpleAclAuthorizer.{VersionedAcls, NoAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
@@ -35,9 +35,9 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
-import org.apache.zookeeper.OpResult.{CheckResult, ErrorResult}
+import org.apache.zookeeper.OpResult.ErrorResult
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
+import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
@@ -1433,7 +1433,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return true if path gets deleted successfully, false if root path doesn't exist
    * @throws KeeperException if there is an error while deleting the znodes
    */
-  def deleteRecursive(path: String, expectedControllerEpochZkVersion: Int = -1): Boolean = {
+  def deleteRecursive(path: String, expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion): Boolean = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(path))
     getChildrenResponse.resultCode match {
       case Code.OK =>
@@ -1643,13 +1643,13 @@ object KafkaZkClient {
       case Some(zkVersionCheckResult) =>
         val zkVersionCheck = zkVersionCheckResult.zkVersionCheck
         if (zkVersionCheck.checkPath.equals(ControllerEpochZNode.path))
-        zkVersionCheckResult.opResult match {
-          case errorResult: ErrorResult => 
-            if (errorResult.getErr != Code.OK.intValue())
+          zkVersionCheckResult.opResult match {
+            case errorResult: ErrorResult =>
+              if (errorResult.getErr != Code.OK.intValue())
               // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
-              throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${zkVersionCheck.expectedZkVersion}")
-          case _ =>
-        }
+                throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${zkVersionCheck.expectedZkVersion}")
+            case _ =>
+          }
       case None =>
     }
   }

@@ -31,7 +31,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
-import org.apache.zookeeper.KeeperException.{BadVersionException, Code, NoNodeException, NodeExistsException}
+import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -44,7 +44,6 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.OpResult.CheckResult
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
