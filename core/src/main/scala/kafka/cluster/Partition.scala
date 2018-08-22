@@ -62,6 +62,8 @@ class Partition(val topic: String,
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
   @volatile private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
+  // defined when this broker is leader for partition
+  @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicas: Set[Replica] = Set.empty[Replica]
 
@@ -263,6 +265,7 @@ class Partition(val topic: String,
       allReplicasMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
+      leaderEpochStartOffsetOpt = None
       removePartitionMetrics()
       logManager.asyncDelete(topicPartition)
       logManager.asyncDelete(topicPartition, isFuture = true)
@@ -293,6 +296,7 @@ class Partition(val topic: String,
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
+      leaderEpochStartOffsetOpt = Some(getReplica().get.logEndOffset.messageOffset)
       newAssignedReplicas.foreach(id => getOrCreateReplica(id, partitionStateInfo.isNew))
 
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
@@ -344,6 +348,7 @@ class Partition(val topic: String,
       (assignedReplicas.map(_.brokerId) -- newAssignedReplicas).foreach(removeReplica)
       inSyncReplicas = Set.empty[Replica]
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
+      leaderEpochStartOffsetOpt = None
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
 
       // If the leader is unchanged and the epochs are no more than one change apart, indicate that no follower changes are required
@@ -388,7 +393,8 @@ class Partition(val topic: String,
 
   /**
    * Check and maybe expand the ISR of the partition.
-   * A replica will be added to ISR if its LEO >= current hw of the partition.
+   * A replica will be added to ISR if its LEO >= current hw of the partition and it caught up to
+   * an offset within the current leader epoch.
    *
    * Technically, a replica shouldn't be in ISR if it hasn't caught up for longer than replicaLagTimeMaxMs,
    * even if its log end offset is >= HW. However, to be consistent with how the follower determines
@@ -405,9 +411,11 @@ class Partition(val topic: String,
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
           val leaderHW = leaderReplica.highWatermark
+          val fetchOffset = logReadResult.info.fetchOffsetMetadata.messageOffset
           if (!inSyncReplicas.contains(replica) &&
              assignedReplicas.map(_.brokerId).contains(replicaId) &&
-             replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
+             replica.logEndOffset.offsetDiff(leaderHW) >= 0 &&
+             leaderEpochStartOffsetOpt.exists(fetchOffset >= _)) {
             val newInSyncReplicas = inSyncReplicas + replica
             info(s"Expanding ISR from ${inSyncReplicas.map(_.brokerId).mkString(",")} " +
               s"to ${newInSyncReplicas.map(_.brokerId).mkString(",")}")
