@@ -272,7 +272,7 @@ class PartitionTest {
     partition.appendRecordsToLeader(batch2, isFromClient = true)
     assertEquals(s"Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
 
-    // let the follower in ISR move leader's HW to LEO
+    // let the follower in ISR move leader's HW to move further but below LEO
     def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
       LogReadResult(info = fetchInfo,
                     highWatermark = leaderReplica.highWatermark.messageOffset,
