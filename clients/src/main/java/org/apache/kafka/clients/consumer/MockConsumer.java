@@ -380,7 +380,23 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+        for (TopicPartition tp : timestampsToSearch.keySet()) {
+            Long timestamp = timestampsToSearch.get(tp);
+            List<ConsumerRecord<K, V>> topicRecords = records.get(tp);
+            if (topicRecords == null) {
+                continue;
+            }
+            OffsetAndTimestamp ot = null;
+            for (ConsumerRecord record : topicRecords) {
+                if (record.timestamp() >= timestamp) {
+                    ot = new OffsetAndTimestamp(record.offset(), record.timestamp());
+                    break;
+                }
+            }
+            result.put(tp, ot);
+        }
+        return result;
     }
 
     @Override

@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,9 +46,17 @@ public class MockConsumerTest {
         consumer.updateBeginningOffsets(beginningOffsets);
         consumer.seek(new TopicPartition("test", 0), 0);
         ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key1", "value1");
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key2", "value2");
+        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 100L, TimestampType.CREATE_TIME, 0L, 0, 0, "key2", "value2");
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
+        Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+        TopicPartition test_0 = new TopicPartition("test", 0);
+        timestampsToSearch.put(test_0, 0L);
+        assertEquals(0, consumer.offsetsForTimes(timestampsToSearch).get(test_0).offset());
+        timestampsToSearch.put(test_0, 50L);
+        assertEquals(1, consumer.offsetsForTimes(timestampsToSearch).get(test_0).offset());
+        timestampsToSearch.put(test_0, 150L);
+        assertEquals(null, consumer.offsetsForTimes(timestampsToSearch).get(test_0));
         ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(1));
         Iterator<ConsumerRecord<String, String>> iter = recs.iterator();
         assertEquals(rec1, iter.next());
