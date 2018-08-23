@@ -220,9 +220,11 @@ public class KafkaProducerTest {
 
             assertTrue("Close terminated prematurely", future.cancel(true));
 
-            TestUtils.waitForCondition(() -> closeException.get() != null, "InterruptException did not occur within timeout.");
+            TestUtils.waitForCondition(() -> closeException.get() != null,
+                    "InterruptException did not occur within timeout.");
 
-            assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+            assertTrue("Expected exception not thrown " + closeException,
+                    closeException.get() instanceof InterruptException);
         } finally {
             executor.shutdownNow();
         }
@@ -511,7 +513,7 @@ public class KafkaProducerTest {
         final Cluster cluster = new Cluster(
             "dummy",
             Collections.singletonList(new Node(0, "host1", 1000)),
-                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
