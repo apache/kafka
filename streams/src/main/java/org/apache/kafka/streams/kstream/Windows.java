@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The window specification interface for fixed size windows that is used to define window boundaries and grace period.
+ * The window specification for fixed size windows that is used to define window boundaries and grace period.
  *
  * Grace period defines how long to wait on late events, where lateness is defined as (stream_time - record_timestamp).
  *
