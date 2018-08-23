@@ -22,7 +22,7 @@ import java.util
 import AbstractFetcherThread.ResultWithPartitions
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{Log, LogConfig}
+import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
 import kafka.zk.AdminZkClient
@@ -95,8 +95,7 @@ class ReplicaFetcherThread(name: String,
   private val minBytes = brokerConfig.replicaFetchMinBytes
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
-  private val brokerSupportsLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2 &&
-    brokerConfig.logMessageFormatVersion >= KAFKA_0_11_0_IV2
+  private val brokerSupportsLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
 
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
@@ -345,27 +344,26 @@ class ReplicaFetcherThread(name: String,
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
-    val (partitionsWithCache, partitionsWithoutCache) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
-    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionsWithCache
-      .map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
-      .partition { case (_, latestEpoch ) => latestEpoch != UNDEFINED_EPOCH }
+    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
-    // partitions for which it makes sense to request epoch
-    val partitionsWithError = (partitionsWithoutCache.keys ++ partitionsWithoutEpoch.keys).filter { tp => topicSupportsEpochRequest(tp) }.toSet
-    debug(s"Build leaderEpoch request: Partitions with epoch: $partitionsWithEpoch; Partitions without epoch: $partitionsWithError")
-
-    ResultWithPartitions(partitionsWithEpoch, partitionsWithError)
+    debug(s"Build leaderEpoch request $partitionsWithEpoch")
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     var result: Map[TopicPartition, EpochEndOffset] = null
     if (shouldSendLeaderEpochRequest(partitions)) {
-      val partitionsAsJava = partitions.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
+      // skip request for partitions without epoch, as their topic log message format doesn't support epochs
+      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epoch) => epoch != UNDEFINED_EPOCH }
+      val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
-        result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
-        debug(s"Receive leaderEpoch response $result")
+        val resultWithoutEpoch = partitionsWithoutEpoch.map { case (tp, _) => (tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)) }
+
+        result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala ++ resultWithoutEpoch
+        debug(s"Receive leaderEpoch response $result; Skipped request for partitions ${partitionsWithoutEpoch.keys}")
       } catch {
         case t: Throwable =>
           warn(s"Error when sending leader epoch request for $partitions", t)
@@ -385,24 +383,19 @@ class ReplicaFetcherThread(name: String,
     result
   }
 
-  /*
-    Decides whether or not we should send a LeaderEpochRequest
-      by checking the broker message format and all topics' message format versions
+  /**
+   * If a partition doesn't have an epoch in the cache, this means it either
+   *   does not support epochs (log message format below 0.11) or it is a bootstrapping follower.
+   *
+   * In both cases, it has an undefined epoch
+   *   and there is no use to send the request, as we know the broker will answer with that epoch
    */
   private def shouldSendLeaderEpochRequest(partitions: Map[TopicPartition, Int]): Boolean = {
     if (!brokerSupportsLeaderEpochRequest)
       return false
 
     // if all topics' message format do not support epoch requests, skip it
-    partitions.map { case (tp, _) => topicSupportsEpochRequest(tp) }.reduce(_ || _)
-  }
-
-  // protected for test mocking
-  protected def topicSupportsEpochRequest(tp: TopicPartition): Boolean = {
-    replicaMgr.getLog(tp) match {
-      case Some(log) => log.config.messageFormatVersion >= KAFKA_0_11_0_IV2
-      case None => false
-    }
+    partitions.map { case (_, latestEpoch) => latestEpoch != UNDEFINED_EPOCH }.reduce(_ || _)
   }
 
   /**
