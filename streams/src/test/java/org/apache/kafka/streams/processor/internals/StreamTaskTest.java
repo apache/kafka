@@ -26,10 +26,9 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -81,9 +80,9 @@ import static org.junit.Assert.fail;
 
 public class StreamTaskTest {
 
-    private final Serializer<Integer> intSerializer = new IntegerSerializer();
-    private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
-    private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
+    private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
+    private final Serializer<byte[]> bytesSerializer = Serdes.ByteArray().serializer();
+    private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
@@ -463,22 +462,35 @@ public class StreamTaskTest {
 
         assertFalse(task.commitNeeded());
 
-        // punctuate should indicate commit needed
-        task.punctuate(processorSystemTime, 10L, PunctuationType.WALL_CLOCK_TIME, punctuator);
-        assertTrue(task.commitNeeded());
-
-        task.commit();
-        assertFalse(task.commitNeeded());
-
-        task.punctuate(processorStreamTime, 10L, PunctuationType.STREAM_TIME, punctuator);
-        assertTrue(task.commitNeeded());
-
-        task.commit();
-        assertFalse(task.commitNeeded());
-
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-        task.process()
+        assertTrue(task.process());
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+        assertFalse(task.commitNeeded());
+
+        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+        assertFalse(task.commitNeeded());
+
+        time.sleep(10);
+        assertTrue(task.maybePunctuateSystemTime());
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+        assertFalse(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldRespectCommitRequested() {
+        task = createStatelessTask(createConfig(false));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.needCommit();
+        assertTrue(task.commitRequested());
     }
 
     @Test

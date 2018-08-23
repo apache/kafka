@@ -849,19 +849,35 @@ public class StreamThread extends Thread {
              *  4. If none of the the above happens, increment N.
              *  5. If one of the above happens, half the value of N.
              */
-            long totalProcessed;
+            int processed = 0;
             long timeSinceLastPoll;
 
             do {
-                totalProcessed = processAndMaybeCommit();
+                for (int i = 0; i < numIterations; i++) {
+                    processed = taskManager.process(now);
+
+                    if (processed > 0) {
+                        streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
+
+                        // commit any tasks that have requested a commit
+                        final int committed = taskManager.maybeCommitActiveTasks();
+                        if (committed > 0) {
+                            streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
+                        }
+                    } else {
+                        // if there is no records to be processed, exit immediately
+                        break;
+                    }
+                }
+
                 timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
                 if (maybePunctuate() || maybeCommit()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-                } else {
+                } else if (processed > 0) {
                     numIterations++;
                 }
-            } while (totalProcessed > 0 && timeSinceLastPoll < maxPollTimeMs / 2);
+            } while (processed > 0 && timeSinceLastPoll < maxPollTimeMs / 2);
         }
 
         // update standby tasks and maybe commit the standby tasks as well
@@ -960,38 +976,6 @@ public class StreamThread extends Thread {
 
             task.addRecords(partition, records.records(partition));
         }
-    }
-
-    /**
-     * Schedule the records processing by selecting which record is processed next. Commits may
-     * happen as records are processed.
-     *
-     * @return Number of records processed since last commit.
-     * @throws TaskMigratedException if committing offsets failed (non-EOS)
-     *                               or if the task producer got fenced (EOS)
-     */
-    private long processAndMaybeCommit() {
-        long totalProcessed = 0;
-
-        for (int i = 0; i < numIterations; i++) {
-            final int processed = taskManager.process(now);
-
-            if (processed > 0) {
-                totalProcessed += processed;
-                streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
-
-                // commit any tasks that have requested a commit
-                final int committed = taskManager.maybeCommitActiveTasks();
-                if (committed > 0) {
-                    streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
-                }
-            } else {
-                // if there is no records to be processed, exit immediately
-                break;
-            }
-        }
-
-        return totalProcessed;
     }
 
     /**
@@ -1249,6 +1233,10 @@ public class StreamThread extends Thread {
 
     Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
         return standbyRecords;
+    }
+
+    int currentNumIterations() {
+        return numIterations;
     }
 
     public Map<MetricName, Metric> producerMetrics() {
