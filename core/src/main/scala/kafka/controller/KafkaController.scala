@@ -75,7 +75,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   val topicDeletionManager = new TopicDeletionManager(this, eventManager, zkClient)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this, stateChangeLogger)
   val replicaStateMachine = new ReplicaStateMachine(config, stateChangeLogger, controllerContext, topicDeletionManager, zkClient, mutable.Map.empty, new ControllerBrokerRequestBatch(this, stateChangeLogger))
-  val partitionStateMachine = new PartitionStateMachine(config, stateChangeLogger, controllerContext, topicDeletionManager, zkClient, mutable.Map.empty, new ControllerBrokerRequestBatch(this, stateChangeLogger))
+  val partitionStateMachine = new PartitionStateMachine(config, stateChangeLogger, controllerContext, zkClient, mutable.Map.empty, new ControllerBrokerRequestBatch(this, stateChangeLogger))
+  partitionStateMachine.setTopicDeletionManager(topicDeletionManager)
 
   private val controllerChangeHandler = new ControllerChangeHandler(this, eventManager)
   private val brokerChangeHandler = new BrokerChangeHandler(this, eventManager)
@@ -200,6 +201,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
     eventManager.put(UncleanLeaderElectionEnable)
+  }
+
+  private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
+    if (isActive) {
+      eventManager.put(TopicUncleanLeaderElectionEnable(topic))
+    }
   }
 
   private def state: ControllerState = eventManager.state
@@ -990,16 +997,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // check ratio and if greater than desired ratio, trigger a rebalance for the topic partitions
       // that need to be on this broker
       if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
-        topicsNotInPreferredReplica.keys.foreach { topicPartition =>
-          // do this check only if the broker is live and there are no partitions being reassigned currently
-          // and preferred replica election is not in progress
-          if (controllerContext.isReplicaOnline(leaderBroker, topicPartition) &&
-            controllerContext.partitionsBeingReassigned.isEmpty &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
-            controllerContext.allTopics.contains(topicPartition.topic)) {
-            onPreferredReplicaElection(Set(topicPartition), isTriggeredByAutoRebalance = true)
-          }
-        }
+        // do this check only if the broker is live and there are no partitions being reassigned currently
+        // and preferred replica election is not in progress
+        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContext.isReplicaOnline(leaderBroker, tp) &&
+          controllerContext.partitionsBeingReassigned.isEmpty &&
+          !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
+          controllerContext.allTopics.contains(tp.topic))
+        onPreferredReplicaElection(candidatePartitions.toSet, isTriggeredByAutoRebalance = true)
       }
     }
   }
@@ -1028,6 +1032,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
+  case class TopicUncleanLeaderElectionEnable(topic: String) extends ControllerEvent {
+
+    def state = ControllerState.TopicUncleanLeaderElectionEnable
+
+    override def process(): Unit = {
+      if (!isActive) return
+      partitionStateMachine.triggerOnlinePartitionStateChange(topic)
+    }
+  }
+
   case class ControlledShutdown(id: Int, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
 
     def state = ControllerState.ControlledShutdown
@@ -1052,7 +1066,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       debug(s"Live brokers: ${controllerContext.liveBrokerIds.mkString(",")}")
 
       val partitionsToActOn = controllerContext.partitionsOnBroker(id).filter { partition =>
-        controllerContext.partitionReplicaAssignment(partition).size > 1 && controllerContext.partitionLeadershipInfo.contains(partition)
+        controllerContext.partitionReplicaAssignment(partition).size > 1 &&
+          controllerContext.partitionLeadershipInfo.contains(partition) &&
+          !topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic)
       }
       val (partitionsLedByBroker, partitionsFollowedByBroker) = partitionsToActOn.partition { partition =>
         controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader == id
@@ -1076,7 +1092,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         trace(s"All leaders = ${controllerContext.partitionLeadershipInfo.mkString(",")}")
         controllerContext.partitionLeadershipInfo.filter {
           case (topicPartition, leaderIsrAndControllerEpoch) =>
-            leaderIsrAndControllerEpoch.leaderAndIsr.leader == id && controllerContext.partitionReplicaAssignment(topicPartition).size > 1
+            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
+              leaderIsrAndControllerEpoch.leaderAndIsr.leader == id &&
+              controllerContext.partitionReplicaAssignment(topicPartition).size > 1
         }.keys
       }
       replicatedPartitionsBrokerLeads().toSet
@@ -1155,10 +1173,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       if (!isActive) {
         0
       } else {
-        controllerContext.partitionLeadershipInfo.count { case (tp, leadershipInfo) =>
-          !controllerContext.liveOrShuttingDownBrokerIds.contains(leadershipInfo.leaderAndIsr.leader) &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)
-        }
+        partitionStateMachine.offlinePartitionCount
       }
 
     preferredReplicaImbalanceCount =

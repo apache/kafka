@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.test.StreamsTestUtils;
 
 /**
  *  This class allows to access the {@link InternalTopologyBuilder} a {@link Topology} object.
@@ -25,14 +26,14 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 public class TopologyWrapper extends Topology {
 
     static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder;
+        return topology.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
     public InternalTopologyBuilder getInternalBuilder() {
-        return internalTopologyBuilder;
+        return internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
-    public void setApplicationId(final String applicationId) {
-        internalTopologyBuilder.setApplicationId(applicationId);
+    public InternalTopologyBuilder getInternalBuilder(final String applicationId) {
+        return internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(applicationId)));
     }
 }

@@ -95,7 +95,7 @@ public enum PatternType {
     }
 
     /**
-     * @eturn whether this resource pattern type is UNKNOWN.
+     * @return whether this resource pattern type is UNKNOWN.
      */
     public boolean isUnknown() {
         return this == UNKNOWN;

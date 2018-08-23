@@ -51,9 +51,7 @@ import java.util.regex.Pattern;
 
 import kafka.utils.MockTime;
 
-import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 
 @Category({IntegrationTest.class})
 public class RepartitionWithMergeOptimizingIntegrationTest {
@@ -165,13 +163,10 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         streams.start();
 
         final List<KeyValue<String, Long>> expectedCountKeyValues = Arrays.asList(KeyValue.pair("A", 6L), KeyValue.pair("B", 6L), KeyValue.pair("C", 6L));
-        final List<KeyValue<String, Long>> receivedCountKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig1, COUNT_TOPIC, expectedCountKeyValues.size());
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig1, COUNT_TOPIC, expectedCountKeyValues);
 
         final List<KeyValue<String, String>> expectedStringCountKeyValues = Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
-        final List<KeyValue<String, String>> receivedCountStringKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig2, COUNT_STRING_TOPIC, expectedStringCountKeyValues.size());
-
-        assertThat(receivedCountKeyValues, equalTo(expectedCountKeyValues));
-        assertThat(receivedCountStringKeyValues, equalTo(expectedStringCountKeyValues));
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig2, COUNT_STRING_TOPIC, expectedStringCountKeyValues);
 
         streams.close(5, TimeUnit.SECONDS);
     }

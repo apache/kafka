@@ -1749,7 +1749,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!parts.isEmpty())
                 return parts;
 
-            Timer timer = time.timer(requestTimeoutMs);
+            Timer timer = time.timer(timeout);
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
                     new MetadataRequest.Builder(Collections.singletonList(topic), true), timer);
             return topicMetadata.get(topic);

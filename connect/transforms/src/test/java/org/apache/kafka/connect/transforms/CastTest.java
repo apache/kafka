@@ -21,12 +21,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -304,6 +306,7 @@ public class CastTest {
         builder.field("boolean", Schema.BOOLEAN_SCHEMA);
         builder.field("string", Schema.STRING_SCHEMA);
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
+        builder.field("timestamp", Timestamp.SCHEMA);
         Schema supportedTypesSchema = builder.build();
 
         Struct recordValue = new Struct(supportedTypesSchema);
@@ -315,6 +318,7 @@ public class CastTest {
         recordValue.put("float64", -64.);
         recordValue.put("boolean", true);
         recordValue.put("string", "42");
+        recordValue.put("timestamp", new Date(0));
         // optional field intentionally omitted
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
@@ -331,7 +335,21 @@ public class CastTest {
         assertEquals(true, ((Struct) transformed.value()).schema().field("float64").schema().defaultValue());
         assertEquals((byte) 1, ((Struct) transformed.value()).get("boolean"));
         assertEquals(42, ((Struct) transformed.value()).get("string"));
+        assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
         assertNull(((Struct) transformed.value()).get("optional"));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.INT16_SCHEMA.type(), transformedSchema.field("int8").schema().type());
+        assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("int16").schema().type());
+        assertEquals(Schema.INT64_SCHEMA.type(), transformedSchema.field("int32").schema().type());
+        assertEquals(Schema.BOOLEAN_SCHEMA.type(), transformedSchema.field("int64").schema().type());
+        assertEquals(Schema.FLOAT64_SCHEMA.type(), transformedSchema.field("float32").schema().type());
+        assertEquals(Schema.BOOLEAN_SCHEMA.type(), transformedSchema.field("float64").schema().type());
+        assertEquals(Schema.INT8_SCHEMA.type(), transformedSchema.field("boolean").schema().type());
+        assertEquals(Schema.INT32_SCHEMA.type(), transformedSchema.field("string").schema().type());
+        assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("optional").schema().type());
+        // The following fields are not changed
+        assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
     }
 
     @SuppressWarnings("unchecked")

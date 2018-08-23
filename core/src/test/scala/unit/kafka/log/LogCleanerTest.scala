@@ -21,6 +21,7 @@ import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.file.Paths
 import java.util.Properties
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import kafka.common._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
@@ -87,6 +88,74 @@ class LogCleanerTest extends JUnitSuite {
     val shouldRemain = LogTest.keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, LogTest.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
+  }
+
+  @Test
+  def testCleanSegmentsWithConcurrentSegmentDeletion(): Unit = {
+    val deleteStartLatch = new CountDownLatch(1)
+    val deleteCompleteLatch = new CountDownLatch(1)
+
+    // Construct a log instance. The replaceSegments() method of the log instance is overridden so that
+    // it waits for another thread to execute deleteOldSegments()
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024 : java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    val topicPartition = Log.parseTopicPartitionName(dir)
+    val producerStateManager = new ProducerStateManager(topicPartition, dir)
+    val log = new Log(dir,
+                      config = LogConfig.fromProps(logConfig.originals, logProps),
+                      logStartOffset = 0L,
+                      recoveryPoint = 0L,
+                      scheduler = time.scheduler,
+                      brokerTopicStats = new BrokerTopicStats, time,
+                      maxProducerIdExpirationMs = 60 * 60 * 1000,
+                      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+                      topicPartition = topicPartition,
+                      producerStateManager = producerStateManager,
+                      logDirFailureChannel = new LogDirFailureChannel(10)) {
+      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+        deleteStartLatch.countDown()
+        if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
+          throw new IllegalStateException("Log segment deletion timed out")
+        }
+        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+      }
+    }
+
+    // Start a thread which execute log.deleteOldSegments() right before replaceSegments() is executed
+    val t = new Thread() {
+      override def run(): Unit = {
+        deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
+        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset)
+        log.onHighWatermarkIncremented(log.activeSegment.baseOffset)
+        log.deleteOldSegments()
+        deleteCompleteLatch.countDown()
+      }
+    }
+    t.start()
+
+    // Append records so that segment number increase to 3
+    while (log.numberOfSegments < 3) {
+      log.appendAsLeader(record(key = 0, log.logEndOffset.toInt), leaderEpoch = 0)
+      log.roll()
+    }
+    assertEquals(3, log.numberOfSegments)
+
+    // Remember reference to the first log and determine its file name expected for async deletion
+    val firstLogFile = log.logSegments.head.log
+    val expectedFileName = CoreUtils.replaceSuffix(firstLogFile.file.getPath, "", Log.DeletedFileSuffix)
+
+    // Clean the log. This should trigger replaceSegments() and deleteOldSegments();
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val segments = log.logSegments(0, log.activeSegment.baseOffset).toSeq
+    val stats = new CleanerStats()
+    cleaner.buildOffsetMap(log, 0, log.activeSegment.baseOffset, offsetMap, stats)
+    cleaner.cleanSegments(log, segments, offsetMap, 0L, stats)
+
+    // Validate based on the file name that log segment file is renamed exactly once for async deletion
+    assertEquals(expectedFileName, firstLogFile.file().getPath)
+    assertEquals(2, log.numberOfSegments)
   }
 
   @Test

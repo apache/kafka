@@ -82,6 +82,35 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
+  def testAppendTxnMarkerWithNoProducerState(): Unit = {
+    val producerEpoch = 2.toShort
+    appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 27L)
+
+    val firstEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    assertEquals(producerEpoch, firstEntry.producerEpoch)
+    assertEquals(producerId, firstEntry.producerId)
+    assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
+
+    // Fencing should continue to work even if the marker is the only thing left
+    assertThrows[ProducerFencedException] {
+      append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
+    }
+
+    // If the transaction marker is the only thing left in the log, then an attempt to write using a
+    // non-zero sequence number should cause an UnknownProducerId, so that the producer can reset its state
+    assertThrows[UnknownProducerIdException] {
+      append(stateManager, producerId, producerEpoch, 17, 0L, 4L)
+    }
+
+    // The broker should accept the request if the sequence number is reset to 0
+    append(stateManager, producerId, producerEpoch, 0, 39L, 4L)
+    val secondEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    assertEquals(producerEpoch, secondEntry.producerEpoch)
+    assertEquals(producerId, secondEntry.producerId)
+    assertEquals(0, secondEntry.lastSeq)
+  }
+
+  @Test
   def testProducerSequenceWrapAround(): Unit = {
     val epoch = 15.toShort
     val sequence = Int.MaxValue
