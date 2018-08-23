@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ExtendedSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -416,15 +417,25 @@ public class KafkaProducerTest {
         Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
+    @SuppressWarnings("unchecked") // safe as generic parameters won't vary
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testHeadersWithExtendedClasses() throws Exception {
+        doTestHeaders(ExtendedSerializer.class);
+    }
+
+    @SuppressWarnings("unchecked")
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testHeaders() throws Exception {
+        doTestHeaders(Serializer.class);
+    }
+
+    private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
-        ExtendedSerializer<String> keySerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
-        @SuppressWarnings("unchecked")
-        ExtendedSerializer<String> valueSerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
+        T keySerializer = PowerMock.createNiceMock(serializerClassToMock);
+        T valueSerializer = PowerMock.createNiceMock(serializerClassToMock);
 
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
@@ -472,6 +483,70 @@ public class KafkaProducerTest {
         PowerMock.verify(valueSerializer);
         PowerMock.verify(keySerializer);
 
+    }
+
+    private static class DefaultSerializerImpl implements Serializer<String> {
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    @Test
+    public void testDefaultSerializerImplementation() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        Serializer serializer = new DefaultSerializerImpl();
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer);
+        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+
+        String topic = "topic";
+        final Cluster cluster = new Cluster(
+                "dummy",
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.emptySet(),
+                Collections.emptySet());
+
+
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).anyTimes();
+
+        PowerMock.replay(metadata);
+
+        String value = "value";
+
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, value);
+        EasyMock.expect(serializer.serialize(topic, record.headers(), null)).andReturn(null).once();
+        EasyMock.expect(serializer.serialize(topic, record.headers(), value)).andReturn(value.getBytes()).once();
+
+        PowerMock.replay(serializer);
+        PowerMock.replay(serializer);
+
+
+        //ensure headers can be mutated pre send.
+        record.headers().add(new RecordHeader("test", "header2".getBytes()));
+
+        producer.send(record, null);
+
+        //ensure headers are closed and cannot be mutated post send
+        try {
+            record.headers().add(new RecordHeader("test", "test".getBytes()));
+            fail("Expected IllegalStateException to be raised");
+        } catch (IllegalStateException ise) {
+            //expected
+        }
+
+        //ensure existing headers are not changed, and last header for key is still original value
+        assertTrue(Arrays.equals(record.headers().lastHeader("test").value(), "header2".getBytes()));
+
+        PowerMock.verify(serializer);
+        PowerMock.verify(serializer);
     }
 
     @Test
