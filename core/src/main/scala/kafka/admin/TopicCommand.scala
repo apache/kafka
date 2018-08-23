@@ -207,6 +207,7 @@ object TopicCommand extends Logging {
     val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
     val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
     val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
+    val reportNotPreferredLeaders = opts.options.has(opts.reportNotPreferredLeaderPartitionsOpt)
     val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
     val adminZkClient = new AdminZkClient(zkClient)
 
@@ -234,9 +235,15 @@ object TopicCommand extends Logging {
               val inSyncReplicas = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr
               val leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader)
 
-              if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
-                  (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get)))) {
+              val isPartitionUnavailable = leader.isEmpty || !liveBrokers.contains(leader.get)
+              val isPartitionUnderReplicated = inSyncReplicas.size < assignedReplicas.size
+              val isPreferredLeader = leader.isDefined && assignedReplicas.head == leader.get
+
+              if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions && !reportNotPreferredLeaders) ||
+                  (reportUnderReplicatedPartitions && isPartitionUnderReplicated) ||
+                  (reportUnavailablePartitions && isPartitionUnavailable) ||
+                  (reportNotPreferredLeaders && !isPreferredLeader && !isPartitionUnavailable)) {
+                    // do not display unavailable partitions as in that case the leader is -1, which is not the preferred
 
                 val markedForDeletionString =
                   if (markedForDeletion && !describeConfigs) "\tMarkedForDeletion: true" else ""
@@ -344,6 +351,8 @@ object TopicCommand extends Logging {
                                                             "if set when describing topics, only show under replicated partitions")
     val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
+    val reportNotPreferredLeaderPartitionsOpt = parser.accepts("not-preferred-leaders",
+                                                            "If set when describing topics, only show partitions whose leader is not the preferred.")
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     val ifExistsOpt = parser.accepts("if-exists",
