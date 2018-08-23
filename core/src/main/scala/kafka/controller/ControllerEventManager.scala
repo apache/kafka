@@ -39,7 +39,8 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[ControllerEvent]
-  private val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
+  // Visible for test
+  private[controller] val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
   private val time = Time.SYSTEM
 
   private val eventQueueTimeHist = newHistogram("EventQueueTimeMs")

@@ -17,6 +17,7 @@
 
 package kafka.controller
 
+import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
 import com.yammer.metrics.Metrics
@@ -24,10 +25,13 @@ import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.zk.{PreferredReplicaElectionZNode, ZooKeeperTestHarness}
+import kafka.zk._
 import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.log4j.Level
+import unit.kafka.utils.LogCaptureAppender
 
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -341,7 +345,95 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     // leader doesn't change since all the replicas are shut down
     assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
   }
+  
+  @Test
+  def testControllerMoveOnTopicCreation(): Unit = {
+    servers = makeServers(1)
+    TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0))
+    
+    testControllerMove(() => {
+      val adminZkClient = new AdminZkClient(zkClient)
+      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(tp.topic, assignment, new Properties())
+    })
+  }
 
+  @Test
+  def testControllerMoveOnTopicDeletion(): Unit = {
+    servers = makeServers(1, deleteTopicEnable = true)
+    TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0))
+    TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
+    
+    testControllerMove(() => {
+      val adminZkClient = new AdminZkClient(zkClient)
+      adminZkClient.deleteTopic(tp.topic())
+    })
+  }
+  
+  @Test
+  def testControllerMoveOnPreferredReplicaElection(): Unit = {
+    servers = makeServers(1)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0))
+    TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
+
+    testControllerMove(() => zkClient.createPreferredReplicaElection(Set(tp)))
+  }
+
+  @Test
+  def testControllerMoveOnPartitionReassignment(): Unit = {
+    servers = makeServers(1)
+    TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0))
+    TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
+
+    val reassignment = Map(tp -> Seq(0))
+    testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
+  }
+
+  def testControllerMove(fun: () => Unit): Unit = {
+    val controller = getController().kafkaController
+    val controllerEpoch = zkClient.getControllerEpoch.get
+    val appender = LogCaptureAppender.createAndRegister
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
+    
+    try {
+      TestUtils.waitUntilTrue(() => {
+        controller.eventManager.state == ControllerState.Idle
+      }, "Controller event thread is still busy")
+
+      // Suspend the controller event thread before the pre-defined logic is triggered and before it process controller change.
+      // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
+      controller.eventManager.thread.suspend()
+
+      // Execute pre-defined logic. This can be topic creation/deletion, PLE, etc.
+      fun()
+
+      // Delete the controller path, re-create \controller znode and update the controller epoch to emulate controller movement
+      zkClient.deleteController(controller.controllerContext.epochZkVersion)
+      zkClient.registerController(servers.size, System.currentTimeMillis())
+      zkClient.setControllerEpochRaw(controllerEpoch._1 + 1, controllerEpoch._2.getVersion)
+
+      // Resume the controller event thread. At this point, the controller should see mismatch controller epoch zkVersion and resign
+      controller.eventManager.thread.resume()
+      TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
+
+      // Expect to capture the ControllerMovedException in the log of ControllerEventThread
+      val event = appender.getMessages.find(e => e.getLevel == Level.INFO
+        && e.getThrowableInformation != null
+        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new ControllerMovedException("").getClass.getName))
+      assertTrue(event.isDefined)
+      
+    } finally {
+      LogCaptureAppender.unregister(appender)
+      LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, previousLevel)
+    }
+  }
+  
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,
                                              replicas: Set[Int], leaderEpoch: Int): Unit = {
     otherBroker.shutdown()
@@ -381,12 +473,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
 
-  private def makeServers(numConfigs: Int, autoLeaderRebalanceEnable: Boolean = false, uncleanLeaderElectionEnable: Boolean = false) = {
+  private def makeServers(numConfigs: Int, autoLeaderRebalanceEnable: Boolean = false, uncleanLeaderElectionEnable: Boolean = false, deleteTopicEnable: Boolean = false) = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
       config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
+      config.setProperty(KafkaConfig.DeleteTopicEnableProp, deleteTopicEnable.toString)
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
