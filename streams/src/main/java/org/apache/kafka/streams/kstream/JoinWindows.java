@@ -112,6 +112,7 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if {@code timeDifferenceMs} is negative
      */
     public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
+        // This is a static factory method, so we initialize grace and retention to the defaults.
         return new JoinWindows(timeDifferenceMs, timeDifferenceMs, null, DEFAULT_RETENTION_MS);
     }
 

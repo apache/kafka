@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
-import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -26,9 +25,6 @@ import static org.junit.Assert.assertEquals;
 public class WindowsTest {
 
     private class TestWindows extends Windows {
-
-        private Duration grace;
-
         @Override
         public Map windowsFor(final long timestamp) {
             return null;

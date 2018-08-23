@@ -105,6 +105,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         if (sizeMs <= 0) {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
         }
+        // This is a static factory method, so we initialize grace and retention to the defaults.
         return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_RETENTION_MS);
     }
 

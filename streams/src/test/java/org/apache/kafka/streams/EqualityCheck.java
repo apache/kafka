@@ -67,7 +67,7 @@ public final class EqualityCheck {
         }
 
         if (o2.equals(o1)) {
-            throw new AssertionError(String.format("o2[%s] was not equal to o1[%s].", o2, o1));
+            throw new AssertionError(String.format("o2[%s] was equal to o1[%s].", o2, o1));
         }
         verifyHashCodeConsistency(o1, o2);
 
@@ -126,7 +126,7 @@ public final class EqualityCheck {
             if (first != second) {
                 throw new AssertionError(
                     String.format(
-                        "o1[%s]'s hashcode was not consistent: [%s]!=[%s].",
+                        "o1[%s]'s hashcode was not consistent: [%d]!=[%d].",
                         o1,
                         first,
                         second
@@ -141,7 +141,7 @@ public final class EqualityCheck {
             if (first != second) {
                 throw new AssertionError(
                     String.format(
-                        "o2[%s]'s hashcode was not consistent: [%s]!=[%s].",
+                        "o2[%s]'s hashcode was not consistent: [%d]!=[%d].",
                         o2,
                         first,
                         second

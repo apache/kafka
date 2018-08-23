@@ -659,14 +659,17 @@ public class KStreamAggregationIntegrationTest {
                                                                         new KeyValue<>("jo", "pause"),
                                                                         new KeyValue<>("emily", "pause"));
 
+        final Properties producerConfig = TestUtils.producerConfig(
+            CLUSTER.bootstrapServers(),
+            StringSerializer.class,
+            StringSerializer.class,
+            new Properties()
+        );
+
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             userSessionsStream,
             t1Messages,
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            producerConfig,
             t1);
 
         final long t2 = t1 + incrementTime;
@@ -675,11 +678,7 @@ public class KStreamAggregationIntegrationTest {
             Collections.singletonList(
                 new KeyValue<>("emily", "resume")
             ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            producerConfig,
             t2);
         final long t3 = t2 + incrementTime;
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -688,11 +687,7 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValue<>("bob", "pause"),
                 new KeyValue<>("penny", "stop")
             ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            producerConfig,
             t3);
 
         final long t4 = t3 + incrementTime;
@@ -702,11 +697,7 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValue<>("bob", "resume"), // bobs session continues
                 new KeyValue<>("jo", "resume")   // jo's starts new session
             ),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+            producerConfig,
             t4);
 
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
