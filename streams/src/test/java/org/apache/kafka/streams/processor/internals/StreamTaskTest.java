@@ -996,6 +996,7 @@ public class StreamTaskTest {
         } catch (final TaskMigratedException expected) {
             assertTrue(expected.getCause() instanceof ProducerFencedException);
         }
+        task = null;
 
         assertFalse(producer.transactionCommitted());
     }
