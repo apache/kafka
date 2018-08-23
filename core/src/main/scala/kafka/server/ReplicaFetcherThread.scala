@@ -339,7 +339,7 @@ class ReplicaFetcherThread(name: String,
     ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
-  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Option[Int]]] = {
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
@@ -347,16 +347,16 @@ class ReplicaFetcherThread(name: String,
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
     debug(s"Build leaderEpoch request $partitionsWithEpoch")
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
-  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
     var result: Map[TopicPartition, EpochEndOffset] = null
     if (shouldSendLeaderEpochRequest(partitions)) {
       // skip request for partitions without epoch, as their topic log message format doesn't support epochs
-      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epoch) => epoch != UNDEFINED_EPOCH }
-      val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
+      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epoch) => epoch.nonEmpty }
+      val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.get.asInstanceOf[Integer] }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
@@ -390,12 +390,12 @@ class ReplicaFetcherThread(name: String,
    * In both cases, it has an undefined epoch
    *   and there is no use to send the request, as we know the broker will answer with that epoch
    */
-  private def shouldSendLeaderEpochRequest(partitions: Map[TopicPartition, Int]): Boolean = {
+  private def shouldSendLeaderEpochRequest(partitions: Map[TopicPartition, Option[Int]]): Boolean = {
     if (!brokerSupportsLeaderEpochRequest)
       return false
 
     // if all topics' message format do not support epoch requests, skip it
-    partitions.map { case (_, latestEpoch) => latestEpoch != UNDEFINED_EPOCH }.reduce(_ || _)
+    partitions.map { case (_, latestEpoch) => latestEpoch.nonEmpty }.reduce(_ || _)
   }
 
   /**

@@ -71,7 +71,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
+    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> Some(leaderEpoch), t1p1 -> Some(leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
@@ -114,7 +114,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
+    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> Some(leaderEpoch), t1p1 -> Some(leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
@@ -156,7 +156,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaT1p1.epochs).andReturn(Some(leaderEpochsT1p1)).anyTimes()
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch).anyTimes()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(leaderEpochsT1p0.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaT1p0LEO)).anyTimes()
     expect(leaderEpochsT1p1.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaT1p1LEO)).anyTimes()
     expect(futureReplicaLeaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, futureReplicaLEO)).anyTimes()
@@ -216,8 +216,8 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch).once()
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch - 2).once()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(Some(leaderEpoch)).once()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(Some(leaderEpoch - 2)).once()
 
     // leader replica truncated and fetched new offsets with new leader epoch
     expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch - 1, replicaLEO)).anyTimes()
@@ -282,7 +282,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
     // pretend this is a completely new future replica, with no leader epochs recorded
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(UNDEFINED_EPOCH).anyTimes()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(None).anyTimes()
 
     // since UNDEFINED_EPOCH is -1 which will be lower than any valid leader epoch, the method
     // will return UNDEFINED_EPOCH_OFFSET if requested epoch is lower than the first epoch cached
@@ -337,7 +337,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(futureReplicaLeaderEpoch).anyTimes()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(Some(futureReplicaLeaderEpoch)).anyTimes()
     expect(leaderEpochs.endOffsetFor(futureReplicaLeaderEpoch)).andReturn((futureReplicaLeaderEpoch, replicaLEO)).anyTimes()
     expect(futureReplicaLeaderEpochs.endOffsetFor(futureReplicaLeaderEpoch)).andReturn((futureReplicaLeaderEpoch, futureReplicaLEO)).anyTimes()
 
@@ -420,7 +420,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch)
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(Some(leaderEpoch))
     expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaLEO))
     expect(futureReplicaLeaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, futureReplicaLEO))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()

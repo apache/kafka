@@ -138,7 +138,7 @@ class ReplicaAlterLogDirsThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Option[Int]]] = {
     def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
 
     val partitionEpochOpts = allPartitions
@@ -147,7 +147,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
@@ -156,10 +156,10 @@ class ReplicaAlterLogDirsThread(name: String,
    * @param partitions map of topic partition -> leader epoch of the future replica
    * @return map of topic partition -> end offset for a requested leader epoch
    */
-  def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
+  def fetchEpochsFromLeader(partitions: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
+        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch.getOrElse(UNDEFINED_EPOCH))
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>

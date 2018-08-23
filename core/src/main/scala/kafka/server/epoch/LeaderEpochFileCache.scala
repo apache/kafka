@@ -28,7 +28,7 @@ import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
-  def latestEpoch(): Int
+  def latestEpoch(): Option[Int]
   def endOffsetFor(epoch: Int): (Int, Long)
   def clearAndFlushLatest(offset: Long)
   def clearAndFlushEarliest(offset: Long)
@@ -58,7 +58,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch >= 0 && epoch > latestEpoch && offset >= latestOffset) {
+      if (epoch >= 0 && epoch > latestEpoch.getOrElse(UNDEFINED_EPOCH) && offset >= latestOffset) {
         info(s"Updated PartitionLeaderEpoch. ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
@@ -74,9 +74,9 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @return
     */
-  override def latestEpoch(): Int = {
+  override def latestEpoch: Option[Int] = {
     inReadLock(lock) {
-      if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
+      if (epochs.isEmpty) None else Some(epochs.last.epoch)
     }
   }
 
@@ -102,7 +102,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
           // this may happen if a bootstrapping follower sends a request with undefined epoch or
           // a follower is on the older message format where leader epochs are not recorded
           (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-        } else if (requestedEpoch == latestEpoch) {
+        } else if (requestedEpoch == latestEpoch.getOrElse(UNDEFINED_EPOCH)) {
           (requestedEpoch, leo().messageOffset)
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
@@ -193,11 +193,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:$latestEpoch, offset:$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:${latestEpoch.getOrElse(UNDEFINED_EPOCH)}, offset:$latestOffset} for Partition: $topicPartition"
 
   def validateAndMaybeWarn(epoch: Int, offset: Long) = {
     assert(epoch >= 0, s"Received a PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
-    if (epoch < latestEpoch())
+    if (epoch < latestEpoch.getOrElse(UNDEFINED_EPOCH))
       warn(s"Received a PartitionLeaderEpoch assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
     else if (offset < latestOffset())
