@@ -608,7 +608,7 @@ class Log(@volatile var dir: File,
       // idempotent/transactional features yet.
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
-          val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
+          val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset)
           producerStateManager.updateMapEndOffset(startOffset)
 
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
@@ -915,6 +915,7 @@ class Log(@volatile var dir: File,
     checkIfMemoryMappedBufferClosed()
     val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
+        // make the LSO always larger than or equal to logStartOffset
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         val segment = segments.floorEntry(offset).getValue
         val position  = segment.translateOffset(offset)

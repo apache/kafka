@@ -106,9 +106,9 @@ private[log] class ProducerStateEntry(val producerId: Long,
 
   def lastDataOffset: Long = if (isEmpty) -1L else batchMetadata.last.lastOffset
 
-  def lastTimestamp = if (isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
+  def lastTimestamp: Long = if (isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
 
-  def lastOffsetDelta : Int = if (isEmpty) 0 else batchMetadata.last.offsetDelta
+  def lastOffsetDelta: Int = if (isEmpty) 0 else batchMetadata.last.offsetDelta
 
   def isEmpty: Boolean = batchMetadata.isEmpty
 
@@ -140,8 +140,6 @@ private[log] class ProducerStateEntry(val producerId: Long,
     this.coordinatorEpoch = nextEntry.coordinatorEpoch
     this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset
   }
-
-  def removeBatchesOlderThan(offset: Long): Unit = batchMetadata.dropWhile(_.lastOffset < offset)
 
   def findDuplicateBatch(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch != producerEpoch)
@@ -548,7 +546,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
           try {
             info(s"Loading producer state from snapshot file '$file'")
             val loadedProducers = readSnapshot(file).filter { producerEntry =>
-              isProducerRetained(producerEntry, logStartOffset) && !isProducerExpired(currentTime, producerEntry)
+              !isProducerExpired(currentTime, producerEntry)
             }
             loadedProducers.foreach(loadProducerEntry)
             lastSnapOffset = offsetFromFile(file)
@@ -581,23 +579,27 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
+   * And also remove it's ongoing transaction.
    */
   def removeExpiredProducers(currentTimeMs: Long) {
-    producers.retain { case (_, lastEntry) =>
-      !isProducerExpired(currentTimeMs, lastEntry)
+    producers.retain { case (producerId, lastEntry) =>
+      if (isProducerExpired(currentTimeMs, lastEntry)) {
+        ongoingTxns.remove(producerId)
+        false
+      } else {
+        true
+      }
     }
   }
 
   /**
-   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
-   * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
+   * Truncate the producer id mapping to the given log end offset and reload the entries from the most
+   * recent snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
-    // remove all out of range snapshots
-    deleteSnapshotFiles(logDir, { snapOffset =>
-      snapOffset > logEndOffset || snapOffset <= logStartOffset
-    })
+    // remove all snapshots which have larger offset than log end offset
+    deleteSnapshotFiles(logDir, snapOffset => snapOffset > logEndOffset)
 
     if (logEndOffset != mapEndOffset) {
       producers.clear()
@@ -682,44 +684,18 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
 
-  private def isProducerRetained(producerStateEntry: ProducerStateEntry, logStartOffset: Long): Boolean = {
-    producerStateEntry.removeBatchesOlderThan(logStartOffset)
-    producerStateEntry.lastDataOffset >= logStartOffset
-  }
-
   /**
-   * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all producerIds which have a smaller last written offset. Additionally,
-   * we remove snapshots older than the new log start offset.
+   * When we remove the head of the log due to retention, This method takes the new start offset and
+   * removes all unreplicated transaction which have a smaller last written offset.
    *
-   * Note that snapshots from offsets greater than the log start offset may have producers included which
-   * should no longer be retained: these producers will be removed if and when we need to load state from
-   * the snapshot.
+   * Note we don't removed producerIds which have a smaller last written offset here. We remove them when
+   * their expiration time arrive. And also we don't delete snapshots here.
    */
   def truncateHead(logStartOffset: Long) {
-    val evictedProducerEntries = producers.filter { case (_, producerState) =>
-      !isProducerRetained(producerState, logStartOffset)
-    }
-    val evictedProducerIds = evictedProducerEntries.keySet
-
-    producers --= evictedProducerIds
-    removeEvictedOngoingTransactions(evictedProducerIds)
     removeUnreplicatedTransactions(logStartOffset)
 
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
-
-    deleteSnapshotsBefore(logStartOffset)
-    lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
-  }
-
-  private def removeEvictedOngoingTransactions(expiredProducerIds: collection.Set[Long]): Unit = {
-    val iterator = ongoingTxns.entrySet.iterator
-    while (iterator.hasNext) {
-      val txnEntry = iterator.next()
-      if (expiredProducerIds.contains(txnEntry.getValue.producerId))
-        iterator.remove()
-    }
   }
 
   private def removeUnreplicatedTransactions(offset: Long): Unit = {

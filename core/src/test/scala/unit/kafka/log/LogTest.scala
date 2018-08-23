@@ -726,7 +726,7 @@ class LogTest {
 
     log.maybeIncrementLogStartOffset(1L)
 
-    assertEquals(1, log.activeProducersWithLastSequence.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
     val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
     assertTrue(retainedLastSeqOpt.isDefined)
     assertEquals(0, retainedLastSeqOpt.get)
@@ -734,7 +734,7 @@ class LogTest {
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    assertEquals(2, reloadedLog.activeProducersWithLastSequence.size)
     val reloadedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
     assertEquals(retainedLastSeqOpt, reloadedLastSeqOpt)
   }
@@ -761,7 +761,7 @@ class LogTest {
     log.deleteOldSegments()
 
     assertEquals(1, log.logSegments.size)
-    assertEquals(1, log.activeProducersWithLastSequence.size)
+    assertEquals(2, log.activeProducersWithLastSequence.size)
     val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
     assertTrue(retainedLastSeqOpt.isDefined)
     assertEquals(0, retainedLastSeqOpt.get)
@@ -769,7 +769,7 @@ class LogTest {
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
-    assertEquals(1, reloadedLog.activeProducersWithLastSequence.size)
+    assertEquals(2, reloadedLog.activeProducersWithLastSequence.size)
     val reloadedEntryOpt = log.activeProducersWithLastSequence.get(pid2)
     assertEquals(retainedLastSeqOpt, reloadedEntryOpt)
   }
@@ -797,7 +797,7 @@ class LogTest {
   }
 
   @Test
-  def testProducerIdExpirationOnSegmentDeletion() {
+  def testProducerIdNotExpiredOnSegmentDeletion() {
     val pid1 = 1L
     val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), producerId = pid1, producerEpoch = 0, sequence = 0)
     val logConfig = LogTest.createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
@@ -819,7 +819,7 @@ class LogTest {
     log.deleteOldSegments()
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(Set(pid2), log.activeProducersWithLastSequence.keySet)
+    assertEquals(Set(pid1, pid2), log.activeProducersWithLastSequence.keySet)
   }
 
   @Test
