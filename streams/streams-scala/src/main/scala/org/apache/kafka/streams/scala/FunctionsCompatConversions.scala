@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,10 +21,17 @@ import org.apache.kafka.streams.kstream._
 import scala.collection.JavaConverters._
 import java.lang.{Iterable => JIterable}
 
-@deprecated("This object is for internal use only", since = "2.1.0")
-object FunctionConversions {
+/**
+ * Implicit classes that offer conversions of Scala function literals to
+ * SAM (Single Abstract Method) objects in Java. These make the Scala APIs much
+ * more expressive, with less boilerplate and more succinct.
+ * <p>
+ * For Scala 2.11, most of these conversions need to be invoked explicitly, as Scala 2.11 does not
+ * have full support for SAM types.
+ */
+private[scala] object FunctionsCompatConversions {
 
-  implicit private[scala] class ForeachActionFromFunction[K, V](val p: (K, V) => Unit) extends AnyVal {
+  implicit class ForeachActionFromFunction[K, V](val p: (K, V) => Unit) extends AnyVal {
     def asForeachAction: ForeachAction[K, V] = new ForeachAction[K, V] {
       override def apply(key: K, value: V): Unit = p(key, value)
     }
