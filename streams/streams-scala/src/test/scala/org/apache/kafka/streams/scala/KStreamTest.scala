@@ -29,6 +29,52 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
+  "filter a KStream" should "filter records satisfying the predicate" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    builder.stream[String, String](sourceTopic).filter((_, value) => value != "value2").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+
+    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+
+    testDriver.pipeRecord(sourceTopic, ("3", "value3"))
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value3"
+
+    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "filterNot a KStream" should "filter records not satisfying the predicate" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    builder.stream[String, String](sourceTopic).filterNot((_, value) => value == "value2").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+
+    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+
+    testDriver.pipeRecord(sourceTopic, ("3", "value3"))
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value3"
+
+    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
   "selectKey a KStream" should "select a new key" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
@@ -43,6 +89,8 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     testDriver.pipeRecord(sourceTopic, ("1", "value2"))
     testDriver.readRecord[String, String](sinkTopic).key shouldBe "value2"
+
+    testDriver.readRecord[String, String](sinkTopic) shouldBe null
 
     testDriver.close()
   }
