@@ -36,29 +36,27 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
+/**
+ * Possible error codes:
+ *
+ * UNKNOWN_TOPIC_OR_PARTITION (3)
+ * REQUEST_TIMED_OUT (7)
+ * OFFSET_METADATA_TOO_LARGE (12)
+ * COORDINATOR_LOAD_IN_PROGRESS (14)
+ * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+ * NOT_COORDINATOR (16)
+ * ILLEGAL_GENERATION (22)
+ * UNKNOWN_MEMBER_ID (25)
+ * REBALANCE_IN_PROGRESS (27)
+ * INVALID_COMMIT_OFFSET_SIZE (28)
+ * TOPIC_AUTHORIZATION_FAILED (29)
+ * GROUP_AUTHORIZATION_FAILED (30)
+ */
 public class OffsetCommitResponse extends AbstractResponse {
-
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level fields
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
-
-    /**
-     * Possible error codes:
-     *
-     * UNKNOWN_TOPIC_OR_PARTITION (3)
-     * REQUEST_TIMED_OUT (7)
-     * OFFSET_METADATA_TOO_LARGE (12)
-     * COORDINATOR_LOAD_IN_PROGRESS (14)
-     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR (16)
-     * ILLEGAL_GENERATION (22)
-     * UNKNOWN_MEMBER_ID (25)
-     * REBALANCE_IN_PROGRESS (27)
-     * INVALID_COMMIT_OFFSET_SIZE (28)
-     * TOPIC_AUTHORIZATION_FAILED (29)
-     * GROUP_AUTHORIZATION_FAILED (30)
-     */
 
     private static final Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(
             PARTITION_ID,
@@ -72,24 +70,29 @@ public class OffsetCommitResponse extends AbstractResponse {
             new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
 
-    /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
+    // V1 adds timestamp and group membership information (generation and memberId) to the request
     private static final Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
+
+    // V2 adds retention time to the request
     private static final Schema OFFSET_COMMIT_RESPONSE_V2 = OFFSET_COMMIT_RESPONSE_V0;
 
+    // V3 adds throttle time
     private static final Schema OFFSET_COMMIT_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V4 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema OFFSET_COMMIT_RESPONSE_V4 = OFFSET_COMMIT_RESPONSE_V3;
 
+    // V5 removes retention time from the request
     private static final Schema OFFSET_COMMIT_RESPONSE_V5 = OFFSET_COMMIT_RESPONSE_V4;
+
+    // V6 adds leader epoch to the request
+    private static final Schema OFFSET_COMMIT_RESPONSE_V6 = OFFSET_COMMIT_RESPONSE_V5;
 
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2,
-            OFFSET_COMMIT_RESPONSE_V3, OFFSET_COMMIT_RESPONSE_V4, OFFSET_COMMIT_RESPONSE_V5};
+            OFFSET_COMMIT_RESPONSE_V3, OFFSET_COMMIT_RESPONSE_V4, OFFSET_COMMIT_RESPONSE_V5, OFFSET_COMMIT_RESPONSE_V6};
     }
 
     private final Map<TopicPartition, Errors> responseData;
@@ -124,7 +127,7 @@ public class OffsetCommitResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
-        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupPartitionsByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);

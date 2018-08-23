@@ -27,7 +27,12 @@ public class CommonFields {
     public static final Field.Int32 PARTITION_ID = new Field.Int32("partition", "Topic partition id");
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
-    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The epoch");
+    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The leader epoch");
+    public static final Field.Int32 CURRENT_LEADER_EPOCH = new Field.Int32("current_leader_epoch",
+            "The current leader epoch, if provided, is used to fence consumers/replicas with old metadata. " +
+                    "If the provided value does not match the epoch of the current leader, then the broker " +
+                    "will respond with either UNKNOWN_LEADER_EPOCH (if the epoch is larger) " +
+                    "or FENCED_LEADER_EPOCH (if the epoch is smaller).");
 
     // Group APIs
     public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");

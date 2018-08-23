@@ -25,12 +25,12 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.EpochEndOffset
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.easymock.EasyMock._
 import org.junit.Assert._
 import org.junit.Test
-
 
 class OffsetsForLeaderEpochTest {
   private val config = TestUtils.createBrokerConfigs(1, TestUtils.MockZkConnect).map(KafkaConfig.fromProps).head
@@ -43,7 +43,8 @@ class OffsetsForLeaderEpochTest {
     //Given
     val epochAndOffset = (5, 42L)
     val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val request = Map(tp -> new OffsetsForLeaderEpochRequest.PartitionData(
+      RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //Stubs
     val mockLog = createNiceMock(classOf[kafka.log.Log])
@@ -84,7 +85,8 @@ class OffsetsForLeaderEpochTest {
 
     //Given
     val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val request = Map(tp -> new OffsetsForLeaderEpochRequest.PartitionData(
+      RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //When
     val response = replicaManager.lastOffsetForLeaderEpoch(request)
@@ -106,7 +108,8 @@ class OffsetsForLeaderEpochTest {
 
     //Given
     val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val request = Map(tp -> new OffsetsForLeaderEpochRequest.PartitionData(
+      RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //When
     val response = replicaManager.lastOffsetForLeaderEpoch(request)

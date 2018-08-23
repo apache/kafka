@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Optional;
+
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
 public class PartitionInfo {
-
     private final String topic;
     private final int partition;
     private final Node leader;
+    private final Integer leaderEpoch;
     private final Node[] replicas;
     private final Node[] inSyncReplicas;
     private final Node[] offlineReplicas;
@@ -33,10 +35,29 @@ public class PartitionInfo {
         this(topic, partition, leader, replicas, inSyncReplicas, new Node[0]);
     }
 
-    public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas, Node[] offlineReplicas) {
+    public PartitionInfo(String topic,
+                         int partition,
+                         Node leader,
+                         Node[] replicas,
+                         Node[] inSyncReplicas,
+                         Node[] offlineReplicas) {
+        this(topic, partition, leader, null, replicas, inSyncReplicas, offlineReplicas);
+    }
+
+    public PartitionInfo(String topic,
+                         int partition,
+                         Node leader,
+                         Integer leaderEpoch,
+                         Node[] replicas,
+                         Node[] inSyncReplicas,
+                         Node[] offlineReplicas) {
+        if (leaderEpoch != null && leaderEpoch < 0)
+            throw new IllegalArgumentException("Invalid negative leader epoch");
+
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
+        this.leaderEpoch = leaderEpoch;
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
         this.offlineReplicas = offlineReplicas;
@@ -85,12 +106,23 @@ public class PartitionInfo {
         return offlineReplicas;
     }
 
+    /**
+     * Get the current leader epoch if available, which will only be the case if the brokers support
+     * the needed Metadata API version and if there is an active leader.
+     *
+     * @return The leader epoch or empty if it is not known
+     */
+    public Optional<Integer> leaderEpoch() {
+        return Optional.ofNullable(leaderEpoch);
+    }
+
     @Override
     public String toString() {
-        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
+        return String.format("Partition(topic = %s, partition = %d, leader = %s, leaderEpoch = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
                              topic,
                              partition,
                              leader == null ? "none" : leader.idString(),
+                             leaderEpoch == null ? "unknown" : leaderEpoch.toString(),
                              formatNodeIds(replicas),
                              formatNodeIds(inSyncReplicas),
                              formatNodeIds(offlineReplicas));

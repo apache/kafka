@@ -128,7 +128,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
             logDirStruct.set(LOG_DIR_KEY_NAME, logDirEntry.getKey());
 
             List<Struct> topicStructArray = new ArrayList<>();
-            for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupDataByTopic(logDirEntry.getValue()).entrySet()) {
+            for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupPartitionsByTopic(logDirEntry.getValue()).entrySet()) {
                 Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);
                 topicStruct.set(TOPIC_NAME, topicEntry.getKey());
                 topicStruct.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());

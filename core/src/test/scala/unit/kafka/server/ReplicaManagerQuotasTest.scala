@@ -26,10 +26,11 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
+import org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH
 import org.apache.kafka.common.requests.IsolationLevel
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -43,7 +44,9 @@ class ReplicaManagerQuotasTest {
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
-  val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 0, 100), topicPartition2 -> new PartitionData(0, 0, 100))
+  val fetchInfo = Seq(
+    topicPartition1 -> new PartitionData(0, 0, 100, NO_PARTITION_LEADER_EPOCH),
+    topicPartition2 -> new PartitionData(0, 0, 100, NO_PARTITION_LEADER_EPOCH))
   var replicaManager: ReplicaManager = _
 
   @Test
@@ -165,7 +168,7 @@ class ReplicaManagerQuotasTest {
 
       val tp = new TopicPartition("t1", 0)
       val fetchParititonStatus = new FetchPartitionStatus(new LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-        relativePositionInSegment = 250), new PartitionData(50, 0, 1))
+         relativePositionInSegment = 250), new PartitionData(50, 0, 1, NO_PARTITION_LEADER_EPOCH))
       val fetchMetadata = new FetchMetadata(fetchMinBytes = 1, fetchMaxBytes = 1000, hardMaxBytesLimit = true, fetchOnlyLeader = true,
         fetchOnlyCommitted = false, isFromFollower = true, replicaId = 1, fetchPartitionStatus = List((tp, fetchParititonStatus)))
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,

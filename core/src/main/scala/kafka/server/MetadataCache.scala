@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
 /**
@@ -74,6 +75,7 @@ class MetadataCache(brokerId: Int) extends Logging {
       partitions.map { case (partitionId, partitionState) =>
         val topicPartition = new TopicPartition(topic, partitionId.toInt)
         val leaderBrokerId = partitionState.basePartitionState.leader
+        val leaderEpoch = partitionState.basePartitionState.leaderEpoch
         val maybeLeader = getAliveEndpoint(snapshot, leaderBrokerId, listenerName)
         val replicas = partitionState.basePartitionState.replicas.asScala.map(_.toInt)
         val replicaInfo = getEndpoints(snapshot, replicas, listenerName, errorUnavailableEndpoints)
@@ -89,7 +91,8 @@ class MetadataCache(brokerId: Int) extends Logging {
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
             new MetadataResponse.PartitionMetadata(error, partitionId.toInt, Node.noNode(),
-              replicaInfo.asJava, java.util.Collections.emptyList(), offlineReplicaInfo.asJava)
+              RecordBatch.NO_PARTITION_LEADER_EPOCH, replicaInfo.asJava, java.util.Collections.emptyList(),
+              offlineReplicaInfo.asJava)
 
           case Some(leader) =>
             val isr = partitionState.basePartitionState.isr.asScala.map(_.toInt)
@@ -100,15 +103,15 @@ class MetadataCache(brokerId: Int) extends Logging {
                 s"following brokers ${replicas.filterNot(replicaInfo.map(_.id).contains).mkString(",")}")
 
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+                leaderEpoch, replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             } else if (isrInfo.size < isr.size) {
               debug(s"Error while fetching metadata for $topicPartition: in sync replica information not available for " +
                 s"following brokers ${isr.filterNot(isrInfo.map(_.id).contains).mkString(",")}")
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+                leaderEpoch, replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             } else {
-              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId.toInt, leader, replicaInfo.asJava,
-                isrInfo.asJava, offlineReplicaInfo.asJava)
+              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId.toInt, leader, leaderEpoch,
+                replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             }
         }
       }

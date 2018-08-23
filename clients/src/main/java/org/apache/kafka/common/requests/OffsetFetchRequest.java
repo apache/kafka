@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -65,21 +66,28 @@ public class OffsetFetchRequest extends AbstractRequest {
             GROUP_ID,
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets."));
 
+    // V1 begins support for fetching offsets from the internal __consumer_offsets topic
     private static final Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
 
+    // V2 adds top-level error code to the response as well as allowing a null offset array to indicate fetch
+    // of all committed offsets for a group
     private static final Schema OFFSET_FETCH_REQUEST_V2 = new Schema(
             GROUP_ID,
             new Field(TOPICS_KEY_NAME, ArrayOf.nullable(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets. If the " +
                     "topic array is null fetch offsets for all topics."));
 
-    /* v3 request is the same as v2. Throttle time has been added to v3 response */
+    // V3 request is the same as v2. Throttle time has been added to v3 response
     private static final Schema OFFSET_FETCH_REQUEST_V3 = OFFSET_FETCH_REQUEST_V2;
 
+    // V4 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema OFFSET_FETCH_REQUEST_V4 = OFFSET_FETCH_REQUEST_V3;
+
+    // V5 adds the leader epoch of the committed offset in the response
+    private static final Schema OFFSET_FETCH_REQUEST_V5 = OFFSET_FETCH_REQUEST_V4;
 
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2,
-            OFFSET_FETCH_REQUEST_V3, OFFSET_FETCH_REQUEST_V4};
+            OFFSET_FETCH_REQUEST_V3, OFFSET_FETCH_REQUEST_V4, OFFSET_FETCH_REQUEST_V5};
     }
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
@@ -128,7 +136,6 @@ public class OffsetFetchRequest extends AbstractRequest {
         return new OffsetFetchRequest.Builder(groupId, null).build((short) 2);
     }
 
-    // v0, v1, and v2 have the same fields.
     private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
         super(version);
         this.groupId = groupId;
@@ -166,12 +173,14 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
         if (versionId < 2) {
-            for (TopicPartition partition : this.partitions) {
-                responsePartitions.put(partition, new OffsetFetchResponse.PartitionData(
-                        OffsetFetchResponse.INVALID_OFFSET,
-                        OffsetFetchResponse.NO_METADATA,
-                        error));
-            }
+            OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
+                    OffsetFetchResponse.INVALID_OFFSET,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                    OffsetFetchResponse.NO_METADATA,
+                    error);
+
+            for (TopicPartition partition : this.partitions)
+                responsePartitions.put(partition, partitionError);
         }
 
         switch (versionId) {
@@ -181,6 +190,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 return new OffsetFetchResponse(error, responsePartitions);
             case 3:
             case 4:
+            case 5:
                 return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -214,7 +224,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.OFFSET_FETCH.requestSchema(version()));
         struct.set(GROUP_ID, groupId);
         if (partitions != null) {
-            Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
+            Map<String, List<Integer>> topicsData = CollectionUtils.groupPartitionsByTopic(partitions);
 
             List<Struct> topicArray = new ArrayList<>();
             for (Map.Entry<String, List<Integer>> entries : topicsData.entrySet()) {
@@ -235,4 +245,5 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         return struct;
     }
+
 }

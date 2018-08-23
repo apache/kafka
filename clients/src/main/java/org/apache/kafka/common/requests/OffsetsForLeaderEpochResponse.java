@@ -33,20 +33,19 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String END_OFFSET_KEY_NAME = "end_offset";
+    private static final Field.Int64 END_OFFSET = new Field.Int64("end_offset", "The end offset");
 
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0 = new Schema(
             ERROR_CODE,
             PARTITION_ID,
-            new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
+            END_OFFSET);
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0)));
@@ -54,13 +53,12 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
                     "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
-    // OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 added a per-partition leader epoch field,
-    // which specifies which leader epoch the end offset belongs to
+    // V1 added a per-partition leader epoch field which specifies which leader epoch the end offset belongs to
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 = new Schema(
             ERROR_CODE,
             PARTITION_ID,
             LEADER_EPOCH,
-            new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
+            END_OFFSET);
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1)));
@@ -68,8 +66,12 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1),
                   "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
+    // V2 bumped for addition of current leader epoch to the request schema.
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1};
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1,
+            OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2};
     }
 
     private Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
@@ -85,7 +87,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 int partitionId = partitionAndEpoch.get(PARTITION_ID);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
                 int leaderEpoch = partitionAndEpoch.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                long endOffset = partitionAndEpoch.getLong(END_OFFSET_KEY_NAME);
+                long endOffset = partitionAndEpoch.get(END_OFFSET);
                 epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, leaderEpoch, endOffset));
             }
         }
@@ -115,7 +117,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct responseStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(version));
 
-        Map<String, Map<Integer, EpochEndOffset>> endOffsetsByTopic = CollectionUtils.groupDataByTopic(epochEndOffsetsByPartition);
+        Map<String, Map<Integer, EpochEndOffset>> endOffsetsByTopic = CollectionUtils.groupPartitionsByTopic(epochEndOffsetsByPartition);
 
         List<Struct> topics = new ArrayList<>(endOffsetsByTopic.size());
         for (Map.Entry<String, Map<Integer, EpochEndOffset>> topicToPartitionEpochs : endOffsetsByTopic.entrySet()) {
@@ -128,7 +130,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 partitionStruct.set(ERROR_CODE, partitionEndOffset.getValue().error().code());
                 partitionStruct.set(PARTITION_ID, partitionEndOffset.getKey());
                 partitionStruct.setIfExists(LEADER_EPOCH, partitionEndOffset.getValue().leaderEpoch());
-                partitionStruct.set(END_OFFSET_KEY_NAME, partitionEndOffset.getValue().endOffset());
+                partitionStruct.set(END_OFFSET, partitionEndOffset.getValue().endOffset());
                 partitions.add(partitionStruct);
             }
             topicStruct.set(PARTITIONS_KEY_NAME, partitions.toArray());

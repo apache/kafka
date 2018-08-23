@@ -204,7 +204,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             markerStruct.set(COORDINATOR_EPOCH_KEY_NAME, entry.coordinatorEpoch);
             markerStruct.set(TRANSACTION_RESULT_KEY_NAME, entry.result.id);
 
-            Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(entry.partitions);
+            Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupPartitionsByTopic(entry.partitions);
             Object[] partitionsArray = new Object[mappedPartitions.size()];
             int j = 0;
             for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {

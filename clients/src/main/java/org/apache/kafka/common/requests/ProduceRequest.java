@@ -268,7 +268,7 @@ public class ProduceRequest extends AbstractRequest {
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
         short version = version();
         Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
-        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
+        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupPartitionsByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
         struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);

@@ -92,4 +92,10 @@ public class Field {
             super(name, Type.NULLABLE_STRING, docString, false, null);
         }
     }
+
+    public static class Bool extends Field {
+        public Bool(String name, String docString) {
+            super(name, Type.BOOLEAN, docString, false, null);
+        }
+    }
 }

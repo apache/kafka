@@ -440,13 +440,17 @@ class GroupMetadataManager(brokerId: Int,
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
       topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
+        val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+          RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
+        topicPartition -> partitionData
       }.toMap
     } else {
       group.inLock {
         if (group.is(Dead)) {
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-            (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
+            val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+              RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
+            topicPartition -> partitionData
           }.toMap
         } else {
           topicPartitionsOpt match {
@@ -454,16 +458,19 @@ class GroupMetadataManager(brokerId: Int,
               // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
               // that commit offsets to Kafka.)
               group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
+                  RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetAndMetadata.metadata, Errors.NONE)
               }
 
             case Some(topicPartitions) =>
               topicPartitions.map { topicPartition =>
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
-                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
+                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                      RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
                   case Some(offsetAndMetadata) =>
-                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
+                      RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetAndMetadata.metadata, Errors.NONE)
                 }
                 topicPartition -> partitionData
               }.toMap

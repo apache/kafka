@@ -127,7 +127,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DELETE_RECORDS.requestSchema(version()));
-        Map<String, Map<Integer, Long>> offsetsByTopic = CollectionUtils.groupDataByTopic(partitionOffsets);
+        Map<String, Map<Integer, Long>> offsetsByTopic = CollectionUtils.groupPartitionsByTopic(partitionOffsets);
         struct.set(TIMEOUT_KEY_NAME, timeout);
         List<Struct> topicStructArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Long>> offsetsByTopicEntry : offsetsByTopic.entrySet()) {

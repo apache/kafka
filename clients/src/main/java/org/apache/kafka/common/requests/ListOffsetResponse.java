@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,11 +34,20 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
+/**
+ * Possible error code:
+ *
+ *  UNKNOWN_TOPIC_OR_PARTITION (3)
+ *  NOT_LEADER_FOR_PARTITION (6)
+ *  UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
+ *  UNKNOWN (-1)
+ */
 public class ListOffsetResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
@@ -47,57 +57,68 @@ public class ListOffsetResponse extends AbstractResponse {
     // topic level field names
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
 
-    /**
-     * Possible error code:
-     *
-     *  UNKNOWN_TOPIC_OR_PARTITION (3)
-     *  NOT_LEADER_FOR_PARTITION (6)
-     *  UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
-     *  UNKNOWN (-1)
-     */
-
     // This key is only used by ListOffsetResponse v0
     @Deprecated
     private static final String OFFSETS_KEY_NAME = "offsets";
-    private static final String TIMESTAMP_KEY_NAME = "timestamp";
-    private static final String OFFSET_KEY_NAME = "offset";
+    private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",
+            "The timestamp associated with the returned offset");
+    private static final Field.Int64 OFFSET = new Field.Int64("offset",
+            "The offset found");
 
     private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
             new Field(OFFSETS_KEY_NAME, new ArrayOf(INT64), "A list of offsets."));
 
-    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE,
-            new Field(TIMESTAMP_KEY_NAME, INT64, "The timestamp associated with the returned offset"),
-            new Field(OFFSET_KEY_NAME, INT64, "offset found"));
-
     private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
+
+    private static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
+
+    // V1 bumped for the removal of the offsets array
+    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            TIMESTAMP,
+            OFFSET);
 
     private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V1 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
 
-    private static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
-
     private static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+
+    // V2 bumped for the addition of the throttle time
     private static final Schema LIST_OFFSET_RESPONSE_V2 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V3 bumped to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema LIST_OFFSET_RESPONSE_V3 = LIST_OFFSET_RESPONSE_V2;
+
+    // V4 bumped for the addition of the current leader epoch in the request schema and the
+    // leader epoch in the response partition data
+    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V4 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            TIMESTAMP,
+            OFFSET,
+            LEADER_EPOCH);
+
+    private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V4 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V4)));
+
+    private static final Schema LIST_OFFSET_RESPONSE_V4 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V4)));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2,
-            LIST_OFFSET_RESPONSE_V3};
+            LIST_OFFSET_RESPONSE_V3, LIST_OFFSET_RESPONSE_V4};
     }
 
     public static final class PartitionData {
@@ -107,6 +128,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public final List<Long> offsets;
         public final Long timestamp;
         public final Long offset;
+        public final int leaderEpoch;
 
         /**
          * Constructor for ListOffsetResponse v0
@@ -117,32 +139,37 @@ public class ListOffsetResponse extends AbstractResponse {
             this.offsets = offsets;
             this.timestamp = null;
             this.offset = null;
+            this.leaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
         }
 
         /**
          * Constructor for ListOffsetResponse v1
          */
-        public PartitionData(Errors error, long timestamp, long offset) {
+        public PartitionData(Errors error, long timestamp, long offset, int leaderEpoch) {
             this.error = error;
             this.timestamp = timestamp;
             this.offset = offset;
             this.offsets = null;
+            this.leaderEpoch = leaderEpoch;
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("PartitionData{").
-                append("errorCode: ").append((int) error.code()).
-                append(", timestamp: ").append(timestamp).
-                append(", offset: ").append(offset).
-                append(", offsets: ");
+            bld.append("PartitionData(").
+                    append("errorCode: ").append((int) error.code());
+
             if (offsets == null) {
-                bld.append(offsets);
+                bld.append(", timestamp: ").append(timestamp).
+                        append(", offset: ").append(offset).
+                        append(", leaderEpoch: ").append(leaderEpoch);
             } else {
-                bld.append("[").append(Utils.join(this.offsets, ",")).append("]");
+                bld.append(", offsets: ").
+                        append("[").
+                        append(Utils.join(this.offsets, ",")).
+                        append("]");
             }
-            bld.append("}");
+            bld.append(")");
             return bld.toString();
         }
     }
@@ -180,9 +207,10 @@ public class ListOffsetResponse extends AbstractResponse {
                         offsetsList.add((Long) offset);
                     partitionData = new PartitionData(error, offsetsList);
                 } else {
-                    long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
-                    long offset = partitionResponse.getLong(OFFSET_KEY_NAME);
-                    partitionData = new PartitionData(error, timestamp, offset);
+                    long timestamp = partitionResponse.get(TIMESTAMP);
+                    long offset = partitionResponse.get(OFFSET);
+                    int leaderEpoch = partitionResponse.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                    partitionData = new PartitionData(error, timestamp, offset, leaderEpoch);
                 }
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
@@ -214,7 +242,7 @@ public class ListOffsetResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionsByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
@@ -226,11 +254,12 @@ public class ListOffsetResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(ERROR_CODE, offsetPartitionData.error.code());
-                if (version == 0)
+                if (version == 0) {
                     partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
-                else {
-                    partitionData.set(TIMESTAMP_KEY_NAME, offsetPartitionData.timestamp);
-                    partitionData.set(OFFSET_KEY_NAME, offsetPartitionData.offset);
+                } else {
+                    partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
+                    partitionData.set(OFFSET, offsetPartitionData.offset);
+                    partitionData.setIfExists(LEADER_EPOCH, offsetPartitionData.leaderEpoch);
                 }
                 partitionArray.add(partitionData);
             }

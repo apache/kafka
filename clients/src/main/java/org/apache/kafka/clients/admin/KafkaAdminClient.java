@@ -140,6 +140,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -2643,12 +2644,15 @@ public class KafkaAdminClient extends AdminClient {
                             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
                                     response.responseData().entrySet()) {
                                 final TopicPartition topicPartition = entry.getKey();
-                                final Errors error = entry.getValue().error;
+                                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                                final Errors error = partitionData.error;
 
                                 if (error == Errors.NONE) {
-                                    final Long offset = entry.getValue().offset;
-                                    final String metadata = entry.getValue().metadata;
-                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
+                                    final Long offset = partitionData.offset;
+                                    final String metadata = partitionData.metadata;
+                                    final Integer leaderEpoch = partitionData.leaderEpoch != NO_PARTITION_LEADER_EPOCH ?
+                                            partitionData.leaderEpoch : null;
+                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                                 } else {
                                     log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                                 }
