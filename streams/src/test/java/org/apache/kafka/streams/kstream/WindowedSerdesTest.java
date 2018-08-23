@@ -27,9 +27,8 @@ public class WindowedSerdesTest {
 
     @Test
     public void testTimeWindowSerdeFrom() {
-        final long windowSize = 500000;
-        final Windowed<Integer> timeWindowed = new Windowed<>(10, new TimeWindow(0, windowSize));
-        final WindowedSerdes.TimeWindowedSerde<Integer> timeWindowedSerde = WindowedSerdes.timeWindowedSerdeFrom(Integer.class, windowSize);
+        final Windowed<Integer> timeWindowed = new Windowed<>(10, new TimeWindow(0, Long.MAX_VALUE));
+        final WindowedSerdes.TimeWindowedSerde<Integer> timeWindowedSerde = WindowedSerdes.timeWindowedSerdeFrom(Integer.class);
         final byte[] bytes = timeWindowedSerde.serializer().serialize(topic, timeWindowed);
         final Windowed<Integer> windowed = timeWindowedSerde.deserializer().deserialize(topic, bytes);
         Assert.assertEquals(timeWindowed, windowed);
