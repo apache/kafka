@@ -25,6 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec}
+import kafka.metrics.KafkaMetricsConfig._
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -944,6 +945,10 @@ object KafkaConfig {
       .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
+
+      /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
+      .define(KafkaMetricsReporterClassesProp, LIST, "", LOW, KafkaMetricsReporterClassesDoc)
+      .define(KafkaMetricsPollingIntervalSecondsProp, INT, KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 
       /** ********* Quota configuration ***********/
       .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ProducerQuotaBytesPerSecondDefaultDoc)
