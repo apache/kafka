@@ -456,6 +456,32 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldRespectCommitNeeded() {
+        task = createStatelessTask(createConfig(false));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        assertFalse(task.commitNeeded());
+
+        // punctuate should indicate commit needed
+        task.punctuate(processorSystemTime, 10L, PunctuationType.WALL_CLOCK_TIME, punctuator);
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+        assertFalse(task.commitNeeded());
+
+        task.punctuate(processorStreamTime, 10L, PunctuationType.STREAM_TIME, punctuator);
+        assertTrue(task.commitNeeded());
+
+        task.commit();
+        assertFalse(task.commitNeeded());
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.process();
+        task.process()
+    }
+
+    @Test
     public void shouldBeProcessableIfAllPartitionsBuffered() {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
