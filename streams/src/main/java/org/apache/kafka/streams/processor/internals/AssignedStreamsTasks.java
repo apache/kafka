@@ -48,8 +48,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             final StreamTask task = it.next();
             try {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    committed++;
                     task.commit();
+                    committed++;
                     log.debug("Committed active task {} per user request in", task.id());
                 }
             } catch (final TaskMigratedException e) {
@@ -62,7 +62,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 it.remove();
                 throw e;
             } catch (final RuntimeException t) {
-                log.error("Failed to commit {} due to the following error:",
+                log.error("Failed to commit StreamTask {} due to the following error:",
                         task.id(),
                         t);
                 if (firstException == null) {
@@ -92,25 +92,16 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     /**
-     * Check if tasks need to be enforced processing
-     */
-    void maybeEnforceProcess(final long now) {
-        for (final StreamTask task : running.values()) {
-            task.maybeEnforceProcess(now);
-        }
-    }
-
-    /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process() {
+    int process(final long now) {
         int processed = 0;
 
         final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
         while (it.hasNext()) {
             final StreamTask task = it.next().getValue();
             try {
-                if (task.isProcessable() && task.process()) {
+                if (task.isProcessable(now) && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {

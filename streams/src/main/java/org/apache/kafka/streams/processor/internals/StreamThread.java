@@ -838,9 +838,9 @@ public class StreamThread extends Thread {
             addRecordsToTasks(records);
         }
 
+        // TODO: we will process some tasks even if the state is not RUNNING, i.e. some other
+        // tasks are still being restored.
         if (taskManager.hasActiveRunningTasks()) {
-            taskManager.maybeEnforceProcess(now);
-
             /*
              * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
              *  1. If it is time to commit, do it;
@@ -864,12 +864,10 @@ public class StreamThread extends Thread {
             } while (totalProcessed > 0 && timeSinceLastPoll < maxPollTimeMs / 2);
         }
 
-        // even if there is not data to process in this iteration, still need to check if commit / punctuate is needed
-        maybePunctuate();
+        // update standby tasks and maybe commit the standby tasks as well
+        maybeUpdateStandbyTasks();
 
         maybeCommit();
-
-        maybeUpdateStandbyTasks();
     }
 
     /**
@@ -882,7 +880,7 @@ public class StreamThread extends Thread {
     private ConsumerRecords<byte[], byte[]> pollRequests(final Duration pollTime) {
         ConsumerRecords<byte[], byte[]> records = null;
 
-        this.lastPollMs = now;
+        lastPollMs = now;
 
         try {
             records = consumer.poll(pollTime);
@@ -976,7 +974,7 @@ public class StreamThread extends Thread {
         long totalProcessed = 0;
 
         for (int i = 0; i < numIterations; i++) {
-            final int processed = taskManager.process();
+            final int processed = taskManager.process(now);
 
             if (processed > 0) {
                 totalProcessed += processed;
@@ -1009,7 +1007,7 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Commit all tasks owned by this thread if specified interval time has elapsed
+     * Try to commit all active tasks owned by this thread
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)

@@ -278,10 +278,6 @@ public class TaskManager {
         }
     }
 
-    void maybeEnforceProcess(final long now) {
-        active.maybeEnforceProcess(now);
-    }
-
     AdminClient getAdminClient() {
         return adminClient;
     }
@@ -413,8 +409,8 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process() {
-        return active.process();
+    int process(final long now) {
+        return active.process(now);
     }
 
     /**

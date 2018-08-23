@@ -72,10 +72,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final ProducerSupplier producerSupplier;
 
     private Sensor closeSensor;
-    private long lastEnforcedProcess;
+    private long lastEnforcedProcessingTime;
     private Producer<byte[], byte[]> producer;
     private boolean commitRequested = false;
-    private boolean enforcedProcess = false;
+    private boolean enforceProcessing = false;
     private boolean transactionInFlight = false;
 
     protected static final class TaskMetrics {
@@ -83,7 +83,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Sensor taskCommitTimeSensor;
         final Sensor taskEnforcedProcessSensor;
         private final String taskName;
-
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             taskName = id.toString();
@@ -276,7 +275,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         processorContext.initialized();
 
-        lastEnforcedProcess = time.milliseconds();
+        lastEnforcedProcessingTime = time.milliseconds();
 
         taskInitialized = true;
     }
@@ -303,19 +302,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable
      */
-    boolean isProcessable() {
-        return enforcedProcess || partitionGroup.allPartitionsBuffered();
-    }
-
-    void maybeEnforceProcess(final long now) {
-        if (partitionGroup.allPartitionsBuffered()) {
-            enforcedProcess = false;
-        } else if (partitionGroup.numBuffered() > 0 && now - lastEnforcedProcess > maxTaskIdleMs) {
+    boolean isProcessable(final long now) {
+        if (enforceProcessing) {
+            return true;
+        } else if (partitionGroup.allPartitionsBuffered()) {
+            return true;
+        } else if (partitionGroup.numBuffered() > 0 && now - lastEnforcedProcessingTime > maxTaskIdleMs) {
             taskMetrics.taskEnforcedProcessSensor.record();
-            lastEnforcedProcess = now;
-            enforcedProcess = true;
+            lastEnforcedProcessingTime = now;
+            enforceProcessing = true;
+            return true;
         } else {
-            enforcedProcess = false;
+            return false;
         }
     }
 
@@ -467,7 +465,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         commitNeeded = false;
         commitRequested = false;
-        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);    }
+        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
+    }
 
     @Override
     protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
@@ -712,6 +711,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
             consumer.pause(singleton(partition));
+        }
+
+        // reset enforce processing flag once we've had data for all partitions: since we have
+        // reset the timer the last time we set this flag to true, it guarantees that we will
+        // re-timer ourselves for another period  of idleness.
+        if (partitionGroup.allPartitionsBuffered()) {
+            enforceProcessing = false;
         }
     }
 

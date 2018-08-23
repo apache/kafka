@@ -599,10 +599,10 @@ public class TaskManagerTest {
 
     @Test
     public void shouldProcessActiveTasks() {
-        EasyMock.expect(active.process()).andReturn(10);
+        EasyMock.expect(active.process(0L)).andReturn(10);
         replay();
 
-        assertThat(taskManager.process(), equalTo(10));
+        assertThat(taskManager.process(0L), equalTo(10));
         verify(active);
     }
 

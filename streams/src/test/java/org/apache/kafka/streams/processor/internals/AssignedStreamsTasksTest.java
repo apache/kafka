@@ -342,19 +342,16 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess(0L);
-        EasyMock.expectLastCall();
-        EasyMock.expect(t1.isProcessable()).andReturn(true);
+        EasyMock.expect(t1.isProcessable(0L)).andReturn(true);
         t1.process();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
-        assignedTasks.maybeEnforceProcess(0L);
 
         try {
-            assignedTasks.process();
+            assignedTasks.process(0L);
             fail("Should have thrown TaskMigratedException.");
         } catch (final TaskMigratedException expected) { /* ignore */ }
 
@@ -365,15 +362,11 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldNotProcessUnprocessableTasks() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess(0L);
-        EasyMock.expectLastCall();
-        EasyMock.expect(t1.isProcessable()).andReturn(false);
+        EasyMock.expect(t1.isProcessable(0L)).andReturn(false);
         EasyMock.replay(t1);
         addAndInitTask();
 
-        assignedTasks.maybeEnforceProcess(0L);
-
-        assertThat(assignedTasks.process(), equalTo(0));
+        assertThat(assignedTasks.process(0L), equalTo(0));
 
         EasyMock.verify(t1);
     }
@@ -381,17 +374,14 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldAlwaysProcessProcessableTasks() {
         mockTaskInitialization();
-        t1.maybeEnforceProcess(0L);
-        EasyMock.expectLastCall();
-        EasyMock.expect(t1.isProcessable()).andReturn(true);
+        EasyMock.expect(t1.isProcessable(0L)).andReturn(true);
         EasyMock.expect(t1.process()).andReturn(true).once();
 
         EasyMock.replay(t1);
 
         addAndInitTask();
-        assignedTasks.maybeEnforceProcess(0L);
 
-        assertThat(assignedTasks.process(), equalTo(1));
+        assertThat(assignedTasks.process(0L), equalTo(1));
 
         EasyMock.verify(t1);
     }

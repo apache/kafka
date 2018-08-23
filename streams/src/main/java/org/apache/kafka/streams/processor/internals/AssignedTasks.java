@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 abstract class AssignedTasks<T extends Task> {
-    protected final Logger log;
+    final Logger log;
     private final String taskTypeName;
     private final Map<TaskId, T> created = new HashMap<>();
     private final Map<TaskId, T> suspended = new HashMap<>();
@@ -347,8 +347,8 @@ abstract class AssignedTasks<T extends Task> {
                     task.commit();
                 }
             } catch (final TaskMigratedException e) {
-                log.info("Failed to commit {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
+                log.info("Failed to commit {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -356,7 +356,8 @@ abstract class AssignedTasks<T extends Task> {
                 it.remove();
                 throw e;
             } catch (final RuntimeException t) {
-                log.error("Failed to commit {} due to the following error:",
+                log.error("Failed to commit {} {} due to the following error:",
+                        taskTypeName,
                         task.id(),
                         t);
                 if (firstException == null) {

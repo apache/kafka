@@ -461,17 +461,17 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        assertFalse(task.isProcessable());
+        assertFalse(task.isProcessable(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable());
+        assertFalse(task.isProcessable(0L));
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
-        assertTrue(task.isProcessable());
+        assertTrue(task.isProcessable(0L));
     }
 
     @Test
@@ -480,30 +480,31 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        assertFalse(task.isProcessable());
+        assertFalse(task.isProcessable(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        task.maybeEnforceProcess(time.milliseconds());
-        assertFalse(task.isProcessable());
+        assertFalse(task.isProcessable(time.milliseconds()));
 
-        task.maybeEnforceProcess(time.milliseconds() + 50L);
-        assertFalse(task.isProcessable());
+        assertFalse(task.isProcessable(time.milliseconds() + 50L));
 
-        task.maybeEnforceProcess(time.milliseconds() + 101L);
-        assertTrue(task.isProcessable());
+        assertTrue(task.isProcessable(time.milliseconds() + 101L));
 
-        // after enforced, should reset the timer
-        task.maybeEnforceProcess(time.milliseconds() + 130L);
-        assertFalse(task.isProcessable());
+        // once decided to enforce, continue doing that
+        assertTrue(task.isProcessable(time.milliseconds() + 102L));
 
-        task.maybeEnforceProcess(time.milliseconds() + 201L);
-        assertFalse(task.isProcessable());
+        task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
-        task.maybeEnforceProcess(time.milliseconds() + 202L);
-        assertTrue(task.isProcessable());
+        assertTrue(task.isProcessable(time.milliseconds() + 130L));
+
+        // one resumed to normal processing, the timer should be reset
+        task.process();
+
+        assertFalse(task.isProcessable(time.milliseconds() + 201L));
+
+        assertTrue(task.isProcessable(time.milliseconds() + 202L));
     }
 
 
