@@ -227,6 +227,14 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         return AdminClient.create(adminClientConfig);
     }
 
+    /**
+     * Consume at least n records in a given duration or throw an exception.
+     *
+     * @param n the number of expected records in this topic.
+     * @param maxDuration the max duration to wait for these records.
+     * @param topics the topics to subscribe and consume records from.
+     * @return a {@link ConsumerRecords} collection containing at least n records.
+     */
     public ConsumerRecords<byte[], byte[]> consumeNRecords(int n, long maxDuration, String... topics) {
         long num = 1;
         long duration = maxDuration;

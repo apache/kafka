@@ -28,15 +28,19 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DLQTest {
+public class ConnectIntegrationTest {
 
-    private static final Logger log = LoggerFactory.getLogger(DLQTest.class);
+    private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
     @ClassRule
     public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster();
 
+    /**
+     * Simple test case to bring up an embedded Connect cluster along a backing Kafka and Zk process.
+     * The test will produce and consume records, and start up a sink connector which will consume these records.
+     */
     @Test
-    public void startConnect() throws InterruptedException {
+    public void testProduceConsumeConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic("test-topic");
 
