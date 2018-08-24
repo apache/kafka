@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -63,11 +63,9 @@ public class ConnectIntegrationTest {
             connect.kafka().produce("test-topic", "world-" + i);
         }
 
-        // consume all records from test topic
+        // consume all records from test topic or fail
         log.info("Consuming records from test topic");
-        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consumeNRecords(2000, 5000, "test-topic")) {
-            log.info("Consumed record ({}, {}) from topic {}", recs.key(), new String(recs.value()), recs.topic());
-        }
+        connect.kafka().consumeNRecords(2000, 5000, "test-topic");
 
         log.info("Connect endpoint: {}", connect.restUrl());
 
@@ -84,6 +82,8 @@ public class ConnectIntegrationTest {
         while (attempts++ < 5 && MonitorableSinkConnector.COUNTER.get() < 2000) {
             Thread.sleep(500);
         }
+
+        Assert.assertEquals(2000, MonitorableSinkConnector.COUNTER.get());
 
         log.info("Connector read {} records from topic", MonitorableSinkConnector.COUNTER.get());
         connect.deleteConnector("simple-conn");

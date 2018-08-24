@@ -60,6 +60,11 @@ public class MonitorableSinkConnector extends TestSinkConnector {
     }
 
     @Override
+    public void stop() {
+        COUNTER.set(0);
+    }
+
+    @Override
     public ConfigDef config() {
         return new ConfigDef();
     }

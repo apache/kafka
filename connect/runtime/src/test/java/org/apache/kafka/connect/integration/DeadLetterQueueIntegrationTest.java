@@ -56,7 +56,7 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     @Test
-    public void testTransformationErrorHandlingWithDeadLetterQueue() throws Exception {
+    public void testTransformationErrorHandling() throws Exception {
         // create test topic
         connect.kafka().createTopic("test-topic");
 
