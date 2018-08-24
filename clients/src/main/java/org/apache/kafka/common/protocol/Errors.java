@@ -80,6 +80,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
@@ -110,7 +111,7 @@ import java.util.function.Function;
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request,",
             UnknownServerException::new),
     NONE(0, null, message -> null),
     OFFSET_OUT_OF_RANGE(1, "The requested offset is not within the range of offsets maintained by the server.",
@@ -129,7 +130,7 @@ public enum Errors {
             TimeoutException::new),
     BROKER_NOT_AVAILABLE(8, "The broker is not available.",
             BrokerNotAvailableException::new),
-    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition",
+    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition.",
             ReplicaNotAvailableException::new),
     MESSAGE_TOO_LARGE(10, "The request included a message larger than the max message size the server will accept.",
             RecordTooLargeException::new),
@@ -161,7 +162,7 @@ public enum Errors {
             "The group member's supported protocols are incompatible with those of existing members" +
                 " or first group member tried to join with empty protocol type or empty protocol list.",
             InconsistentGroupProtocolException::new),
-    INVALID_GROUP_ID(24, "The configured groupId is invalid",
+    INVALID_GROUP_ID(24, "The configured groupId is invalid.",
             InvalidGroupIdException::new),
     UNKNOWN_MEMBER_ID(25, "The coordinator is not aware of this member.",
             UnknownMemberIdException::new),
@@ -171,7 +172,7 @@ public enum Errors {
             InvalidSessionTimeoutException::new),
     REBALANCE_IN_PROGRESS(27, "The group is rebalancing, so a rejoin is needed.",
             RebalanceInProgressException::new),
-    INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid",
+    INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid.",
             InvalidCommitOffsetSizeException::new),
     TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.",
             TopicAuthorizationException::new),
@@ -207,28 +208,28 @@ public enum Errors {
             UnsupportedForMessageFormatException::new),
     POLICY_VIOLATION(44, "Request parameters do not satisfy the configured policy.",
             PolicyViolationException::new),
-    OUT_OF_ORDER_SEQUENCE_NUMBER(45, "The broker received an out of order sequence number",
+    OUT_OF_ORDER_SEQUENCE_NUMBER(45, "The broker received an out of order sequence number.",
             OutOfOrderSequenceException::new),
-    DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number",
+    DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number.",
             DuplicateSequenceException::new),
     INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
             "with the same transactionalId, or the producer's transaction has been expired by the broker.",
             ProducerFencedException::new),
-    INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state",
+    INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state.",
             InvalidTxnStateException::new),
     INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
-            "its transactional id",
+            "its transactional id.",
             InvalidPidMappingException::new),
     INVALID_TRANSACTION_TIMEOUT(50, "The transaction timeout is larger than the maximum value allowed by " +
                 "the broker (as configured by transaction.max.timeout.ms).",
             InvalidTxnTimeoutException::new),
     CONCURRENT_TRANSACTIONS(51, "The producer attempted to update a transaction " +
-                "while another concurrent operation on the same transaction was ongoing",
+                "while another concurrent operation on the same transaction was ongoing.",
             ConcurrentTransactionsException::new),
     TRANSACTION_COORDINATOR_FENCED(52, "Indicates that the transaction coordinator sending a WriteTxnMarker " +
-            "is no longer the current coordinator for a given producer",
+            "is no longer the current coordinator for a given producer.",
             TransactionCoordinatorFencedException::new),
-    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed",
+    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed.",
             TransactionalIdAuthorizationException::new),
     SECURITY_DISABLED(54, "Security features are disabled.",
             SecurityDisabledException::new),
@@ -248,7 +249,7 @@ public enum Errors {
             "removed, the producer's metadata is removed from the broker, and future appends by the producer will " +
             "return this exception.",
             UnknownProducerIdException::new),
-    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress",
+    REASSIGNMENT_IN_PROGRESS(60, "A partition reassignment is in progress.",
             ReassignmentInProgressException::new),
     DELEGATION_TOKEN_AUTH_DISABLED(61, "Delegation Token feature is not enabled.",
             DelegationTokenDisabledException::new),
@@ -263,19 +264,21 @@ public enum Errors {
             DelegationTokenAuthorizationException::new),
     DELEGATION_TOKEN_EXPIRED(66, "Delegation Token is expired.",
             DelegationTokenExpiredException::new),
-    INVALID_PRINCIPAL_TYPE(67, "Supplied principalType is not supported",
+    INVALID_PRINCIPAL_TYPE(67, "Supplied principalType is not supported.",
             InvalidPrincipalTypeException::new),
-    NON_EMPTY_GROUP(68, "The group is not empty",
+    NON_EMPTY_GROUP(68, "The group is not empty.",
             GroupNotEmptyException::new),
-    GROUP_ID_NOT_FOUND(69, "The group id does not exist",
+    GROUP_ID_NOT_FOUND(69, "The group id does not exist.",
             GroupIdNotFoundException::new),
-    FETCH_SESSION_ID_NOT_FOUND(70, "The fetch session ID was not found",
+    FETCH_SESSION_ID_NOT_FOUND(70, "The fetch session ID was not found.",
             FetchSessionIdNotFoundException::new),
-    INVALID_FETCH_SESSION_EPOCH(71, "The fetch session epoch is invalid",
+    INVALID_FETCH_SESSION_EPOCH(71, "The fetch session epoch is invalid.",
             InvalidFetchSessionEpochException::new),
     LISTENER_NOT_FOUND(72, "There is no listener on the leader broker that matches the listener on which " +
-            "metadata request was processed",
-            ListenerNotFoundException::new),;
+            "metadata request was processed.",
+            ListenerNotFoundException::new),
+    TOPIC_DELETION_DISABLED(73, "Topic deletion is disabled.",
+            TopicDeletionDisabledException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
