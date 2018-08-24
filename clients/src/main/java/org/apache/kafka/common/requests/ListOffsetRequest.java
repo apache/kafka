@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.CURRENT_LEADER_EPOCH;
@@ -182,7 +183,7 @@ public class ListOffsetRequest extends AbstractRequest {
         public final long timestamp;
         @Deprecated
         public final int maxNumOffsets; // only supported in v0
-        public final int currentLeaderEpoch;
+        private final int currentLeaderEpoch;
 
         private PartitionData(long timestamp, int maxNumOffsets, int currentLeaderEpoch) {
             this.timestamp = timestamp;
@@ -197,6 +198,12 @@ public class ListOffsetRequest extends AbstractRequest {
 
         public static PartitionData withCurrentLeaderEpoch(long timestamp, int currentLeaderEpoch) {
             return new PartitionData(timestamp, 1, currentLeaderEpoch);
+        }
+
+        public Optional<Integer> currentLeaderEpoch() {
+            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(currentLeaderEpoch);
         }
 
         @Override

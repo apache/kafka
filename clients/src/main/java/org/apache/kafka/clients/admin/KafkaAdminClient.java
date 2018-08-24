@@ -134,13 +134,13 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -2650,8 +2650,7 @@ public class KafkaAdminClient extends AdminClient {
                                 if (error == Errors.NONE) {
                                     final Long offset = partitionData.offset;
                                     final String metadata = partitionData.metadata;
-                                    final Integer leaderEpoch = partitionData.leaderEpoch != NO_PARTITION_LEADER_EPOCH ?
-                                            partitionData.leaderEpoch : null;
+                                    final Optional<Integer> leaderEpoch = partitionData.leaderEpoch();
                                     groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                                 } else {
                                     log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);

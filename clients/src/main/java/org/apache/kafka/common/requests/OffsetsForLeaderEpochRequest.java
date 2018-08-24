@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.CURRENT_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -182,12 +183,19 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     public static class PartitionData {
-        public final int currentLeaderEpoch;
+        private final int currentLeaderEpoch;
         public final int searchLeaderEpoch;
 
         public PartitionData(int currentLeaderEpoch, int searchLeaderEpoch) {
             this.currentLeaderEpoch = currentLeaderEpoch;
             this.searchLeaderEpoch = searchLeaderEpoch;
         }
+
+        public Optional<Integer> currentLeaderEpoch() {
+            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(currentLeaderEpoch);
+        }
+
     }
 }

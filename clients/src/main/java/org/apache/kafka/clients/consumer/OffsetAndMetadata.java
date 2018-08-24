@@ -45,15 +45,12 @@ public class OffsetAndMetadata implements Serializable {
      * @param leaderEpoch The leader epoch of the last consumed record or null if not known
      * @param metadata Non-null metadata
      */
-    public OffsetAndMetadata(long offset, Integer leaderEpoch, String metadata) {
-        if (leaderEpoch != null && leaderEpoch < 0)
-            throw new IllegalArgumentException("Invalid negative leader epoch");
-
+    public OffsetAndMetadata(long offset, Optional<Integer> leaderEpoch, String metadata) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
 
         this.offset = offset;
-        this.leaderEpoch = leaderEpoch;
+        this.leaderEpoch = leaderEpoch.orElse(null);
 
         // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
         // to be consistent.
@@ -69,7 +66,7 @@ public class OffsetAndMetadata implements Serializable {
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset, String metadata) {
-        this(offset, null, metadata);
+        this(offset, Optional.empty(), metadata);
     }
 
     /**

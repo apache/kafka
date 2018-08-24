@@ -82,6 +82,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -169,9 +170,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class OffsetData {
         final long offset;
         final Long timestamp; //  null if the broker does not support returning timestamps
-        final Integer leaderEpoch; // null if leader epoch is not known
+        final Optional<Integer> leaderEpoch; // null if leader epoch is not known
 
-        OffsetData(long offset, Long timestamp, Integer leaderEpoch) {
+        OffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.timestamp = timestamp;
             this.leaderEpoch = leaderEpoch;
@@ -772,7 +773,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp,
-                                leaderEpochOrNull(partitionData.leaderEpoch));
+                                partitionData.leaderEpoch());
                         fetchedOffsets.put(topicPartition, offsetData);
                     }
                 }
@@ -1454,10 +1455,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
         decompressionBufferSupplier.close();
-    }
-
-    private static Integer leaderEpochOrNull(int leaderEpoch) {
-        return leaderEpoch == NO_PARTITION_LEADER_EPOCH ? null : leaderEpoch;
     }
 
 }

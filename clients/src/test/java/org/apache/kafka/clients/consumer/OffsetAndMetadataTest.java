@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Serializer;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 
@@ -31,18 +32,13 @@ import static org.junit.Assert.assertEquals;
 public class OffsetAndMetadataTest {
 
     @Test(expected = IllegalArgumentException.class)
-    public void testInvalidLeaderEpoch() {
-        new OffsetAndMetadata(239L, -1, "");
-    }
-
-    @Test(expected = IllegalArgumentException.class)
     public void testInvalidNegativeOffset() {
-        new OffsetAndMetadata(-239L, 15, "");
+        new OffsetAndMetadata(-239L, Optional.of(15), "");
     }
 
     @Test
     public void testSerializationRoundtrip() throws IOException, ClassNotFoundException {
-        checkSerde(new OffsetAndMetadata(239L, 15, "blah"));
+        checkSerde(new OffsetAndMetadata(239L, Optional.of(15), "blah"));
         checkSerde(new OffsetAndMetadata(239L, "blah"));
         checkSerde(new OffsetAndMetadata(239L));
     }
@@ -64,7 +60,7 @@ public class OffsetAndMetadataTest {
     public void testDeserializationCompatibilityWithLeaderEpoch() throws IOException, ClassNotFoundException {
         String fileName = "serializedData/offsetAndMetadataWithLeaderEpoch";
         Object deserializedObject = Serializer.deserialize(fileName);
-        assertEquals(new OffsetAndMetadata(10, 235, "test commit metadata"), deserializedObject);
+        assertEquals(new OffsetAndMetadata(10, Optional.of(235), "test commit metadata"), deserializedObject);
     }
 
 }

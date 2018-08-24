@@ -124,7 +124,7 @@ public class ConsumerRecord<K, V> {
                           V value,
                           Headers headers) {
         this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize,
-                key, value, headers, null);
+                key, value, headers, Optional.empty());
     }
 
     /**
@@ -154,11 +154,9 @@ public class ConsumerRecord<K, V> {
                           K key,
                           V value,
                           Headers headers,
-                          Integer leaderEpoch) {
+                          Optional<Integer> leaderEpoch) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
-        if (leaderEpoch != null && leaderEpoch < 0)
-            throw new IllegalArgumentException("Invalid negative leader epoch");
 
         this.topic = topic;
         this.partition = partition;
@@ -171,7 +169,7 @@ public class ConsumerRecord<K, V> {
         this.key = key;
         this.value = value;
         this.headers = headers;
-        this.leaderEpoch = leaderEpoch;
+        this.leaderEpoch = leaderEpoch.orElse(null);
     }
 
     /**

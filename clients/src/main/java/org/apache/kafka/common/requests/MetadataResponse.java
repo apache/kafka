@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
@@ -507,8 +508,10 @@ public class MetadataResponse extends AbstractResponse {
             return leader == null ? -1 : leader.id();
         }
 
-        public int leaderEpoch() {
-            return leaderEpoch;
+        public Optional<Integer> leaderEpoch() {
+            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(leaderEpoch);
         }
 
         public Node leader() {

@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -136,9 +137,9 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     public static final class PartitionData {
         public final long offset;
-        public final int leaderEpoch;
         public final String metadata;
         public final Errors error;
+        private final int leaderEpoch;
 
         public PartitionData(long offset,
                              int leaderEpoch,
@@ -148,6 +149,12 @@ public class OffsetFetchResponse extends AbstractResponse {
             this.leaderEpoch = leaderEpoch;
             this.metadata = metadata;
             this.error = error;
+        }
+
+        public Optional<Integer> leaderEpoch() {
+            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(leaderEpoch);
         }
 
         public boolean hasError() {

@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.CURRENT_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -216,13 +217,19 @@ public class FetchRequest extends AbstractRequest {
         public final long fetchOffset;
         public final long logStartOffset;
         public final int maxBytes;
-        public final int currentLeaderEpoch;
+        private final int currentLeaderEpoch;
 
         public PartitionData(long fetchOffset, long logStartOffset, int maxBytes, int currentLeaderEpoch) {
             this.fetchOffset = fetchOffset;
             this.logStartOffset = logStartOffset;
             this.maxBytes = maxBytes;
             this.currentLeaderEpoch = currentLeaderEpoch;
+        }
+
+        public Optional<Integer> currentLeaderEpoch() {
+            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(currentLeaderEpoch);
         }
 
         @Override

@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.GENERATION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
@@ -167,8 +168,8 @@ public class OffsetCommitRequest extends AbstractRequest {
         public final long timestamp;                // for V1
 
         public final long offset;
-        public final int leaderEpoch;
         public final String metadata;
+        private final int leaderEpoch;
 
         private PartitionData(long offset, int leaderEpoch, long timestamp, String metadata) {
             this.offset = offset;
@@ -184,6 +185,12 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         public PartitionData(long offset, int leaderEpoch, String metadata) {
             this(offset, leaderEpoch, DEFAULT_TIMESTAMP, metadata);
+        }
+
+        public Optional<Integer> leaderEpoch() {
+            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(leaderEpoch);
         }
 
         @Override

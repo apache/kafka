@@ -28,22 +28,19 @@ public final class OffsetAndTimestamp {
     private final Integer leaderEpoch;
 
     public OffsetAndTimestamp(long offset, long timestamp) {
-        this(offset, timestamp, null);
+        this(offset, timestamp, Optional.empty());
     }
 
-    public OffsetAndTimestamp(long offset, long timestamp, Integer leaderEpoch) {
+    public OffsetAndTimestamp(long offset, long timestamp, Optional<Integer> leaderEpoch) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
 
         if (timestamp < 0)
             throw new IllegalArgumentException("Invalid negative timestamp");
 
-        if (leaderEpoch != null && leaderEpoch < 0)
-            throw new IllegalArgumentException("Invalid negative leader epoch");
-
         this.offset = offset;
         this.timestamp = timestamp;
-        this.leaderEpoch = leaderEpoch;
+        this.leaderEpoch = leaderEpoch.orElse(null);
     }
 
     public long timestamp() {

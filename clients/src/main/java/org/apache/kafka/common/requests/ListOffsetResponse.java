@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
@@ -151,6 +152,12 @@ public class ListOffsetResponse extends AbstractResponse {
             this.offset = offset;
             this.offsets = null;
             this.leaderEpoch = leaderEpoch;
+        }
+
+        public Optional<Integer> leaderEpoch() {
+            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                return Optional.empty();
+            return Optional.of(leaderEpoch);
         }
 
         @Override
