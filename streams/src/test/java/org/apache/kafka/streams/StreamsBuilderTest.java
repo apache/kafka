@@ -56,6 +56,14 @@ public class StreamsBuilderTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
+    public void shouldNotThrowNullPointerIfOptimizationsNotSpecified() {
+        final Properties properties = new Properties();
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.build(properties);
+    }
+
+    @Test
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.<Bytes, String>allGoodPredicate());
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);

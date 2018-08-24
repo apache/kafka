@@ -22,6 +22,8 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import java.time.Duration;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
+
 
 /**
  * A session based window specification used for aggregating events into sessions.
@@ -91,8 +93,7 @@ public final class SessionWindows {
         if (inactivityGapMs <= 0) {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
-        final long oneDayMs = 24 * 60 * 60_000L;
-        return new SessionWindows(inactivityGapMs, oneDayMs, null);
+        return new SessionWindows(inactivityGapMs, DEFAULT_RETENTION_MS, null);
     }
 
     /**

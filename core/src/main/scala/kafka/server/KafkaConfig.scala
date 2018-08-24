@@ -492,11 +492,11 @@ object KafkaConfig {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = "The authorizer class that should be used for authorization"
   /** ********* Socket Server Configuration ***********/
-  val PortDoc = "DEPRECATED: only used when `listeners` is not set. " +
-  "Use `listeners` instead. \n" +
+  val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
+  "Use <code>listeners</code> instead. \n" +
   "the port to listen and accept connections on"
-  val HostNameDoc = "DEPRECATED: only used when `listeners` is not set. " +
-  "Use `listeners` instead. \n" +
+  val HostNameDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
+  "Use <code>listeners</code> instead. \n" +
   "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
   s" If the listener name is not a security protocol, $ListenerSecurityProtocolMapProp must also be set.\n" +
@@ -505,21 +505,21 @@ object KafkaConfig {
   " Examples of legal listener lists:\n" +
   " PLAINTEXT://myhost:9092,SSL://:9091\n" +
   " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
-  val AdvertisedHostNameDoc = "DEPRECATED: only used when `advertised.listeners` or `listeners` are not set. " +
-  "Use `advertised.listeners` instead. \n" +
+  val AdvertisedHostNameDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
+  "Use <code>advertised.listeners</code> instead. \n" +
   "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the interface to which the broker binds. If this is not set, " +
-  "it will use the value for `host.name` if configured. Otherwise " +
+  "it will use the value for <code>host.name</code> if configured. Otherwise " +
   "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
-  val AdvertisedPortDoc = "DEPRECATED: only used when `advertised.listeners` or `listeners` are not set. " +
-  "Use `advertised.listeners` instead. \n" +
+  val AdvertisedPortDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
+  "Use <code>advertised.listeners</code> instead. \n" +
   "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the port to which the broker binds. If this is not set, " +
   "it will publish the same port that the broker binds to."
-  val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the `listeners` config property." +
+  val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the <code>listeners</code> config property." +
   " In IaaS environments, this may need to be different from the interface to which the broker binds." +
-  " If this is not set, the value for `listeners` will be used." +
-  " Unlike `listeners` it is not valid to advertise the 0.0.0.0 meta-address."
+  " If this is not set, the value for <code>listeners</code> will be used." +
+  " Unlike <code>listeners</code> it is not valid to advertise the 0.0.0.0 meta-address."
   val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
     "the same security protocol to be usable in more than one port or IP. For example, internal and " +
     "external traffic can be separated even if SSL is required for both. Concretely, the user could define listeners " +
@@ -527,8 +527,8 @@ object KafkaConfig {
     "separated by a colon and map entries are separated by commas. Each listener name should only appear once in the map. " +
     "Different security (SSL and SASL) settings can be configured for each listener by adding a normalised " +
     "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
-    "INTERNAL listener, a config with name `listener.name.internal.ssl.keystore.location` would be set. " +
-    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. `ssl.keystore.location`). "
+    "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
+    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). "
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."

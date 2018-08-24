@@ -18,20 +18,11 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.streams._
-import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
-import org.apache.kafka.streams.processor.internals.StreamThread
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.test.TestUtils
-import org.junit.Assert._
+import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase
 import org.junit._
-import org.junit.rules.TemporaryFolder
-import org.scalatest.junit.JUnitSuite
 
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
@@ -141,10 +132,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val streams: KafkaStreamsJ = new KafkaStreamsJ(builder.build(), streamsConfiguration)
 
     streams.start()
-
-    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
-      produceNConsume(userClicksTopicJ, userRegionsTopicJ, outputTopicJ)
-
+    produceNConsume(userClicksTopicJ, userRegionsTopicJ, outputTopicJ)
     streams.close()
   }
 }

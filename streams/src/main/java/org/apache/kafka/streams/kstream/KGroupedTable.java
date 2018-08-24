@@ -60,7 +60,7 @@ public interface KGroupedTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-word";
      * Long countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -89,7 +89,6 @@ public interface KGroupedTable<K, V> {
      * the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
@@ -158,7 +157,7 @@ public interface KGroupedTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-word";
      * Long countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -191,7 +190,6 @@ public interface KGroupedTable<K, V> {
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
@@ -202,7 +200,7 @@ public interface KGroupedTable<K, V> {
      * record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
-     * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
+     * Thus, {@code reduce(Reducer, Reducer)} can be used to compute aggregate functions like sum.
      * For sum, the adder and subtractor would work as follows:
      * <pre>{@code
      * public class SumAdder implements Reducer<Integer> {
@@ -243,12 +241,12 @@ public interface KGroupedTable<K, V> {
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
-     * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
+     * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, Materialized) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * provided by the given {@code storeSupplier}.
+     * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is processed to
@@ -260,11 +258,11 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
-     * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
+     * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, Materialized)} can be used to compute aggregate functions
      * like sum.
      * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
-     * // in this example, LongSerde.class must be set as default value serde in StreamsConfig
+     * // in this example, LongSerde.class must be set as value serde in Materialized#withValueSerde
      * public class SumInitializer implements Initializer<Long> {
      *   public Long apply() {
      *     return 0L;
@@ -277,7 +275,7 @@ public interface KGroupedTable<K, V> {
      *   }
      * }
      *
-     * public class SumSubstractor implements Aggregator<String, Integer, Long> {
+     * public class SumSubtractor implements Aggregator<String, Integer, Long> {
      *   public Long apply(String key, Integer oldValue, Long aggregate) {
      *     return aggregate - oldValue;
      *   }
@@ -294,7 +292,7 @@ public interface KGroupedTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-word";
      * Long countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -333,7 +331,6 @@ public interface KGroupedTable<K, V> {
      * If the result value type does not match the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value
      * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
-     * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is processed to
@@ -362,7 +359,7 @@ public interface KGroupedTable<K, V> {
      *   }
      * }
      *
-     * public class SumSubstractor implements Aggregator<String, Integer, Long> {
+     * public class SumSubtractor implements Aggregator<String, Integer, Long> {
      *   public Long apply(String key, Integer oldValue, Long aggregate) {
      *     return aggregate - oldValue;
      *   }
