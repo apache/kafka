@@ -100,6 +100,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException on every invocation.
      * @deprecated since 2.1.
      */
+    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public UnlimitedWindows until(final long durationMs) {
@@ -113,42 +114,39 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return the window retention time that is {@link Long#MAX_VALUE}
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
+    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public long maintainMs() {
         return Long.MAX_VALUE;
     }
 
-    /**
-     * Throws an {@link IllegalArgumentException} because the window never ends and the
-     * grace period is therefore meaningless.
-     *
-     * @throws IllegalArgumentException on every invocation
-     */
     @Override
-    public UnlimitedWindows grace(final long millisAfterWindowEnd) {
-        throw new IllegalArgumentException("Grace period cannot be set for UnlimitedWindows.");
+    public long gracePeriodMs() {
+        return 0L;
     }
 
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
         final UnlimitedWindows that = (UnlimitedWindows) o;
-        return startMs == that.startMs;
+        return startMs == that.startMs && segments == that.segments;
     }
 
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), startMs);
+        return Objects.hash(startMs, segments);
     }
 
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     @Override
     public String toString() {
         return "UnlimitedWindows{" +
             "startMs=" + startMs +
-            ", super=" + super.toString() +
+            ", segments=" + segments +
             '}';
     }
 }

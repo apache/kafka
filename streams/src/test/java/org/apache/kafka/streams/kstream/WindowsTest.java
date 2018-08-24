@@ -21,12 +21,10 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class WindowsTest {
 
     private class TestWindows extends Windows {
-
         @Override
         public Map windowsFor(final long timestamp) {
             return null;
@@ -35,6 +33,10 @@ public class WindowsTest {
         @Override
         public long size() {
             return 0;
+        }
+
+        public long gracePeriodMs() {
+            return 0L;
         }
     }
 
@@ -56,19 +58,6 @@ public class WindowsTest {
     public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
         assertEquals(anyNotNegativeRetentionTime, new TestWindows().until(anyNotNegativeRetentionTime).maintainMs());
-    }
-
-
-    @Test
-    public void gracePeriodShouldEnforceBoundaries() {
-        new TestWindows().grace(0L);
-
-        try {
-            new TestWindows().grace(-1L);
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
