@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.Request;
-import kafka.server.KafkaServer;
-import kafka.server.MetadataCache;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -41,7 +38,6 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,12 +46,16 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+
+import kafka.api.Request;
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
+import scala.Option;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -364,26 +364,25 @@ public class IntegrationTestUtils {
                                                                                     final long waitTime) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    final List<KeyValue<K, V>> readData =
-                            readKeyValues(topic, consumer, waitTime, expectedRecords.size());
-                    accumData.addAll(readData);
+            final TestCondition valuesRead = () -> {
+                final List<KeyValue<K, V>> readData =
+                        readKeyValues(topic, consumer, waitTime, expectedRecords.size());
+                accumData.addAll(readData);
 
-                    final Map<K, V> finalData = new HashMap<>();
+                final int accumLastIndex = accumData.size() - 1;
+                final int expectedLastIndex = expectedRecords.size() - 1;
 
-                    for (final KeyValue<K, V> keyValue : accumData) {
-                        finalData.put(keyValue.key, keyValue.value);
-                    }
+                // filter out all intermediate records we don't want
+                final List<KeyValue<K, V>> accumulatedActual = accumData.stream().filter(expectedRecords::contains).collect(Collectors.toList());
 
-                    for (final KeyValue<K, V> keyValue : expectedRecords) {
-                        if (!keyValue.value.equals(finalData.get(keyValue.key)))
-                            return false;
-                    }
+                // need this check as filtering above could have removed the last record from accumData, but it did not
+                // equal the last expected record
+                final boolean lastRecordsMatch = accumData.get(accumLastIndex).equals(expectedRecords.get(expectedLastIndex));
 
-                    return true;
-                }
+                // returns true only if the remaining records in both lists are the same and in the same order
+                // and the last record received matches the last expected record
+                return accumulatedActual.equals(expectedRecords) && lastRecordsMatch;
+
             };
             final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);

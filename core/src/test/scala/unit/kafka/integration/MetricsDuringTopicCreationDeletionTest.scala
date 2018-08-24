@@ -34,32 +34,32 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   private val replicationFactor = 3
   private val partitionNum = 3
   private val createDeleteIterations = 3
-  
+
   private val overridingProps = new Properties
   overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  // speed up the test for UnderReplicatedPartitions 
+  // speed up the test for UnderReplicatedPartitions
   // which relies on the ISR expiry thread to execute concurrently with topic creation
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "2000") 
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "2000")
 
   private val testedMetrics = List("OfflinePartitionsCount","PreferredReplicaImbalanceCount","UnderReplicatedPartitions")
   private val topics = List.tabulate(topicNum) (n => topicName + n)
 
   @volatile private var running = true
-  
+
   override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
   override def setUp {
-    // Do some Metrics Registry cleanup by removing the metrics that this test checks. 
+    // Do some Metrics Registry cleanup by removing the metrics that this test checks.
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
     for (m <- testedMetrics) {
         val metricName = Metrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
         metricName.foreach(Metrics.defaultRegistry.removeMetric)
     }
-    
+
     super.setUp
   }
 
@@ -70,7 +70,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   def testMetricsDuringTopicCreateDelete() {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605
-    // we can't access the metrics value of each server. So instead we directly invoke the method 
+    // we can't access the metrics value of each server. So instead we directly invoke the method
     // replicaManager.underReplicatedPartitionCount() that defines the metrics value.
     @volatile var underReplicatedPartitionCount = 0
 
@@ -116,7 +116,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // if the thread checking the gauge is still run, stop it
     running = false;
     thread.join
-    
+
     assert(offlinePartitionsCount==0, "OfflinePartitionCount not 0: "+ offlinePartitionsCount)
     assert(preferredReplicaImbalanceCount==0, "PreferredReplicaImbalanceCount not 0: " + preferredReplicaImbalanceCount)
     assert(underReplicatedPartitionCount==0, "UnderReplicatedPartitionCount not 0: " + underReplicatedPartitionCount)
@@ -129,7 +129,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
            .getOrElse { fail( "Unable to find metric " + metricName ) }
            ._2.asInstanceOf[Gauge[Int]]
   }
-  
+
   private def createDeleteTopics() {
     for (l <- 1 to createDeleteIterations if running) {
       // Create topics
@@ -140,17 +140,16 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
           case e: Exception => e.printStackTrace
         }
       }
-      Thread.sleep(500)
 
       // Delete topics
       for (t <- topics if running) {
           try {
-              adminZkClient.deleteTopic(t)
+            adminZkClient.deleteTopic(t)
+            TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
           } catch {
           case e: Exception => e.printStackTrace
           }
       }
-      Thread.sleep(500)
     }
   }
 }

@@ -55,8 +55,9 @@ class PartitionStateMachineTest extends JUnitSuite {
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
     mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
     partitionState = mutable.Map.empty[TopicPartition, PartitionState]
-    partitionStateMachine = new PartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext, mockTopicDeletionManager,
+    partitionStateMachine = new PartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext,
       mockZkClient, partitionState, mockControllerBrokerRequestBatch)
+    partitionStateMachine.setTopicDeletionManager(mockTopicDeletionManager)
   }
 
   @Test
@@ -310,6 +311,149 @@ class PartitionStateMachineTest extends JUnitSuite {
     partitionState.put(partition, OfflinePartition)
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     assertEquals(OfflinePartition, partitionState(partition))
+  }
+
+  private def prepareMockToElectLeaderForPartitions(partitions: Seq[TopicPartition]): Unit = {
+    val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+    def prepareMockToGetTopicPartitionsStatesRaw(): Unit = {
+      val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+      val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+      val getDataResponses = partitions.map {p => GetDataResponse(Code.OK, null, Some(p),
+        TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))}
+      EasyMock.expect(mockZkClient.getTopicPartitionStatesRaw(partitions))
+        .andReturn(getDataResponses)
+    }
+    prepareMockToGetTopicPartitionsStatesRaw()
+
+    def prepareMockToGetLogConfigs(): Unit = {
+      val topicsForPartitionsWithNoLiveInSyncReplicas = Seq()
+      EasyMock.expect(mockZkClient.getLogConfigs(topicsForPartitionsWithNoLiveInSyncReplicas, config.originals()))
+        .andReturn(Map.empty, Map.empty)
+    }
+    prepareMockToGetLogConfigs()
+
+    def prepareMockToUpdateLeaderAndIsr(): Unit = {
+      val updatedLeaderAndIsr = partitions.map { partition =>
+        partition -> leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+      }.toMap
+      EasyMock.expect(mockZkClient.updateLeaderAndIsr(updatedLeaderAndIsr, controllerEpoch))
+        .andReturn(UpdateLeaderAndIsrResult(updatedLeaderAndIsr, Seq.empty, Map.empty))
+    }
+    prepareMockToUpdateLeaderAndIsr()
+  }
+
+  /**
+    * This method tests changing partitions' state to OfflinePartition increments the offlinePartitionCount,
+    * and changing their state back to OnlinePartition decrements the offlinePartitionCount
+    */
+  @Test
+  def testUpdatingOfflinePartitionsCount(): Unit = {
+    controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
+
+    val partitionIds = Seq(0, 1, 2, 3)
+    val topic = "test"
+    val partitions = partitionIds.map(new TopicPartition("test", _))
+
+    partitions.foreach { partition =>
+      controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    }
+
+    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(false)
+    EasyMock.expectLastCall().anyTimes()
+    prepareMockToElectLeaderForPartitions(partitions)
+    EasyMock.replay(mockZkClient, mockTopicDeletionManager)
+
+    partitionStateMachine.handleStateChanges(partitions, NewPartition)
+    partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
+    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, partitionStateMachine.offlinePartitionCount)
+
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy))
+    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
+  }
+
+  /**
+    * This method tests if a topic is being deleted, then changing partitions' state to OfflinePartition makes no change
+    * to the offlinePartitionCount
+    */
+  @Test
+  def testNoOfflinePartitionsChangeForTopicsBeingDeleted() = {
+    val partitionIds = Seq(0, 1, 2, 3)
+    val topic = "test"
+    val partitions = partitionIds.map(new TopicPartition("test", _))
+
+    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(true)
+    EasyMock.expectLastCall().anyTimes()
+    EasyMock.replay(mockTopicDeletionManager)
+
+    partitionStateMachine.handleStateChanges(partitions, NewPartition)
+    partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
+    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
+  }
+
+  /**
+    * This method tests if some partitions are already in OfflinePartition state,
+    * then deleting their topic will decrement the offlinePartitionCount.
+    * For example, if partitions test-0, test-1, test-2, test-3 are in OfflinePartition state,
+    * and the offlinePartitionCount is 4, trying to delete the topic "test" means these
+    * partitions no longer qualify as offline-partitions, and the offlinePartitionCount
+    * should be decremented to 0.
+    */
+  @Test
+  def testUpdatingOfflinePartitionsCountDuringTopicDeletion() = {
+    val partitionIds = Seq(0, 1, 2, 3)
+    val topic = "test"
+    val partitions = partitionIds.map(new TopicPartition("test", _))
+    partitions.foreach { partition =>
+      controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    }
+
+    val props = TestUtils.createBrokerConfig(brokerId, "zkConnect")
+    props.put(KafkaConfig.DeleteTopicEnableProp, "true")
+
+    val customConfig = KafkaConfig.fromProps(props)
+
+    def createMockReplicaStateMachine() = {
+      val replicaStateMachine: ReplicaStateMachine = EasyMock.createMock(classOf[ReplicaStateMachine])
+      EasyMock.expect(replicaStateMachine.areAllReplicasForTopicDeleted(topic)).andReturn(false).anyTimes()
+      EasyMock.expect(replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)).andReturn(false).anyTimes()
+      EasyMock.expect(replicaStateMachine.isAnyReplicaInState(topic, ReplicaDeletionIneligible)).andReturn(false).anyTimes()
+      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionIneligible)).andReturn(Set.empty).anyTimes()
+      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)).andReturn(Set.empty).anyTimes()
+      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)).andReturn(Set.empty).anyTimes()
+      EasyMock.expect(replicaStateMachine.handleStateChanges(EasyMock.anyObject[Seq[PartitionAndReplica]],
+        EasyMock.anyObject[ReplicaState], EasyMock.anyObject[Callbacks]))
+
+      EasyMock.expectLastCall().anyTimes()
+      replicaStateMachine
+    }
+    val replicaStateMachine = createMockReplicaStateMachine()
+    partitionStateMachine = new PartitionStateMachine(customConfig, new StateChangeLogger(brokerId, true, None), controllerContext,
+      mockZkClient, partitionState, mockControllerBrokerRequestBatch)
+
+    def createMockController() = {
+      val mockController = EasyMock.createMock(classOf[KafkaController])
+      EasyMock.expect(mockController.controllerContext).andReturn(controllerContext).anyTimes()
+      EasyMock.expect(mockController.config).andReturn(customConfig).anyTimes()
+      EasyMock.expect(mockController.partitionStateMachine).andReturn(partitionStateMachine).anyTimes()
+      EasyMock.expect(mockController.replicaStateMachine).andReturn(replicaStateMachine).anyTimes()
+      EasyMock.expect(mockController.sendUpdateMetadataRequest(Seq.empty, partitions.toSet))
+      EasyMock.expectLastCall().anyTimes()
+      mockController
+    }
+
+    val mockController = createMockController()
+    val mockEventManager = EasyMock.createMock(classOf[ControllerEventManager])
+    EasyMock.replay(mockController, replicaStateMachine, mockEventManager)
+
+    val topicDeletionManager = new TopicDeletionManager(mockController, mockEventManager, mockZkClient)
+    partitionStateMachine.setTopicDeletionManager(topicDeletionManager)
+
+    partitionStateMachine.handleStateChanges(partitions, NewPartition)
+    partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
+    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, mockController.partitionStateMachine.offlinePartitionCount)
+
+    topicDeletionManager.enqueueTopicsForDeletion(Set(topic))
+    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
   }
 
 }

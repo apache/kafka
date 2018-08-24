@@ -164,13 +164,16 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         } else {
             builder = SchemaUtil.copySchemaBasics(valueSchema, SchemaBuilder.struct());
             for (Field field : valueSchema.fields()) {
-                SchemaBuilder fieldBuilder =
-                        convertFieldType(casts.containsKey(field.name()) ? casts.get(field.name()) : field.schema().type());
-                if (field.schema().isOptional())
-                    fieldBuilder.optional();
-                if (field.schema().defaultValue() != null)
-                    fieldBuilder.defaultValue(castValueToType(field.schema().defaultValue(), fieldBuilder.type()));
-                builder.field(field.name(), fieldBuilder.build());
+                if (casts.containsKey(field.name())) {
+                    SchemaBuilder fieldBuilder = convertFieldType(casts.get(field.name()));
+                    if (field.schema().isOptional())
+                        fieldBuilder.optional();
+                    if (field.schema().defaultValue() != null)
+                        fieldBuilder.defaultValue(castValueToType(field.schema().defaultValue(), fieldBuilder.type()));
+                    builder.field(field.name(), fieldBuilder.build());
+                } else {
+                    builder.field(field.name(), field.schema());
+                }
             }
         }
 

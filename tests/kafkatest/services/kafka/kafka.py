@@ -211,20 +211,38 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.advertised_listeners = ','.join(advertised_listeners)
 
     def prop_file(self, node):
-        cfg = KafkaConfig(**node.config)
-        cfg[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
-        cfg[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
-
-        for prop in self.server_prop_overides:
-            cfg[prop[0]] = prop[1]
-
         self.set_protocol_and_port(node)
 
-        # TODO - clean up duplicate configuration logic
-        prop_file = cfg.render()
-        prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
+        #load template configs as dictionary
+        config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                  security_config=self.security_config, num_nodes=self.num_nodes)
+
+        configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
+                        if not l.startswith("#") and "=" in l )
+
+        #load specific test override configs
+        override_configs = KafkaConfig(**node.config)
+        override_configs[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
+        override_configs[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
+
+        for prop in self.server_prop_overides:
+            override_configs[prop[0]] = prop[1]
+
+        #update template configs with test override configs
+        configs.update(override_configs)
+
+        prop_file = self.render_configs(configs)
         return prop_file
+
+    def render_configs(self, configs):
+        """Render self as a series of lines key=val\n, and do so in a consistent order. """
+        keys = [k for k in configs.keys()]
+        keys.sort()
+
+        s = ""
+        for k in keys:
+            s += "%s=%s\n" % (k, str(configs[k]))
+        return s
 
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port

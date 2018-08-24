@@ -20,6 +20,7 @@
 package org.apache.kafka.streams.scala
 package kstream
 
+import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -46,7 +47,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KTable#filter`
    */
   def filter(predicate: (K, V) => Boolean): KTable[K, V] =
-    inner.filter(predicate(_, _))
+    inner.filter(predicate.asPredicate)
 
   /**
    * Create a new [[KTable]] that consists all records of this [[KTable]] which satisfies the given
@@ -70,7 +71,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KTable#filterNot`
    */
   def filterNot(predicate: (K, V) => Boolean): KTable[K, V] =
-    inner.filterNot(predicate(_, _))
+    inner.filterNot(predicate.asPredicate)
 
   /**
    * Create a new [[KTable]] that consists all records of this [[KTable]] which do <em>not</em> satisfy the given
@@ -245,9 +246,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#join`
    */
-  def join[VO, VR](other: KTable[K, VO])(
-    joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def join[VO, VR](other: KTable[K, VO], materialized: Materialized[K, VR, ByteArrayKeyValueStore])(
+    joiner: (V, VO) => VR
   ): KTable[K, VR] =
     inner.join[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
@@ -274,9 +274,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
    */
-  def leftJoin[VO, VR](other: KTable[K, VO])(
-    joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def leftJoin[VO, VR](other: KTable[K, VO], materialized: Materialized[K, VR, ByteArrayKeyValueStore])(
+    joiner: (V, VO) => VR
   ): KTable[K, VR] =
     inner.leftJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
@@ -303,9 +302,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
    */
-  def outerJoin[VO, VR](other: KTable[K, VO])(
-    joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  def outerJoin[VO, VR](other: KTable[K, VO], materialized: Materialized[K, VR, ByteArrayKeyValueStore])(
+    joiner: (V, VO) => VR
   ): KTable[K, VR] =
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 

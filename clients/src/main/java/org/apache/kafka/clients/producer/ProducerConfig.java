@@ -102,7 +102,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
-        + " This should be larger than replica.lag.time.max.ms (a broker configuration)"
+        + " This should be larger than <code>replica.lag.time.max.ms</code> (a broker configuration)"
         + " to reduce the possibility of message duplication due to unnecessary producer retries.";
 
     /** <code>delivery.timeout.ms</code> */
@@ -112,9 +112,9 @@ public class ProducerConfig extends AbstractConfig {
             + "prior to sending, the time to await acknowledgement from the broker (if expected), and the time allowed "
             + "for retriable send failures. The producer may report failure to send a record earlier than this config if "
             + "either an unrecoverable error is encountered, the retries have been exhausted, "
-            + "or the record is added to a batch which reached an earlier delivery expiration deadline."
-            + "The value of this config should be greater than or equal to the sum of " + REQUEST_TIMEOUT_MS_CONFIG
-            + " and " + LINGER_MS_CONFIG + ". ";
+            + "or the record is added to a batch which reached an earlier delivery expiration deadline. "
+            + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "</code> "
+            + "and <code>" + LINGER_MS_CONFIG + "</code>.";
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -190,8 +190,8 @@ public class ProducerConfig extends AbstractConfig {
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
             + " succeeds, then the records in the second batch may appear first. Note additionall that produce requests will be"
             + " failed before the number of retries has been exhausted if the timeout configured by"
-            + " " + DELIVERY_TIMEOUT_MS_CONFIG + " expires first before successful acknowledgement. Users should generally"
-            + " prefer to leave this config unset and instead use " + DELIVERY_TIMEOUT_MS_CONFIG + " to control"
+            + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
+            + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
             + " retry behavior.";
 
     /** <code>key.serializer</code> */
@@ -220,21 +220,21 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and " + ACKS_CONFIG + " must be 'all'. If these values "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
                                                         + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
-                                                        + "a ConfigException will be thrown.";
+                                                        + "a <code>ConfigException</code> will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
     public static final String TRANSACTION_TIMEOUT_DOC = "The maximum amount of time in ms that the transaction coordinator will wait for a transaction status update from the producer before proactively aborting the ongoing transaction." +
-            "If this value is larger than the transaction.max.timeout.ms setting in the broker, the request will fail with a `InvalidTransactionTimeout` error.";
+            "If this value is larger than the transaction.max.timeout.ms setting in the broker, the request will fail with a <code>InvalidTransactionTimeout</code> error.";
 
     /** <code> transactional.id </code> */
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
-            "Note that enable.idempotence must be enabled if a TransactionalId is configured. " +
+            "Note that <code>enable.idempotence</code> must be enabled if a TransactionalId is configured. " +
             "The default is <code>null</code>, which means transactions cannot be used. " +
-            "Note that transactions requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
+            "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
