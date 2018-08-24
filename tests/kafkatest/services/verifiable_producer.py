@@ -57,7 +57,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
                  stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
-                 enable_idempotence=False, offline_nodes=[], create_time=-1, repeating_keys=None):
+                 enable_idempotence=False, offline_nodes=[], create_time=-1, repeating_keys=None,
+                 jaas_override_variables=None):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -68,6 +69,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                will produce exactly same messages, and validation may miss missing messages.
         :param compression_types: If None, all producers will not use compression; or a list of
         compression types, one per producer (could be "none").
+        :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -94,6 +96,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.offline_nodes = offline_nodes
         self.create_time = create_time
         self.repeating_keys = repeating_keys
+        self.jaas_override_variables = jaas_override_variables or {}
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -116,7 +119,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Configure security
-        self.security_config = self.kafka.security_config.client_config(node=node)
+        self.security_config = self.kafka.security_config.client_config(node=node,
+                                                                        jaas_override_variables=self.jaas_override_variables)
         self.security_config.setup_node(node)
 
         # Create and upload config file
