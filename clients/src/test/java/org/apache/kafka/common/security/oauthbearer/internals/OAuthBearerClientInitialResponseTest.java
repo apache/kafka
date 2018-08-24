@@ -24,7 +24,6 @@ import org.junit.Test;
 
 import javax.security.sasl.SaslException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -120,7 +119,6 @@ public class OAuthBearerClientInitialResponseTest {
 
     @Test
     public void testValidateNullExtensions() throws Exception {
-        assertEquals(new SaslExtensions(Collections.emptyMap()),
-                OAuthBearerClientInitialResponse.validateExtensions(null));
+        OAuthBearerClientInitialResponse.validateExtensions(null);
     }
 }

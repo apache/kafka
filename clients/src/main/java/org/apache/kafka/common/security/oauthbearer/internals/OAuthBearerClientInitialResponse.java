@@ -62,7 +62,9 @@ public class OAuthBearerClientInitialResponse {
         if (auth == null)
             throw new SaslException("Invalid OAUTHBEARER client first message: 'auth' not specified");
         properties.remove(AUTH_KEY);
-        this.saslExtensions = validateExtensions(new SaslExtensions(properties));
+        SaslExtensions extensions = new SaslExtensions(properties);
+        validateExtensions(extensions);
+        this.saslExtensions = extensions;
 
         Matcher authMatcher = AUTH_PATTERN.matcher(auth);
         if (!authMatcher.matches())
@@ -108,7 +110,8 @@ public class OAuthBearerClientInitialResponse {
     public OAuthBearerClientInitialResponse(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         this.tokenValue = Objects.requireNonNull(tokenValue, "token value must not be null");
         this.authorizationId = authorizationId == null ? "" : authorizationId;
-        this.saslExtensions = validateExtensions(extensions);
+        validateExtensions(extensions);
+        this.saslExtensions = extensions != null ? extensions : NO_SASL_EXTENSIONS;
     }
 
     /**
@@ -164,9 +167,9 @@ public class OAuthBearerClientInitialResponse {
      * @see <a href="https://tools.ietf.org/html/rfc7628#section-3.1">RFC 7628,
      *  Section 3.1</a>
      */
-    public static SaslExtensions validateExtensions(SaslExtensions extensions) throws SaslException {
+    public static void validateExtensions(SaslExtensions extensions) throws SaslException {
         if (extensions == null)
-            return NO_SASL_EXTENSIONS;
+            return;
         if (extensions.map().containsKey(OAuthBearerClientInitialResponse.AUTH_KEY))
             throw new SaslException("Extension name " + OAuthBearerClientInitialResponse.AUTH_KEY + " is invalid");
 
@@ -179,7 +182,6 @@ public class OAuthBearerClientInitialResponse {
             if (!EXTENSION_VALUE_PATTERN.matcher(extensionValue).matches())
                 throw new SaslException("Extension value (" + extensionValue + ") for extension " + extensionName + " is invalid");
         }
-        return extensions;
     }
 
     /**
