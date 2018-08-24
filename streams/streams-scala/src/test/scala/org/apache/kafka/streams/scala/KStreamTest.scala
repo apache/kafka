@@ -75,7 +75,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
-  "foreach a KStream" should "side effect records" in {
+  "foreach a KStream" should "run foreach actions on records" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
 
@@ -93,7 +93,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
-  "peek a KStream" should "side effect records" in {
+  "peek a KStream" should "run peek actions on records" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
