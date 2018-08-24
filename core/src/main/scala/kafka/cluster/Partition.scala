@@ -732,12 +732,16 @@ class Partition(val topic: String,
     *         offset of the first leader epoch larger than the leader epoch, or else the log end
     *         offset if the leader epoch is the latest leader epoch.
     */
-  def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
+  def lastOffsetForLeaderEpoch(leaderEpoch: Option[Int]): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          val (epoch, offset) = leaderReplica.epochs.get.endOffsetFor(leaderEpoch)
-          new EpochEndOffset(NONE, epoch, offset)
+          if (leaderEpoch.isEmpty)
+            new EpochEndOffset(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          else {
+            val (epoch, offset) = leaderReplica.epochs.get.endOffsetFor(leaderEpoch.get)
+            new EpochEndOffset(NONE, epoch, offset)
+          }
         case None =>
           new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }

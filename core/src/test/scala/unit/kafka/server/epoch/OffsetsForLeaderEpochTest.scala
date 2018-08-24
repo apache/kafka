@@ -42,8 +42,8 @@ class OffsetsForLeaderEpochTest {
   def shouldGetEpochsFromReplica(): Unit = {
     //Given
     val epochAndOffset = (5, 42L)
-    val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val epochRequested: Int = 5
+    val request = Map(tp -> Some(epochRequested))
 
     //Stubs
     val mockLog = createNiceMock(classOf[kafka.log.Log])
@@ -83,8 +83,8 @@ class OffsetsForLeaderEpochTest {
     replicaManager.getOrCreatePartition(tp)
 
     //Given
-    val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val epochRequested: Int = 5
+    val request = Map(tp -> Some(epochRequested))
 
     //When
     val response = replicaManager.lastOffsetForLeaderEpoch(request)
@@ -105,8 +105,8 @@ class OffsetsForLeaderEpochTest {
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
 
     //Given
-    val epochRequested: Integer = 5
-    val request = Map(tp -> epochRequested)
+    val epochRequested: Int = 5
+    val request = Map(tp -> Some(epochRequested))
 
     //When
     val response = replicaManager.lastOffsetForLeaderEpoch(request)

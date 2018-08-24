@@ -1475,7 +1475,7 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
   }
 
-  def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, Integer]): Map[TopicPartition, EpochEndOffset] = {
+  def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
     requestedEpochInfo.map { case (tp, leaderEpoch) =>
       val epochEndOffset = getPartition(tp) match {
         case Some(partition) =>

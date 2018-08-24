@@ -2037,7 +2037,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val requestInfo = offsetForLeaderEpoch.epochsByTopicPartition()
     authorizeClusterAction(request)
 
-    val lastOffsetForLeaderEpoch = replicaManager.lastOffsetForLeaderEpoch(requestInfo.asScala).asJava
+    val epochInfo = requestInfo.asScala.map {
+      case (tp, epoch) => (tp, if (epoch == EpochEndOffset.UNDEFINED_EPOCH) None else Some(epoch.intValue))
+    }
+    val lastOffsetForLeaderEpoch = replicaManager.lastOffsetForLeaderEpoch(epochInfo).asJava
     sendResponseExemptThrottle(request, new OffsetsForLeaderEpochResponse(lastOffsetForLeaderEpoch))
   }
 

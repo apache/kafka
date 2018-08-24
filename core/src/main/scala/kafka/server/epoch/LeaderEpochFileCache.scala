@@ -98,7 +98,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
     inReadLock(lock) {
       val epochAndOffset =
-        if (requestedEpoch == latestEpoch.getOrElse(UNDEFINED_EPOCH)) {
+        if (latestEpoch.contains(requestedEpoch)) {
           (requestedEpoch, leo().messageOffset)
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
