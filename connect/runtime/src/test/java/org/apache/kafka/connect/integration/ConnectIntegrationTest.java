@@ -67,7 +67,8 @@ public class ConnectIntegrationTest {
 
         connect.startConnector("simple-conn", confs);
 
-        while (MonitorableSinkConnector.COUNTER.get() < 2000) {
+        int attempts = 0;
+        while (attempts++ < 5 && MonitorableSinkConnector.COUNTER.get() < 2000) {
             Thread.sleep(500);
         }
 
