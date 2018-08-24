@@ -36,7 +36,7 @@ public class ConnectIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
     @ClassRule
-    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster();
+    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
 
     /**
      * Simple test case to bring up an embedded Connect cluster along a backing Kafka and Zk process.

@@ -18,22 +18,25 @@ package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
-import org.apache.kafka.connect.storage.FileOffsetBackingStore;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
+import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
+import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.junit.rules.ExternalResource;
-import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -54,19 +57,23 @@ public class EmbeddedConnectCluster extends ExternalResource {
     private final EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     private final Map<String, String> workerProps;
+    private final String clusterName;
 
-    private File offsetsDirectory;
     private Connect connect;
     private URI advertisedUrl;
-    private Herder herder;
 
-    public EmbeddedConnectCluster() {
-        // this empty map will be populated with defaults before starting Connect.
-        this(new HashMap<>());
+    public EmbeddedConnectCluster(Class<?> klass) {
+        this(klass.getName());
     }
 
-    public EmbeddedConnectCluster(Map<String, String> workerProps) {
+    public EmbeddedConnectCluster(String name) {
+        // this empty map will be populated with defaults before starting Connect.
+        this(name, new HashMap<>());
+    }
+
+    public EmbeddedConnectCluster(String name, Map<String, String> workerProps) {
         this.workerProps = workerProps;
+        this.clusterName = name;
     }
 
     public void start() throws IOException {
@@ -90,13 +97,6 @@ public class EmbeddedConnectCluster extends ExternalResource {
     @Override
     protected void after() {
         try {
-            log.info("Cleaning up connect offset dir at {}", offsetsDirectory);
-            Utils.delete(offsetsDirectory);
-        } catch (IOException e) {
-            log.error("Could not delete directory at {}", offsetsDirectory, e);
-        }
-
-        try {
             connect.stop();
         } catch (Exception e) {
             log.error("Could not stop connect", e);
@@ -109,32 +109,52 @@ public class EmbeddedConnectCluster extends ExternalResource {
         }
     }
 
-    public void startConnect() throws IOException {
+    public void startConnect() {
         log.info("Starting standalone connect cluster..");
         workerProps.put("bootstrap.servers", kafka().bootstrapServers());
         workerProps.put("rest.host.name", "localhost");
 
+        putIfAbsent(workerProps, "group.id", "connect-integration-test-" + clusterName);
+        putIfAbsent(workerProps, "offset.storage.topic", "connect-offset-topic-" + clusterName);
+        putIfAbsent(workerProps, "offset.storage.replication.factor", "1");
+        putIfAbsent(workerProps, "config.storage.topic", "connect-config-topic-" + clusterName);
+        putIfAbsent(workerProps, "config.storage.replication.factor", "1");
+        putIfAbsent(workerProps, "status.storage.topic", "connect-storage-topic-" + clusterName);
+        putIfAbsent(workerProps, "status.storage.replication.factor", "1");
         putIfAbsent(workerProps, "key.converter", "org.apache.kafka.connect.json.JsonConverter");
         putIfAbsent(workerProps, "value.converter", "org.apache.kafka.connect.json.JsonConverter");
         putIfAbsent(workerProps, "key.converter.schemas.enable", "false");
         putIfAbsent(workerProps, "value.converter.schemas.enable", "false");
 
-        offsetsDirectory = createTmpDir();
-        putIfAbsent(workerProps, "offset.storage.file.filename", new File(offsetsDirectory, "connect.integration.offsets").getAbsolutePath());
-
         log.info("Scanning for plugins...");
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
 
-        StandaloneConfig config = new StandaloneConfig(workerProps);
+        DistributedConfig config = new DistributedConfig(workerProps);
 
         RestServer rest = new RestServer(config);
         advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        Worker worker = new Worker(workerId, kafkaCluster.time(), plugins, config, new FileOffsetBackingStore());
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
+        offsetBackingStore.configure(config);
 
-        herder = new StandaloneHerder(worker, ConnectUtils.lookupKafkaClusterId(config));
+        Worker worker = new Worker(workerId, kafkaCluster.time(), plugins, config, offsetBackingStore);
+
+        WorkerConfigTransformer configTransformer = worker.configTransformer();
+        Converter internalValueConverter = worker.getInternalValueConverter();
+
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(kafkaCluster.time(), internalValueConverter);
+        statusBackingStore.configure(config);
+
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
+                internalValueConverter,
+                config,
+                configTransformer);
+
+        Herder herder = new DistributedHerder(config, kafkaCluster.time(), worker,
+                ConnectUtils.lookupKafkaClusterId(config), statusBackingStore, configBackingStore,
+                advertisedUrl.toString());
         connect = new Connect(herder, rest);
         connect.start();
     }
@@ -165,12 +185,6 @@ public class EmbeddedConnectCluster extends ExternalResource {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
         }
-    }
-
-    private File createTmpDir() throws IOException {
-        TemporaryFolder tmpFolder = new TemporaryFolder();
-        tmpFolder.create();
-        return tmpFolder.newFolder();
     }
 
     public URI restUrl() {

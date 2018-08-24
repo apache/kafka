@@ -43,7 +43,7 @@ public class DeadLetterQueueIntegrationTest {
     private static final String DLQ_TOPIC = "my-connector-errors";
 
     @ClassRule
-    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster();
+    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster(DeadLetterQueueIntegrationTest.class);
 
     @Test
     public void testTransformationErrorHandlingWithDeadLetterQueue() throws Exception {
@@ -59,7 +59,7 @@ public class DeadLetterQueueIntegrationTest {
         // consume all records from test topic
         log.info("Consuming records from test topic");
         for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consumeNRecords(20, 5000, "test-topic")) {
-            log.info("Consumed record ({}, {}) from topic {}", recs.key(), new String(recs.value()), recs.topic());
+            log.debug("Consumed record ({}, {}) from topic {}", new String(recs.key()), new String(recs.value()), recs.topic());
         }
 
         Map<String, String> confs = new HashMap<>();
