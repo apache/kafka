@@ -86,6 +86,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     testDriver.pipeRecord(sourceTopic, ("1", "value1"))
     acc shouldBe "value1"
+
     testDriver.pipeRecord(sourceTopic, ("2", "value2"))
     acc shouldBe "value1value2"
 
