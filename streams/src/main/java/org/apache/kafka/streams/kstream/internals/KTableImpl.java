@@ -26,20 +26,29 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
+import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
+import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
+import org.apache.kafka.streams.kstream.internals.suppress.SuppressedImpl;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.time.Duration;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+
+import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtil.findAndVerifyWindowGrace;
 
 /**
  * The implementation class of {@link KTable}.
@@ -65,6 +74,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private static final String MERGE_NAME = "KTABLE-MERGE-";
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
+
+    private static final String SUPPRESS_NAME = "KTABLE-SUPPRESS-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
@@ -350,6 +361,53 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
+    public KTable<K, V> suppress(final Suppressed<K> suppressed) {
+        final String name = builder.newProcessorName(SUPPRESS_NAME);
+
+        final ProcessorSupplier<K, Change<V>> suppressionSupplier =
+            () -> new KTableSuppressProcessor<>(buildSuppress(suppressed));
+
+        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(
+            suppressionSupplier,
+            name
+        );
+
+        final ProcessorGraphNode<K, Change<V>> node = new ProcessorGraphNode<>(name, processorParameters, false);
+
+        builder.addGraphNode(streamsGraphNode, node);
+
+        return new KTableImpl<K, S, V>(
+            builder,
+            name,
+            suppressionSupplier,
+            keySerde,
+            valSerde,
+            Collections.singleton(this.name),
+            null,
+            false,
+            node
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private SuppressedImpl<K> buildSuppress(final Suppressed<K> suppress) {
+        if (suppress instanceof FinalResultsSuppressionBuilder) {
+            final long grace = findAndVerifyWindowGrace(streamsGraphNode);
+
+            final FinalResultsSuppressionBuilder<?> builder = (FinalResultsSuppressionBuilder) suppress;
+
+            final SuppressedImpl<? extends Windowed> finalResultsSuppression =
+                builder.buildFinalResultsSuppression(Duration.ofMillis(grace));
+
+            return (SuppressedImpl<K>) finalResultsSuppression;
+        } else if (suppress instanceof SuppressedImpl) {
+            return (SuppressedImpl<K>) suppress;
+        } else {
+            throw new IllegalArgumentException("Custom subclasses of Suppressed are not allowed.");
+        }
+    }
+
+    @Override
     public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, null, false, false);
@@ -492,12 +550,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final ProcessorParameters joinMergeProcessorParameters = new ProcessorParameters(joinMerge, joinMergeName);
 
         kTableJoinNodeBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParameters)
-            .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
-            .withJoinThisProcessorParameters(joinThisProcessorParameters)
-            .withJoinThisStoreNames(valueGetterSupplier().storeNames())
-            .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
-            .withOtherJoinSideNodeName(((KTableImpl) other).name)
-            .withThisJoinSideNodeName(name);
+                             .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
+                             .withJoinThisProcessorParameters(joinThisProcessorParameters)
+                             .withJoinThisStoreNames(valueGetterSupplier().storeNames())
+                             .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
+                             .withOtherJoinSideNodeName(((KTableImpl) other).name)
+                             .withThisJoinSideNodeName(name);
 
         final KTableKTableJoinNode kTableKTableJoinNode = kTableJoinNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
@@ -526,10 +584,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final String selectName = builder.newProcessorName(SELECT_NAME);
 
         final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
+        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorGraphNode<K1, V1> groupByMapNode = new ProcessorGraphNode<>(
+        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(
             selectName,
             processorParameters,
             false

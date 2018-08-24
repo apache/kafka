@@ -405,13 +405,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        capturedForwards.add(new CapturedForward(To.all(), new KeyValue(key, value)));
+        forward(key, value, To.all());
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
+        capturedForwards.add(
+            new CapturedForward(
+                to.timestamp == -1 ? to.withTimestamp(timestamp == null ? -1 : timestamp) : to,
+                new KeyValue(key, value)
+            )
+        );
     }
 
     @SuppressWarnings("deprecation")
