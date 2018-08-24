@@ -20,14 +20,17 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.MonitorableSinkConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Category(IntegrationTest.class)
 public class ConnectIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);

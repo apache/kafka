@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
-import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -35,13 +35,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class EmbeddedConnectCluster extends ExternalResource {
 
@@ -68,10 +69,21 @@ public class EmbeddedConnectCluster extends ExternalResource {
         this.workerProps = workerProps;
     }
 
+    public void start() throws IOException {
+        before();
+    }
+
+    /**
+     * Stop the connect cluster and the embedded Kafka and
+     */
+    public void stop() {
+        after();
+    }
+
     @Override
     protected void before() throws IOException {
         kafkaCluster.before();
-        start();
+        startConnect();
         log.info("Started connect at {} with kafka cluster at {}", restUrl(), kafka().bootstrapServers());
     }
 
@@ -84,11 +96,20 @@ public class EmbeddedConnectCluster extends ExternalResource {
             log.error("Could not delete directory at {}", offsetsDirectory, e);
         }
 
-        connect.stop();
-        kafkaCluster.after();
+        try {
+            connect.stop();
+        } catch (Exception e) {
+            log.error("Could not stop connect", e);
+        }
+
+        try {
+            kafkaCluster.after();
+        } catch (Exception e) {
+            log.error("Could not stop kafka", e);
+        }
     }
 
-    public void start() throws IOException {
+    public void startConnect() throws IOException {
         log.info("Starting standalone connect cluster..");
         workerProps.put("bootstrap.servers", kafka().bootstrapServers());
         workerProps.put("rest.host.name", "localhost");
@@ -118,24 +139,25 @@ public class EmbeddedConnectCluster extends ExternalResource {
         connect.start();
     }
 
-    public void startConnector(String connName, Map<String, String> connConfig) {
-        connConfig.put("name", connName);
-        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(connName, connConfig, true, cb);
+    public void startConnector(String connName, Map<String, String> connConfig) throws IOException {
+        String url = String.format("http://localhost:8083/connectors/%s/config", connName);
+        ObjectMapper mapper = new ObjectMapper();
         try {
-            cb.get(60, TimeUnit.SECONDS);
-        } catch (Exception e) {
+            String content = mapper.writeValueAsString(connConfig);
+            int status = executePut(url , content);
+            if (status >= 400) {
+                throw new IOException("Could not execute PUT request. status=" + status);
+            }
+        } catch (JsonProcessingException e) {
+            log.error("Could not serialize config", e);
             throw new RuntimeException(e);
         }
     }
 
-    public void deleteConnector(String connName) {
-        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.deleteConnectorConfig(connName, cb);
-        try {
-            cb.get(60, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+    public void deleteConnector(String connName) throws IOException {
+        int status = executeDelete(String.format("http://localhost:8083/connectors/%s", connName));
+        if (status >= 400) {
+            throw new IOException("Could not execute DELETE request. status=" + status);
         }
     }
 
@@ -158,4 +180,34 @@ public class EmbeddedConnectCluster extends ExternalResource {
     public EmbeddedKafkaCluster kafka() {
         return kafkaCluster;
     }
+
+    public int executePut(String url, String body) throws IOException {
+        log.debug("Executing PUT request to URL={}. Payload={}", url, body);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestProperty("Content-Type", "application/json");
+        httpCon.setRequestMethod("PUT");
+        OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream());
+        out.write(body);
+        out.close();
+        try (InputStream is = httpCon.getInputStream()) {
+            int c;
+            StringBuilder response = new StringBuilder();
+            while ((c = is.read()) != -1) {
+                response.append((char) c);
+            }
+            log.info("Put response for URL={} is {}", url, response);
+        }
+        return httpCon.getResponseCode();
+    }
+
+    public int executeDelete(String url) throws IOException {
+        log.debug("Executing DELETE request to URL={}", url);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestMethod("DELETE");
+        httpCon.connect();
+        return httpCon.getResponseCode();
+    }
+
 }
