@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
@@ -164,13 +163,13 @@ public class EmbeddedConnectCluster extends ExternalResource {
         ObjectMapper mapper = new ObjectMapper();
         try {
             String content = mapper.writeValueAsString(connConfig);
-            int status = executePut(url , content);
+            int status = executePut(url, content);
             if (status >= 400) {
                 throw new IOException("Could not execute PUT request. status=" + status);
             }
-        } catch (JsonProcessingException e) {
+        } catch (IOException e) {
             log.error("Could not serialize config", e);
-            throw new RuntimeException(e);
+            throw new IOException(e);
         }
     }
 

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.util;
+package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
@@ -35,11 +35,12 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MonitorableSinkConnector.class);
 
-    public static AtomicInteger COUNTER = new AtomicInteger();
+    public static final AtomicInteger COUNTER = new AtomicInteger();
 
     @Override
     public void start(Map<String, String> props) {
         log.info("Starting connector");
+        COUNTER.set(0);
     }
 
     @Override

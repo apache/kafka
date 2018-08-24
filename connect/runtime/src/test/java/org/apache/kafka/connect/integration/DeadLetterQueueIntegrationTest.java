@@ -22,16 +22,17 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.apache.kafka.connect.util.MonitorableSinkConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
 import org.junit.Assert;
-import org.junit.ClassRule;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,8 +43,17 @@ public class DeadLetterQueueIntegrationTest {
 
     private static final String DLQ_TOPIC = "my-connector-errors";
 
-    @ClassRule
-    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster(DeadLetterQueueIntegrationTest.class);
+    private final EmbeddedConnectCluster connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
+
+    @Before
+    public void setup() throws IOException {
+        connect.start();
+    }
+
+    @After
+    public void close() {
+        connect.stop();
+    }
 
     @Test
     public void testTransformationErrorHandlingWithDeadLetterQueue() throws Exception {

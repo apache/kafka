@@ -18,15 +18,16 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.apache.kafka.connect.util.MonitorableSinkConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.ClassRule;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,8 +36,17 @@ public class ConnectIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
-    @ClassRule
-    public static EmbeddedConnectCluster connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
+    private final EmbeddedConnectCluster connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
+
+    @Before
+    public void setup() throws IOException {
+        connect.start();
+    }
+
+    @After
+    public void close() {
+        connect.stop();
+    }
 
     /**
      * Simple test case to bring up an embedded Connect cluster along a backing Kafka and Zk process.
