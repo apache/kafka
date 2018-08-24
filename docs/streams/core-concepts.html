@@ -181,8 +181,8 @@
     </p>
 
     <ul>
-        <li> Within a topic-partition, a record's timestamp may not be monotonically increasing along with their offsets. Since Kafka Streams will always try to process records within a topic-partition to follow the offset order, it can cause records with larger timestamps
-             to be processed earlier than records with smaller timestamp in the same topic-partition.
+        <li> Within a topic-partition, a record's timestamp may not be monotonically increasing along with their offsets. Since Kafka Streams will always try to process records within a topic-partition to follow the offset order,
+            it can cause records with larger timestamps (but smaller offsets) to be processed earlier than records with smaller timestamps (but larger offsets) in the same topic-partition.
         </li>
         <li> Within a <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">stream task</a> that may be processing multiple topic-partitions, if users configure the application to not wait for all partitions to contain some buffered data and
              pick from the partition with the smallest timestamp to process the next record, then later on when some records are fetched for other topic-partitions, their timestamps may be smaller than those processed records fetched from another topic-partition.
@@ -200,7 +200,7 @@
     <ul>
         <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulted stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins. </li>
         <li> For Stream-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order), and hence it may produce unpredictable results. </li>
-        <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventual consistent. </li>
+        <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventually consistent. </li>
     </ul>
 
     <div class="pagination">
