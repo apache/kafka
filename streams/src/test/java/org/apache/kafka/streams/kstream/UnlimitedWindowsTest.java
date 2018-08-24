@@ -21,8 +21,9 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
+import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -46,16 +47,6 @@ public class UnlimitedWindowsTest {
         try {
             windowSpec.until(42);
             fail("should not allow to set window retention time");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
-    }
-
-    @Test
-    public void gracePeriodShouldNotBeSettable() {
-        try {
-            UnlimitedWindows.of().grace(0L);
-            fail("should not be able to set grace period");
         } catch (final IllegalArgumentException e) {
             // expected
         }
@@ -88,18 +79,15 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
-        assertEquals(UnlimitedWindows.of(), UnlimitedWindows.of());
-        assertEquals(UnlimitedWindows.of().hashCode(), UnlimitedWindows.of().hashCode());
+        verifyEquality(UnlimitedWindows.of(), UnlimitedWindows.of());
 
-        assertEquals(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
-        assertEquals(UnlimitedWindows.of().startOn(1).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
+        verifyEquality(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
 
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
-        assertNotEquals(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
-        assertNotEquals(UnlimitedWindows.of().startOn(9).hashCode(), UnlimitedWindows.of().startOn(1).hashCode());
+        verifyInEquality(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
     }
 
 }

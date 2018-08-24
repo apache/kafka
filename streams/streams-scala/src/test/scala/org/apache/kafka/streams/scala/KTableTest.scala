@@ -29,6 +29,72 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class KTableTest extends FlatSpec with Matchers with TestDriver {
 
+  "filter a KTable" should "filter records satisfying the predicate" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count()
+    table.filter((_, value) => value > 1).toStream.to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe (null: java.lang.Long)
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe 2
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "2"
+      record.value shouldBe (null: java.lang.Long)
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "filterNot a KTable" should "filter records not satisfying the predicate" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count()
+    table.filterNot((_, value) => value > 1).toStream.to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe 1
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe (null: java.lang.Long)
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "2"
+      record.value shouldBe 1
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
   "join 2 KTables" should "join correctly records" in {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
