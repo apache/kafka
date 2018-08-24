@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -31,6 +31,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
@@ -48,12 +49,12 @@ public class SegmentIteratorTest {
         }
     };
 
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private SegmentIterator iterator = null;
 
     @Before
     public void before() {
-        context = new MockProcessorContext(
+        context = new InternalMockProcessorContext(
                 TestUtils.tempDirectory(),
                 Serdes.String(),
                 Serdes.String(),
@@ -76,7 +77,6 @@ public class SegmentIteratorTest {
         }
         segmentOne.close();
         segmentTwo.close();
-        context.close();
     }
 
     @Test
@@ -102,6 +102,19 @@ public class SegmentIteratorTest {
         assertEquals("d", new String(iterator.peekNextKey().get()));
         assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
 
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
+        iterator = new SegmentIterator(Collections.singletonList(segmentOne).iterator(),
+                                       hasNextCondition,
+                                       Bytes.wrap("a".getBytes()),
+                                       Bytes.wrap("z".getBytes()));
+
+
+        iterator.currentIterator = segmentOne.all();
+        segmentOne.close();
         assertFalse(iterator.hasNext());
     }
 

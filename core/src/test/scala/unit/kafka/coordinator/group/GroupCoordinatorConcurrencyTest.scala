@@ -27,7 +27,7 @@ import kafka.server.{ DelayedOperationPurgatory, KafkaConfig }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ JoinGroupRequest, TransactionResult }
+import org.apache.kafka.common.requests.JoinGroupRequest
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{ After, Before, Test }
@@ -116,7 +116,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   def testConcurrentRandomSequence() {
     verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
   }
-
 
   abstract class GroupOperation[R, C] extends Operation {
     val responseFutures = new ConcurrentHashMap[GroupMember, Future[R]]()
@@ -228,8 +227,17 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1))
       val producerId = 1000L
       val producerEpoch : Short = 2
+      // When transaction offsets are appended to the log, transactions may be scheduled for
+      // completion. Since group metadata locks are acquired for transaction completion, include
+      // this in the callback to test that there are no deadlocks.
+      def callbackWithTxnCompletion(errors: Map[TopicPartition, Errors]): Unit = {
+        val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
+        groupCoordinator.groupManager.scheduleHandleTxnCompletion(producerId,
+          offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
+        responseCallback(errors)
+      }
       groupCoordinator.handleTxnCommitOffsets(member.group.groupId,
-          producerId, producerEpoch, offsets, responseCallback)
+          producerId, producerEpoch, offsets, callbackWithTxnCompletion)
     }
   }
 
@@ -241,18 +249,13 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: CompleteTxnCallback): Unit = {
       val producerId = 1000L
       val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
-      groupCoordinator.handleTxnCompletion(producerId, offsetsPartitions, transactionResult(member.group.groupId))
+      groupCoordinator.groupManager.handleTxnCompletion(producerId,
+        offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
       responseCallback(Errors.NONE)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
       val error = await(member, 500)
       assertEquals(Errors.NONE, error)
-    }
-    // Test both commit and abort. Group ids used in the test have the format <prefix><index>
-    // Use the last digit of the index to decide between commit and abort.
-    private def transactionResult(groupId: String): TransactionResult = {
-      val lastDigit = groupId(groupId.length - 1).toInt
-      if (lastDigit % 2 == 0) TransactionResult.COMMIT else TransactionResult.ABORT
     }
   }
 
@@ -272,7 +275,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 }
 
 object GroupCoordinatorConcurrencyTest {
-
 
   type JoinGroupCallback = JoinGroupResult => Unit
   type SyncGroupCallbackParams = (Array[Byte], Errors)

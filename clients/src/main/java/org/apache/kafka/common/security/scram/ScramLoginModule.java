@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.security.scram;
 
+import org.apache.kafka.common.security.scram.internals.ScramSaslClientProvider;
+import org.apache.kafka.common.security.scram.internals.ScramSaslServerProvider;
+
+import java.util.Collections;
 import java.util.Map;
 
 import javax.security.auth.Subject;
@@ -44,7 +48,10 @@ public class ScramLoginModule implements LoginModule {
             subject.getPrivateCredentials().add(password);
 
         Boolean useTokenAuthentication = "true".equalsIgnoreCase((String) options.get(TOKEN_AUTH_CONFIG));
-        subject.getPublicCredentials().add(useTokenAuthentication);
+        if (useTokenAuthentication) {
+            Map<String, String> scramExtensions = Collections.singletonMap(TOKEN_AUTH_CONFIG, "true");
+            subject.getPublicCredentials().add(scramExtensions);
+        }
     }
 
     @Override

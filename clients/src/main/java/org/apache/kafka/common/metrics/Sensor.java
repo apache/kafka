@@ -24,8 +24,11 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -40,11 +43,12 @@ public final class Sensor {
     private final String name;
     private final Sensor[] parents;
     private final List<Stat> stats;
-    private final List<KafkaMetric> metrics;
+    private final Map<MetricName, KafkaMetric> metrics;
     private final MetricConfig config;
     private final Time time;
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
+    private final Object metricLock;
 
     public enum RecordingLevel {
         INFO(0, "INFO"), DEBUG(1, "DEBUG");
@@ -79,8 +83,8 @@ public final class Sensor {
 
         public static RecordingLevel forId(int id) {
             if (id < MIN_RECORDING_LEVEL_KEY || id > MAX_RECORDING_LEVEL_KEY)
-                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%s`, it should be between `%s` " +
-                    "and `%s` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
+                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%d`, it should be between `%d` " +
+                    "and `%d` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
             return ID_TO_TYPE[id];
         }
 
@@ -90,11 +94,7 @@ public final class Sensor {
         }
 
         public boolean shouldRecord(final int configId) {
-            if (configId == DEBUG.id) {
-                return true;
-            } else {
-                return configId == this.id;
-            }
+            return configId == DEBUG.id || configId == this.id;
         }
 
     }
@@ -107,13 +107,14 @@ public final class Sensor {
         this.registry = registry;
         this.name = Utils.notNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
-        this.metrics = new ArrayList<>();
+        this.metrics = new LinkedHashMap<>();
         this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
         this.recordingLevel = recordingLevel;
+        this.metricLock = new Object();
         checkForest(new HashSet<Sensor>());
     }
 
@@ -175,9 +176,11 @@ public final class Sensor {
         if (shouldRecord()) {
             this.lastRecordTime = timeMs;
             synchronized (this) {
-                // increment all the stats
-                for (Stat stat : this.stats)
-                    stat.record(config, value, timeMs);
+                synchronized (metricLock()) {
+                    // increment all the stats
+                    for (Stat stat : this.stats)
+                        stat.record(config, value, timeMs);
+                }
                 if (checkQuotas)
                     checkQuotas(timeMs);
             }
@@ -194,7 +197,7 @@ public final class Sensor {
     }
 
     public void checkQuotas(long timeMs) {
-        for (KafkaMetric metric : this.metrics) {
+        for (KafkaMetric metric : this.metrics.values()) {
             MetricConfig config = metric.config();
             if (config != null) {
                 Quota quota = config.quota();
@@ -211,9 +214,11 @@ public final class Sensor {
 
     /**
      * Register a compound statistic with this sensor with no config override
+     * @param stat The stat to register
+     * @return true if stat is added to sensor, false if sensor is expired
      */
-    public void add(CompoundStat stat) {
-        add(stat, null);
+    public boolean add(CompoundStat stat) {
+        return add(stat, null);
     }
 
     /**
@@ -221,41 +226,60 @@ public final class Sensor {
      * @param stat The stat to register
      * @param config The configuration for this stat. If null then the stat will use the default configuration for this
      *        sensor.
+     * @return true if stat is added to sensor, false if sensor is expired
      */
-    public synchronized void add(CompoundStat stat, MetricConfig config) {
+    public synchronized boolean add(CompoundStat stat, MetricConfig config) {
+        if (hasExpired())
+            return false;
+
         this.stats.add(Utils.notNull(stat));
-        Object lock = new Object();
+        Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
-            KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
-            this.registry.registerMetric(metric);
-            this.metrics.add(metric);
+            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
+            if (!metrics.containsKey(metric.metricName())) {
+                registry.registerMetric(metric);
+                metrics.put(metric.metricName(), metric);
+            }
         }
+        return true;
     }
 
     /**
      * Register a metric with this sensor
      * @param metricName The name of the metric
      * @param stat The statistic to keep
+     * @return true if metric is added to sensor, false if sensor is expired
      */
-    public void add(MetricName metricName, MeasurableStat stat) {
-        add(metricName, stat, null);
+    public boolean add(MetricName metricName, MeasurableStat stat) {
+        return add(metricName, stat, null);
     }
 
     /**
      * Register a metric with this sensor
+     *
      * @param metricName The name of the metric
-     * @param stat The statistic to keep
-     * @param config A special configuration for this metric. If null use the sensor default configuration.
+     * @param stat       The statistic to keep
+     * @param config     A special configuration for this metric. If null use the sensor default configuration.
+     * @return true if metric is added to sensor, false if sensor is expired
      */
-    public synchronized void add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
-        KafkaMetric metric = new KafkaMetric(new Object(),
-                                             Utils.notNull(metricName),
-                                             Utils.notNull(stat),
-                                             config == null ? this.config : config,
-                                             time);
-        this.registry.registerMetric(metric);
-        this.metrics.add(metric);
-        this.stats.add(stat);
+    public synchronized boolean add(final MetricName metricName, final MeasurableStat stat, final MetricConfig config) {
+        if (hasExpired()) {
+            return false;
+        } else if (metrics.containsKey(metricName)) {
+            return true;
+        } else {
+            final KafkaMetric metric = new KafkaMetric(
+                metricLock(),
+                Utils.notNull(metricName),
+                Utils.notNull(stat),
+                config == null ? this.config : config,
+                time
+            );
+            registry.registerMetric(metric);
+            metrics.put(metric.metricName(), metric);
+            stats.add(stat);
+            return true;
+        }
     }
 
     /**
@@ -267,6 +291,30 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return Collections.unmodifiableList(this.metrics);
+        return Collections.unmodifiableList(new LinkedList<>(this.metrics.values()));
+    }
+
+    /**
+     * KafkaMetrics of sensors which use SampledStat should be synchronized on the same lock
+     * for sensor record and metric value read to allow concurrent reads and updates. For simplicity,
+     * all sensors are synchronized on this object.
+     * <p>
+     * Sensor object is not used as a lock for reading metric value since metrics reporter is
+     * invoked while holding Sensor and Metrics locks to report addition and removal of metrics
+     * and synchronized reporters may deadlock if Sensor lock is used for reading metrics values.
+     * Note that Sensor object itself is used as a lock to protect the access to stats and metrics
+     * while recording metric values, adding and deleting sensors.
+     * </p><p>
+     * Locking order (assume all MetricsReporter methods may be synchronized):
+     * <ul>
+     *   <li>Sensor#add: Sensor -> Metrics -> MetricsReporter</li>
+     *   <li>Metrics#removeSensor: Sensor -> Metrics -> MetricsReporter</li>
+     *   <li>KafkaMetric#metricValue: MetricsReporter -> Sensor#metricLock</li>
+     *   <li>Sensor#record: Sensor -> Sensor#metricLock</li>
+     * </ul>
+     * </p>
+     */
+    private Object metricLock() {
+        return metricLock;
     }
 }

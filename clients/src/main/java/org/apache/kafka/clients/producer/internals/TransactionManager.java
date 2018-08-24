@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -568,14 +569,15 @@ public class TransactionManager {
         if (isTransactional())
             // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
             return false;
-        for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
+        for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.iterator(); iter.hasNext(); ) {
+            TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
                 if (isNextSequence(topicPartition, sequenceNumber(topicPartition))) {
                     // This would happen when a batch was expired, but subsequent batches succeeded.
-                    partitionsWithUnresolvedSequences.remove(topicPartition);
+                    iter.remove();
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
@@ -1270,50 +1272,49 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
-            boolean hadFailure = false;
             Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();
+
+            log.debug("Received TxnOffsetCommit response for consumer group {}: {}", builder.consumerGroupId(),
+                    errors);
 
             for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
-                    log.debug("Successfully added offsets {} from consumer group {} to transaction.",
-                            builder.offsets(), builder.consumerGroupId());
                     pendingTxnOffsetCommits.remove(topicPartition);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR
                         || error == Errors.REQUEST_TIMED_OUT) {
-                    hadFailure = true;
                     if (!coordinatorReloaded) {
                         coordinatorReloaded = true;
                         lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.consumerGroupId());
                     }
-                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                    hadFailure = true;
+                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION
+                        || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                    // If the topic is unknown or the coordinator is loading, retry with the current coordinator
+                    continue;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
-                    return;
+                    break;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
                         || error == Errors.INVALID_PRODUCER_EPOCH
                         || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                     fatalError(error.exception());
-                    return;
+                    break;
                 } else {
                     fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
-                    return;
+                    break;
                 }
             }
 
-            if (!hadFailure || !result.isSuccessful()) {
-                // all attempted partitions were either successful, or there was a fatal failure.
-                // either way, we are not retrying, so complete the request.
+            if (result.isCompleted()) {
+                pendingTxnOffsetCommits.clear();
+            } else if (pendingTxnOffsetCommits.isEmpty()) {
                 result.done();
-                return;
-            }
-
-            // retry the commits which failed with a retriable error.
-            if (!pendingTxnOffsetCommits.isEmpty())
+            } else {
+                // Retry the commits which failed with a retriable error
                 reenqueue();
+            }
         }
     }
 }

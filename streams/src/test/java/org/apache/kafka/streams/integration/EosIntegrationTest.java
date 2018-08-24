@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -78,18 +79,18 @@ public class EosIntegrationTest {
     });
 
     private static String applicationId;
+    private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
     private final static String SINGLE_PARTITION_INPUT_TOPIC = "singlePartitionInputTopic";
     private final static String SINGLE_PARTITION_THROUGH_TOPIC = "singlePartitionThroughTopic";
     private final static String SINGLE_PARTITION_OUTPUT_TOPIC = "singlePartitionOutputTopic";
-    private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
     private final static String MULTI_PARTITION_THROUGH_TOPIC = "multiPartitionThroughTopic";
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
     private final String storeName = "store";
 
     private AtomicBoolean errorInjected;
-    private AtomicBoolean injectGC;
+    private AtomicBoolean gcInjected;
     private volatile boolean doGC = true;
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
@@ -153,7 +154,6 @@ public class EosIntegrationTest {
         output.to(outputTopic);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
-            final long factor = i;
             final KafkaStreams streams = new KafkaStreams(
                 builder.build(),
                 StreamsTestUtils.getStreamsConfig(
@@ -163,15 +163,20 @@ public class EosIntegrationTest {
                     Serdes.LongSerde.class.getName(),
                     new Properties() {
                         {
-                            put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
                             put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+                            put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+                            put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+                            put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
+                            put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+                            put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+                            put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
                         }
                     }));
 
             try {
                 streams.start();
 
-                final List<KeyValue<Long, Long>> inputData = prepareData(factor * 100, factor * 100 + 10L, 0L, 1L);
+                final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
 
                 IntegrationTestUtils.produceKeyValuesSynchronously(
                     inputTopic,
@@ -248,6 +253,10 @@ public class EosIntegrationTest {
                 new Properties() {
                     {
                         put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+                        put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+                        put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
+                        put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
                     }
                 }));
 
@@ -391,8 +400,9 @@ public class EosIntegrationTest {
         // the app is supposed to emit all 40 update records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
+        // in the uncommitted batch sending some data for the new key to validate that upon resuming they will not be shown up in the store
         //
-        // the failure gets inject after 20 committed and 30 uncommitted records got received
+        // the failure gets inject after 20 committed and 10 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
@@ -402,7 +412,7 @@ public class EosIntegrationTest {
             streams.start();
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
 
             final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
             dataBeforeFailure.addAll(committedDataBeforeFailure);
@@ -510,7 +520,7 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecords, committedDataBeforeGC);
             checkResultPerKey(uncommittedRecords, dataBeforeGC);
 
-            injectGC.set(true);
+            gcInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
 
             TestUtils.waitForCondition(new TestCondition() {
@@ -577,7 +587,7 @@ public class EosIntegrationTest {
     private KafkaStreams getKafkaStreams(final boolean withState, final String appDir, final int numberOfStreamsThreads) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
-        injectGC = new AtomicBoolean(false);
+        gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
 
         String[] storeNames = null;
@@ -610,11 +620,7 @@ public class EosIntegrationTest {
 
                     @Override
                     public KeyValue<Long, Long> transform(final Long key, final Long value) {
-                        if (errorInjected.compareAndSet(true, false)) {
-                            // only tries to fail once on one of the task
-                            throw new RuntimeException("Injected test exception.");
-                        }
-                        if (injectGC.compareAndSet(true, false)) {
+                        if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
                                 try {
                                     Thread.sleep(100);
@@ -631,21 +637,27 @@ public class EosIntegrationTest {
 
                         if (state != null) {
                             Long sum = state.get(key);
+
                             if (sum == null) {
                                 sum = value;
                             } else {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            context.forward(key, sum);
-                            return null;
+                            state.flush();
                         }
-                        return new KeyValue<>(key, value);
-                    }
 
-                    @Override
-                    public KeyValue<Long, Long> punctuate(final long timestamp) {
-                        return null;
+
+                        if (errorInjected.compareAndSet(true, false)) {
+                            // only tries to fail once on one of the task
+                            throw new RuntimeException("Injected test exception.");
+                        }
+
+                        if (state != null) {
+                            return new KeyValue<>(key, state.get(key));
+                        } else {
+                            return new KeyValue<>(key, value);
+                        }
                     }
 
                     @Override
@@ -666,6 +678,8 @@ public class EosIntegrationTest {
                         put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
                         put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
                         put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, -1);
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
@@ -778,6 +792,8 @@ public class EosIntegrationTest {
                 } catch (final Exception ignore) { }
             }
         }
+
+        assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();
         while (it.hasNext()) {

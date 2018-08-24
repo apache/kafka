@@ -18,17 +18,17 @@ package kafka.server
 
 import java.util
 
-import kafka.admin.AdminClient
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
+import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -46,15 +46,6 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     super.setUp()
   }
 
-  def createAdminConfig():util.Map[String, Object] = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
-    config
-  }
-
   override def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
@@ -64,46 +55,73 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     props.map(KafkaConfig.fromProps)
   }
 
+  private def createAdminConfig():util.Map[String, Object] = {
+    val config = new util.HashMap[String, Object]
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val securityProps: util.Map[Object, Object] =
+      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
+    config
+  }
+
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = AdminClient.create(createAdminConfig.asScala.toMap)
+    adminClient = AdminClient.create(createAdminConfig)
 
-    // test creating token
-    val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:" + JaasTestUtils.KafkaPlainUser))
-    val tokenResult1 = adminClient.createToken(renewer1)
-    assertEquals(Errors.NONE, tokenResult1._1)
-    var token1 = adminClient.describeToken(null)._2.head
-    assertEquals(token1, tokenResult1._2)
+    // create token1 with renewer1
+    val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:renewer1")).asJava
+    val createResult1 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer1))
+    val tokenCreated = createResult1.delegationToken().get()
+
+    //test describe token
+    var tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    assertTrue(tokens.size() == 1)
+    var token1 = tokens.get(0)
+    assertEquals(token1, tokenCreated)
+
+    // create token2 with renewer2
+    val renewer2 = List(SecurityUtils.parseKafkaPrincipal("User:renewer2")).asJava
+    val createResult2 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer2))
+    val token2 = createResult2.delegationToken().get()
+
+    //get all tokens
+    tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    assertTrue(tokens.size() == 2)
+    assertEquals(Set(token1, token2), tokens.asScala.toSet)
+
+    //get tokens for renewer2
+    tokens = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(renewer2)).delegationTokens().get()
+    assertTrue(tokens.size() == 1)
+    assertEquals(Set(token2), tokens.asScala.toSet)
 
     //test renewing tokens
-    val renewResponse = adminClient.renewToken(token1.hmacBuffer())
-    assertEquals(Errors.NONE, renewResponse._1)
+    val renewResult = adminClient.renewDelegationToken(token1.hmac())
+    var expiryTimestamp = renewResult.expiryTimestamp().get()
 
-    token1 = adminClient.describeToken(null)._2.head
-    assertEquals(renewResponse._2, token1.tokenInfo().expiryTimestamp())
+    val describeResult = adminClient.describeDelegationToken()
+    val tokenId = token1.tokenInfo().tokenId()
+    token1 = describeResult.delegationTokens().get().asScala.filter(dt => dt.tokenInfo().tokenId() == tokenId).head
+    assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
 
-    //test describe tokens
-    val renewer2 = List(SecurityUtils.parseKafkaPrincipal("User:Renewer1"))
-    val tokenResult2 = adminClient.createToken(renewer2)
-    assertEquals(Errors.NONE, tokenResult2._1)
-    val token2 = tokenResult2._2
+    //test expire tokens
+    val expireResult1 = adminClient.expireDelegationToken(token1.hmac())
+    expiryTimestamp = expireResult1.expiryTimestamp().get()
 
-    assertTrue(adminClient.describeToken(null)._2.size == 2)
+    val expireResult2 = adminClient.expireDelegationToken(token2.hmac())
+    expiryTimestamp = expireResult2.expiryTimestamp().get()
 
-    //test expire tokens tokens
-    val expireResponse1 = adminClient.expireToken(token1.hmacBuffer())
-    assertEquals(Errors.NONE, expireResponse1._1)
-
-    val expireResponse2 = adminClient.expireToken(token2.hmacBuffer())
-    assertEquals(Errors.NONE, expireResponse2._1)
-
-    assertTrue(adminClient.describeToken(null)._2.size == 0)
+    tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    assertTrue(tokens.size == 0)
 
     //create token with invalid principal type
-    val renewer3 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer1"))
-    val tokenResult3 = adminClient.createToken(renewer3)
-    assertEquals(Errors.INVALID_PRINCIPAL_TYPE, tokenResult3._1)
+    val renewer3 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer3")).asJava
+    val createResult3 = adminClient.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer3))
+    intercept[ExecutionException](createResult3.delegationToken().get()).getCause.isInstanceOf[InvalidPrincipalTypeException]
 
+    // try describing tokens for unknown owner
+    val unknownOwner = List(SecurityUtils.parseKafkaPrincipal("User:Unknown")).asJava
+    tokens = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(unknownOwner)).delegationTokens().get()
+    assertTrue(tokens.isEmpty)
   }
 
   @After

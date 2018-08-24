@@ -29,12 +29,14 @@ public class Node {
     private final int port;
     private final String rack;
 
+    // Cache hashCode as it is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
+    private Integer hash;
+
     public Node(int id, String host, int port) {
         this(id, host, port, null);
     }
 
     public Node(int id, String host, int port, String rack) {
-        super();
         this.id = id;
         this.idString = Integer.toString(id);
         this.host = host;
@@ -100,39 +102,30 @@ public class Node {
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((host == null) ? 0 : host.hashCode());
-        result = prime * result + id;
-        result = prime * result + port;
-        result = prime * result + ((rack == null) ? 0 : rack.hashCode());
-        return result;
+        Integer h = this.hash;
+        if (h == null) {
+            int result = 31 + ((host == null) ? 0 : host.hashCode());
+            result = 31 * result + id;
+            result = 31 * result + port;
+            result = 31 * result + ((rack == null) ? 0 : rack.hashCode());
+            this.hash = result;
+            return result;
+        } else {
+            return h;
+        }
     }
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
+        if (obj == null || getClass() != obj.getClass())
             return false;
         Node other = (Node) obj;
-        if (host == null) {
-            if (other.host != null)
-                return false;
-        } else if (!host.equals(other.host))
-            return false;
-        if (id != other.id)
-            return false;
-        if (port != other.port)
-            return false;
-        if (rack == null) {
-            if (other.rack != null)
-                return false;
-        } else if (!rack.equals(other.rack))
-            return false;
-        return true;
+        return (host == null ? other.host == null : host.equals(other.host)) &&
+            id == other.id &&
+            port == other.port &&
+            (rack == null ? other.rack == null : rack.equals(other.rack));
     }
 
     @Override

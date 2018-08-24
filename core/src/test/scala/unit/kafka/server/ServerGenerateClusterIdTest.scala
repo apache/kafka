@@ -19,7 +19,7 @@ package kafka.server
 import scala.concurrent._
 import ExecutionContext.Implicits._
 import scala.concurrent.duration._
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.{Before, After, Test}
@@ -49,7 +49,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   @Test
   def testAutoGenerateClusterId() {
     // Make sure that the cluster id doesn't exist yet.
-    assertFalse(zkUtils.pathExists(ZkUtils.ClusterIdPath))
+    assertFalse(zkClient.getClusterId.isDefined)
 
     var server1 = TestUtils.createServer(config1)
     servers = Seq(server1)
@@ -61,7 +61,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     server1.shutdown()
 
     // Make sure that the cluster id is persistent.
-    assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
+    assertTrue(zkClient.getClusterId.isDefined)
     assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     // Restart the server check to confirm that it uses the clusterId generated previously
@@ -74,7 +74,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     server1.shutdown()
 
     // Make sure that the cluster id is persistent after multiple reboots.
-    assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
+    assertTrue(zkClient.getClusterId.isDefined)
     assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)

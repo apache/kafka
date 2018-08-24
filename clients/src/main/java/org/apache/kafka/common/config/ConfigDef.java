@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -57,7 +58,7 @@ import java.util.Set;
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
- * 
+ *
  * Map&lt;String, Object&gt; configs = defs.parse(props);
  * // will return &quot;some value&quot;
  * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
@@ -73,6 +74,9 @@ import java.util.Set;
  * functionality for accessing configs.
  */
 public class ConfigDef {
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     /**
      * A unique Java object which represents the lack of a default value.
      */
@@ -595,10 +599,8 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
-        
         ConfigKey key = configKeys.get(name);
         ConfigValue value = configs.get(name);
-        
         if (key.recommender != null) {
             try {
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
@@ -705,7 +707,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
@@ -845,6 +847,11 @@ public class ConfigDef {
         private final Number min;
         private final Number max;
 
+        /**
+         *  A numeric range with inclusive upper bound and inclusive lower bound
+         * @param min  the lower bound
+         * @param max  the upper bound
+         */
         private Range(Number min, Number max) {
             this.min = min;
             this.max = max;
@@ -860,7 +867,7 @@ public class ConfigDef {
         }
 
         /**
-         * A numeric range that checks both the upper and lower bound
+         * A numeric range that checks both the upper (inclusive) and lower bound
          */
         public static Range between(Number min, Number max) {
             return new Range(min, max);
@@ -877,7 +884,9 @@ public class ConfigDef {
         }
 
         public String toString() {
-            if (min == null)
+            if (min == null && max == null)
+                return "[...]";
+            else if (min == null)
                 return "[...," + max + "]";
             else if (max == null)
                 return "[" + min + ",...]";
@@ -945,6 +954,10 @@ public class ConfigDef {
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
+
+        public String toString() {
+            return "non-null string";
+        }
     }
 
     public static class CompositeValidator implements Validator {
@@ -964,6 +977,19 @@ public class ConfigDef {
                 validator.ensureValid(name, value);
             }
         }
+
+        @Override
+        public String toString() {
+            if (validators == null) return "";
+            StringBuilder desc = new StringBuilder();
+            for (Validator v: validators) {
+                if (desc.length() > 0) {
+                    desc.append(',').append(' ');
+                }
+                desc.append(String.valueOf(v));
+            }
+            return desc.toString();
+        }
     }
 
     public static class NonEmptyString implements Validator {
@@ -979,6 +1005,44 @@ public class ConfigDef {
         @Override
         public String toString() {
             return "non-empty string";
+        }
+    }
+
+    public static class NonEmptyStringWithoutControlChars implements Validator {
+
+        public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
+            return new NonEmptyStringWithoutControlChars();
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            String s = (String) value;
+
+            if (s == null) {
+                // This can happen during creation of the config object due to no default value being defined for the
+                // name configuration - a missing name parameter is caught when checking for mandatory parameters,
+                // thus we can ok a null value here
+                return;
+            } else if (s.isEmpty()) {
+                throw new ConfigException(name, value, "String may not be empty");
+            }
+
+            // Check name string for illegal characters
+            ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
+
+            for (int i = 0; i < s.length(); i++) {
+                if (Character.isISOControl(s.codePointAt(i))) {
+                    foundIllegalCharacters.add(s.codePointAt(i));
+                }
+            }
+
+            if (!foundIllegalCharacters.isEmpty()) {
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+            }
+        }
+
+        public String toString() {
+            return "non-empty string without ISO control characters";
         }
     }
 
@@ -1057,16 +1121,40 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
+        return toHtmlTable(Collections.<String, String>emptyMap());
+    }
+
+    private void addHeader(StringBuilder builder, String headerName) {
+        builder.append("<th>");
+        builder.append(headerName);
+        builder.append("</th>\n");
+    }
+
+    private void addColumnValue(StringBuilder builder, String value) {
+        builder.append("<td>");
+        builder.append(value);
+        builder.append("</td>");
+    }
+
+    /**
+     * Converts this config into an HTML table that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" column
+     * will be included n the table with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -> update mode mapping
+     */
+    public String toHtmlTable(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         // print column headers
         for (String headerName : headers()) {
-            b.append("<th>");
-            b.append(headerName);
-            b.append("</th>\n");
+            addHeader(b, headerName);
         }
+        if (hasUpdateModes)
+            addHeader(b, "Dynamic Update Mode");
         b.append("</tr>\n");
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
@@ -1075,9 +1163,14 @@ public class ConfigDef {
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
-                b.append("<td>");
-                b.append(getConfigValue(key, headerName));
+                addColumnValue(b, getConfigValue(key, headerName));
                 b.append("</td>");
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addColumnValue(b, updateMode);
             }
             b.append("</tr>\n");
         }

@@ -87,14 +87,18 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      */
     int process() {
         int processed = 0;
+
         final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
         while (it.hasNext()) {
             final StreamTask task = it.next().getValue();
+
             try {
-                if (task.process()) {
+                if (task.isProcessable() && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
+                log.info("Failed to process stream task {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -106,6 +110,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 throw e;
             }
         }
+
         return processed;
     }
 
@@ -125,6 +130,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     punctuated++;
                 }
             } catch (final TaskMigratedException e) {
+                log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;

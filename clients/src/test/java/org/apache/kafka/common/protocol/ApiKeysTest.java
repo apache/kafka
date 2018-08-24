@@ -47,7 +47,7 @@ public class ApiKeysTest {
      * All valid client responses which may be throttled should have a field named
      * 'throttle_time_ms' to return the throttle time to the client. Exclusions are
      * <ul>
-     *   <li>Cluster actions used only for inter-broker are throttled only if unauthorized
+     *   <li> Cluster actions used only for inter-broker are throttled only if unauthorized
      *   <li> SASL_HANDSHAKE and SASL_AUTHENTICATE are not throttled when used for authentication
      *        when a connection is established. At any other time, this request returns an error
      *        response that may be throttled.

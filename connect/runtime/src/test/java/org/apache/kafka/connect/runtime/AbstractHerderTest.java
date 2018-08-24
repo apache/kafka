@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
@@ -31,9 +32,13 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.EasyMockSupport;
 import org.easymock.IAnswer;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.easymock.annotation.MockStrict;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,26 +48,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.powermock.api.easymock.PowerMock.verifyAll;
+import static org.powermock.api.easymock.PowerMock.replayAll;
+import static org.easymock.EasyMock.strictMock;
+import static org.easymock.EasyMock.partialMockBuilder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class AbstractHerderTest extends EasyMockSupport {
-    private final Worker worker = strictMock(Worker.class);
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({AbstractHerder.class})
+public class AbstractHerderTest {
+
     private final String workerId = "workerId";
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
     private final String connector = "connector";
-    private final Plugins plugins = strictMock(Plugins.class);
-    private final ClassLoader classLoader = strictMock(ClassLoader.class);
+
+    @MockStrict private Worker worker;
+    @MockStrict private WorkerConfigTransformer transformer;
+    @MockStrict private Plugins plugins;
+    @MockStrict private ClassLoader classLoader;
+    @MockStrict private ConfigBackingStore configStore;
+    @MockStrict private StatusBackingStore statusStore;
 
     @Test
     public void connectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
-
-        ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
-        StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
@@ -96,16 +109,13 @@ public class AbstractHerderTest extends EasyMockSupport {
         assertEquals("UNASSIGNED", taskState.state());
         assertEquals(workerId, taskState.workerId());
 
-        verifyAll();
+        PowerMock.verifyAll();
     }
 
     @Test
     public void taskStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
         String workerId = "workerId";
-
-        ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
-        StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
@@ -161,16 +171,31 @@ public class AbstractHerderTest extends EasyMockSupport {
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(TestSourceConnector.class.getName(), result.name());
-        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP), result.groups());
+        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP, ConnectorConfig.ERROR_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 6 fields, connector's configs add 2
-        assertEquals(8, result.values().size());
+        // Base connector config has 13 fields, connector's configs add 2
+        assertEquals(15, result.values().size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG, result.values().get(0).configValue().name());
         assertEquals(1, result.values().get(0).configValue().errors().size());
         // "required" config from connector should generate an error
-        assertEquals("required", result.values().get(6).configValue().name());
-        assertEquals(1, result.values().get(6).configValue().errors().size());
+        assertEquals("required", result.values().get(13).configValue().name());
+        assertEquals(1, result.values().get(13).configValue().errors().size());
+
+        verifyAll();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testConfigValidationInvalidTopics() {
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class);
+        replayAll();
+
+        Map<String, String> config = new HashMap();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSinkConnector.class.getName());
+        config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
+        config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
+
+        herder.validateConnectorConfig(config);
 
         verifyAll();
     }
@@ -204,20 +229,21 @@ public class AbstractHerderTest extends EasyMockSupport {
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.ERROR_GROUP,
                 "Transforms: xformA",
                 "Transforms: xformB"
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 6 fields, connector's configs add 2, 2 type fields from the transforms, and
+        // Base connector config has 13 fields, connector's configs add 2, 2 type fields from the transforms, and
         // 1 from the valid transformation's config
-        assertEquals(11, result.values().size());
+        assertEquals(18, result.values().size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
-        assertEquals("transforms.xformA.type", result.values().get(6).configValue().name());
-        assertTrue(result.values().get(6).configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.subconfig", result.values().get(7).configValue().name());
-        assertEquals("transforms.xformB.type", result.values().get(8).configValue().name());
-        assertFalse(result.values().get(8).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.type", result.values().get(13).configValue().name());
+        assertTrue(result.values().get(13).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.subconfig", result.values().get(14).configValue().name());
+        assertEquals("transforms.xformB.type", result.values().get(15).configValue().name());
+        assertFalse(result.values().get(15).configValue().errors().isEmpty());
 
         verifyAll();
     }
@@ -236,6 +262,9 @@ public class AbstractHerderTest extends EasyMockSupport {
         EasyMock.expect(herder.generation()).andStubReturn(generation);
 
         // Call to validateConnectorConfig
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
         final Connector connector;
         try {
@@ -262,7 +291,7 @@ public class AbstractHerderTest extends EasyMockSupport {
         @Override
         public ConfigDef config() {
             return new ConfigDef()
-                    .define("subconfig", ConfigDef.Type.STRING, "default", ConfigDef.Importance.LOW, "docs");
+                           .define("subconfig", ConfigDef.Type.STRING, "default", ConfigDef.Importance.LOW, "docs");
         }
 
         @Override

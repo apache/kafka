@@ -57,4 +57,12 @@ public class InternalTopicConfigTest {
         assertEquals("1000", properties.get("retention.ms"));
         assertEquals("10000", properties.get("retention.bytes"));
     }
+
+    @Test
+    public void shouldUseSuppliedConfigsForRepartitionConfig() {
+        final Map<String, String> configs = new HashMap<>();
+        configs.put("retention.ms", "1000");
+        final RepartitionTopicConfig topicConfig = new RepartitionTopicConfig("name", configs);
+        assertEquals("1000", topicConfig.getProperties(Collections.<String, String>emptyMap(), 0).get(TopicConfig.RETENTION_MS_CONFIG));
+    }
 }

@@ -17,26 +17,35 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
+import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStopping;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.WorkerDone;
+import org.apache.kafka.trogdor.rest.WorkerReceiving;
+import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -100,11 +109,21 @@ public final class TaskManager {
     private final Map<String, NodeManager> nodeManagers;
 
     /**
+     * The states of all workers.
+     */
+    private final Map<Long, WorkerState> workerStates = new HashMap<>();
+
+    /**
      * True if the TaskManager is shut down.
      */
     private AtomicBoolean shutdown = new AtomicBoolean(false);
 
-    TaskManager(Platform platform, Scheduler scheduler) {
+    /**
+     * The ID to use for the next worker.  Only accessed by the state change thread.
+     */
+    private long nextWorkerId;
+
+    TaskManager(Platform platform, Scheduler scheduler, long firstWorkerId) {
         this.platform = platform;
         this.scheduler = scheduler;
         this.time = scheduler.time();
@@ -112,6 +131,7 @@ public final class TaskManager {
         this.executor = Executors.newSingleThreadScheduledExecutor(
             ThreadUtils.createThreadFactory("TaskManagerStateThread", false));
         this.nodeManagers = new HashMap<>();
+        this.nextWorkerId = firstWorkerId;
         for (Node node : platform.topology().nodes().values()) {
             if (Node.Util.getTrogdorAgentPort(node) > 0) {
                 this.nodeManagers.put(node.name(), new NodeManager(node, this));
@@ -171,16 +191,9 @@ public final class TaskManager {
         private Future<?> startFuture = null;
 
         /**
-         * The name of the worker nodes involved with this task.
-         * Null if the task is not running.
+         * Maps node names to worker IDs.
          */
-        private Set<String> workers = null;
-
-        /**
-         * The names of the worker nodes which are still running this task.
-         * Null if the task is not running.
-         */
-        private Set<String> activeWorkers = null;
+        public TreeMap<String, Long> workerIds = new TreeMap<>();
 
         /**
          * If this is non-empty, a message describing how this task failed.
@@ -240,13 +253,42 @@ public final class TaskManager {
                 case PENDING:
                     return new TaskPending(spec);
                 case RUNNING:
-                    return new TaskRunning(spec, startedMs);
+                    return new TaskRunning(spec, startedMs, getCombinedStatus());
                 case STOPPING:
-                    return new TaskStopping(spec, startedMs);
+                    return new TaskStopping(spec, startedMs, getCombinedStatus());
                 case DONE:
-                    return new TaskDone(spec, startedMs, doneMs, error, cancelled);
+                    return new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus());
             }
             throw new RuntimeException("unreachable");
+        }
+
+        private JsonNode getCombinedStatus() {
+            if (workerIds.size() == 1) {
+                return workerStates.get(workerIds.values().iterator().next()).status();
+            } else {
+                ObjectNode objectNode = new ObjectNode(JsonNodeFactory.instance);
+                for (Map.Entry<String, Long> entry : workerIds.entrySet()) {
+                    String nodeName = entry.getKey();
+                    Long workerId = entry.getValue();
+                    WorkerState state = workerStates.get(workerId);
+                    JsonNode node = state.status();
+                    if (node != null) {
+                        objectNode.set(nodeName, node);
+                    }
+                }
+                return objectNode;
+            }
+        }
+
+        TreeMap<String, Long> activeWorkerIds() {
+            TreeMap<String, Long> activeWorkerIds = new TreeMap<>();
+            for (Map.Entry<String, Long> entry : workerIds.entrySet()) {
+                WorkerState workerState = workerStates.get(entry.getValue());
+                if (!workerState.done()) {
+                    activeWorkerIds.put(entry.getKey(), entry.getValue());
+                }
+            }
+            return activeWorkerIds;
         }
     }
 
@@ -255,27 +297,21 @@ public final class TaskManager {
      *
      * @param id                    The ID of the task to create.
      * @param spec                  The specification of the task to create.
-     *
-     * @return                      The specification of the task with the given ID.
-     *                              Note that if there was already a task with the given ID,
-     *                              this may be different from the specification that was
-     *                              requested.
      */
-    public TaskSpec createTask(final String id, TaskSpec spec)
-            throws ExecutionException, InterruptedException {
-        final TaskSpec existingSpec = executor.submit(new CreateTask(id, spec)).get();
-        if (existingSpec != null) {
-            log.info("Ignoring request to create task {}, because there is already " +
-                "a task with that id.", id);
-            return existingSpec;
+    public void createTask(final String id, TaskSpec spec)
+            throws Throwable {
+        try {
+            executor.submit(new CreateTask(id, spec)).get();
+        } catch (ExecutionException e) {
+            log.info("createTask(id={}, spec={}) error", id, spec, e);
+            throw e.getCause();
         }
-        return spec;
     }
 
     /**
      * Handles a request to create a new task.  Processed by the state change thread.
      */
-    class CreateTask implements Callable<TaskSpec> {
+    class CreateTask implements Callable<Void> {
         private final String id;
         private final TaskSpec spec;
 
@@ -285,11 +321,18 @@ public final class TaskManager {
         }
 
         @Override
-        public TaskSpec call() throws Exception {
+        public Void call() throws Exception {
+            if (id.isEmpty()) {
+                throw new InvalidRequestException("Invalid empty ID in createTask request.");
+            }
             ManagedTask task = tasks.get(id);
             if (task != null) {
-                log.info("Task ID {} is already in use.", id);
-                return task.spec;
+                if (!task.spec.equals(spec)) {
+                    throw new RequestConflictException("Task ID " + id + " already " +
+                        "exists, and has a different spec " + task.spec);
+                }
+                log.info("Task {} already exists with spec {}", id, spec);
+                return null;
             }
             TaskController controller = null;
             String failure = null;
@@ -348,11 +391,11 @@ public final class TaskManager {
             log.info("Running task {} on node(s): {}", task.id, Utils.join(nodeNames, ", "));
             task.state = ManagedTaskState.RUNNING;
             task.startedMs = time.milliseconds();
-            task.workers = nodeNames;
-            task.activeWorkers = new HashSet<>();
-            for (String workerName : task.workers) {
-                task.activeWorkers.add(workerName);
-                nodeManagers.get(workerName).createWorker(task.id, task.spec);
+            for (String workerName : nodeNames) {
+                long workerId = nextWorkerId++;
+                task.workerIds.put(workerName, workerId);
+                workerStates.put(workerId, new WorkerReceiving(task.id, task.spec));
+                nodeManagers.get(workerName).createWorker(workerId, task.id, task.spec);
             }
             return null;
         }
@@ -362,18 +405,20 @@ public final class TaskManager {
      * Stop a task.
      *
      * @param id                    The ID of the task to stop.
-     * @return                      The specification of the task which was stopped, or null if there
-     *                              was no task found with the given ID.
      */
-    public TaskSpec stopTask(final String id) throws ExecutionException, InterruptedException {
-        final TaskSpec spec = executor.submit(new CancelTask(id)).get();
-        return spec;
+    public void stopTask(final String id) throws Throwable {
+        try {
+            executor.submit(new CancelTask(id)).get();
+        } catch (ExecutionException e) {
+            log.info("stopTask(id={}) error", id, e);
+            throw e.getCause();
+        }
     }
 
     /**
      * Handles cancelling a task.  Processed by the state change thread.
      */
-    class CancelTask implements Callable<TaskSpec> {
+    class CancelTask implements Callable<Void> {
         private final String id;
 
         CancelTask(String id) {
@@ -381,7 +426,10 @@ public final class TaskManager {
         }
 
         @Override
-        public TaskSpec call() throws Exception {
+        public Void call() throws Exception {
+            if (id.isEmpty()) {
+                throw new InvalidRequestException("Invalid empty ID in stopTask request.");
+            }
             ManagedTask task = tasks.get(id);
             if (task == null) {
                 log.info("Can't cancel non-existent task {}.", id);
@@ -397,15 +445,21 @@ public final class TaskManager {
                     break;
                 case RUNNING:
                     task.cancelled = true;
-                    if (task.activeWorkers.size() == 0) {
-                        log.info("Task {} is now complete with error: {}", id, task.error);
+                    TreeMap<String, Long> activeWorkerIds = task.activeWorkerIds();
+                    if (activeWorkerIds.isEmpty()) {
+                        if (task.error.isEmpty()) {
+                            log.info("Task {} is now complete with no errors.", id);
+                        } else {
+                            log.info("Task {} is now complete with error: {}", id, task.error);
+                        }
                         task.doneMs = time.milliseconds();
                         task.state = ManagedTaskState.DONE;
                     } else {
-                        for (String workerName : task.activeWorkers) {
-                            nodeManagers.get(workerName).stopWorker(id);
+                        for (Map.Entry<String, Long> entry : activeWorkerIds.entrySet()) {
+                            nodeManagers.get(entry.getKey()).stopWorker(entry.getValue());
                         }
-                        log.info("Cancelling task {} on worker(s): {}", id, Utils.join(task.activeWorkers, ", "));
+                        log.info("Cancelling task {} with worker(s) {}",
+                            id, Utils.mkString(activeWorkerIds, "", "", " = ", ", "));
                         task.state = ManagedTaskState.STOPPING;
                     }
                     break;
@@ -416,83 +470,159 @@ public final class TaskManager {
                     log.info("Can't cancel task {} because it is already done.", id);
                     break;
             }
-            return task.spec;
+            return null;
+        }
+    }
+
+    public void destroyTask(String id) throws Throwable {
+        try {
+            executor.submit(new DestroyTask(id)).get();
+        } catch (ExecutionException e) {
+            log.info("destroyTask(id={}) error", id, e);
+            throw e.getCause();
         }
     }
 
     /**
-     * A callback NodeManager makes to indicate that a worker has completed.
-     * The task will transition to DONE once all workers are done.
-     *
-     * @param nodeName      The node name.
-     * @param id            The worker name.
-     * @param error         An empty string if there is no error, or an error string.
+     * Handles destroying a task.  Processed by the state change thread.
      */
-    public void handleWorkerCompletion(String nodeName, String id, String error) {
-        executor.submit(new HandleWorkerCompletion(nodeName, id, error));
-    }
-
-    class HandleWorkerCompletion implements Callable<Void> {
-        private final String nodeName;
+    class DestroyTask implements Callable<Void> {
         private final String id;
-        private final String error;
 
-        HandleWorkerCompletion(String nodeName, String id, String error) {
-            this.nodeName = nodeName;
+        DestroyTask(String id) {
             this.id = id;
-            this.error = error;
         }
 
         @Override
         public Void call() throws Exception {
-            ManagedTask task = tasks.get(id);
+            if (id.isEmpty()) {
+                throw new InvalidRequestException("Invalid empty ID in destroyTask request.");
+            }
+            ManagedTask task = tasks.remove(id);
             if (task == null) {
-                log.error("Can't handle completion of unknown worker {} on node {}",
-                    id, nodeName);
+                log.info("Can't destroy task {}: no such task found.", id);
                 return null;
             }
-            if ((task.state == ManagedTaskState.PENDING) || (task.state == ManagedTaskState.DONE)) {
-                log.error("Task {} got unexpected worker completion from {} while " +
-                    "in {} state.", id, nodeName, task.state);
-                return null;
-            }
-            boolean broadcastStop = false;
-            if (task.state == ManagedTaskState.RUNNING) {
-                task.state = ManagedTaskState.STOPPING;
-                broadcastStop = true;
-            }
-            task.maybeSetError(error);
-            task.activeWorkers.remove(nodeName);
-            if (task.activeWorkers.size() == 0) {
-                task.doneMs = time.milliseconds();
-                task.state = ManagedTaskState.DONE;
-                log.info("Task {} is now complete on {} with error: {}", id,
-                    Utils.join(task.workers, ", "),
-                    task.error.isEmpty() ? "(none)" : task.error);
-            } else if (broadcastStop) {
-                log.info("Node {} stopped.  Stopping task {} on worker(s): {}",
-                    id, Utils.join(task.activeWorkers, ", "));
-                for (String workerName : task.activeWorkers) {
-                    nodeManagers.get(workerName).stopWorker(id);
-                }
+            log.info("Destroying task {}.", id);
+            task.clearStartFuture();
+            for (Map.Entry<String, Long> entry : task.workerIds.entrySet()) {
+                long workerId = entry.getValue();
+                workerStates.remove(workerId);
+                String nodeName = entry.getKey();
+                nodeManagers.get(nodeName).destroyWorker(workerId);
             }
             return null;
         }
     }
 
     /**
-     * Get information about the tasks being managed.
+     * Update the state of a particular agent's worker.
+     *
+     * @param nodeName      The node where the agent is running.
+     * @param workerId      The worker ID.
+     * @param state         The worker state.
      */
-    public TasksResponse tasks() throws ExecutionException, InterruptedException {
-        return executor.submit(new GetTasksResponse()).get();
+    public void updateWorkerState(String nodeName, long workerId, WorkerState state) {
+        executor.submit(new UpdateWorkerState(nodeName, workerId, state));
     }
 
+    /**
+     * Updates the state of a worker.  Process by the state change thread.
+     */
+    class UpdateWorkerState implements Callable<Void> {
+        private final String nodeName;
+        private final long workerId;
+        private final WorkerState nextState;
+
+        UpdateWorkerState(String nodeName, long workerId, WorkerState nextState) {
+            this.nodeName = nodeName;
+            this.workerId = workerId;
+            this.nextState = nextState;
+        }
+
+        @Override
+        public Void call() throws Exception {
+            try {
+                WorkerState prevState = workerStates.get(workerId);
+                if (prevState == null) {
+                    throw new RuntimeException("Unable to find workerId " + workerId);
+                }
+                ManagedTask task = tasks.get(prevState.taskId());
+                if (task == null) {
+                    throw new RuntimeException("Unable to find taskId " + prevState.taskId());
+                }
+                log.debug("Task {}: Updating worker state for {} on {} from {} to {}.",
+                    task.id, workerId, nodeName, prevState, nextState);
+                workerStates.put(workerId, nextState);
+                if (nextState.done() && (!prevState.done())) {
+                    handleWorkerCompletion(task, nodeName, (WorkerDone) nextState);
+                }
+            } catch (Exception e) {
+                log.error("Error updating worker state for {} on {}.  Stopping worker.",
+                    workerId, nodeName, e);
+                nodeManagers.get(nodeName).stopWorker(workerId);
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Handle a worker being completed.
+     *
+     * @param task      The task that owns the worker.
+     * @param nodeName  The name of the node on which the worker is running.
+     * @param state     The worker state.
+     */
+    private void handleWorkerCompletion(ManagedTask task, String nodeName, WorkerDone state) {
+        if (state.error().isEmpty()) {
+            log.info("{}: Worker {} finished with status '{}'",
+                nodeName, task.id, JsonUtil.toJsonString(state.status()));
+        } else {
+            log.warn("{}: Worker {} finished with error '{}' and status '{}'",
+                nodeName, task.id, state.error(), JsonUtil.toJsonString(state.status()));
+            task.maybeSetError(state.error());
+        }
+        TreeMap<String, Long> activeWorkerIds = task.activeWorkerIds();
+        if (activeWorkerIds.isEmpty()) {
+            task.doneMs = time.milliseconds();
+            task.state = ManagedTaskState.DONE;
+            log.info("{}: Task {} is now complete on {} with error: {}",
+                nodeName, task.id, Utils.join(task.workerIds.keySet(), ", "),
+                task.error.isEmpty() ? "(none)" : task.error);
+        } else if ((task.state == ManagedTaskState.RUNNING) && (!task.error.isEmpty())) {
+            log.info("{}: task {} stopped with error {}.  Stopping worker(s): {}",
+                nodeName, task.id, task.error, Utils.mkString(activeWorkerIds, "{", "}", ": ", ", "));
+            task.state = ManagedTaskState.STOPPING;
+            for (Map.Entry<String, Long> entry : activeWorkerIds.entrySet()) {
+                nodeManagers.get(entry.getKey()).stopWorker(entry.getValue());
+            }
+        }
+    }
+
+    /**
+     * Get information about the tasks being managed.
+     */
+    public TasksResponse tasks(TasksRequest request) throws ExecutionException, InterruptedException {
+        return executor.submit(new GetTasksResponse(request)).get();
+    }
+
+    /**
+     * Gets information about the tasks being managed.  Processed by the state change thread.
+     */
     class GetTasksResponse implements Callable<TasksResponse> {
+        private final TasksRequest request;
+
+        GetTasksResponse(TasksRequest request) {
+            this.request = request;
+        }
+
         @Override
         public TasksResponse call() throws Exception {
             TreeMap<String, TaskState> states = new TreeMap<>();
             for (ManagedTask task : tasks.values()) {
-                states.put(task.id, task.taskState());
+                if (request.matches(task.id, task.startedMs, task.doneMs)) {
+                    states.put(task.id, task.taskState());
+                }
             }
             return new TasksResponse(states);
         }

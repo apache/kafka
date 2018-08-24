@@ -26,6 +26,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
 
 
@@ -47,6 +48,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return null;
     }
 
     @Before

@@ -108,10 +108,14 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V5 = PRODUCE_REQUEST_V4;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema PRODUCE_REQUEST_V6 = PRODUCE_REQUEST_V5;
 
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -325,6 +329,7 @@ public class ProduceRequest extends AbstractRequest {
             case 3:
             case 4:
             case 5:
+            case 6:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -394,6 +399,7 @@ public class ProduceRequest extends AbstractRequest {
             case 3:
             case 4:
             case 5:
+            case 6:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

@@ -19,8 +19,6 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio._
-import java.nio.file.Files
-import java.util
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -29,15 +27,16 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
-import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
+import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Set, mutable}
 import scala.collection.JavaConverters._
+import scala.collection.{Set, mutable}
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the "compact" retention strategy.
@@ -54,7 +53,7 @@ import scala.collection.JavaConverters._
  * To clean a log the cleaner first builds a mapping of key=>last_offset for the dirty section of the log. See kafka.log.OffsetMap for details of
  * the implementation of the mapping.
  *
- * Once the key=>offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
+ * Once the key=>last_offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
  * higher offset than what is found in the segment (i.e. messages with a key that appears in the dirty section of the log).
  *
  * To avoid segments shrinking to very small sizes with repeated cleanings we implement a rule by which if we will merge successive segments when
@@ -154,14 +153,21 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleaners.clear()
   }
 
-  override def reconfigurableConfigs(): Set[String] = {
+  override def reconfigurableConfigs: Set[String] = {
     LogCleaner.ReconfigurableConfigs
   }
 
-  override def validateReconfiguration(newConfig: KafkaConfig): Boolean = {
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
     val numThreads = newCleanerConfig.numThreads
-    numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
+    val currentThreads = config.numThreads
+    if (numThreads < 1)
+      throw new ConfigException(s"Log cleaner threads should be at least 1")
+    if (numThreads < currentThreads / 2)
+      throw new ConfigException(s"Log cleaner threads cannot be reduced to less than half the current value $currentThreads")
+    if (numThreads > currentThreads * 2)
+      throw new ConfigException(s"Log cleaner threads cannot be increased to more than double the current value $currentThreads")
+
   }
 
   /**
@@ -253,9 +259,9 @@ class LogCleaner(initialConfig: CleanerConfig,
   private class CleanerThread(threadId: Int)
     extends ShutdownableThread(name = "kafka-log-cleaner-thread-" + threadId, isInterruptible = false) {
 
-    override val loggerName = classOf[LogCleaner].getName
+    protected override def loggerName = classOf[LogCleaner].getName
 
-    if(config.dedupeBufferSize / config.numThreads > Int.MaxValue)
+    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
@@ -375,6 +381,12 @@ object LogCleaner {
       enableCleaner = config.logCleanerEnable)
 
   }
+
+  def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
+    LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
+    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
+      fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+  }
 }
 
 /**
@@ -397,7 +409,7 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: (TopicPartition) => Unit) extends Logging {
 
-  override val loggerName = classOf[LogCleaner].getName
+  protected override def loggerName = classOf[LogCleaner].getName
 
   this.logIdent = "Cleaner " + id + ": "
 
@@ -447,7 +459,6 @@ private[log] class Cleaner(val id: Int,
     // this is the lower of the last active segment and the compaction lag
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
 
-
     // group the segments and clean the groups
     info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
     for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize, cleanable.firstUncleanableOffset))
@@ -475,21 +486,8 @@ private[log] class Cleaner(val id: Int,
                                  map: OffsetMap,
                                  deleteHorizonMs: Long,
                                  stats: CleanerStats) {
-
-    def deleteCleanedFileIfExists(file: File): Unit = {
-      Files.deleteIfExists(new File(file.getPath + Log.CleanedFileSuffix).toPath)
-    }
-
     // create a new segment with a suffix appended to the name of the log and indexes
-    val firstSegment = segments.head
-    deleteCleanedFileIfExists(firstSegment.log.file)
-    deleteCleanedFileIfExists(firstSegment.offsetIndex.file)
-    deleteCleanedFileIfExists(firstSegment.timeIndex.file)
-    deleteCleanedFileIfExists(firstSegment.txnIndex.file)
-
-    val baseOffset = firstSegment.baseOffset
-    val cleaned = LogSegment.open(log.dir, baseOffset, log.config, time, fileSuffix = Log.CleanedFileSuffix,
-      initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+    val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
 
     try {
       // clean segments into the new destination segment
@@ -507,9 +505,18 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = currentSegment.lastModified > deleteHorizonMs
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
           s"into ${cleaned.baseOffset}, ${if(retainDeletes) "retaining" else "discarding"} deletes.")
-        cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
-          transactionMetadata, log.activeProducersWithLastSequence, stats)
 
+        try {
+          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
+            transactionMetadata, log.activeProducersWithLastSequence, stats)
+        } catch {
+          case e: LogSegmentOffsetOverflowException =>
+            // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
+            // scratch once the split is complete.
+            info(s"Caught segment overflow error during cleaning: ${e.getMessage}")
+            log.splitOverflowedSegment(currentSegment)
+            throw new LogCleaningAbortedException()
+        }
         currentSegmentOpt = nextSegmentOpt
       }
 
@@ -522,9 +529,8 @@ private[log] class Cleaner(val id: Int,
       cleaned.lastModified = modified
 
       // swap in new segment
-      info(s"Swapping in cleaned segment ${cleaned.baseOffset} for segment(s) ${segments.map(_.baseOffset).mkString(",")} " +
-        s"in log ${log.name}")
-      log.replaceSegments(cleaned, segments)
+      info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
+      log.replaceSegments(List(cleaned), segments)
     } catch {
       case e: LogCleaningAbortedException =>
         try cleaned.deleteIfExists()
@@ -606,19 +612,52 @@ private[log] class Cleaner(val id: Int,
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
-          largestOffset = result.maxOffset,
+        dest.append(largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 
-      // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if (readBuffer.limit() > 0 && result.messagesRead == 0)
-        growBuffers(maxLogMessageSize)
+      // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
+      // `result.bytesRead` contains bytes from `messagesRead` and any discarded batches.
+      if (readBuffer.limit() > 0 && result.bytesRead == 0)
+        growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+  }
+
+
+  /**
+   * Grow buffers to process next batch of records from `sourceRecords.` Buffers are doubled in size
+   * up to a maximum of `maxLogMessageSize`. In some scenarios, a record could be bigger than the
+   * current maximum size configured for the log. For example:
+   *   1. A compacted topic using compression may contain a message set slightly larger than max.message.bytes
+   *   2. max.message.bytes of a topic could have been reduced after writing larger messages
+   * In these cases, grow the buffer to hold the next batch.
+   */
+  private def growBuffersOrFail(sourceRecords: FileRecords,
+                                position: Int,
+                                maxLogMessageSize: Int,
+                                memoryRecords: MemoryRecords): Unit = {
+
+    val maxSize = if (readBuffer.capacity >= maxLogMessageSize) {
+      val nextBatchSize = memoryRecords.firstBatchSize
+      val logDesc = s"log segment ${sourceRecords.file} at position $position"
+      if (nextBatchSize == null)
+        throw new IllegalStateException(s"Could not determine next batch size for $logDesc")
+      if (nextBatchSize <= 0)
+        throw new IllegalStateException(s"Invalid batch size $nextBatchSize for $logDesc")
+      if (nextBatchSize <= readBuffer.capacity)
+        throw new IllegalStateException(s"Batch size $nextBatchSize < buffer size ${readBuffer.capacity}, but not processed for $logDesc")
+      val bytesLeft = sourceRecords.channel.size - position
+      if (nextBatchSize > bytesLeft)
+        throw new CorruptRecordException(s"Log segment may be corrupt, batch size $nextBatchSize > $bytesLeft bytes left in segment for $logDesc")
+      nextBatchSize.intValue
+    } else
+      maxLogMessageSize
+
+    growBuffers(maxSize)
   }
 
   private def shouldDiscardBatch(batch: RecordBatch,
@@ -794,7 +833,13 @@ private[log] class Cleaner(val id: Int,
     while (position < segment.log.sizeInBytes) {
       checkDone(topicPartition)
       readBuffer.clear()
-      segment.log.readInto(readBuffer, position)
+      try {
+        segment.log.readInto(readBuffer, position)
+      } catch {
+        case e: Exception =>
+          throw new KafkaException(s"Failed to read from segment $segment of partition $topicPartition " +
+            "while loading offset map", e)
+      }
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
 
@@ -831,7 +876,7 @@ private[log] class Cleaner(val id: Int,
 
       // if we didn't read even one complete message, our read buffer may be too small
       if(position == startPosition)
-        growBuffers(maxLogMessageSize)
+        growBuffersOrFail(segment.log, position, maxLogMessageSize, records)
     }
     restoreBuffers()
     false

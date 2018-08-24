@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.resource.PatternType;
 
 public class CommonFields {
     public static final Field.Int32 THROTTLE_TIME_MS = new Field.Int32("throttle_time_ms",
@@ -26,6 +27,7 @@ public class CommonFields {
     public static final Field.Int32 PARTITION_ID = new Field.Int32("partition", "Topic partition id");
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
+    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The epoch");
 
     // Group APIs
     public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");
@@ -44,6 +46,8 @@ public class CommonFields {
     public static final Field.Int8 RESOURCE_TYPE = new Field.Int8("resource_type", "The resource type");
     public static final Field.Str RESOURCE_NAME = new Field.Str("resource_name", "The resource name");
     public static final Field.NullableStr RESOURCE_NAME_FILTER = new Field.NullableStr("resource_name", "The resource name filter");
+    public static final Field.Int8 RESOURCE_PATTERN_TYPE = new Field.Int8("resource_pattten_type", "The resource pattern type", PatternType.LITERAL.code());
+    public static final Field.Int8 RESOURCE_PATTERN_TYPE_FILTER = new Field.Int8("resource_pattern_type_filter", "The resource pattern type filter", PatternType.LITERAL.code());
     public static final Field.Str PRINCIPAL = new Field.Str("principal", "The ACL principal");
     public static final Field.NullableStr PRINCIPAL_FILTER = new Field.NullableStr("principal", "The ACL principal filter");
     public static final Field.Str HOST = new Field.Str("host", "The ACL host");

@@ -87,6 +87,18 @@ public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
 
+    private enum CloseMode {
+        GRACEFUL(true),            // process outstanding staged receives, notify disconnect
+        NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
+        DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
+
+        boolean notifyDisconnect;
+
+        CloseMode(boolean notifyDisconnect) {
+            this.notifyDisconnect = notifyDisconnect;
+        }
+    }
+
     private final Logger log;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
@@ -253,6 +265,7 @@ public class Selector implements Selectable, AutoCloseable {
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        this.sensors.connectionCreated.record();
     }
 
     private void ensureNotRegistered(String id) {
@@ -325,9 +338,9 @@ public class Selector implements Selectable, AutoCloseable {
             } catch (Exception e) {
                 // update the state for consistency, the channel will be discarded after `close`
                 channel.state(ChannelState.FAILED_SEND);
-                // ensure notification via `disconnected`
+                // ensure notification via `disconnected` when `failedSends` are processed in the next poll
                 this.failedSends.add(connectionId);
-                close(channel, false);
+                close(channel, CloseMode.DISCARD_NO_NOTIFY);
                 if (!(e instanceof CancelledKeyException)) {
                     log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
                             connectionId, e);
@@ -385,7 +398,7 @@ public class Selector implements Selectable, AutoCloseable {
             log.trace("Broker no longer low on memory - unmuting incoming sockets");
             for (KafkaChannel channel : channels.values()) {
                 if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
-                    channel.unmute();
+                    channel.maybeUnmute();
                 }
             }
             outOfMemory = false;
@@ -450,6 +463,7 @@ public class Selector implements Selectable, AutoCloseable {
             if (idleExpiryManager != null)
                 idleExpiryManager.update(channel.id(), currentTimeNanos);
 
+            boolean sendFailed = false;
             try {
 
                 /* complete any connections that have finished their handshake (either normally or immediately) */
@@ -485,13 +499,21 @@ public class Selector implements Selectable, AutoCloseable {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
                     //(possibly because no memory). it may be the case that the underlying socket will
                     //not come up in the next poll() and so we need to remember this channel for the
-                    //next poll call otherwise data may be stuck in said buffers forever.
+                    //next poll call otherwise data may be stuck in said buffers forever. If we attempt
+                    //to process buffered data and no progress is made, the channel buffered status is
+                    //cleared to avoid the overhead of checking every time.
                     keysWithBufferedRead.add(key);
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                 if (channel.ready() && key.isWritable()) {
-                    Send send = channel.write();
+                    Send send = null;
+                    try {
+                        send = channel.write();
+                    } catch (Exception e) {
+                        sendFailed = true;
+                        throw e;
+                    }
                     if (send != null) {
                         this.completedSends.add(send);
                         this.sensors.recordBytesSent(channel.id(), send.size());
@@ -500,7 +522,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* cancel any defunct sockets */
                 if (!key.isValid())
-                    close(channel, true);
+                    close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
@@ -510,7 +532,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, true);
+                close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -591,8 +613,10 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void unmute(KafkaChannel channel) {
-        explicitlyMutedChannels.remove(channel);
-        channel.unmute();
+        // Remove the channel from explicitlyMutedChannels only if the channel has been actually unmuted.
+        if (channel.maybeUnmute()) {
+            explicitlyMutedChannels.remove(channel);
+        }
     }
 
     @Override
@@ -620,7 +644,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
                 channel.state(ChannelState.EXPIRED);
-                close(channel, true);
+                close(channel, CloseMode.GRACEFUL);
             }
         }
     }
@@ -674,7 +698,7 @@ public class Selector implements Selectable, AutoCloseable {
             // There is no disconnect notification for local close, but updating
             // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
-            close(channel, false);
+            close(channel, CloseMode.DISCARD_NO_NOTIFY);
         } else {
             KafkaChannel closingChannel = this.closingChannels.remove(id);
             // Close any closing channel, leave the channel in the state in which closing was triggered
@@ -685,17 +709,15 @@ public class Selector implements Selectable, AutoCloseable {
 
     /**
      * Begin closing this connection.
+     * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but staged receives
+     * are processed. The channel is closed when there are no outstanding receives or if a send is
+     * requested. For other values of `closeMode`, outstanding receives are discarded and the channel
+     * is closed immediately.
      *
-     * If 'processOutstanding' is true, the channel is disconnected here, but staged receives are
-     * processed. The channel is closed when there are no outstanding receives or if a send
-     * is requested. The channel will be added to disconnect list when it is actually closed.
-     *
-     * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
-     * closed immediately. The channel will not be added to disconnected list and it is the
-     * responsibility of the caller to handle disconnect notifications.
+     * The channel will be added to disconnect list when it is actually closed if `closeMode.notifyDisconnect`
+     * is true.
      */
-    private void close(KafkaChannel channel, boolean processOutstanding) {
-
+    private void close(KafkaChannel channel, CloseMode closeMode) {
         channel.disconnect();
 
         // Ensure that `connected` does not have closed channels. This could happen if `prepare` throws an exception
@@ -709,11 +731,12 @@ public class Selector implements Selectable, AutoCloseable {
         // a send fails or all outstanding receives are processed. Mute state of disconnected channels
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-        if (processOutstanding && deque != null && !deque.isEmpty()) {
+        if (closeMode == CloseMode.GRACEFUL && deque != null && !deque.isEmpty()) {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
+            log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else
-            doClose(channel, processOutstanding);
+            doClose(channel, closeMode.notifyDisconnect);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
@@ -839,7 +862,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
         NetworkReceive networkReceive = stagedDeque.poll();
         this.completedReceives.add(networkReceive);
-        this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+        this.sensors.recordBytesReceived(channel.id(), networkReceive.size());
     }
 
     // only for testing

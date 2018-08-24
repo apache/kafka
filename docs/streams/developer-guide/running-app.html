@@ -77,7 +77,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                   <a class="reference internal" href="../code-examples.html#streams-code-examples"><span class="std std-ref">Streams code examples</span></a>.</p>
               <p>When you start your application you are launching a Kafka Streams instance of your application. You can run multiple
                   instances of your application. A common scenario is that there are multiple instances of your application running in
-                  parallel. For more information, see <a class="reference internal" href="../architecture.html#streams-architecture-parallelism-model"><span class="std std-ref">Parallelism Model</span></a>.</p>
+                  parallel. For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Parallelism Model</span></a>.</p>
               <p>When the application instance starts running, the defined processor topology will be initialized as one or more stream tasks.
                   If the processor topology defines any state stores, these are also constructed during the initialization period. For
                   more information, see the  <a class="reference internal" href="#streams-developer-guide-execution-scaling-state-restoration"><span class="std std-ref">State restoration during workload rebalance</span></a> section).</p>
@@ -87,7 +87,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
               <p>Kafka Streams makes your stream processing applications elastic and scalable.  You can add and remove processing capacity
                   dynamically during application runtime without any downtime or data loss.  This makes your applications
                   resilient in the face of failures and for allows you to perform maintenance as needed (e.g. rolling upgrades).</p>
-              <p>For more information about this elasticity, see the <a class="reference internal" href="../architecture.html#streams-architecture-parallelism-model"><span class="std std-ref">Parallelism Model</span></a> section. Kafka Streams
+              <p>For more information about this elasticity, see the <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Parallelism Model</span></a> section. Kafka Streams
                   leverages the Kafka group management functionality, which is built right into the <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol">Kafka wire protocol</a>. It is the foundation that enables the
                   elasticity of Kafka Streams applications: members of a group coordinate and collaborate jointly on the consumption and
                   processing of data in Kafka.  Additionally, Kafka Streams provides stateful processing and allows for fault-tolerant
@@ -128,7 +128,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                       <li>If no local state store exists, the changelog is replayed from the earliest to the current offset. This reconstructs the local state store to the most recent snapshot.</li>
                       <li>If a local state store exists, the changelog is replayed from the previously checkpointed offset. The changes are applied and the state is restored to the most recent snapshot. This method takes less time because it is applying a smaller portion of the changelog.</li>
                   </ul>
-                  <p>For more information, see <a class="reference internal" href="config-streams.html#streams-developer-guide-standby-replicas"><span class="std std-ref">Standby Replicas</span></a>.</p>
+                  <p>For more information, see <a class="reference internal" href="config-streams.html#num-standby-replicas"><span class="std std-ref">Standby Replicas</span></a>.</p>
               </div>
               <div class="section" id="determining-how-many-application-instances-to-run">
                   <h3><a class="toc-backref" href="#id8">Determining how many application instances to run</a><a class="headerlink" href="#determining-how-many-application-instances-to-run" title="Permalink to this headline"></a></h3>

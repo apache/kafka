@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
@@ -51,16 +52,17 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @Override public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return null;
     }
 
     @Override
-    public void schedule(final long interval) {
+    public <K, V> void forward(final K key, final V value) {
+        forwardedValues.put(key, value);
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K, V> void forward(final K key, final V value, final To to) {
         forwardedValues.put(key, value);
     }
 
@@ -84,8 +86,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
+    }
+
+    @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }

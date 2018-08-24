@@ -20,11 +20,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroupId;
-import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -145,21 +144,21 @@ public class ConnectMetricsTest {
 
     @Test
     public void testRecreateWithClose() {
-        int numMetrics = addToGroup(metrics, false);
-        int numMetricsInRecreatedGroup = addToGroup(metrics, true);
-        Assert.assertEquals(numMetrics, numMetricsInRecreatedGroup);
+        final Sensor originalSensor = addToGroup(metrics, false);
+        final Sensor recreatedSensor = addToGroup(metrics, true);
+        // because we closed the metricGroup, we get a brand-new sensor
+        assertNotSame(originalSensor, recreatedSensor);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRecreateWithoutClose() {
-        int numMetrics = addToGroup(metrics, false);
-        int numMetricsInRecreatedGroup = addToGroup(metrics, false);
-        // we should never get here
-        throw new RuntimeException("Created " + numMetricsInRecreatedGroup
-                + " metrics in recreated group. Original=" + numMetrics);
+        final Sensor originalSensor = addToGroup(metrics, false);
+        final Sensor recreatedSensor = addToGroup(metrics, false);
+        // since we didn't close the group, the second addToGroup is idempotent
+        assertSame(originalSensor, recreatedSensor);
     }
 
-    private int addToGroup(ConnectMetrics connectMetrics, boolean shouldClose) {
+    private Sensor addToGroup(ConnectMetrics connectMetrics, boolean shouldClose) {
         ConnectMetricsRegistry registry = connectMetrics.registry();
         ConnectMetrics.MetricGroup metricGroup = connectMetrics.group(registry.taskGroupName(),
                 registry.connectorTagName(), "conn_name");
@@ -172,7 +171,7 @@ public class ConnectMetricsTest {
         sensor.add(metricName("x1"), new Max());
         sensor.add(metricName("y2"), new Avg());
 
-        return metricGroup.metrics().metrics().size();
+        return sensor;
     }
 
     static MetricName metricName(String name) {

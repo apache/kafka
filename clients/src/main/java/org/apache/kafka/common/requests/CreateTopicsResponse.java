@@ -58,8 +58,14 @@ public class CreateTopicsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(TOPIC_ERROR), "An array of per topic errors."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_TOPICS_RESPONSE_V3 = CREATE_TOPICS_RESPONSE_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2};
+        return new Schema[]{CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2,
+            CREATE_TOPICS_RESPONSE_V3};
     }
 
     /**
@@ -67,7 +73,7 @@ public class CreateTopicsResponse extends AbstractResponse {
      *
      * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
-     * CLUSTER_AUTHORIZATION_FAILED(31)
+     * TOPIC_AUTHORIZATION_FAILED(29)
      * TOPIC_ALREADY_EXISTS(36)
      * INVALID_PARTITIONS(37)
      * INVALID_REPLICATION_FACTOR(38)
@@ -75,6 +81,7 @@ public class CreateTopicsResponse extends AbstractResponse {
      * INVALID_CONFIG(40)
      * NOT_CONTROLLER(41)
      * INVALID_REQUEST(42)
+     * POLICY_VIOLATION(44)
      */
 
     private final Map<String, ApiError> errors;
@@ -118,6 +125,7 @@ public class CreateTopicsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -133,5 +141,10 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
         return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

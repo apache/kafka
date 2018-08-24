@@ -32,6 +32,7 @@ import org.junit.Test;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -43,9 +44,6 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-/**
- *
- */
 public class StreamsResetterTest {
 
     private static final String TOPIC = "topic1";
@@ -77,7 +75,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 2L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(3, records.count());
     }
 
@@ -93,7 +91,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 2L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -109,7 +107,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 4L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -125,7 +123,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, 3L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -141,7 +139,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, -3L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(5, records.count());
     }
 
@@ -157,7 +155,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, 5L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -175,7 +173,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 3L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -193,7 +191,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 1L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -211,7 +209,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 5L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
@@ -229,23 +227,23 @@ public class StreamsResetterTest {
         intermediateTopicPartitions.add(topicPartition);
         streamsResetter.maybeSeekToEnd("g1", consumer, intermediateTopicPartitions);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(2, records.count());
     }
 
     @Test
     public void shouldDeleteTopic() throws InterruptedException, ExecutionException {
-        Cluster cluster = createCluster(1);
-        try (MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+        final Cluster cluster = createCluster(1);
+        try (final MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
             adminClient.addTopic(false, TOPIC, Collections.singletonList(topicPartitionInfo), null);
             streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
             assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
         }
     }
 
-    private Cluster createCluster(int numNodes) {
-        HashMap<Integer, Node> nodes = new HashMap<>();
+    private Cluster createCluster(final int numNodes) {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }

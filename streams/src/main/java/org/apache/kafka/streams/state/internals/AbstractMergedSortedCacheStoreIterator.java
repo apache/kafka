@@ -49,7 +49,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     abstract V deserializeCacheValue(final LRUCacheEntry cacheEntry);
 
     private boolean isDeletedCacheEntry(final KeyValue<Bytes, LRUCacheEntry> nextFromCache) {
-        return nextFromCache.value.value == null;
+        return nextFromCache.value.value() == null;
     }
 
     @Override
@@ -98,7 +98,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         }
     }
 
-    private KeyValue<K, V> nextStoreValue(KS nextStoreKey) {
+    private KeyValue<K, V> nextStoreValue(final KS nextStoreKey) {
         final KeyValue<KS, VS> next = storeIterator.next();
 
         if (!next.key.equals(nextStoreKey)) {
@@ -108,7 +108,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         return deserializeStorePair(next);
     }
 
-    private KeyValue<K, V> nextCacheValue(Bytes nextCacheKey) {
+    private KeyValue<K, V> nextCacheValue(final Bytes nextCacheKey) {
         final KeyValue<Bytes, LRUCacheEntry> next = cacheIterator.next();
 
         if (!next.key.equals(nextCacheKey)) {

@@ -242,16 +242,8 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
         return failure(Errors.COORDINATOR_NOT_AVAILABLE.exception());
     }
 
-    public static <T> RequestFuture<T> leaderNotAvailable() {
-        return failure(Errors.LEADER_NOT_AVAILABLE.exception());
-    }
-
     public static <T> RequestFuture<T> noBrokersAvailable() {
         return failure(new NoAvailableBrokersException());
-    }
-
-    public static <T> RequestFuture<T> staleMetadata() {
-        return failure(new StaleMetadataException());
     }
 
     @Override

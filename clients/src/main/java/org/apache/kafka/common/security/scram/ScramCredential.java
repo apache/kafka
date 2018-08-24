@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.security.scram;
 
+/**
+ * SCRAM credential class that encapsulates the credential data persisted for each user that is
+ * accessible to the server. See <a href="https://tools.ietf.org/html/rfc5802#section-5">RFC rfc5802</a>
+ * for details.
+ */
 public class ScramCredential {
 
     private final byte[] salt;
@@ -23,6 +28,9 @@ public class ScramCredential {
     private final byte[] storedKey;
     private final int iterations;
 
+    /**
+     * Constructs a new credential.
+     */
     public ScramCredential(byte[] salt, byte[] storedKey, byte[] serverKey, int iterations) {
         this.salt = salt;
         this.serverKey = serverKey;
@@ -30,18 +38,30 @@ public class ScramCredential {
         this.iterations = iterations;
     }
 
+    /**
+     * Returns the salt used to process this credential using the SCRAM algorithm.
+     */
     public byte[] salt() {
         return salt;
     }
 
+    /**
+     * Server key computed from the client password using the SCRAM algorithm.
+     */
     public byte[] serverKey() {
         return serverKey;
     }
 
+    /**
+     * Stored key computed from the client password using the SCRAM algorithm.
+     */
     public byte[] storedKey() {
         return storedKey;
     }
 
+    /**
+     * Number of iterations used to process this credential using the SCRAM algorithm.
+     */
     public int iterations() {
         return iterations;
     }

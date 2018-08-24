@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 import util.Arrays.asList
 
-import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -73,7 +72,7 @@ class MetadataCacheTest {
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
       partitionStates.asJava, brokers.asJava).build()
-    cache.updateCache(15, updateMetadataRequest)
+    cache.updateMetadata(15, updateMetadataRequest)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
       val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
@@ -111,7 +110,47 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadataPartitionLeaderNotAvailable() {
+  def getTopicMetadataPartitionLeaderNotAvailable(): Unit = {
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+    val brokers = Set(new Broker(0, Seq(new EndPoint("foo", 9092, securityProtocol, listenerName)).asJava, null))
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
+  }
+
+  @Test
+  def getTopicMetadataPartitionListenerNotAvailableOnLeader(): Unit = {
+    val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val sslListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
+    val broker0Endpoints = Seq(
+      new EndPoint("host0", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName),
+      new EndPoint("host0", 9093, SecurityProtocol.SSL, sslListenerName))
+    val broker1Endpoints = Seq(new EndPoint("host1", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName))
+    val brokers = Set(new Broker(0, broker0Endpoints.asJava, null), new Broker(1, broker1Endpoints.asJava, null))
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+      leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
+  }
+
+  @Test
+  def getTopicMetadataPartitionListenerNotAvailableOnLeaderOldMetadataVersion(): Unit = {
+    val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val sslListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
+    val broker0Endpoints = Seq(
+      new EndPoint("host0", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName),
+      new EndPoint("host0", 9093, SecurityProtocol.SSL, sslListenerName))
+    val broker1Endpoints = Seq(new EndPoint("host1", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName))
+    val brokers = Set(new Broker(0, broker0Endpoints.asJava, null), new Broker(1, broker1Endpoints.asJava, null))
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
+  }
+
+  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers: Set[Broker],
+                                                                       listenerName: ListenerName,
+                                                                       leader: Int,
+                                                                       expectedError: Errors,
+                                                                       errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
 
     val cache = new MetadataCache(1)
@@ -119,11 +158,7 @@ class MetadataCacheTest {
     val zkVersion = 3
     val controllerId = 2
     val controllerEpoch = 1
-    val securityProtocol = SecurityProtocol.PLAINTEXT
-    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-    val brokers = Set(new Broker(0, Seq(new EndPoint("foo", 9092, securityProtocol, listenerName)).asJava, null))
 
-    val leader = 1
     val leaderEpoch = 1
     val partitionStates = Map(
       new TopicPartition(topic, 0) -> new UpdateMetadataRequest.PartitionState(controllerEpoch, leader, leaderEpoch, asList(0), zkVersion, asList(0), asList()))
@@ -131,9 +166,9 @@ class MetadataCacheTest {
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
       partitionStates.asJava, brokers.asJava).build()
-    cache.updateCache(15, updateMetadataRequest)
+    cache.updateMetadata(15, updateMetadataRequest)
 
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName)
+    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -144,7 +179,7 @@ class MetadataCacheTest {
 
     val partitionMetadata = partitionMetadatas.get(0)
     assertEquals(0, partitionMetadata.partition)
-    assertEquals(Errors.LEADER_NOT_AVAILABLE, partitionMetadata.error)
+    assertEquals(expectedError, partitionMetadata.error)
     assertTrue(partitionMetadata.isr.isEmpty)
     assertEquals(1, partitionMetadata.replicas.size)
     assertEquals(0, partitionMetadata.replicas.get(0).id)
@@ -175,7 +210,7 @@ class MetadataCacheTest {
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
       partitionStates.asJava, brokers.asJava).build()
-    cache.updateCache(15, updateMetadataRequest)
+    cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
@@ -235,7 +270,7 @@ class MetadataCacheTest {
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch,
       partitionStates.asJava, brokers.asJava).build()
-    cache.updateCache(15, updateMetadataRequest)
+    cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
@@ -287,16 +322,12 @@ class MetadataCacheTest {
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, partitionStates.asJava,
       brokers.asJava).build()
-    cache.updateCache(15, updateMetadataRequest)
+    cache.updateMetadata(15, updateMetadataRequest)
 
-    try {
-      val result = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
-      fail(s"Exception should be thrown by `getTopicMetadata` with non-supported SecurityProtocol, $result was returned instead")
-    }
-    catch {
-      case _: BrokerEndPointNotAvailableException => //expected
-    }
-
+    val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
+    assertEquals(1, topicMetadata.size)
+    assertEquals(1, topicMetadata.head.partitionMetadata.size)
+    assertEquals(-1, topicMetadata.head.partitionMetadata.get(0).leaderId)
   }
 
   @Test
@@ -320,7 +351,7 @@ class MetadataCacheTest {
       val version = ApiKeys.UPDATE_METADATA.latestVersion
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, partitionStates.asJava,
         brokers.asJava).build()
-      cache.updateCache(15, updateMetadataRequest)
+      cache.updateMetadata(15, updateMetadataRequest)
     }
 
     val initialBrokerIds = (0 to 2).toSet

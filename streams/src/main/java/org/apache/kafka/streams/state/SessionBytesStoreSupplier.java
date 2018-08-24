@@ -19,7 +19,12 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
- * A store supplier that can be used to create one or more {@link SessionStore SessionStore<Bytes, byte[]>>} instances of type &lt;Byte, byte[]&gt;.
+ * A store supplier that can be used to create one or more {@link SessionStore SessionStore<Bytes, byte[]>} instances of type &lt;Byte, byte[]&gt;.
+ *
+ * For any stores implementing the {@link SessionStore SessionStore<Bytes, byte[]>} interface, null value bytes are considered as "not exist". This means:
+ *
+ * 1. Null value bytes in put operations should be treated as delete.
+ * 2. Null value bytes should never be returned in range query results.
  */
 public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<Bytes, byte[]>> {
 
@@ -30,4 +35,11 @@ public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<By
      * @return segmentInterval in milliseconds
      */
     long segmentIntervalMs();
+
+    /**
+     * The time period for which the {@link SessionStore} will retain historic data.
+     *
+     * @return retentionPeriod
+     */
+    long retentionPeriod();
 }

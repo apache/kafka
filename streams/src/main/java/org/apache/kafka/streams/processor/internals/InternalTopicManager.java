@@ -35,7 +35,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -43,6 +42,12 @@ import java.util.concurrent.ExecutionException;
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
+
+    private static final class InternalAdminClientConfig extends AdminClientConfig {
+        private InternalAdminClientConfig(final Map<?, ?> props) {
+            super(props, false);
+        }
+    }
 
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
@@ -57,12 +62,12 @@ public class InternalTopicManager {
                                 final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
-        LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
+        final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        retries = new AdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+        retries = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
 
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -108,6 +113,7 @@ public class InternalTopicManager {
                     .configs(topicConfig));
             }
 
+            // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
             int remainingRetries = retries;
             boolean retry;
             do {
@@ -130,9 +136,9 @@ public class InternalTopicManager {
                                 "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
                         } else if (cause instanceof TopicExistsException) {
                             createTopicNames.add(createTopicResult.getKey());
-                            log.info(String.format("Topic %s exist already: %s",
+                            log.info("Topic {} exist already: {}",
                                 topicName,
-                                couldNotCreateTopic.getMessage()));
+                                couldNotCreateTopic.toString());
                         } else {
                             throw new StreamsException(String.format("Could not create topic %s.", topicName),
                                 couldNotCreateTopic);
@@ -145,12 +151,7 @@ public class InternalTopicManager {
                 }
 
                 if (retry) {
-                    final Iterator<NewTopic> it = newTopics.iterator();
-                    while (it.hasNext()) {
-                        if (createTopicNames.contains(it.next().name())) {
-                            it.remove();
-                        }
-                    }
+                    newTopics.removeIf(newTopic -> createTopicNames.contains(newTopic.name()));
 
                     continue;
                 }
@@ -171,6 +172,9 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
+
+        // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
         int remainingRetries = retries;
         boolean retry;
         do {
@@ -197,8 +201,8 @@ public class InternalTopicManager {
                         log.debug("Could not get number of partitions for topic {} due to timeout. " +
                             "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
                     } else {
-                        final String error = "Could not get number of partitions for topic {}.";
-                        log.debug(error, topicFuture.getKey(), cause.getMessage());
+                        final String error = "Could not get number of partitions for topic {} due to {}";
+                        log.debug(error, topicFuture.getKey(), cause.toString());
                     }
                 }
             }
@@ -221,7 +225,7 @@ public class InternalTopicManager {
                                                              final Map<String, Integer> existingTopicNamesPartitions) {
         final Set<InternalTopicConfig> topicsToBeCreated = new HashSet<>();
         for (final InternalTopicConfig topic : topicsPartitionsMap) {
-            final Integer numberOfPartitions = topic.numberOfPartitions();
+            final int numberOfPartitions = topic.numberOfPartitions();
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
                 if (!existingTopicNamesPartitions.get(topic.name()).equals(numberOfPartitions)) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +

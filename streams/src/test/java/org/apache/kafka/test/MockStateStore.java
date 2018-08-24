@@ -47,7 +47,7 @@ public class MockStateStore implements StateStore {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        context.register(root, false, stateRestoreCallback);
+        context.register(root, stateRestoreCallback);
         initialized = true;
         closed = false;
     }

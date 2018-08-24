@@ -28,12 +28,15 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
@@ -52,6 +55,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -108,6 +112,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private PluginClassLoader pluginLoader;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain transformationChain;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
@@ -134,8 +139,10 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter,
-                valueConverter, TransformationChain.noOp(), pluginLoader, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
+                valueConverter, headerConverter,
+                new TransformationChain(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
+                pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
 
         recordsReturned = 0;
     }
@@ -519,7 +526,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         sinkTask.open(partitions);
         EasyMock.expectLastCall();
 
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
             @Override
             public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                 rebalanceListener.getValue().onPartitionsAssigned(partitions);
@@ -551,7 +558,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private Capture<Collection<SinkRecord>> expectPolls(final long pollDelayMs) throws Exception {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andStubAnswer(
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andStubAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
@@ -589,7 +596,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Currently the SinkTask's put() method will not be invoked unless we provide some data, so instead of
         // returning empty data, we return one record. The expectation is that the data will be ignored by the
         // response behavior specified using the return value of this method.
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
@@ -619,7 +626,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(TOPIC_PARTITION, startOffset);
 
-        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
@@ -695,5 +702,4 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
     private static abstract class TestSinkTask extends SinkTask {
     }
-
 }

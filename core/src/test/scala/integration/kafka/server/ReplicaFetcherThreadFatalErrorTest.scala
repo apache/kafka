@@ -20,7 +20,7 @@ package kafka.server
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.BrokerEndPoint
-import kafka.server.ReplicaFetcherThread.{FetchRequest, PartitionData}
+import kafka.server.ReplicaFetcherThread.FetchRequest
 import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.createBrokerConfigs
 import kafka.zk.ZooKeeperTestHarness
@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Test}
@@ -88,10 +89,11 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
       import params._
       new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, config, replicaManager, metrics, time, quotaManager) {
         override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = throw new FatalExitError
-        override protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
+        override protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PD)] = {
           fetchRequest.underlying.fetchData.asScala.keys.toSeq.map { tp =>
-            (tp, new PartitionData(new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE,
-              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, null)))
+            (tp, new FetchResponse.PartitionData[Records](Errors.OFFSET_OUT_OF_RANGE,
+              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              FetchResponse.INVALID_LOG_START_OFFSET, null, null))
           }
         }
       }

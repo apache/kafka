@@ -149,11 +149,26 @@ public interface Herder {
     void restartTask(ConnectorTaskId id, Callback<Void> cb);
 
     /**
+     * Get the configuration reload action.
+     * @param connName name of the connector
+     */
+    ConfigReloadAction connectorConfigReloadAction(final String connName);
+
+    /**
      * Restart the connector.
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
      */
     void restartConnector(String connName, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 
     /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
@@ -182,6 +197,11 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+    enum ConfigReloadAction {
+        NONE,
+        RESTART
+    }
 
     class Created<T> {
         private final boolean created;

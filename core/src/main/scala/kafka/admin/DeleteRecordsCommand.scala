@@ -20,33 +20,55 @@ package kafka.admin
 import java.io.PrintStream
 import java.util.Properties
 
-import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.AdminCommandFailedException
-import kafka.utils.{CoreUtils, Json, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, CoreUtils, Json}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.clients.admin
+import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
+import kafka.utils.json.JsonValue
+
+import scala.collection.JavaConverters._
 
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */
 object DeleteRecordsCommand {
 
+  private[admin] val EarliestVersion = 1
+
   def main(args: Array[String]): Unit = {
     execute(args, System.out)
   }
 
   def parseOffsetJsonStringWithoutDedup(jsonData: String): Seq[(TopicPartition, Long)] = {
-    Json.parseFull(jsonData).toSeq.flatMap { js =>
-      js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
-        partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
-          val topic = partitionJs("topic").to[String]
-          val partition = partitionJs("partition").to[Int]
-          val offset = partitionJs("offset").to[Long]
-          new TopicPartition(topic, partition) -> offset
-        }.toBuffer
-      }
+    Json.parseFull(jsonData) match {
+      case Some(js) =>
+        val version = js.asJsonObject.get("version") match {
+          case Some(jsonValue) => jsonValue.to[Int]
+          case None => EarliestVersion
+        }
+        parseJsonData(version, js)
+      case None => throw new AdminOperationException("The input string is not a valid JSON")
+    }
+  }
+
+  def parseJsonData(version: Int, js: JsonValue): Seq[(TopicPartition, Long)] = {
+    version match {
+      case 1 =>
+        js.asJsonObject.get("partitions") match {
+          case Some(partitions) =>
+            partitions.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
+              val topic = partitionJs("topic").to[String]
+              val partition = partitionJs("partition").to[Int]
+              val offset = partitionJs("offset").to[Long]
+              new TopicPartition(topic, partition) -> offset
+            }.toBuffer
+          case _ => throw new AdminOperationException("Missing partitions field");
+        }
+      case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
 
@@ -61,26 +83,31 @@ object DeleteRecordsCommand {
     if (duplicatePartitions.nonEmpty)
       throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
 
+    val recordsToDelete = offsetSeq.map { case (topicPartition, offset) =>
+      (topicPartition, RecordsToDelete.beforeOffset(offset))
+    }.toMap.asJava
+
     out.println("Executing records delete operation")
-    val deleteRecordsResult: Map[TopicPartition, DeleteRecordsResult] = adminClient.deleteRecordsBefore(offsetSeq.toMap).get()
+    val deleteRecordsResult = adminClient.deleteRecords(recordsToDelete)
     out.println("Records delete operation completed:")
 
-    deleteRecordsResult.foreach{ case (tp, partitionResult) => {
-      if (partitionResult.error == null)
-        out.println(s"partition: $tp\tlow_watermark: ${partitionResult.lowWatermark}")
-      else
-        out.println(s"partition: $tp\terror: ${partitionResult.error.toString}")
+    deleteRecordsResult.lowWatermarks.asScala.foreach { case (tp, partitionResult) => {
+      try out.println(s"partition: $tp\tlow_watermark: ${partitionResult.get.lowWatermark}")
+      catch {
+        case e: Exception => out.println(s"partition: $tp\terror: ${e.getMessage}")
+      }
     }}
+
     adminClient.close()
   }
 
-  private def createAdminClient(opts: DeleteRecordsCommandOptions): AdminClient = {
+  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.AdminClient = {
     val props = if (opts.options.has(opts.commandConfigOpt))
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
       new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-    AdminClient.create(props)
+    admin.AdminClient.create(props)
   }
 
   class DeleteRecordsCommandOptions(args: Array[String]) {

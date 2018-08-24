@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -32,7 +31,6 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-
 public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final String name;
     private final Serde<K> keySerde;
@@ -42,7 +40,9 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     private StateSerdes<K, V> serdes;
 
-    public InMemoryKeyValueStore(final String name, final Serde<K> keySerde, final Serde<V> valueSerde) {
+    public InMemoryKeyValueStore(final String name,
+                                 final Serde<K> keySerde,
+                                 final Serde<V> valueSerde) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -63,7 +63,8 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -72,15 +73,12 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         if (root != null) {
             // register the store
-            context.register(root, false, new StateRestoreCallback() {
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    // this is a delete
-                    if (value == null) {
-                        delete(serdes.keyFrom(key));
-                    } else {
-                        put(serdes.keyFrom(key), serdes.valueFrom(value));
-                    }
+            context.register(root, (key, value) -> {
+                // this is a delete
+                if (value == null) {
+                    delete(serdes.keyFrom(key));
+                } else {
+                    put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
             });
         }
@@ -99,18 +97,24 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(K key) {
+    public synchronized V get(final K key) {
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(K key, V value) {
-        this.map.put(key, value);
+    public synchronized void put(final K key,
+                                 final V value) {
+        if (value == null) {
+            this.map.remove(key);
+        } else {
+            this.map.put(key, value);
+        }
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
-        V originalValue = get(key);
+    public synchronized V putIfAbsent(final K key,
+                                      final V value) {
+        final V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -118,19 +122,23 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void putAll(List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+    public synchronized void putAll(final List<KeyValue<K, V>> entries) {
+        for (final KeyValue<K, V> entry : entries) {
             put(entry.key, entry.value);
+        }
     }
 
     @Override
-    public synchronized V delete(K key) {
+    public synchronized V delete(final K key) {
         return this.map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(K from, K to) {
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+    public synchronized KeyValueIterator<K, V> range(final K from,
+                                                     final K to) {
+        return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
@@ -158,7 +166,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<Map.Entry<K, V>> iter;
 
-        private InMemoryKeyValueIterator(Iterator<Map.Entry<K, V>> iter) {
+        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
             this.iter = iter;
         }
 
@@ -169,7 +177,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public KeyValue<K, V> next() {
-            Map.Entry<K, V> entry = iter.next();
+            final Map.Entry<K, V> entry = iter.next();
             return new KeyValue<>(entry.getKey(), entry.getValue());
         }
 

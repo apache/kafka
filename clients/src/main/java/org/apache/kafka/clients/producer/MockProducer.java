@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -32,7 +33,6 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -68,8 +68,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionCommitted;
     private boolean transactionAborted;
     private boolean producerFenced;
+    private boolean producerFencedOnClose;
     private boolean sentOffsets;
     private long commitCount = 0L;
+    private Map<MetricName, Metric> mockMetrics;
 
     /**
      * Create a mock producer
@@ -77,7 +79,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * @param cluster The cluster holding metadata for this producer
      * @param autoComplete If true automatically complete all requests successfully and execute the callback. Otherwise
      *        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
-     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the @{link
+     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the {@link
      *        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
      * @param partitioner The partition strategy
      * @param keySerializer The serializer for key that implements {@link Serializer}.
@@ -99,6 +101,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.consumerGroupOffsets = new ArrayList<>();
         this.uncommittedConsumerGroupOffsets = new HashMap<>();
         this.completions = new ArrayDeque<>();
+        this.mockMetrics = new HashMap<>();
     }
 
     /**
@@ -205,7 +208,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = false;
     }
 
-    private void verifyProducerState() {
+    private synchronized void verifyProducerState() {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
@@ -243,7 +246,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
-        verifyProducerState();
+        if (this.closed) {
+            throw new IllegalStateException("MockProducer is already closed.");
+        }
+        if (this.producerFenced) {
+            throw new KafkaException("MockProducer is fenced.", new ProducerFencedException("Fenced"));
+        }
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
@@ -293,7 +301,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public Map<MetricName, Metric> metrics() {
-        return Collections.emptyMap();
+        return mockMetrics;
+    }
+
+    /**
+     * Set a mock metric for testing purpose
+     */
+    public void setMockMetrics(MetricName name, Metric metric) {
+        mockMetrics.put(name, metric);
     }
 
     @Override
@@ -303,8 +318,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
-        if (this.closed) {
-            throw new IllegalStateException("MockProducer is already closed.");
+        if (producerFencedOnClose) {
+            throw new ProducerFencedException("MockProducer is fenced.");
         }
         this.closed = true;
     }
@@ -313,10 +328,16 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.closed;
     }
 
-    public void fenceProducer() {
+    public synchronized void fenceProducer() {
         verifyProducerState();
         verifyTransactionsInitialized();
         this.producerFenced = true;
+    }
+
+    public void fenceProducerOnClose() {
+        verifyProducerState();
+        verifyTransactionsInitialized();
+        this.producerFencedOnClose = true;
     }
 
     public boolean transactionInitialized() {

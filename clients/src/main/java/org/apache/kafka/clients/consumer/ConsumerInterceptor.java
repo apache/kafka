@@ -35,14 +35,16 @@ import java.util.Map;
  * the user configures the interceptor with the wrong key and value type parameters, the consumer will not throw an exception,
  * just log the errors.
  * <p>
- * ConsumerInterceptor callbacks are called from the same thread that invokes {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)}.
+ * ConsumerInterceptor callbacks are called from the same thread that invokes
+ * {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.time.Duration)}.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
 public interface ConsumerInterceptor<K, V> extends Configurable {
 
     /**
-     * This is called just before the records are returned by {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)}
+     * This is called just before the records are returned by
+     * {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.time.Duration)}
      * <p>
      * This method is allowed to modify consumer records, in which case the new records will be
      * returned. There is no limitation on number of records that could be returned from this

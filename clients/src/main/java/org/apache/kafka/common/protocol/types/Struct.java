@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -105,6 +105,18 @@ public class Struct {
         return alternative;
     }
 
+    public Short getOrElse(Field.Int16 field, short alternative) {
+        if (hasField(field.name))
+            return getShort(field.name);
+        return alternative;
+    }
+
+    public Byte getOrElse(Field.Int8 field, byte alternative) {
+        if (hasField(field.name))
+            return getByte(field.name);
+        return alternative;
+    }
+
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
@@ -166,8 +178,8 @@ public class Struct {
         return (Byte) get(name);
     }
 
-    public Records getRecords(String name) {
-        return (Records) get(name);
+    public BaseRecords getRecords(String name) {
+        return (BaseRecords) get(name);
     }
 
     public Short getShort(BoundField field) {

@@ -222,6 +222,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new ExpireDelegationTokenRequest(struct, apiVersion);
             case DESCRIBE_DELEGATION_TOKEN:
                 return new DescribeDelegationTokenRequest(struct, apiVersion);
+            case DELETE_GROUPS:
+                return new DeleteGroupsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

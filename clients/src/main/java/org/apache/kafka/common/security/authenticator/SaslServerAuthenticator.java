@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
@@ -46,17 +45,16 @@ import org.apache.kafka.common.requests.SaslAuthenticateRequest;
 import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
-import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
+import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramMechanism;
-import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -101,14 +99,12 @@ public class SaslServerAuthenticator implements Authenticator {
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
     private final String connectionId;
-    private final JaasContext jaasContext;
-    private final Subject subject;
-    private final CredentialCache credentialCache;
+    private final Map<String, Subject> subjects;
     private final TransportLayer transportLayer;
     private final Set<String> enabledMechanisms;
     private final Map<String, ?> configs;
     private final KafkaPrincipalBuilder principalBuilder;
-    private final DelegationTokenCache tokenCache;
+    private final Map<String, AuthenticateCallbackHandler> callbackHandlers;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -118,7 +114,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private AuthenticationException pendingException = null;
     private SaslServer saslServer;
     private String saslMechanism;
-    private AuthCallbackHandler callbackHandler;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -127,25 +122,19 @@ public class SaslServerAuthenticator implements Authenticator {
     private boolean enableKafkaSaslAuthenticateHeaders;
 
     public SaslServerAuthenticator(Map<String, ?> configs,
+                                   Map<String, AuthenticateCallbackHandler> callbackHandlers,
                                    String connectionId,
-                                   JaasContext jaasContext,
-                                   Subject subject,
+                                   Map<String, Subject> subjects,
                                    KerberosShortNamer kerberosNameParser,
-                                   CredentialCache credentialCache,
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
-                                   TransportLayer transportLayer,
-                                   DelegationTokenCache tokenCache) throws IOException {
-        if (subject == null)
-            throw new IllegalArgumentException("subject cannot be null");
+                                   TransportLayer transportLayer) throws IOException {
+        this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
-        this.jaasContext = jaasContext;
-        this.subject = subject;
-        this.credentialCache = credentialCache;
+        this.subjects = subjects;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.enableKafkaSaslAuthenticateHeaders = false;
-        this.tokenCache = tokenCache;
         this.transportLayer = transportLayer;
 
         this.configs = configs;
@@ -154,6 +143,12 @@ public class SaslServerAuthenticator implements Authenticator {
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
         this.enabledMechanisms = new HashSet<>(enabledMechanisms);
+        for (String mechanism : enabledMechanisms) {
+            if (!callbackHandlers.containsKey(mechanism))
+                throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
+            if (!subjects.containsKey(mechanism))
+                throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
+        }
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
@@ -162,11 +157,8 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
-        if (!ScramMechanism.isScram(mechanism))
-            callbackHandler = new SaslServerCallbackHandler(jaasContext);
-        else
-            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
-        callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
+        Subject subject = subjects.get(mechanism);
+        final AuthenticateCallbackHandler callbackHandler = callbackHandlers.get(mechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
@@ -183,7 +175,7 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
+    private SaslServer createSaslKerberosServer(final AuthenticateCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
         final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
         KerberosName kerberosName;
@@ -276,11 +268,9 @@ public class SaslServerAuthenticator implements Authenticator {
                     default:
                         break;
                 }
-            } catch (SaslException | AuthenticationException e) {
+            } catch (AuthenticationException e) {
                 // Exception will be propagated after response is sent to client
-                AuthenticationException authException = (e instanceof AuthenticationException) ?
-                        (AuthenticationException) e : new AuthenticationException("SASL authentication failed", e);
-                setSaslState(SaslState.FAILED, authException);
+                setSaslState(SaslState.FAILED, e);
             } catch (Exception e) {
                 // In the case of IOExceptions and other unexpected exceptions, fail immediately
                 saslState = SaslState.FAILED;
@@ -291,8 +281,12 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
-        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
-        return principalBuilder.build(context);
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress(), listenerName.value());
+        KafkaPrincipal principal = principalBuilder.build(context);
+        if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
+            principal.tokenAuthenticated(true);
+        }
+        return principal;
     }
 
     @Override
@@ -306,8 +300,6 @@ public class SaslServerAuthenticator implements Authenticator {
             Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         if (saslServer != null)
             saslServer.dispose();
-        if (callbackHandler != null)
-            callbackHandler.close();
     }
 
     private void setSaslState(SaslState saslState) throws IOException {
@@ -385,12 +377,20 @@ public class SaslServerAuthenticator implements Authenticator {
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
                 ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
-            } catch (SaslAuthenticationException | SaslException e) {
-                String errorMessage = e instanceof SaslAuthenticationException ? e.getMessage() :
-                    "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
-                        errorMessage));
+            } catch (SaslAuthenticationException e) {
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
                 throw e;
+            } catch (SaslException e) {
+                KerberosError kerberosError = KerberosError.fromException(e);
+                if (kerberosError != null && kerberosError.retriable()) {
+                    // Handle retriable Kerberos exceptions as I/O exceptions rather than authentication exceptions
+                    throw e;
+                } else {
+                    String errorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
+                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
+                            errorMessage));
+                    throw new SaslAuthenticationException(errorMessage, e);
+                }
             }
         }
     }
