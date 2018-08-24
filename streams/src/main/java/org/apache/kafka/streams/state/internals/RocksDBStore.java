@@ -283,7 +283,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try (final WriteBatch batch = new WriteBatch()) {
             for (final KeyValue<byte[], byte[]> record : records) {
                 if (record.value == null) {
-                    batch.remove(record.key);
+                    batch.delete(record.key);
                 } else {
                     batch.put(record.key, record.value);
                 }
@@ -323,7 +323,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 if (entry.value == null) {
-                    batch.remove(entry.key.get());
+                    batch.delete(entry.key.get());
                 } else {
                     batch.put(entry.key.get(), entry.value);
                 }
