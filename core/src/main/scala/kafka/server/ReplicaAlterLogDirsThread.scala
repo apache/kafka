@@ -159,7 +159,14 @@ class ReplicaAlterLogDirsThread(name: String,
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch.getOrElse(UNDEFINED_EPOCH))
+        val (leaderEpoch, leaderOffset) =
+          if (epoch.nonEmpty)
+            replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch.get)
+          else
+            // this may happen if a bootstrapping follower sends a request with undefined epoch or
+            // a follower is on the older message format where leader epochs are not recorded
+            (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>

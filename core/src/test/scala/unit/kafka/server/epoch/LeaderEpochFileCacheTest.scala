@@ -48,7 +48,7 @@ class LeaderEpochFileCacheTest {
     leo = 11
 
     //Then
-    assertEquals(2, cache.latestEpoch.get)
+    assertEquals(Some(2), cache.latestEpoch)
     assertEquals(EpochEntry(2, 10), cache.epochEntries()(0))
     assertEquals((2, leo), cache.endOffsetFor(2)) //should match leo
   }
@@ -303,7 +303,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 1, offset = 7); leo = 8
 
     //Then epoch should not be changed
-    assertEquals(2, cache.latestEpoch.get)
+    assertEquals(Some(2), cache.latestEpoch)
 
     //Then end offset for epoch 1 shouldn't have changed
     assertEquals((1, 6), cache.endOffsetFor(1))
@@ -344,7 +344,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 1, offset = 0) //leo=0
 
     //Then epoch should go up
-    assertEquals(1, cache.latestEpoch.get)
+    assertEquals(Some(1), cache.latestEpoch)
     //offset for 1 should still be 0
     assertEquals((1, 0), cache.endOffsetFor(1))
     //offset for epoch 0 should still be 0
@@ -387,7 +387,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 0, offset = 2); leo = 3
 
     //Then epoch should stay, offsets should grow
-    assertEquals(0, cache.latestEpoch.get)
+    assertEquals(Some(0), cache.latestEpoch)
     assertEquals((0, leo), cache.endOffsetFor(0))
 
     //When messages arrive with greater epoch
@@ -395,7 +395,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 1, offset = 4); leo = 5
     cache.assign(epoch = 1, offset = 5); leo = 6
 
-    assertEquals(1, cache.latestEpoch.get)
+    assertEquals(Some(1), cache.latestEpoch)
     assertEquals((1, leo), cache.endOffsetFor(1))
 
     //When
@@ -403,7 +403,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, offset = 7); leo = 8
     cache.assign(epoch = 2, offset = 8); leo = 9
 
-    assertEquals(2, cache.latestEpoch.get)
+    assertEquals(Some(2), cache.latestEpoch)
     assertEquals((2, leo), cache.endOffsetFor(2))
 
     //Older epochs should return the start offset of the first message in the subsequent epoch.
@@ -578,7 +578,7 @@ class LeaderEpochFileCacheTest {
     cache.clearAndFlushLatest(offset = 9)
 
     //Then should keep the preceding epochs
-    assertEquals(3, cache.latestEpoch.get)
+    assertEquals(Some(3), cache.latestEpoch)
     assertEquals(ListBuffer(EpochEntry(2, 6), EpochEntry(3, 8)), cache.epochEntries)
   }
 

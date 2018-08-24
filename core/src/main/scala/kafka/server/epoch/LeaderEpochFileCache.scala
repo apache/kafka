@@ -28,7 +28,7 @@ import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
-  def latestEpoch(): Option[Int]
+  def latestEpoch: Option[Int]
   def endOffsetFor(epoch: Int): (Int, Long)
   def clearAndFlushLatest(offset: Long)
   def clearAndFlushEarliest(offset: Long)
@@ -92,17 +92,13 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * if requestedEpoch is < the first epoch cached, UNSUPPORTED_EPOCH_OFFSET will be returned
     * so that the follower falls back to High Water Mark.
     *
-    * @param requestedEpoch requested leader epoch
+    * @param requestedEpoch requested leader epoch. Must be non-negative
     * @return leader epoch and offset
     */
   override def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
     inReadLock(lock) {
       val epochAndOffset =
-        if (requestedEpoch == UNDEFINED_EPOCH) {
-          // this may happen if a bootstrapping follower sends a request with undefined epoch or
-          // a follower is on the older message format where leader epochs are not recorded
-          (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-        } else if (requestedEpoch == latestEpoch.getOrElse(UNDEFINED_EPOCH)) {
+        if (requestedEpoch == latestEpoch.getOrElse(UNDEFINED_EPOCH)) {
           (requestedEpoch, leo().messageOffset)
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}

@@ -353,15 +353,20 @@ class ReplicaFetcherThread(name: String,
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
     var result: Map[TopicPartition, EpochEndOffset] = null
-    if (shouldSendLeaderEpochRequest(partitions)) {
+    if (brokerSupportsLeaderEpochRequest) {
       // skip request for partitions without epoch, as their topic log message format doesn't support epochs
       val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epoch) => epoch.nonEmpty }
+      val resultWithoutEpoch = partitionsWithoutEpoch.map { case (tp, _) => (tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)) }
+
+      if (partitionsWithEpoch.isEmpty) {
+        debug("Skipping leaderEpoch request since all partitions do not have an epoch")
+        return resultWithoutEpoch
+      }
+
       val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.get.asInstanceOf[Integer] }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
-        val resultWithoutEpoch = partitionsWithoutEpoch.map { case (tp, _) => (tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)) }
-
         result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala ++ resultWithoutEpoch
         debug(s"Receive leaderEpoch response $result; Skipped request for partitions ${partitionsWithoutEpoch.keys}")
       } catch {
@@ -381,21 +386,6 @@ class ReplicaFetcherThread(name: String,
       }
     }
     result
-  }
-
-  /**
-   * If a partition doesn't have an epoch in the cache, this means it either
-   *   does not support epochs (log message format below 0.11) or it is a bootstrapping follower.
-   *
-   * In both cases, it has an undefined epoch
-   *   and there is no use to send the request, as we know the broker will answer with that epoch
-   */
-  private def shouldSendLeaderEpochRequest(partitions: Map[TopicPartition, Option[Int]]): Boolean = {
-    if (!brokerSupportsLeaderEpochRequest)
-      return false
-
-    // if all topics' message format do not support epoch requests, skip it
-    partitions.map { case (_, latestEpoch) => latestEpoch.nonEmpty }.reduce(_ || _)
   }
 
   /**
