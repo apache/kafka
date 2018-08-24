@@ -61,7 +61,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
-                 isolation_level="read_uncommitted"):
+                 isolation_level="read_uncommitted", jaas_override_variables=None):
         """
         Args:
             context:                    standard context
@@ -82,6 +82,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                                         and the corresponding background thread to finish successfully.
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
+            jaas_override_variables     A dict of variables to be used in the jaas.conf template file
+
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -113,6 +115,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
+        self.jaas_override_variables = jaas_override_variables or {}
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -125,7 +128,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = self.kafka.security_config.client_config(prop_file, node)
+        self.security_config = self.kafka.security_config.client_config(prop_file, node, self.jaas_override_variables)
         self.security_config.setup_node(node)
 
         prop_file += str(self.security_config)

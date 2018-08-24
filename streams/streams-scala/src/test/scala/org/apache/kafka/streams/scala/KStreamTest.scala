@@ -75,6 +75,22 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
+  "foreach a KStream" should "side effect records" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+
+    var acc = ""
+    builder.stream[String, String](sourceTopic).foreach((_, value) => acc += value)
+
+    val testDriver = createTestDriver(builder)
+
+    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    acc shouldBe "value1value2"
+
+    testDriver.close()
+  }
+
   "selectKey a KStream" should "select a new key" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
