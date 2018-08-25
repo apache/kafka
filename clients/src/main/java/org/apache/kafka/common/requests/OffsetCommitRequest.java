@@ -302,7 +302,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.requestSchema(version));
         struct.set(GROUP_ID, groupId);
 
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionsByTopic(offsetData);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(offsetData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);

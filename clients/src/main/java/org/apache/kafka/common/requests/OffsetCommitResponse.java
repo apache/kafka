@@ -127,7 +127,7 @@ public class OffsetCommitResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
-        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupPartitionsByTopic(responseData);
+        Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);

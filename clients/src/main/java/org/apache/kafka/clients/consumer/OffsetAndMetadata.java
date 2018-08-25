@@ -42,7 +42,7 @@ public class OffsetAndMetadata implements Serializable {
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
      *
      * @param offset The offset to be committed
-     * @param leaderEpoch The leader epoch of the last consumed record or null if not known
+     * @param leaderEpoch Optional leader epoch of the last consumed record
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset, Optional<Integer> leaderEpoch, String metadata) {

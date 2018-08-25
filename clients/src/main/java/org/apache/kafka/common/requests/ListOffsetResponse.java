@@ -249,7 +249,7 @@ public class ListOffsetResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionsByTopic(responseData);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {

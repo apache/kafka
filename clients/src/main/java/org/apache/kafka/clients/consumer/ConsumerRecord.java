@@ -141,7 +141,7 @@ public class ConsumerRecord<K, V> {
      * @param key The key of the record, if one exists (null is allowed)
      * @param value The record contents
      * @param headers The headers of the record
-     * @param leaderEpoch The leader epoch of the record or null if it is not known
+     * @param leaderEpoch Optional leader epoch of the record (may be empty for legacy record formats)
      */
     public ConsumerRecord(String topic,
                           int partition,

@@ -98,7 +98,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupPartitionsByTopic(errors);
+        Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupPartitionDataByTopic(errors);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, Errors>> topicAndPartitions : mappedPartitions.entrySet()) {

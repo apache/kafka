@@ -250,7 +250,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.OFFSET_FETCH.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionsByTopic(responseData);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);

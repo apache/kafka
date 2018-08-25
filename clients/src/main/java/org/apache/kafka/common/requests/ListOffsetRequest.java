@@ -311,7 +311,7 @@ public class ListOffsetRequest extends AbstractRequest {
     protected Struct toStruct() {
         short version = version();
         Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionsByTopic(partitionTimestamps);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(partitionTimestamps);
 
         struct.set(REPLICA_ID, replicaId);
         struct.setIfExists(ISOLATION_LEVEL, isolationLevel.id());

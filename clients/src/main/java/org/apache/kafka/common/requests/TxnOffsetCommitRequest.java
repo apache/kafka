@@ -179,7 +179,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         struct.set(PRODUCER_ID, producerId);
         struct.set(PRODUCER_EPOCH, producerEpoch);
 
-        Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupPartitionsByTopic(offsets);
+        Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupPartitionDataByTopic(offsets);
         Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, CommittedOffset>> topicAndPartitions : mappedPartitionOffsets.entrySet()) {
