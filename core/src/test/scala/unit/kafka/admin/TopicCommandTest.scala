@@ -242,4 +242,28 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
   }
 
+  @Test
+  def testDescribeAndListTopicsWithoutInternalTopics() {
+    val brokers = List(0)
+    val topic = "testDescribeAndListTopicsWithoutInternalTopics"
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic)))
+    // create a internal topic
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
+
+    // test describe
+    var output = TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient,
+      new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+
+    // test list
+    output = TestUtils.grabConsoleOutput(TopicCommand.listTopics(zkClient,
+      new TopicCommandOptions(Array("--list", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+  }
 }
