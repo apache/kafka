@@ -1214,9 +1214,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def triggerControllerMove(): Unit = {
+    val controllerEpochZkVersion = controllerContext.epochZkVersion
     onControllerResignation()
     activeControllerId = -1
-    zkClient.deleteController()
+    zkClient.deleteController(controllerEpochZkVersion)
   }
 
   private def elect(): Unit = {
@@ -1247,6 +1248,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         else
           warn("A controller has been elected but just resigned, this will result in another round of election")
 
+      case e2: ControllerMovedException =>
+        error("Error while electing or becoming controller on broker %d because controller moved to another broker".format(config.brokerId), e2)
+        throw e2
+        
       case e2: Throwable =>
         error(s"Error while electing or becoming controller on broker ${config.brokerId}", e2)
         triggerControllerMove()

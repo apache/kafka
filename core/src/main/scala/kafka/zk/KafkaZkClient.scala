@@ -943,9 +943,11 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
 
   /**
    * Deletes the controller znode.
+   * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
-  def deleteController(): Unit = {
-    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion)
+  def deleteController(expectedControllerEpochZkVersion: Int): Unit = {
+    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion, 
+      zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion))
     retryRequestUntilConnected(deleteRequest)
   }
 
