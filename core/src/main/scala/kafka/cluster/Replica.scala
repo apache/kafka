@@ -194,15 +194,16 @@ class Replica(val brokerId: Int,
 
   override def toString: String = {
     val replicaString = new StringBuilder
-    replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + topicPartition.topic)
-    replicaString.append("; Partition: " + topicPartition.partition)
-    replicaString.append("; isLocal: " + isLocal)
-    replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
+    replicaString.append("Replica(replicaId=" + brokerId)
+    replicaString.append(", topic=" + topicPartition.topic)
+    replicaString.append(", partition=" + topicPartition.partition)
+    replicaString.append(", isLocal=" + isLocal)
+    replicaString.append(", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs)
     if (isLocal) {
-      replicaString.append("; Highwatermark: " + highWatermark)
-      replicaString.append("; LastStableOffset: " + lastStableOffset)
+      replicaString.append(", highWatermark=" + highWatermark)
+      replicaString.append(", lastStableOffset=" + lastStableOffset)
     }
+    replicaString.append(")")
     replicaString.toString
   }
 }

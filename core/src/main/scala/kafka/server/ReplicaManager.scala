@@ -1494,4 +1494,3 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 }
-
