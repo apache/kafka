@@ -340,7 +340,17 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
+  def process(processorSupplier: => Processor[K, V], stateStoreNames: String*): Unit = {
+    //noinspection ConvertExpressionToSAM // because of the 2.11 build
+    val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
+      override def get(): Processor[K, V] = processorSupplier
+    }
+    inner.process(processorSupplierJ, stateStoreNames: _*)
+  }
+
+  @deprecated("Use the call by name processorSupplier instead", "2.1.0")
+  def process(processorSupplier: () => Processor[K, V],
+              stateStoreNames: String*)(implicit dummyImplicit: DummyImplicit): Unit = {
     //noinspection ConvertExpressionToSAM // because of the 2.11 build
     val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
       override def get(): Processor[K, V] = processorSupplier()
