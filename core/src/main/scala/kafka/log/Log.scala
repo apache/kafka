@@ -107,6 +107,25 @@ case class LogAppendInfo(var firstOffset: Option[Long],
 }
 
 /**
+ * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
+ * of these offsets atomically without the possibility of a leader change affecting their consistency relative
+ * to each other. See [[kafka.cluster.Partition.fetchOffsetSnapshot()]].
+ */
+case class LogOffsetSnapshot(logStartOffset: Long,
+                             logEndOffset: LogOffsetMetadata,
+                             highWatermark: LogOffsetMetadata,
+                             lastStableOffset: LogOffsetMetadata)
+
+/**
+ * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
+ */
+case class LogReadInfo(fetchedData: FetchDataInfo,
+                       highWatermark: Long,
+                       logStartOffset: Long,
+                       logEndOffset: Long,
+                       lastStableOffset: Long)
+
+/**
  * A class used to hold useful metadata about a completed transaction. This is used to build
  * the transaction index after appending to the log.
  *
@@ -1264,6 +1283,51 @@ class Log(@volatile var dir: File,
 
       targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
     }
+  }
+
+  def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segments = logSegments.toBuffer
+    val lastSegmentHasSize = segments.last.size > 0
+
+    val offsetTimeArray =
+      if (lastSegmentHasSize)
+        new Array[(Long, Long)](segments.length + 1)
+      else
+        new Array[(Long, Long)](segments.length)
+
+    for (i <- segments.indices)
+      offsetTimeArray(i) = (math.max(segments(i).baseOffset, logStartOffset), segments(i).lastModified)
+    if (lastSegmentHasSize)
+      offsetTimeArray(segments.length) = (logEndOffset, time.milliseconds)
+
+    var startIndex = -1
+    timestamp match {
+      case ListOffsetRequest.LATEST_TIMESTAMP =>
+        startIndex = offsetTimeArray.length - 1
+      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
+        startIndex = 0
+      case _ =>
+        var isFound = false
+        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
+        startIndex = offsetTimeArray.length - 1
+        while (startIndex >= 0 && !isFound) {
+          if (offsetTimeArray(startIndex)._2 <= timestamp)
+            isFound = true
+          else
+            startIndex -= 1
+        }
+    }
+
+    val retSize = maxNumOffsets.min(startIndex + 1)
+    val ret = new Array[Long](retSize)
+    for (j <- 0 until retSize) {
+      ret(j) = offsetTimeArray(startIndex)._1
+      startIndex -= 1
+    }
+    // ensure that the returned seq is in descending order of offsets
+    ret.toSeq.sortBy(-_)
   }
 
   /**

@@ -80,7 +80,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.maybeIncrementLogStartOffset(3)
     log.deleteOldSegments()
 
-    val offsets = server.apis.fetchOffsets(logManager, topicPartition, ListOffsetRequest.LATEST_TIMESTAMP, 15)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
@@ -108,7 +108,7 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, topicPartition, ListOffsetRequest.LATEST_TIMESTAMP, 15)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
@@ -168,7 +168,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
-    val offsets = server.apis.fetchOffsets(logManager, topicPartition, now, 15)
+    val offsets = log.legacyFetchOffsetsBefore(now, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
@@ -194,7 +194,7 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    val offsets = server.apis.fetchOffsets(logManager, topicPartition, ListOffsetRequest.EARLIEST_TIMESTAMP, 10)
+    val offsets = log.legacyFetchOffsetsBefore(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)
 
     assertEquals(Seq(0L), offsets)
 
@@ -221,7 +221,7 @@ class LogOffsetTest extends BaseRequestTest {
     val logSegments = Seq(logSegment)
     EasyMock.expect(log.logSegments).andStubReturn(logSegments)
     EasyMock.replay(log)
-    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
+    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
   /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
@@ -240,7 +240,7 @@ class LogOffsetTest extends BaseRequestTest {
     }
     EasyMock.replay(logSegment)
     EasyMock.replay(log)
-    server.apis.fetchOffsetsBefore(log, System.currentTimeMillis, 100)
+    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
   private def server: KafkaServer = servers.head
