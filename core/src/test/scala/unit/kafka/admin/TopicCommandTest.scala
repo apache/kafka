@@ -262,7 +262,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // test list
     output = TestUtils.grabConsoleOutput(TopicCommand.listTopics(zkClient,
-      new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
+      new TopicCommandOptions(Array("--list", "--exclude-internal"))))
     assertTrue(output.contains(topic))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
