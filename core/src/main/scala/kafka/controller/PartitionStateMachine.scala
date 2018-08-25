@@ -257,7 +257,7 @@ class PartitionStateMachine(config: KafkaConfig,
       zkClient.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs, controllerContext.epochZkVersion)
     } catch {
       case e: ControllerMovedException =>
-        error("Controller moved to another broker when trying to create the topic partition state znode")
+        error("Controller moved to another broker when trying to create the topic partition state znode", e)
         throw e
       case e: Exception =>
         partitionsWithLiveReplicas.foreach { case (partition,_) => logFailedStateChange(partition, partitionState(partition), NewPartition, e) }

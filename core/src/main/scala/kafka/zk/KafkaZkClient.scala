@@ -1633,21 +1633,21 @@ object KafkaZkClient {
   }
 
 
-  def controllerZkVersionCheck(version: Int): Option[ZkVersionCheck] = {
+  private def controllerZkVersionCheck(version: Int): Option[ZkVersionCheck] = {
     if (version < 0)
       None
     else
       Some(ZkVersionCheck(ControllerEpochZNode.path, version))
   }
 
-  def maybeThrowControllerMoveException(response: AsyncResponse): Unit = {
+  private def maybeThrowControllerMoveException(response: AsyncResponse): Unit = {
     response.zkVersionCheckResult match {
       case Some(zkVersionCheckResult) =>
         val zkVersionCheck = zkVersionCheckResult.zkVersionCheck
         if (zkVersionCheck.checkPath.equals(ControllerEpochZNode.path))
           zkVersionCheckResult.opResult match {
             case errorResult: ErrorResult =>
-              if (errorResult.getErr != Code.OK.intValue())
+              if (errorResult.getErr == Code.BADVERSION.intValue())
               // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
                 throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${zkVersionCheck.expectedZkVersion}")
             case _ =>

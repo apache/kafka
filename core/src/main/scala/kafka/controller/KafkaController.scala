@@ -1252,8 +1252,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         error("Error while electing or becoming controller on broker %d because controller moved to another broker".format(config.brokerId), e2)
         throw e2
         
-      case e2: Throwable =>
-        error(s"Error while electing or becoming controller on broker ${config.brokerId}", e2)
+      case e3: Throwable =>
+        error(s"Error while electing or becoming controller on broker ${config.brokerId}", e3)
         triggerControllerMove()
     }
   }
