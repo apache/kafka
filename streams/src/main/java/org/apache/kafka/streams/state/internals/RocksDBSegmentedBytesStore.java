@@ -237,7 +237,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     if (record.value == null) {
-                        batch.remove(record.key);
+                        batch.delete(record.key);
                     } else {
                         batch.put(record.key, record.value);
                     }

@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -437,7 +438,7 @@ public class StreamThread extends Thread {
                 cache,
                 time,
                 () -> createProducer(taskId),
-                streamsMetrics.tasksClosedSensor);
+                streamsMetrics.taskClosedSensor);
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -518,7 +519,7 @@ public class StreamThread extends Thread {
         private final Sensor processTimeSensor;
         private final Sensor punctuateTimeSensor;
         private final Sensor taskCreatedSensor;
-        private final Sensor tasksClosedSensor;
+        private final Sensor taskClosedSensor;
 
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
@@ -532,7 +533,7 @@ public class StreamThread extends Thread {
             addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
             // can't use addInvocationRateAndCount due to non-standard description string
             pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new Count());
+            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new CumulativeCount());
 
             processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
             addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
@@ -546,9 +547,9 @@ public class StreamThread extends Thread {
             taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
             taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tagMap()), new Total());
 
-            tasksClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-            tasksClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            tasksClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
+            taskClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+            taskClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
         }
     }
 
