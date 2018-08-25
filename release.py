@@ -45,6 +45,10 @@ release.py stage-docs [kafka-site-path]
   With no arguments this script assumes you have the Kafka repository and kafka-site repository checked out side-by-side, but
   you can specify a full path to the kafka-site repository if this is not the case.
 
+release.py release-email
+
+  Generates the email content/template for sending release announcement email.
+
 """
 
 from __future__ import print_function
@@ -256,11 +260,105 @@ def command_stage_docs():
 
     sys.exit(0)
 
+def command_release_announcement_email():
+    release_version_num = raw_input('What is the current release version:')
+    previos_release_version_num = raw_input('What is the previous release version:')
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previos_release_version_num, release_version_num) , shell=True))
+    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | tr '\n' ',' | sed -e 's/,/, /g'" % (previos_release_version_num, release_version_num), shell=True)
+    release_announcement_data = {
+        'number_of_contributors': number_of_contributors,
+        'contributors': contributors,
+        'release_version': release_version_num
+    }
+
+    release_announcement_email = """
+        To: dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
+        Subject: [ANNOUNCE] Apache Kafka %(release_version)s
+        
+        The Apache Kafka community is pleased to announce the release for Apache Kafka %(release_version)s
+        
+        <DETAILS OF THE CHANGES>
+        
+        All of the changes in this release can be found in the release notes:
+        https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html 
+ 
+
+        You can download the source and binary release (Scala 2.11 and Scala 2.12) from:        
+        https://kafka.apache.org/downloads#%(release_version)s                
+        
+        ---------------------------------------------------------------------------------------------------
+              
+        
+        Apache Kafka is a distributed streaming platform with four core APIs:
+        
+                 
+        ** The Producer API allows an application to publish a stream records to        
+        one or more Kafka topics.        
+                 
+        ** The Consumer API allows an application to subscribe to one or more        
+        topics and process the stream of records produced to them.      
+        
+        ** The Streams API allows an application to act as a stream processor,
+        consuming an input stream from one or more topics and producing an        
+        output stream to one or more output topics, effectively transforming the        
+        input streams to output streams.         
+        
+        ** The Connector API allows building and running reusable producers or        
+        consumers that connect Kafka topics to existing applications or data        
+        systems. For example, a connector to a relational database might        
+        capture every change to a table.
+         
+        
+        With these APIs, Kafka can be used for two broad classes of application: 
+        
+        ** Building real-time streaming data pipelines that reliably get data        
+        between systems or applications.         
+        
+        ** Building real-time streaming applications that transform or react        
+        to the streams of data.
+         
+        
+        Apache Kafka is in use at large and small companies worldwide, including        
+        Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,        
+        Target, The New York Times, Uber, Yelp, and Zalando, among others.
+
+        A big thank you for the following %(number_of_contributors)d contributors to this release!
+        
+        %(contributors)s
+        
+        We welcome your help and feedback. For more information on how to
+        report problems, and to get involved, visit the project website at
+        https://kafka.apache.org/ 
+
+        Thank you!
+        
+        
+        Regards,
+ 
+        <YOU>""" % release_announcement_data
+
+    print()
+    print("*****************************************************************")
+    print()
+    print(release_announcement_email)
+    print()
+    print("*****************************************************************")
+    print()
+    print("Use the above template to send the announcement for the release to the mailing list.")
+    print("IMPORTANT: Note that there are still some substitutions that need to be made in the template:")
+    print("  - Describe major changes in this release")
+    print("  - Fill in your name in the signature")
+    print("  - Finally, validate all the links before shipping!")
+    print("Note that all substitutions are annotated with <> around them.")
+    sys.exit(0)
+
 
 # Dispatch to subcommand
 subcommand = sys.argv[1] if len(sys.argv) > 1 else None
 if subcommand == 'stage-docs':
     command_stage_docs()
+elif subcommand == 'release-email':
+    command_release_announcement_email()
 elif not (subcommand is None or subcommand == 'stage'):
     fail("Unknown subcommand: %s" % subcommand)
 # else -> default subcommand stage
