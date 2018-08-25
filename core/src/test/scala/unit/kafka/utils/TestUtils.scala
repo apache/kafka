@@ -916,10 +916,7 @@ object TestUtils extends Logging {
 
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
-                      acks: Int = -1,
-                      compressionType: CompressionType = CompressionType.NONE): Unit = {
-    val props = new Properties()
-    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
+                      acks: Int = -1): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
       val futures = records.map(producer.send)
@@ -935,11 +932,10 @@ object TestUtils extends Logging {
   def generateAndProduceMessages(servers: Seq[KafkaServer],
                                  topic: String,
                                  numMessages: Int,
-                                 acks: Int = -1,
-                                 compressionType: CompressionType = CompressionType.NONE): Seq[String] = {
+                                 acks: Int = -1): Seq[String] = {
     val values = (0 until numMessages).map(x =>  s"test-$x")
     val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
-    produceMessages(servers, records, acks, compressionType)
+    produceMessages(servers, records, acks)
     values
   }
 
