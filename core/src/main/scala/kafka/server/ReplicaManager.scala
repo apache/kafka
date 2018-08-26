@@ -405,12 +405,18 @@ class ReplicaManager(val config: KafkaConfig,
         else
           partition.getReplica(brokerId).getOrElse(
             throw new ReplicaNotAvailableException(s"Replica $brokerId is not available for partition $topicPartition"))
-      case None =>
+
+      case None if metadataCache.contains(topicPartition) =>
         throw new ReplicaNotAvailableException(s"Replica $brokerId is not available for partition $topicPartition")
+
+      case None =>
+        throw new UnknownTopicOrPartitionException(s"Partition $topicPartition doesn't exist")
     }
   }
 
-  def getReplicaOrException(topicPartition: TopicPartition): Replica = getReplicaOrException(topicPartition, localBrokerId)
+  def getReplicaOrException(topicPartition: TopicPartition): Replica = {
+    getReplicaOrException(topicPartition, localBrokerId)
+  }
 
   def getLeaderReplicaIfLocal(topicPartition: TopicPartition): Replica =  {
     val (_, replica) = getPartitionAndLeaderReplicaIfLocal(topicPartition)
@@ -1472,14 +1478,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, Integer]): Map[TopicPartition, EpochEndOffset] = {
     requestedEpochInfo.map { case (tp, leaderEpoch) =>
-      val epochEndOffset = getPartition(tp) match {
-        case Some(partition) =>
-          if (partition eq ReplicaManager.OfflinePartition)
-            new EpochEndOffset(KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-          else
-            partition.lastOffsetForLeaderEpoch(leaderEpoch)
-        case None =>
-          new EpochEndOffset(UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+      val epochEndOffset = try {
+        val (partition, _) = getPartitionAndLeaderReplicaIfLocal(tp)
+        partition.lastOffsetForLeaderEpoch(leaderEpoch)
+      } catch {
+        case e: Exception =>
+          val error = Errors.forException(e)
+          new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
       tp -> epochEndOffset
     }
