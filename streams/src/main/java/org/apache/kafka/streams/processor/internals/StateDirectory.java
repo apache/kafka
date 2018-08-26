@@ -216,12 +216,14 @@ public class StateDirectory {
         final LockAndOwner lockAndOwner = locks.get(taskId);
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
             locks.remove(taskId);
-            lockAndOwner.lock.release();
-            log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
-
-            final FileChannel fileChannel = channels.remove(taskId);
-            if (fileChannel != null) {
-                fileChannel.close();
+            try {
+                lockAndOwner.lock.release();
+                log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
+            } finally {
+                final FileChannel fileChannel = channels.remove(taskId);
+                if (fileChannel != null) {
+                    fileChannel.close();
+                }
             }
         }
     }
