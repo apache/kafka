@@ -67,6 +67,15 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   // Only for testing
   private[kafka] def currentZooKeeper: ZooKeeper = zooKeeperClient.currentZooKeeper
 
+  /*
+  * This variable holds the Zookeeper session id at the moment the ZooKeeperClient object
+  * is created and the subsequent updates of the session id, it is possible that the session id change
+  * over the time for 'Session expired', for instance.
+  * */
+  private var previousZooKeeperSessionId = zooKeeperClient.sessionId
+  // Only for testing, to simulate the ZooKeeper session id has changed
+  private var currentZooKeeperSessionId: Long = -1
+
   /**
    * Create a sequential persistent path. That is, the znode will not be automatically deleted upon client's disconnect
    * and a monotonically increasing number will be appended to its name.
@@ -1631,6 +1640,31 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       throw KeeperException.create(code)
   }
 
+  private def isPreviousZKSessionIdDiffFromCurrentZKSessionId(): Boolean = {
+    zooKeeperSessionId() != previousZooKeeperSessionId
+  }
+
+  private def isZKSessionTheEphemeralOwner(ephemeralOwnerId: Long): Boolean = {
+    ephemeralOwnerId == previousZooKeeperSessionId
+  }
+
+  private def shouldReCreateEphemeralZNode(ephemeralOwnerId: Long): Boolean = {
+    isZKSessionTheEphemeralOwner(ephemeralOwnerId) && isPreviousZKSessionIdDiffFromCurrentZKSessionId()
+  }
+
+  private def updatePreviousZKSessionId(newSessionId: Long): Unit = {
+    previousZooKeeperSessionId = newSessionId
+  }
+
+  // Only for testing, to override the current ZooKeeper session id
+  private[zk] def updateCurrentZKSessionId(newSessionId: Long): Unit = {
+    currentZooKeeperSessionId = newSessionId
+  }
+
+  private def zooKeeperSessionId(): Long = {
+    if (currentZooKeeperSessionId != -1) currentZooKeeperSessionId else zooKeeperClient.sessionId
+  }
+
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
     def create(): Code = {
       val createRequest = CreateRequest(path, data, acls(path), CreateMode.EPHEMERAL)
@@ -1644,13 +1678,42 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       }
     }
 
+    private def delete(): Code = {
+      val deleteRequest = DeleteRequest(path, ZkVersion.MatchAnyVersion)
+      val deleteResponse = retryRequestUntilConnected(deleteRequest)
+      deleteResponse.resultCode match {
+        case code@ Code.OK => code
+        case code =>
+          error(s"Error while deleting ephemeral node at $path with return code: $code")
+          code
+      }
+    }
+
+    private def reCreate(): Code = {
+      val codeAfterDelete = delete()
+      var codeAfterReCreate = codeAfterDelete
+      info(s"Result of znode ephemeral deletion at $path is: $codeAfterDelete")
+      if (codeAfterDelete == Code.OK) {
+        codeAfterReCreate = create()
+        info(s"Result of znode ephemeral re-creation at $path is: $codeAfterReCreate")
+      }
+      codeAfterReCreate
+    }
+
     private def getAfterNodeExists(): Code = {
       val getDataRequest = GetDataRequest(path)
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
+      val ephemeralOwnerId = getDataResponse.stat.getEphemeralOwner
       getDataResponse.resultCode match {
-        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
+        case Code.OK if shouldReCreateEphemeralZNode(ephemeralOwnerId) =>
+          warn(s"Error while creating ephemeral at $path, node already exists and owner " +
+            s"'$ephemeralOwnerId' does not match current session '${zooKeeperSessionId()}'" +
+            s", trying to delete and re-create it with the newest Zookeeper session")
+          updatePreviousZKSessionId(zooKeeperClient.sessionId)
+          reCreate()
+        case Code.OK if ephemeralOwnerId != zooKeeperClient.sessionId =>
           error(s"Error while creating ephemeral at $path, node already exists and owner " +
-            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
+            s"'$ephemeralOwnerId' does not match current session '${zooKeeperClient.sessionId}'")
           Code.NODEEXISTS
         case code@ Code.OK => code
         case Code.NONODE =>
