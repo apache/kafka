@@ -158,6 +158,10 @@ class ZooKeeperClient(connectString: String,
       responseQueue.asScala.toBuffer
     }
   }
+  
+  def createTransaction(): Transaction = {
+    zooKeeper.transaction()
+  }
 
   // Visibility to override for testing
   private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {

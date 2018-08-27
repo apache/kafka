@@ -345,14 +345,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     // leader doesn't change since all the replicas are shut down
     assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
   }
-  
+
   @Test
   def testControllerMoveOnTopicCreation(): Unit = {
     servers = makeServers(1)
     TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(0))
-    
+
     testControllerMove(() => {
       val adminZkClient = new AdminZkClient(zkClient)
       adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(tp.topic, assignment, new Properties())
@@ -366,13 +366,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(0))
     TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
-    
+
     testControllerMove(() => {
       val adminZkClient = new AdminZkClient(zkClient)
       adminZkClient.deleteTopic(tp.topic())
     })
   }
-  
+
   @Test
   def testControllerMoveOnPreferredReplicaElection(): Unit = {
     servers = makeServers(1)
@@ -400,7 +400,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controllerEpoch = zkClient.getControllerEpoch.get
     val appender = LogCaptureAppender.createAndRegister
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
-    
+
     try {
       TestUtils.waitUntilTrue(() => {
         controller.eventManager.state == ControllerState.Idle
@@ -413,10 +413,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       // Execute pre-defined logic. This can be topic creation/deletion, PLE, etc.
       fun()
 
-      // Delete the controller path, re-create \controller znode and update the controller epoch to emulate controller movement
+      // Delete the controller path, re-create \controller znode to emulate controller movement
       zkClient.deleteController(controller.controllerContext.epochZkVersion)
       zkClient.registerController(servers.size, System.currentTimeMillis())
-      zkClient.setControllerEpochRaw(controllerEpoch._1 + 1, controllerEpoch._2.getVersion)
 
       // Resume the controller event thread. At this point, the controller should see mismatch controller epoch zkVersion and resign
       controller.eventManager.thread.resume()
@@ -427,13 +426,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         && e.getThrowableInformation != null
         && e.getThrowableInformation.getThrowable.getClass.getName.equals(new ControllerMovedException("").getClass.getName))
       assertTrue(event.isDefined)
-      
+
     } finally {
       LogCaptureAppender.unregister(appender)
       LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, previousLevel)
     }
   }
-  
+
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,
                                              replicas: Set[Int], leaderEpoch: Int): Unit = {
     otherBroker.shutdown()

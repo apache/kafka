@@ -21,7 +21,7 @@ import java.util.Properties
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.{VersionedAcls, NoAcls}
@@ -34,13 +34,14 @@ import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
+import org.apache.zookeeper.KeeperException.{BadVersionException, Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.ErrorResult
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
+import scala.collection.JavaConverters._
 
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
@@ -89,13 +90,71 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
 
   /**
    * Registers a given broker in zookeeper as the controller.
+   * @return the updated controller epoch and epoch zkVersion
    * @param controllerId the id of the broker that is to be registered as the controller.
    * @param timestamp the timestamp of the controller election.
-   * @throws KeeperException if an error is returned by ZooKeeper.
+   * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
-  def registerController(controllerId: Int, timestamp: Long): Unit = {
-    val path = ControllerZNode.path
-    checkedEphemeralCreate(path, ControllerZNode.encode(controllerId, timestamp))
+  def registerController(controllerId: Int, timestamp: Long): (Int, Int) = {
+    getControllerEpoch match {
+      case Some(epochAndStat) =>
+        // Create \controller
+        val expectedControllerEpochZkVersion = epochAndStat._2.getVersion
+        info(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+        tryCreateControllerZNode(controllerId, timestamp, expectedControllerEpochZkVersion)
+
+        // Update \controller_epoch
+        val curEpoch = epochAndStat._1
+        val newControllerEpoch =
+          if (curEpoch == ControllerEpochZNode.NoEpoch)
+            KafkaController.InitialControllerEpoch
+          else
+            curEpoch + 1
+        info(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+        val setDataResponse = setControllerEpochRaw(newControllerEpoch, expectedControllerEpochZkVersion)
+        setDataResponse.resultCode match {
+          case Code.OK =>
+            (newControllerEpoch, setDataResponse.stat.getVersion)
+          case _ =>
+            throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        }
+    }
+  }
+
+  private def tryCreateControllerZNode(controllerId: Int, timestamp: Long, expectedControllerEpochZkVersion: Int): Unit = {
+    def createControllerZNode(): Unit = {
+      try {
+        val transaction = zooKeeperClient.createTransaction()
+        transaction.check(ControllerEpochZNode.path, expectedControllerEpochZkVersion)
+        transaction.create(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp),
+          acls(ControllerZNode.path).asJava, CreateMode.EPHEMERAL)
+        transaction.commit()
+      } catch {
+        case _: NodeExistsException => controllerNodeExistsHandler()
+        case _: BadVersionException =>
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+      }
+    }
+
+    def controllerNodeExistsHandler(): Unit = {
+      val getDataRequest = GetDataRequest(ControllerZNode.path)
+      val getDataResponse = retryRequestUntilConnected(getDataRequest)
+      getDataResponse.resultCode match {
+        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
+          error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
+            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        case code@Code.OK =>
+        case Code.NONODE =>
+          info(s"The ephemeral node at ${ControllerZNode.path} went away while reading it, attempting create() again")
+          createControllerZNode()
+        case code =>
+          error(s"Error while creating ephemeral at ${ControllerZNode.path} as it already exists and error getting the node data due to $code")
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+      }
+    }
+
+    createControllerZNode()
   }
 
   def updateBrokerInfo(brokerInfo: BrokerInfo): Unit = {
@@ -946,7 +1005,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteController(expectedControllerEpochZkVersion: Int): Unit = {
-    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion, 
+    val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.MatchAnyVersion,
       zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion))
     retryRequestUntilConnected(deleteRequest)
   }

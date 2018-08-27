@@ -35,14 +35,14 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
-import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
+import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection._
 import scala.util.Try
 
 object KafkaController extends Logging {
   val InitialControllerEpoch = 1
-  val InitialControllerEpochZkVersion = 0
+  val InitialControllerEpochZkVersion = 1
 
   /**
    * ControllerEventThread will shutdown once it sees this event
@@ -214,21 +214,15 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   /**
    * This callback is invoked by the zookeeper leader elector on electing the current broker as the new controller.
    * It does the following things on the become-controller state change -
-   * 1. Registers controller epoch changed listener
-   * 2. Increments the controller epoch
-   * 3. Initializes the controller's context object that holds cache objects for current topics, live brokers and
+   * 1. Initializes the controller's context object that holds cache objects for current topics, live brokers and
    *    leaders for all existing partitions.
-   * 4. Starts the controller's channel manager
-   * 5. Starts the replica state machine
-   * 6. Starts the partition state machine
+   * 2. Starts the controller's channel manager
+   * 3. Starts the replica state machine
+   * 4. Starts the partition state machine
    * If it encounters any unexpected exception/error while becoming controller, it resigns as the current controller.
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
   private def onControllerFailover() {
-    info("Reading controller epoch from ZooKeeper")
-    readControllerEpochFromZooKeeper()
-    info("Incrementing controller epoch in ZooKeeper")
-    incrementControllerEpoch()
     info("Registering handlers")
 
     // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
@@ -631,33 +625,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private def incrementControllerEpoch(): Unit = {
-    val newControllerEpoch = controllerContext.epoch + 1
-    val setDataResponse = zkClient.setControllerEpochRaw(newControllerEpoch, controllerContext.epochZkVersion)
-    setDataResponse.resultCode match {
-      case Code.OK =>
-        controllerContext.epochZkVersion = setDataResponse.stat.getVersion
-        controllerContext.epoch = newControllerEpoch
-      case Code.NONODE =>
-        // if path doesn't exist, this is the first controller whose epoch should be 1
-        // the following call can still fail if another controller gets elected between checking if the path exists and
-        // trying to create the controller epoch path
-        val createResponse = zkClient.createControllerEpochRaw(KafkaController.InitialControllerEpoch)
-        createResponse.resultCode match {
-          case Code.OK =>
-            controllerContext.epoch = KafkaController.InitialControllerEpoch
-            controllerContext.epochZkVersion = KafkaController.InitialControllerEpochZkVersion
-          case Code.NODEEXISTS =>
-            throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-          case _ =>
-            val exception = createResponse.resultException.get
-            error("Error while incrementing controller epoch", exception)
-            throw exception
-        }
-      case _ =>
-        throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-    }
-    info(s"Epoch incremented to ${controllerContext.epoch} and epoch zk version is now ${controllerContext.epochZkVersion}")
+  private def tryRegisterController(timestamp: Long): Unit = {
+    val controllerEpochAndZkVersion = zkClient.registerController(config.brokerId, timestamp)
+    controllerContext.epochZkVersion = controllerEpochAndZkVersion._1
+    controllerContext.epoch = controllerEpochAndZkVersion._2
   }
 
   private def initializeControllerContext() {
@@ -848,16 +819,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def unregisterPartitionReassignmentIsrChangeHandlers() {
     controllerContext.partitionsBeingReassigned.values.foreach(_.unregisterReassignIsrChangeHandler(zkClient))
-  }
-
-  private def readControllerEpochFromZooKeeper() {
-    // initialize the controller epoch and zk version by reading from zookeeper
-    val epochAndStatOpt = zkClient.getControllerEpoch
-    epochAndStatOpt.foreach { case (epoch, stat) =>
-      controllerContext.epoch = epoch
-      controllerContext.epochZkVersion = stat.getVersion
-      info(s"Initialized controller epoch to ${controllerContext.epoch} and zk version ${controllerContext.epochZkVersion}")
-    }
   }
 
   /**
@@ -1234,26 +1195,24 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
 
     try {
-      zkClient.registerController(config.brokerId, timestamp)
-      info(s"${config.brokerId} successfully elected as the controller")
+      tryRegisterController(timestamp)
+      info(s"${config.brokerId} successfully elected as the controller. Epoch incremented to ${controllerContext.epoch} " +
+        s"and epoch zk version is now ${controllerContext.epochZkVersion}")
+
       activeControllerId = config.brokerId
       onControllerFailover()
     } catch {
-      case _: NodeExistsException =>
+      case e1: ControllerMovedException =>
         // If someone else has written the path, then
         activeControllerId = zkClient.getControllerId.getOrElse(-1)
 
         if (activeControllerId != -1)
-          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}")
+          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e1)
         else
-          warn("A controller has been elected but just resigned, this will result in another round of election")
+          warn("A controller has been elected but just resigned, this will result in another round of election", e1)
 
-      case e2: ControllerMovedException =>
-        error("Error while electing or becoming controller on broker %d because controller moved to another broker".format(config.brokerId), e2)
-        throw e2
-        
-      case e3: Throwable =>
-        error(s"Error while electing or becoming controller on broker ${config.brokerId}", e3)
+      case e2: Throwable =>
+        error(s"Error while electing or becoming controller on broker ${config.brokerId}", e2)
         triggerControllerMove()
     }
   }
