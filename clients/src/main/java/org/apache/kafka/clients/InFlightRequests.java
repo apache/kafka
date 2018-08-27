@@ -82,7 +82,7 @@ final class InFlightRequests {
      * Can we send more requests to this node?
      * 
      * @param node Node in question
-     * @return true iff we have no requests still being sent to the given node
+     * @return true if we have no requests still being sent to the given node
      */
     public boolean canSendMore(String node) {
         Deque<ClientRequest> queue = requests.get(node);
