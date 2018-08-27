@@ -625,12 +625,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private def tryRegisterController(timestamp: Long): Unit = {
-    val controllerEpochAndZkVersion = zkClient.registerController(config.brokerId, timestamp)
-    controllerContext.epochZkVersion = controllerEpochAndZkVersion._1
-    controllerContext.epoch = controllerEpochAndZkVersion._2
-  }
-
   private def initializeControllerContext() {
     // update controller cache with delete topic information
     controllerContext.liveBrokers = zkClient.getAllBrokersInCluster.toSet
@@ -1182,7 +1176,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def elect(): Unit = {
-    val timestamp = time.milliseconds
     activeControllerId = zkClient.getControllerId.getOrElse(-1)
     /*
      * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
@@ -1195,24 +1188,29 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
 
     try {
-      tryRegisterController(timestamp)
+      val controllerEpochAndZkVersion = zkClient.registerControllerAndIncrementControllerEpoch(config.brokerId)
+      controllerContext.epochZkVersion = controllerEpochAndZkVersion._1
+      controllerContext.epoch = controllerEpochAndZkVersion._2
+      activeControllerId = config.brokerId
+
       info(s"${config.brokerId} successfully elected as the controller. Epoch incremented to ${controllerContext.epoch} " +
         s"and epoch zk version is now ${controllerContext.epochZkVersion}")
 
-      activeControllerId = config.brokerId
       onControllerFailover()
     } catch {
-      case e1: ControllerMovedException =>
+      case e: ControllerMovedException =>
         // If someone else has written the path, then
         activeControllerId = zkClient.getControllerId.getOrElse(-1)
 
         if (activeControllerId != -1)
-          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e1)
+          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
         else
-          warn("A controller has been elected but just resigned, this will result in another round of election", e1)
+          warn("A controller has been elected but just resigned, this will result in another round of election", e)
 
-      case e2: Throwable =>
-        error(s"Error while electing or becoming controller on broker ${config.brokerId}", e2)
+        throw e
+
+      case t: Throwable =>
+        error(s"Error while electing or becoming controller on broker ${config.brokerId}", t)
         triggerControllerMove()
     }
   }

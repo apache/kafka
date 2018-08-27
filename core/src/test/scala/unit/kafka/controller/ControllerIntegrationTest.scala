@@ -397,7 +397,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
-    val controllerEpoch = zkClient.getControllerEpoch.get
     val appender = LogCaptureAppender.createAndRegister
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
 
@@ -415,7 +414,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
       // Delete the controller path, re-create \controller znode to emulate controller movement
       zkClient.deleteController(controller.controllerContext.epochZkVersion)
-      zkClient.registerController(servers.size, System.currentTimeMillis())
+      zkClient.registerControllerAndIncrementControllerEpoch(servers.size)
 
       // Resume the controller event thread. At this point, the controller should see mismatch controller epoch zkVersion and resign
       controller.eventManager.thread.resume()

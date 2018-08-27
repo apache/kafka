@@ -990,7 +990,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // No controller
     assertEquals(None, zkClient.getControllerId)
     // Create controller
-    val (_, newEpochZkVersion) = zkClient.registerController(controllerId = 1, timestamp = 123456)
+    val (_, newEpochZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(controllerId = 1)
     assertEquals(Some(1), zkClient.getControllerId)
     zkClient.deleteController(newEpochZkVersion)
     assertEquals(None, zkClient.getControllerId)

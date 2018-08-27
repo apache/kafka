@@ -89,19 +89,18 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Registers a given broker in zookeeper as the controller.
-   * @return the updated controller epoch and epoch zkVersion
+   * Registers a given broker in zookeeper as the controller and increments controller epoch.
+   * @return the (updated controller epoch, epoch zkVersion) tuple
    * @param controllerId the id of the broker that is to be registered as the controller.
-   * @param timestamp the timestamp of the controller election.
    * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
-  def registerController(controllerId: Int, timestamp: Long): (Int, Int) = {
+  def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
     getControllerEpoch match {
       case Some(epochAndStat) =>
         // Create \controller
         val expectedControllerEpochZkVersion = epochAndStat._2.getVersion
-        info(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-        tryCreateControllerZNode(controllerId, timestamp, expectedControllerEpochZkVersion)
+        debug(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+        maybeCreateControllerZNode(controllerId, expectedControllerEpochZkVersion)
 
         // Update \controller_epoch
         val curEpoch = epochAndStat._1
@@ -110,7 +109,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
             KafkaController.InitialControllerEpoch
           else
             curEpoch + 1
-        info(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+        debug(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
         val setDataResponse = setControllerEpochRaw(newControllerEpoch, expectedControllerEpochZkVersion)
         setDataResponse.resultCode match {
           case Code.OK =>
@@ -121,7 +120,9 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     }
   }
 
-  private def tryCreateControllerZNode(controllerId: Int, timestamp: Long, expectedControllerEpochZkVersion: Int): Unit = {
+  private def maybeCreateControllerZNode(controllerId: Int, expectedControllerEpochZkVersion: Int): Unit = {
+    val timestamp = time.milliseconds()
+
     def createControllerZNode(): Unit = {
       try {
         val transaction = zooKeeperClient.createTransaction()
