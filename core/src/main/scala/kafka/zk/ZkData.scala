@@ -59,12 +59,9 @@ object ControllerZNode {
 }
 
 object ControllerEpochZNode {
-  val NoEpoch = -1
   def path = "/controller_epoch"
   def encode(epoch: Int): Array[Byte] = epoch.toString.getBytes(UTF_8)
-  def decode(bytes: Array[Byte]): Int =
-    if (bytes == null || bytes.length == 0) NoEpoch
-    else new String(bytes, UTF_8).toInt
+  def decode(bytes: Array[Byte]): Int = new String(bytes, UTF_8).toInt
 }
 
 object ConfigZNode {
@@ -732,8 +729,7 @@ object ZkData {
     BrokerSequenceIdZNode.path,
     IsrChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
-    LogDirEventNotificationZNode.path,
-    ControllerEpochZNode.path
+    LogDirEventNotificationZNode.path
   ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
 
   val SensitiveRootPaths = Seq(

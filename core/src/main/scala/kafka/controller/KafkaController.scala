@@ -1188,9 +1188,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
 
     try {
-      val controllerEpochAndZkVersion = zkClient.registerControllerAndIncrementControllerEpoch(config.brokerId)
-      controllerContext.epochZkVersion = controllerEpochAndZkVersion._1
-      controllerContext.epoch = controllerEpochAndZkVersion._2
+      val (epoch, epochZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(config.brokerId)
+      controllerContext.epoch = epoch
+      controllerContext.epochZkVersion = epochZkVersion
       activeControllerId = config.brokerId
 
       info(s"${config.brokerId} successfully elected as the controller. Epoch incremented to ${controllerContext.epoch} " +

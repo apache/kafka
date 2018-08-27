@@ -95,28 +95,34 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
   def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
-    getControllerEpoch match {
-      case Some(epochAndStat) =>
-        // Create \controller
-        val expectedControllerEpochZkVersion = epochAndStat._2.getVersion
-        debug(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-        maybeCreateControllerZNode(controllerId, expectedControllerEpochZkVersion)
+    maybeCreateControllerEpochZNode()
 
-        // Update \controller_epoch
-        val curEpoch = epochAndStat._1
-        val newControllerEpoch =
-          if (curEpoch == ControllerEpochZNode.NoEpoch)
-            KafkaController.InitialControllerEpoch
-          else
-            curEpoch + 1
-        debug(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-        val setDataResponse = setControllerEpochRaw(newControllerEpoch, expectedControllerEpochZkVersion)
-        setDataResponse.resultCode match {
-          case Code.OK =>
-            (newControllerEpoch, setDataResponse.stat.getVersion)
-          case _ =>
-            throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-        }
+    val (curEpoch, curEpochStat) = getControllerEpoch.get
+
+    // Create /controller
+    val expectedControllerEpochZkVersion = curEpochStat.getVersion
+    debug(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+    maybeCreateControllerZNode(controllerId, expectedControllerEpochZkVersion)
+
+    // Update /controller_epoch
+    val newControllerEpoch = curEpoch + 1
+    debug(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+    val setDataResponse = setControllerEpochRaw(newControllerEpoch, expectedControllerEpochZkVersion)
+    setDataResponse.resultCode match {
+      case Code.OK =>
+        (newControllerEpoch, setDataResponse.stat.getVersion)
+      case _ =>
+        throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+    }
+  }
+
+  private def maybeCreateControllerEpochZNode(): Unit = {
+    createControllerEpochRaw(KafkaController.InitialControllerEpoch - 1).resultCode match {
+      case Code.OK =>
+        info(s"Successfully create ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch - 1}")
+      case Code.NODEEXISTS =>
+      case code =>
+        throw KeeperException.create(code)
     }
   }
 
@@ -151,7 +157,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
           createControllerZNode()
         case code =>
           error(s"Error while creating ephemeral at ${ControllerZNode.path} as it already exists and error getting the node data due to $code")
-          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+          throw KeeperException.create(code)
       }
     }
 
