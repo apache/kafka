@@ -1478,13 +1478,18 @@ class ReplicaManager(val config: KafkaConfig,
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, Integer]): Map[TopicPartition, EpochEndOffset] = {
     requestedEpochInfo.map { case (tp, leaderEpoch) =>
-      val epochEndOffset = try {
-        val (partition, _) = getPartitionAndLeaderReplicaIfLocal(tp)
-        partition.lastOffsetForLeaderEpoch(leaderEpoch)
-      } catch {
-        case e: Exception =>
-          val error = Errors.forException(e)
-          new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+      val epochEndOffset = getPartition(tp) match {
+        case Some(partition) =>
+          if (partition eq ReplicaManager.OfflinePartition)
+            new EpochEndOffset(Errors.KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          else
+            partition.lastOffsetForLeaderEpoch(leaderEpoch)
+
+        case None if metadataCache.contains(tp) =>
+          new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+
+        case None =>
+          new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
       tp -> epochEndOffset
     }
