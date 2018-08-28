@@ -248,19 +248,19 @@ class PartitionTest {
     val replicas = List[Integer](leader, follower1, follower2).asJava
     val isr = List[Integer](leader, follower2).asJava
     val leaderEpoch = 8
-    val batch1 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-                                    new SimpleRecord("k2".getBytes, "v2".getBytes)))
-    val batch2 = createRecords(List(new SimpleRecord("k3".getBytes, "v1".getBytes),
-                                    new SimpleRecord("k4".getBytes, "v2".getBytes),
-                                    new SimpleRecord("k5".getBytes, "v3".getBytes)))
-    val batch3 = createRecords(List(new SimpleRecord("k6".getBytes, "v1".getBytes),
-                                    new SimpleRecord("k7".getBytes, "v2".getBytes)))
+    val batch1 = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+                                                  new SimpleRecord("k2".getBytes, "v2".getBytes)))
+    val batch2 = TestUtils.records(records = List(new SimpleRecord("k3".getBytes, "v1".getBytes),
+                                                  new SimpleRecord("k4".getBytes, "v2".getBytes),
+                                                  new SimpleRecord("k5".getBytes, "v3".getBytes)))
+    val batch3 = TestUtils.records(records = List(new SimpleRecord("k6".getBytes, "v1".getBytes),
+                                                  new SimpleRecord("k7".getBytes, "v2".getBytes)))
 
     val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
-    assertTrue(s"Expected first makeLeader() to return 'leader changed'",
+    assertTrue("Expected first makeLeader() to return 'leader changed'",
                partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0))
-    assertEquals(s"Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
-    assertTrue(s"Expected under-replicated partitions due to one of the followers not in ISR", partition.isUnderReplicated)
+    assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas.map(_.brokerId))
 
     // after makeLeader(() call, partition should know about all the replicas
     val leaderReplica = partition.getReplica(leader).get
@@ -270,7 +270,7 @@ class PartitionTest {
     // append records with initial leader epoch
     val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, isFromClient = true).lastOffset
     partition.appendRecordsToLeader(batch2, isFromClient = true)
-    assertEquals(s"Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
+    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
 
     // let the follower in ISR move leader's HW to move further but below LEO
     def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
@@ -287,12 +287,12 @@ class PartitionTest {
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
     partition.updateReplicaLogReadResult(
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(lastOffsetOfFirstBatch), batch2), leaderReplica))
-    assertEquals(s"Expected leader's HW", lastOffsetOfFirstBatch, leaderReplica.highWatermark.messageOffset)
+    assertEquals("Expected leader's HW", lastOffsetOfFirstBatch, leaderReplica.highWatermark.messageOffset)
 
     // current leader becomes follower and then leader again (without any new records appended)
     partition.makeFollower(
       controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, follower2, leaderEpoch + 1, isr, 1, replicas, false), 1)
-    assertTrue(s"Expected makeLeader() to return 'leader changed' after makeFollower()",
+    assertTrue("Expected makeLeader() to return 'leader changed' after makeFollower()",
                partition.makeLeader(controllerEpoch, new LeaderAndIsrRequest.PartitionState(
                  controllerEpoch, leader, leaderEpoch + 2, isr, 1, replicas, false), 2))
     val currentLeaderEpochStartOffset = leaderReplica.logEndOffset.messageOffset
@@ -305,19 +305,19 @@ class PartitionTest {
                                          readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
     partition.updateReplicaLogReadResult(follower1Replica,
                                          readResult(FetchDataInfo(LogOffsetMetadata(lastOffsetOfFirstBatch), batch2), leaderReplica))
-    assertTrue(s"Expected under-replicated partitions until follower in ISR catches up to an offset within the current leader Epoch",
-               partition.isUnderReplicated)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas.map(_.brokerId))
+
     // fetch from the follower not in ISR from start offset of the current leader epoch should
     // add this follower to ISR
     partition.updateReplicaLogReadResult(follower1Replica,
                                          readResult(FetchDataInfo(LogOffsetMetadata(currentLeaderEpochStartOffset), batch3), leaderReplica))
-    assertFalse(s"Expected all replicas in ISR", partition.isUnderReplicated)
+    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicas.map(_.brokerId))
  }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long = 0, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(
-      buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
+      buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.LOG_APPEND_TIME,
       baseOffset, time.milliseconds, partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
