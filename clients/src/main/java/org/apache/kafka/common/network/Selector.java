@@ -19,7 +19,6 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.DelayedResponseAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -134,7 +133,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Create a new nioSelector
      * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
-     * @param failedAuthenticationDelayMs Minimum time by which failed authentication repsonse and channel close should be delayed by.
+     * @param failedAuthenticationDelayMs Minimum time by which failed authentication response and channel close should be delayed by.
      *                                    Use {@link #NO_FAILED_AUTHENTICATION_DELAY} to disable this delay.
      * @param metrics Registry for Selector metrics
      * @param time Time implementation
@@ -483,7 +482,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
-        maybeCloseOldestConnection(endIo);
+        maybeCloseOldestConnection(endSelect);
 
         // Add to completedReceives after closing expired connections to avoid removing
         // channels with completed receives until all staged receives are completed.
@@ -681,11 +680,13 @@ public class Selector implements Selectable, AutoCloseable {
             unmute(channel);
     }
 
-    private void completeDelayedChannelClose(long currentTimeNanos) {
-        if (delayedClosingChannels == null || delayedClosingChannels.isEmpty())
+    // package-private for testing
+    void completeDelayedChannelClose(long currentTimeNanos) {
+        if (delayedClosingChannels == null)
             return;
 
-        for (DelayedAuthenticationFailureClose delayedClose : delayedClosingChannels.values()) {
+        while (!delayedClosingChannels.isEmpty()) {
+            DelayedAuthenticationFailureClose delayedClose = delayedClosingChannels.values().iterator().next();
             if (!delayedClose.tryClose(currentTimeNanos))
                 break;
         }
@@ -728,9 +729,6 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
-
-        // Close any channels that were delayed and are now eligible to be closed
-        completeDelayedChannelClose(time.nanoseconds());
 
         for (String channel : this.failedSends)
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
@@ -1055,11 +1053,11 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
-                                  SampledStat stat, String baseName, String descriptiveName) {
+                SampledStat stat, String baseName, String descriptiveName) {
             MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
-                    String.format("The number of %s per second", descriptiveName), metricTags);
+                            String.format("The number of %s per second", descriptiveName), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
-                    String.format("The total number of %s", descriptiveName), metricTags);
+                            String.format("The total number of %s", descriptiveName), metricTags);
             if (stat == null)
                 return new Meter(rateMetricName, totalMetricName);
             else
@@ -1067,12 +1065,12 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
-                                  String baseName, String descriptiveName) {
+                String baseName, String descriptiveName) {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
         private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
-                                               String baseName, String action) {
+                String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                     String.format("The fraction of time the I/O thread spent %s", action), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
@@ -1240,5 +1238,10 @@ public class Selector implements Selectable, AutoCloseable {
     //package-private for testing
     boolean isMadeReadProgressLastPoll() {
         return madeReadProgressLastPoll;
+    }
+
+    // package-private for testing
+    Map<?, ?> delayedClosingChannels() {
+        return delayedClosingChannels;
     }
 }

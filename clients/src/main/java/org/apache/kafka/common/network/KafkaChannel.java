@@ -17,7 +17,6 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.DelayedResponseAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -249,7 +248,6 @@ public class KafkaChannel {
      * {@link #completeCloseOnAuthenticationFailure()} is called to finish up the channel close.
      */
     private void delayCloseOnAuthenticationFailure() {
-        mute();
         transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
     }
 
@@ -258,8 +256,8 @@ public class KafkaChannel {
      * @throws IOException
      */
     void completeCloseOnAuthenticationFailure() throws IOException {
-        // Invoke the underlying handler to finish up any processing on authentication failure
         transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+        // Invoke the underlying handler to finish up any processing on authentication failure
         authenticator.handleAuthenticationFailure();
     }
 

@@ -93,10 +93,6 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public void handleAuthenticationFailure() throws IOException {
-        }
-
-        @Override
         public void close() {
             if (principalBuilder instanceof Closeable)
                 Utils.closeQuietly((Closeable) principalBuilder, "principal builder");

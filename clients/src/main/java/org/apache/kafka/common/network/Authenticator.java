@@ -42,7 +42,8 @@ public interface Authenticator extends Closeable {
      * because of an {@link AuthenticationException} thrown from a prior {@link #authenticate()} call.
      * @throws IOException if read/write fails due to an I/O error
      */
-    void handleAuthenticationFailure() throws IOException;
+    default void handleAuthenticationFailure() throws IOException {
+    }
 
     /**
      * Returns Principal using PrincipalBuilder

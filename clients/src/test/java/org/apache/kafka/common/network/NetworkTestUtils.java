@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -42,7 +43,8 @@ public class NetworkTestUtils {
     }
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-            AbstractConfig serverConfig, CredentialCache credentialCache, int failedAuthenticationDelayMs, Time time) throws Exception {
+                                                 AbstractConfig serverConfig, CredentialCache credentialCache,
+                                                 int failedAuthenticationDelayMs, Time time) throws Exception {
         NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost",
                 null, credentialCache, failedAuthenticationDelayMs, time);
         server.start();
@@ -105,5 +107,13 @@ public class NetworkTestUtils {
 
     public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
         return waitForChannelClose(selector, node, channelState, null);
+    }
+
+    public static void completeDelayedChannelClose(Selector selector, long currentTimeNanos) {
+        selector.completeDelayedChannelClose(currentTimeNanos);
+    }
+
+    public static Map<?, ?> delayedClosingChannels(Selector selector) {
+        return selector.delayedClosingChannels();
     }
 }

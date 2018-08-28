@@ -38,22 +38,16 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(value = Parameterized.class)
 public class ClientAuthenticationFailureTest {
     private static MockTime time = new MockTime(50);
 
@@ -62,20 +56,6 @@ public class ClientAuthenticationFailureTest {
     private Map<String, Object> saslClientConfigs;
     private final String topic = "test";
     private TestJaasConfig testJaasConfig;
-    private final int failedAuthenticationDelayMs;
-    private long startTimeMs;
-
-    public ClientAuthenticationFailureTest(int failedAuthenticationDelayMs) {
-        this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
-    }
-
-    @Parameterized.Parameters(name = "failedAuthenticationDelayMs={0}")
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        values.add(new Object[]{0});
-        values.add(new Object[]{200});
-        return values;
-    }
 
     @Before
     public void setup() throws Exception {
@@ -92,16 +72,12 @@ public class ClientAuthenticationFailureTest {
         testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
         testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
-        startTimeMs = time.milliseconds();
     }
 
     @After
     public void teardown() throws Exception {
-        long now = time.milliseconds();
         if (server != null)
             server.close();
-        if (failedAuthenticationDelayMs != -1)
-            assertTrue(now - startTimeMs >= failedAuthenticationDelayMs);
     }
 
     @Test
@@ -172,9 +148,7 @@ public class ClientAuthenticationFailureTest {
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        if (failedAuthenticationDelayMs == -1)
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
-        else
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs), new CredentialCache(), failedAuthenticationDelayMs, time);
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
+                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
     }
 }
