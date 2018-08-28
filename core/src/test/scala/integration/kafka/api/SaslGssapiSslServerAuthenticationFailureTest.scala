@@ -38,8 +38,7 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
   def kafkaClientSaslMechanism = "GSSAPI"
   def kafkaServerSaslMechanisms = List("GSSAPI")
 
-  override val producerCount = 0
-  override val consumerCount = 1
+  val consumer = createConsumer()
   override val serverCount = 1
 
   val topic = "topic"
@@ -73,7 +72,6 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
    */
   @Test
   def testServerAuthenticationFailure(): Unit = {
-    val consumer = consumers.head
     consumer.assign(List(tp).asJava)
 
     val startMs = System.currentTimeMillis()

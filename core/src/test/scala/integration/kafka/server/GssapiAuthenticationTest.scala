@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.security.{JaasContext, TestSecurityConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -43,6 +44,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private val executor = Executors.newFixedThreadPool(numThreads)
   private val clientConfig: Properties = new Properties
   private var serverAddr: InetSocketAddress = _
+  private val time = new MockTime(10)
 
   @Before
   override def setUp() {
@@ -148,6 +150,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private def createSelector(): Selector = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
       JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, true)
-    NetworkTestUtils.createSelector(channelBuilder)
+    NetworkTestUtils.createSelector(channelBuilder, time)
   }
 }
