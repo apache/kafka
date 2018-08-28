@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
@@ -160,17 +161,22 @@ class ReplicaAlterLogDirsThread(name: String,
     partitions.map { case (tp, epoch) =>
       try {
         val (leaderEpoch, leaderOffset) = epoch match {
-          case Some(e) => replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(e)
+          case Some(e) =>
+            replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(e) match {
+              case (Some(rawEpoch), Some(rawOffset)) =>
+                (Optional.of(rawEpoch.asInstanceOf[Integer]), Optional.of(rawOffset.asInstanceOf[java.lang.Long]))
+              case (None, None) => (Optional.empty[Integer](), Optional.empty[java.lang.Long]())
+            }
           // this may happen if a bootstrapping follower sends a request with undefined epoch or
           // a follower is on the older message format where leader epochs are not recorded
-          case None => (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          case None => (Optional.empty[Integer](), Optional.empty[java.lang.Long]())
         }
 
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
-          tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          tp -> new EpochEndOffset(Errors.forException(t), Optional.empty(), Optional.empty())
       }
     }
   }

@@ -16,7 +16,7 @@
   */
 package kafka.server.epoch
 
-import java.util.{Map => JMap}
+import java.util.{Optional, Map => JMap}
 
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
@@ -123,8 +123,8 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     val offsetsForEpochs = fetcher0.leaderOffsetsFor(epochsRequested)
 
     //Then end offset should be correct
-    assertEquals(10, offsetsForEpochs(t1p0).endOffset)
-    assertEquals(30, offsetsForEpochs(t2p0).endOffset)
+    assertEquals(10L, offsetsForEpochs(t1p0).endOffset.get())
+    assertEquals(30L, offsetsForEpochs(t2p0).endOffset.get())
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
     assertTrue(offsetsForEpochs(t1p1).hasError)
@@ -134,7 +134,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     //Repointing to broker 1 we should get the correct offset for t1p1
     val fetcher1 = new TestFetcherThread(sender(from = brokers(2), to = brokers(1)))
     val offsetsForEpochs1 = fetcher1.leaderOffsetsFor(epochsRequested)
-    assertEquals(20, offsetsForEpochs1(t1p1).endOffset)
+    assertEquals(20L, offsetsForEpochs1(t1p1).endOffset.get())
   }
 
   @Test
@@ -151,8 +151,8 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch should be 0 and leo: 1
-    var offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
+    var offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset().get()
+    assertEquals(1L, offset)
     assertEquals(leo(), offset)
 
 
@@ -165,12 +165,12 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
 
     //Then epoch 0 should still be the start offset of epoch 1
-    offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
+    offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset().get()
+    assertEquals(1L, offset)
 
     //Then epoch 2 should be the leo (NB: The leader epoch goes up in factors of 2 - This is because we have to first change leader to -1 and then change it again to the live replica)
-    assertEquals(2, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
-    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
+    assertEquals(2L, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset().get())
+    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset().get())
 
 
     //3. When broker is bounced again
@@ -182,14 +182,14 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
 
     //Then Epoch 0 should still map to offset 1
-    assertEquals(1, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset())
+    assertEquals(1L, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset().get())
 
     //Then Epoch 2 should still map to offset 2
-    assertEquals(2, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
+    assertEquals(2L, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset().get())
 
     //Then Epoch 4 should still map to offset 2
-    assertEquals(3, fetcher.leaderOffsetsFor(Map(tp -> 4))(tp).endOffset())
-    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 4))(tp).endOffset())
+    assertEquals(3L, fetcher.leaderOffsetsFor(Map(tp -> 4))(tp).endOffset().get())
+    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 4))(tp).endOffset().get())
 
     //Adding some extra assertions here to save test setup.
     shouldSupportRequestsForEpochsNotOnTheLeader(fetcher)
@@ -199,18 +199,17 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   def shouldSupportRequestsForEpochsNotOnTheLeader(fetcher: TestFetcherThread): Unit = {
     /**
       * Asking for an epoch not present on the leader should return the
-      * next matching epoch, unless there isn't any, which should return
-      * undefined.
+      * next matching epoch, unless there isn't any, which should an empty optional.
       */
 
     val epoch1 = Map(t1p0 -> 1)
-    assertEquals(1, fetcher.leaderOffsetsFor(epoch1)(t1p0).endOffset())
+    assertEquals(1L, fetcher.leaderOffsetsFor(epoch1)(t1p0).endOffset().get())
 
     val epoch3 = Map(t1p0 -> 3)
-    assertEquals(2, fetcher.leaderOffsetsFor(epoch3)(t1p0).endOffset())
+    assertEquals(2L, fetcher.leaderOffsetsFor(epoch3)(t1p0).endOffset().get())
 
     val epoch5 = Map(t1p0 -> 5)
-    assertEquals(-1, fetcher.leaderOffsetsFor(epoch5)(t1p0).endOffset())
+    assertEquals(Optional.empty(), fetcher.leaderOffsetsFor(epoch5)(t1p0).endOffset())
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {

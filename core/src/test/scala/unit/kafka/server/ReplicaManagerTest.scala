@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -619,7 +619,7 @@ class ReplicaManagerTest {
 
     // Setup mock local log to have leader epoch of 3 and offset of 10
     val localLogOffset = 10
-    val offsetFromLeader = 5
+    val offsetFromLeader = 5L
     val leaderEpochFromLeader = 3
     val mockScheduler = new MockScheduler(time)
     val mockBrokerTopicStats = new BrokerTopicStats
@@ -627,7 +627,7 @@ class ReplicaManagerTest {
     val mockLeaderEpochCache = EasyMock.createMock(classOf[LeaderEpochCache])
     EasyMock.expect(mockLeaderEpochCache.latestEpoch).andReturn(Some(leaderEpochFromLeader))
     EasyMock.expect(mockLeaderEpochCache.endOffsetFor(leaderEpochFromLeader))
-      .andReturn((leaderEpochFromLeader, localLogOffset))
+      .andReturn((Some(leaderEpochFromLeader), Some(localLogOffset)))
     EasyMock.replay(mockLeaderEpochCache)
     val mockLog = new Log(
       dir = new File(new File(config.logDirs.head), s"$topic-0"),
@@ -682,7 +682,7 @@ class ReplicaManagerTest {
     // Mock network client to show leader offset of 5
     val quota = QuotaFactory.instantiate(config, metrics, time, "")
     val blockingSend = new ReplicaFetcherMockBlockingSend(Map(new TopicPartition(topic, topicPartition) ->
-      new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
+      new EpochEndOffset(Optional.of(leaderEpochFromLeader), Optional.of[java.lang.Long](offsetFromLeader))).asJava, BrokerEndPoint(1, "host1" ,1), time)
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quota, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,

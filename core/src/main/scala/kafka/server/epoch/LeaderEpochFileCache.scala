@@ -24,12 +24,13 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch: Option[Int]
-  def endOffsetFor(epoch: Int): (Int, Long)
+  def endOffsetFor(epoch: Int): (Option[Int], Option[Long])
   def clearAndFlushLatest(offset: Long)
   def clearAndFlushEarliest(offset: Long)
   def clearAndFlush()
@@ -58,7 +59,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch >= 0 && epoch > latestEpoch.getOrElse(UNDEFINED_EPOCH) && offset >= latestOffset) {
+      if (epoch >= 0 && (latestEpoch.isEmpty || epoch > latestEpoch.get) && offset >= latestOffset) {
         info(s"Updated PartitionLeaderEpoch. ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
@@ -72,7 +73,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * Returns the current Leader Epoch. This is the latest epoch
     * which has messages assigned to it.
     *
-    * @return
+    * @return None is there is no leader epoch or the latest leader epoch in the cache
     */
   override def latestEpoch: Option[Int] = {
     inReadLock(lock) {
@@ -95,20 +96,23 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * @param requestedEpoch requested leader epoch. Must be non-negative
     * @return leader epoch and offset
     */
-  override def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
+  override def endOffsetFor(requestedEpoch: Int): (Option[Int], Option[Long]) = {
+    if (requestedEpoch < 0)
+      throw new IllegalStateException("Requested leaderEpoch cannot be negative")
+
     inReadLock(lock) {
       val epochAndOffset =
         if (latestEpoch.contains(requestedEpoch)) {
-          (requestedEpoch, leo().messageOffset)
+          (Some(requestedEpoch), Some(leo().messageOffset))
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
           if (subsequentEpochs.isEmpty || requestedEpoch < epochs.head.epoch)
             // no epochs recorded or requested epoch < the first epoch cached
-            (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+            (None, None)
           else {
             // we must get at least one element in previous epochs list, because if we are here,
             // it means that requestedEpoch >= epochs.head.epoch -- so at least the first epoch is
-            (previousEpochs.last.epoch, subsequentEpochs.head.startOffset)
+            (Some(previousEpochs.last.epoch), Some(subsequentEpochs.head.startOffset))
           }
         }
       debug(s"Processed offset for epoch request for partition ${topicPartition} epoch:$requestedEpoch and returning epoch ${epochAndOffset._1} and offset ${epochAndOffset._2} from epoch list of size ${epochs.size}")
