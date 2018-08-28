@@ -111,8 +111,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     setDataResponse.resultCode match {
       case Code.OK =>
         (newControllerEpoch, setDataResponse.stat.getVersion)
-      case _ =>
+      case Code.BADVERSION =>
         throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+      case code =>
+        throw KeeperException.create(code)
     }
   }
 
