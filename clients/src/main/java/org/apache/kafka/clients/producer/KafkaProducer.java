@@ -126,6 +126,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
  * {@link org.apache.kafka.common.serialization.StringSerializer} for simple string or byte types.
  */
+// 当前版本并没有增加事务 在0.11.x版本中增加了 事务的概念 kafkaProducer 主要用于异步发送produceRecord 中间存在缓存的概念 另外启动新线程sender 验证发送buffer
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
