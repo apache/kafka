@@ -33,7 +33,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val partition = new TopicPartition(topic, 0)
 
     val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion)
-      .add(partition, 0)
+      .add(partition, 5, 0)
       .build()
 
     // Unknown topic
