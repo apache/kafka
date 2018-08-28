@@ -131,7 +131,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
-
+    // 指定的clientID 只要用于权限设计 和 配额控制
     private String clientId;
     private final Partitioner partitioner;
     private final int maxRequestSize;
