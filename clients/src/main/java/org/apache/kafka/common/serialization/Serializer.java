@@ -46,9 +46,7 @@ public interface Serializer<T> extends Closeable {
      * @param data typed data
      * @return serialized bytes
      */
-    default byte[] serialize(String topic, T data) {
-        return new byte[0];
-    }
+    byte[] serialize(String topic, T data);
 
     /**
      * Convert {@code data} into a byte array.

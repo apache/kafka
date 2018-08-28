@@ -45,9 +45,7 @@ public interface Deserializer<T> extends Closeable {
      * @param data serialized bytes; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.
      * @return deserialized typed data; may be null
      */
-    default T deserialize(String topic, byte[] data) {
-        return null;
-    }
+    T deserialize(String topic, byte[] data);
 
     /**
      * Deserialize a record value from a byte array into a value or object.
