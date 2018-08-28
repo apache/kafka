@@ -524,9 +524,10 @@ class GroupMetadataManager(brokerId: Int,
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
-              val recordsBuffer = if (fileRecords.sizeInBytes > buffer.capacity) {
-                debug(s"Loaded offsets and group metadata from $topicPartition with buffer larger than configured offsets.load.buffer.size")
-                ByteBuffer.allocate(fileRecords.sizeInBytes)
+              val sizeInBytes = fileRecords.sizeInBytes
+              val recordsBuffer = if (sizeInBytes > buffer.capacity) {
+                warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($sizeInBytes bytes) than configured offsets.load.buffer.size")
+                ByteBuffer.allocate(sizeInBytes)
               } else {
                 buffer.clear()
                 buffer
