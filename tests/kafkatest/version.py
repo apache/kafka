@@ -14,9 +14,8 @@
 # limitations under the License.
 
 
-from kafkatest.utils import kafkatest_version
-
 from distutils.version import LooseVersion
+from kafkatest.utils import kafkatest_version
 
 
 class KafkaVersion(LooseVersion):
@@ -100,11 +99,13 @@ LATEST_0_11 = LATEST_0_11_0
 # 1.0.x versions
 V_1_0_0 = KafkaVersion("1.0.0")
 V_1_0_1 = KafkaVersion("1.0.1")
-LATEST_1_0 = V_1_0_1
+V_1_0_2 = KafkaVersion("1.0.2")
+LATEST_1_0 = V_1_0_2
 
 # 1.1.x versions
 V_1_1_0 = KafkaVersion("1.1.0")
-LATEST_1_1 = V_1_1_0
+V_1_1_1 = KafkaVersion("1.1.1")
+LATEST_1_1 = V_1_1_1
 
 # 2.0.x versions
 V_2_0_0 = KafkaVersion("2.0.0")
