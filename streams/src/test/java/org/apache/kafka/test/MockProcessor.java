@@ -40,7 +40,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     private final PunctuationType punctuationType;
     private final long scheduleInterval;
 
-    private boolean commitRequested;
+    private boolean commitRequested = false;
 
     public MockProcessor(final PunctuationType punctuationType, final long scheduleInterval) {
         this.punctuationType = punctuationType;

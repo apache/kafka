@@ -40,7 +40,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    int maybeCommit() {
+    int maybeCommitPerUserRequested() {
         int committed = 0;
         RuntimeException firstException = null;
 

@@ -851,7 +851,7 @@ public class StreamThread extends Thread {
              *  5. If one of the above happens, half the value of N.
              */
             int processed = 0;
-            long timeSinceLastPoll;
+            long timeSinceLastPoll = 0L;
 
             do {
                 for (int i = 0; i < numIterations; i++) {
@@ -861,7 +861,7 @@ public class StreamThread extends Thread {
                         streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, now);
 
                         // commit any tasks that have requested a commit
-                        final int committed = taskManager.maybeCommitActiveTasks();
+                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
                         if (committed > 0) {
                             streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
                         }
@@ -871,7 +871,7 @@ public class StreamThread extends Thread {
                     }
                 }
 
-                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
+                timeSinceLastPoll = Math.max(timeSinceLastPoll, Math.max(now - lastPollMs, 0));
 
                 if (maybePunctuate() || maybeCommit()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
@@ -992,16 +992,15 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Try to commit all active tasks owned by this thread
+     * Try to commit all active tasks owned by this thread.
+     *
+     * Visible for testing.
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
     boolean maybeCommit() {
-        int committed = taskManager.maybeCommitActiveTasks();
-        if (committed > 0) {
-            streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
-        }
+        int committed = 0;
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
             if (log.isTraceEnabled()) {
@@ -1026,6 +1025,14 @@ public class StreamThread extends Thread {
 
             lastCommitMs = now;
             processStandbyRecords = true;
+        }
+
+        if (committed == 0) {
+            final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
+            if (commitPerRequested > 0) {
+                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
+                committed += commitPerRequested;
+            }
         }
 
         return committed > 0;

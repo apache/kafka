@@ -314,7 +314,7 @@ public class AssignedStreamsTasksTest {
 
         addAndInitTask();
 
-        assertThat(assignedTasks.maybeCommit(), equalTo(1));
+        assertThat(assignedTasks.maybeCommitPerUserRequested(), equalTo(1));
         EasyMock.verify(t1);
     }
 
@@ -331,7 +331,7 @@ public class AssignedStreamsTasksTest {
         addAndInitTask();
 
         try {
-            assignedTasks.maybeCommit();
+            assignedTasks.maybeCommitPerUserRequested();
             fail("Should have thrown TaskMigratedException.");
         } catch (final TaskMigratedException expected) { /* ignore */ }
 

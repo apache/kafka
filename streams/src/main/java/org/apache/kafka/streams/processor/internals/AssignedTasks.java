@@ -343,8 +343,8 @@ abstract class AssignedTasks<T extends Task> {
             final T task = it.next();
             try {
                 if (task.commitNeeded()) {
-                    committed++;
                     task.commit();
+                    committed++;
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit {} {} since it got migrated to another thread already. " +

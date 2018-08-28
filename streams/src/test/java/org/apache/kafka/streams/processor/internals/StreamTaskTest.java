@@ -391,12 +391,6 @@ public class StreamTaskTest {
         assertEquals(4, source2.numReceived);
         assertFalse(task.maybePunctuateStreamTime());
 
-        // st: 161
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertFalse(task.process());
-        assertFalse(task.maybePunctuateStreamTime());
-
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
     }
 
@@ -489,7 +483,7 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.needCommit();
+        task.requestCommit();
         assertTrue(task.commitRequested());
     }
 

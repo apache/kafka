@@ -377,13 +377,11 @@ public class IntegrationTestUtils {
                 // still need to check that for each key, the ordering is expected
                 final Map<K, List<KeyValue<K, V>>> finalAccumData = new HashMap<>();
                 for (final KeyValue<K, V> kv : accumulatedActual) {
-                    finalAccumData.putIfAbsent(kv.key, new ArrayList<>());
-                    finalAccumData.get(kv.key).add(kv);
+                    finalAccumData.computeIfAbsent(kv.key, key -> new ArrayList<>()).add(kv);
                 }
                 final Map<K, List<KeyValue<K, V>>> finalExpected = new HashMap<>();
                 for (final KeyValue<K, V> kv : expectedRecords) {
-                    finalExpected.putIfAbsent(kv.key, new ArrayList<>());
-                    finalExpected.get(kv.key).add(kv);
+                    finalExpected.computeIfAbsent(kv.key, key -> new ArrayList<>()).add(kv);
                 }
 
                 // returns true only if the remaining records in both lists are the same and in the same order

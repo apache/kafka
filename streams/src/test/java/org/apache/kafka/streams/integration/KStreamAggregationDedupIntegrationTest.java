@@ -247,11 +247,11 @@ public class KStreamAggregationDedupIntegrationTest {
             keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             valueDeserializer.getClass().getName());
-        consumerProperties.setProperty(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(Integer.MAX_VALUE));
 
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerProperties,
-                outputTopic,
-                expectedRecords);
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+            consumerProperties,
+            outputTopic,
+            expectedRecords);
     }
 
 }
