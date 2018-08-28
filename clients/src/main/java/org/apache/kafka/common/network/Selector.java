@@ -1163,7 +1163,7 @@ public class Selector implements Selectable, AutoCloseable {
          */
         public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
             this.channel = channel;
-            this.endTimeNanos = time.nanoseconds() + (delayMs * 1000 * 1000);
+            this.endTimeNanos = time.nanoseconds() + (delayMs * 1000L * 1000L);
             this.closed = false;
         }
 

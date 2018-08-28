@@ -21,6 +21,7 @@ import java.time.Duration
 
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.server.KafkaConfig
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
@@ -38,7 +39,6 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
   def kafkaClientSaslMechanism = "GSSAPI"
   def kafkaServerSaslMechanisms = List("GSSAPI")
 
-  val consumer = createConsumer()
   override val serverCount = 1
 
   val topic = "topic"
@@ -72,6 +72,7 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
    */
   @Test
   def testServerAuthenticationFailure(): Unit = {
+    val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
     val startMs = System.currentTimeMillis()
@@ -83,5 +84,6 @@ class SaslGssapiSslServerAuthenticationFailureTest extends IntegrationTestHarnes
     }
     val endMs = System.currentTimeMillis()
     require(endMs - startMs < failedAuthenticationDelayMs, "Failed authentication must not be delayed on the client")
+    consumer.close()
   }
 }
