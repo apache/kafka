@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 
 import kafka.api.Request
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.LeaderEpochCache
@@ -45,7 +45,6 @@ class ReplicaAlterLogDirsThread(name: String,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
                                 brokerConfig = brokerConfig,
-                                replicaMgr = replicaMgr,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 includeLogTruncation = true) {
@@ -54,8 +53,9 @@ class ReplicaAlterLogDirsThread(name: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =
-    replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
+  protected def getReplica(tp: TopicPartition): Option[Replica] = {
+    replicaMgr.getReplica(tp, Request.FutureLocalReplicaId)
+  }
 
   def fetch(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, PD)] = {
     var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[Records])] = null

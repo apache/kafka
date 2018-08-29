@@ -51,7 +51,6 @@ abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
                                      brokerConfig: KafkaConfig,
-                                     replicaMgr: ReplicaManager,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
                                      includeLogTruncation: Boolean)
@@ -84,9 +83,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetch(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, PD)]
 
-  protected def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = {
-    replicaMgr.getReplica(tp).map(_.epochs.get)
-  }
+  protected def getReplica(tp: TopicPartition): Option[Replica]
 
   // deal with partitions with errors, potentially due to leadership changes
   private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
@@ -99,6 +96,9 @@ abstract class AbstractFetcherThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   private def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =
+      getReplica(tp).map(_.epochs.get)
+
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap

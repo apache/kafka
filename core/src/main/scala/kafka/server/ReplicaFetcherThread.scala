@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.api._
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.log.LogConfig
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.zk.AdminZkClient
@@ -49,7 +49,6 @@ class ReplicaFetcherThread(name: String,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
                                 brokerConfig = brokerConfig,
-                                replicaMgr = replicaMgr,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 includeLogTruncation = true) {
@@ -94,6 +93,10 @@ class ReplicaFetcherThread(name: String,
   private val brokerSupportsLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
 
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
+
+  protected def getReplica(tp: TopicPartition): Option[Replica] = {
+    replicaMgr.getReplica(tp, Request.FutureLocalReplicaId)
+  }
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()

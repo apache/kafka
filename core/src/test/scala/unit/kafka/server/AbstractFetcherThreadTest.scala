@@ -19,7 +19,7 @@ package kafka.server
 
 import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -100,10 +100,11 @@ class AbstractFetcherThreadTest {
                            fetchBackOffMs: Int = 0)
     extends AbstractFetcherThread(name, clientId, sourceBroker,
       brokerConfig = EasyMock.mock(classOf[KafkaConfig]),
-      replicaMgr = EasyMock.mock(classOf[ReplicaManager]),
       fetchBackOffMs,
       isInterruptible = true,
       includeLogTruncation = false) {
+
+    protected def getReplica(tp: TopicPartition): Option[Replica] = None
 
     override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
@@ -162,6 +163,7 @@ class AbstractFetcherThreadTest {
       new PartitionData(Errors.NONE, 0L, 0L, 0L, Seq.empty.asJava,
         MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes)))
     )
+
 
     override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
