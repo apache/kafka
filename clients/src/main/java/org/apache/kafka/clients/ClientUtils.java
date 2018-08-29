@@ -85,7 +85,8 @@ public final class ClientUtils {
             }
         }
         if (addresses.isEmpty())
-            throw new ConfigException("No resolvable bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            throw new ConfigException("No resolvable bootstrap server in provided urls: " +
+                String.join(",", urls));
         return addresses;
     }
 
