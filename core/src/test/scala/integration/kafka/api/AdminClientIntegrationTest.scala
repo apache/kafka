@@ -319,7 +319,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterReplicaLogDirsOptions).values.asScala.values
     futures.foreach { future =>
       val exception = intercept[ExecutionException](future.get)
-      assertTrue(exception.getCause.isInstanceOf[ReplicaNotAvailableException])
+      assertTrue(exception.getCause.isInstanceOf[UnknownTopicOrPartitionException])
     }
 
     createTopic(topic, numPartitions = 1, replicationFactor = serverCount)

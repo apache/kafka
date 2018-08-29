@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.junit.Test;
@@ -98,5 +99,26 @@ public class OAuthBearerClientInitialResponseTest {
         assertEquals("user@example.com", response.authorizationId());
         assertEquals("server.example.com", response.extensions().map().get("host"));
         assertEquals("143", response.extensions().map().get("port"));
+    }
+
+    @Test
+    public void testNoExtensionsFromByteArray() throws Exception {
+        String message = "n,a=user@example.com,\u0001" +
+                "auth=Bearer vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
+        assertEquals("vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg", response.tokenValue());
+        assertEquals("user@example.com", response.authorizationId());
+        assertTrue(response.extensions().map().isEmpty());
+    }
+
+    @Test
+    public void testNoExtensionsFromTokenAndNullExtensions() throws Exception {
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse("token", null);
+        assertTrue(response.extensions().map().isEmpty());
+    }
+
+    @Test
+    public void testValidateNullExtensions() throws Exception {
+        OAuthBearerClientInitialResponse.validateExtensions(null);
     }
 }
