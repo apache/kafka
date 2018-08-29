@@ -410,14 +410,9 @@ public class KafkaAdminClient extends AdminClient {
         this.time = time;
         this.metadataManager = metadataManager;
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-<<<<<<< HEAD
             config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
             config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP));
-        this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
-=======
-            config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
->>>>>>> trunk
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
