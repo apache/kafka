@@ -482,9 +482,9 @@ class ReplicaAlterLogDirsThreadTest {
     val ResultWithPartitions(fetchRequest, partitionsWithError) =
       thread.buildFetchRequest(Seq((t1p0, new PartitionFetchState(150)), (t1p1, new PartitionFetchState(160))))
 
-    assertFalse(fetchRequest.isEmpty)
+    assertFalse(fetchRequest.fetchData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
-    val request = fetchRequest.underlying.build()
+    val request = fetchRequest.build()
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
@@ -528,9 +528,9 @@ class ReplicaAlterLogDirsThreadTest {
         (t1p0, new PartitionFetchState(150)),
         (t1p1, new PartitionFetchState(160, truncatingLog=true))))
 
-    assertFalse(fetchRequest.isEmpty)
+    assertFalse(fetchRequest.fetchData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
-    val fetchInfos = fetchRequest.underlying.build().fetchData.asScala.toSeq
+    val fetchInfos = fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals("Expected fetch request for non-truncating partition", t1p0, fetchInfos.head._1)
     assertEquals(150, fetchInfos.head._2.fetchOffset)
@@ -541,9 +541,9 @@ class ReplicaAlterLogDirsThreadTest {
         (t1p0, new PartitionFetchState(140)),
         (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
 
-    assertFalse(fetchRequest2.isEmpty)
+    assertFalse(fetchRequest2.fetchData.isEmpty)
     assertFalse(partitionsWithError2.nonEmpty)
-    val fetchInfos2 = fetchRequest2.underlying.build().fetchData.asScala.toSeq
+    val fetchInfos2 = fetchRequest2.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals("Expected fetch request for non-delayed partition", t1p0, fetchInfos2.head._1)
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
@@ -553,7 +553,7 @@ class ReplicaAlterLogDirsThreadTest {
       thread.buildFetchRequest(Seq(
         (t1p0, new PartitionFetchState(140, delay=new DelayedItem(5000))),
         (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
-    assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3.isEmpty)
+    assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3.fetchData.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }
 
