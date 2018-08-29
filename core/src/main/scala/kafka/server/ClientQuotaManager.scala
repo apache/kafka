@@ -68,8 +68,8 @@ object QuotaTypes {
 }
 
 object ClientQuotaManager {
-  // Purge sensors after 1 hour of inactivity
-  val InactiveSensorExpirationTimeSeconds = 3600
+  // Do not expire quota sensors
+  val InactiveSensorExpirationTimeSeconds = Int.MaxValue
 
   val DefaultClientIdQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
   val DefaultUserQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
