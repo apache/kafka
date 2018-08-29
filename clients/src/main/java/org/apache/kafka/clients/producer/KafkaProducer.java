@@ -138,9 +138,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final int maxRequestSize;
     private final long totalMemorySize;
     private final Metadata metadata;
+    // 中间缓存存储 用于sender的发送已经 以node节点为key的request整理 也就是说每一个send 发往同一个的node都是集成到一个请求里面
     private final RecordAccumulator accumulator;
     private final Sender sender;
     private final Metrics metrics;
+    // ioThread 另起线程 对应执行sender
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
@@ -204,16 +206,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
+    // 初始化 kafkaProducer 设置发送的基本格式以及压缩模式等 初始化metadata属性
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
             log.trace("Starting the Kafka producer");
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = new SystemTime();
-
+            // clientId 不存在 需要自定义
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+            // clientID用法之一就是用于监控
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -243,6 +247,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             // load interceptors and make sure they get clientId
+            // 设置用户配置的参数 Provided ：提供
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
@@ -289,7 +294,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             }
-
+            // 创建缓存类
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.totalMemorySize,
                     this.compressionType,
@@ -297,10 +302,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     retryBackoffMs,
                     metrics,
                     time);
-
+            // 解析配置的brokerAddress 并配置成InetSocketAddress
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+            // 更新发送metadata请求 主要发送metadataRequest 请求 有对应的 metadataHandler 也就是protocol 协议
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            // 封装了基本的 NIO selector  其中并有有像netty中的优化key 采取的均是原生的
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
                     this.metadata,
@@ -322,6 +329,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     clientId,
                     this.requestTimeoutMs);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+            // 启动了新的线程做Sender的载体 无限循环运行 sender 查询是否满足条件发送请求
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
 
@@ -430,6 +438,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      *
      */
+    // 方法体能够看出 这是存在拦截就拦截信息 并返回应的修改信息 能看到的是 这个返回值都是一样的
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
@@ -439,12 +448,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Implementation of asynchronously send a record to a topic.
+     * callback 主要用于信息ack后的操作 用户自定义
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
+            // 计算最大等待元数据更新时间  并更新元数据 处于阻塞更新的状态
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
+            // 计算剩余时间
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
