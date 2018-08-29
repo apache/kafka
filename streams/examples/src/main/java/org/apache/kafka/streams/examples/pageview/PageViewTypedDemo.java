@@ -16,23 +16,35 @@
  */
 package org.apache.kafka.streams.examples.pageview;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
-import java.util.HashMap;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -51,18 +63,90 @@ import java.util.concurrent.TimeUnit;
  * bin/kafka-topics.sh --create ...), and write some data to the input topics (e.g. via
  * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
+@SuppressWarnings({"WeakerAccess", "unused"})
 public class PageViewTypedDemo {
+
+    public static class JSONSerde<T> implements Serializer<T>, Deserializer<T>, Serde<T> {
+        private static final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {}
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public T deserialize(final String topic, final byte[] data) {
+            if (data == null) {
+                return null;
+            }
+
+            try {
+                final JsonNode jsonNode = objectMapper.readTree(data);
+                try {
+                    final String className = jsonNode.get("_class").asText();
+                    final Class<?> clazz = Class.forName(className);
+                    final ObjectNode objectNode = (ObjectNode) jsonNode;
+                    objectNode.remove("_class");
+                    return (T) objectMapper.convertValue(objectNode, clazz);
+                } catch (final ClassNotFoundException e) {
+                    throw new SerializationException(e);
+                }
+            } catch (final IOException e) {
+                throw new SerializationException(e);
+            }
+        }
+
+        @Override
+        public byte[] serialize(final String topic, final T data) {
+            if (data == null) { return null; }
+
+            try {
+                final ObjectNode jsonNode = objectMapper.convertValue(data, ObjectNode.class);
+                jsonNode.put("_class", data.getClass().getName());
+                return objectMapper.writeValueAsBytes(jsonNode);
+            } catch (final Exception e) {
+                throw new SerializationException("Error serializing JSON message", e);
+            }
+        }
+
+        @Override
+        public void close() {}
+
+        @Override
+        public Serializer<T> serializer() {
+            return this;
+        }
+
+        @Override
+        public Deserializer<T> deserializer() {
+            return this;
+        }
+    }
 
     // POJO classes
     static public class PageView {
         public String user;
         public String page;
         public Long timestamp;
+
+        public PageView() {}
+
+        public PageView(final String user, final String page, final Long timestamp) {
+            this.user = user;
+            this.page = page;
+            this.timestamp = timestamp;
+        }
     }
 
     static public class UserProfile {
         public String region;
         public Long timestamp;
+
+        public UserProfile() {}
+
+        public UserProfile(final String region, final Long timestamp) {
+            this.region = region;
+            this.timestamp = timestamp;
+        }
     }
 
     static public class PageViewByRegion {
@@ -74,11 +158,23 @@ public class PageViewTypedDemo {
     static public class WindowedPageViewByRegion {
         public long windowStart;
         public String region;
+
+        @Override
+        public String toString() {
+            return "WindowedPageViewByRegion{" +
+                "windowStart=" + windowStart +
+                ", region='" + region + '\'' +
+                '}';
+        }
     }
 
     static public class RegionCount {
         public long count;
         public String region;
+
+        @Override
+        public String toString() { return "RegionCount{count=" + count + ", region='" + region + '\'' + '}';
+        }
     }
 
     public static void main(final String[] args) {
@@ -86,67 +182,21 @@ public class PageViewTypedDemo {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSONSerde.class);
+        props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, JSONSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSONSerde.class);
+        props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, JSONSerde.class);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        // TODO: the following can be removed with a serialization factory
-        final Map<String, Object> serdeProps = new HashMap<>();
+        final KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), new JSONSerde<>()));
 
-        final Serializer<PageView> pageViewSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", PageView.class);
-        pageViewSerializer.configure(serdeProps, false);
-
-        final Deserializer<PageView> pageViewDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", PageView.class);
-        pageViewDeserializer.configure(serdeProps, false);
-
-        final Serde<PageView> pageViewSerde = Serdes.serdeFrom(pageViewSerializer, pageViewDeserializer);
-
-        final Serializer<UserProfile> userProfileSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", UserProfile.class);
-        userProfileSerializer.configure(serdeProps, false);
-
-        final Deserializer<UserProfile> userProfileDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", UserProfile.class);
-        userProfileDeserializer.configure(serdeProps, false);
-
-        final Serde<UserProfile> userProfileSerde = Serdes.serdeFrom(userProfileSerializer, userProfileDeserializer);
-
-        final Serializer<WindowedPageViewByRegion> wPageViewByRegionSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
-        wPageViewByRegionSerializer.configure(serdeProps, false);
-
-        final Deserializer<WindowedPageViewByRegion> wPageViewByRegionDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", WindowedPageViewByRegion.class);
-        wPageViewByRegionDeserializer.configure(serdeProps, false);
-
-        final Serde<WindowedPageViewByRegion> wPageViewByRegionSerde = Serdes.serdeFrom(wPageViewByRegionSerializer, wPageViewByRegionDeserializer);
-
-        final Serializer<RegionCount> regionCountSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", RegionCount.class);
-        regionCountSerializer.configure(serdeProps, false);
-
-        final Deserializer<RegionCount> regionCountDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", RegionCount.class);
-        regionCountDeserializer.configure(serdeProps, false);
-        final Serde<RegionCount> regionCountSerde = Serdes.serdeFrom(regionCountSerializer, regionCountDeserializer);
-
-        final Serializer<PageViewByRegion> pageViewByRegionSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", PageViewByRegion.class);
-        pageViewByRegionSerializer.configure(serdeProps, false);
-        final Deserializer<PageViewByRegion> pageViewByRegionDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", PageViewByRegion.class);
-        pageViewByRegionDeserializer.configure(serdeProps, false);
-        final Serde<PageViewByRegion> pageViewByRegionSerde = Serdes.serdeFrom(pageViewByRegionSerializer, pageViewByRegionDeserializer);
-
-        final KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), pageViewSerde));
-
-        final KTable<String, UserProfile> users = builder.table("streams-userprofile-input",
-                                                                Consumed.with(Serdes.String(), userProfileSerde));
+        final KTable<String, UserProfile> users = builder.table("streams-userprofile-input", Consumed.with(Serdes.String(), new JSONSerde<>()));
 
         final KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
             .leftJoin(users, (view, profile) -> {
@@ -162,7 +212,7 @@ public class PageViewTypedDemo {
                 return viewByRegion;
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
-            .groupByKey(Serialized.with(Serdes.String(), pageViewByRegionSerde))
+            .groupByKey(Serialized.with(Serdes.String(), new JSONSerde<>()))
             .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(7)).advanceBy(TimeUnit.SECONDS.toMillis(1)))
             .count()
             .toStream()
@@ -179,7 +229,7 @@ public class PageViewTypedDemo {
             });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-typed-output", Produced.with(wPageViewByRegionSerde, regionCountSerde));
+        regionCount.to("streams-pageviewstats-typed-output");
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -195,8 +245,45 @@ public class PageViewTypedDemo {
 
         try {
             streams.start();
+            {
+
+                final Properties config = new Properties();
+                config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+                final KafkaProducer<String, PageView> viewKafkaProducer = new KafkaProducer<>(config, new StringSerializer(), new JSONSerde<>());
+                final KafkaProducer<String, UserProfile> profileKafkaProducer = new KafkaProducer<>(config, new StringSerializer(), new JSONSerde<>());
+
+                for (int i = 0; i < 5; i++) {
+                    profileKafkaProducer.send(new ProducerRecord<>("streams-userprofile-input", "user" + i, new UserProfile("region" + (i % 3), System.currentTimeMillis())));
+                }
+                for (int i = 0; i < 1000; i++) {
+                    viewKafkaProducer.send(new ProducerRecord<>("streams-pageview-input", "user" + (i % 5), new PageView("user" + (i % 5), "page" + (i % 20), System.currentTimeMillis())));
+                }
+                viewKafkaProducer.close();
+                profileKafkaProducer.close();
+
+                System.out.println("produced");
+            }
+            {
+                final Properties config = new Properties();
+                config.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
+                config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+                final KafkaConsumer<WindowedPageViewByRegion, RegionCount> results = new KafkaConsumer<>(config, new JSONSerde<>(), new JSONSerde<>());
+                results.subscribe(Collections.singleton("streams-pageviewstats-typed-output"));
+                while (true) {
+                    final ConsumerRecords<WindowedPageViewByRegion, RegionCount> poll = results.poll(Duration.ofSeconds(5));
+                    System.out.println("polled: " + poll.count());
+                    for (final ConsumerRecord<WindowedPageViewByRegion, RegionCount> record : poll) {
+                        System.out.println(record.key() + ": " + record.value());
+                    }
+                    if (!poll.isEmpty()) {
+                        break;
+                    }
+                }
+            }
+
             latch.await();
         } catch (final Throwable e) {
+            e.printStackTrace();
             System.exit(1);
         }
         System.exit(0);
