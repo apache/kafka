@@ -23,11 +23,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
-<<<<<<< HEAD
 import org.apache.kafka.clients.CommonClientConfigs;
-=======
 import org.apache.kafka.clients.StaleMetadataException;
->>>>>>> trunk
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
