@@ -102,7 +102,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
             metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
           }
           ioWaitRatioMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.value, 1.0))
+            Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
           }.sum / processors.size
         }
       }
@@ -539,7 +539,7 @@ private[kafka] class Processor(val id: Int,
     new Gauge[Double] {
       def value = {
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags)))
-          .fold(0.0)(m => Math.min(m.value, 1.0))
+          .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }
     },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
