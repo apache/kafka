@@ -259,7 +259,7 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest.Builder] = {
+  override def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     val builder = fetchSessionHandler.newBuilder()
@@ -280,51 +280,39 @@ class ReplicaFetcherThread(name: String,
     }
 
     val fetchData = builder.build()
-    val requestBuilder = FetchRequest.Builder.
-      forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend())
+    val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
+      None
+    } else {
+      val requestBuilder = FetchRequest.Builder.
+        forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
-    if (fetchMetadataSupported) {
-      requestBuilder.metadata(fetchData.metadata())
+      if (fetchMetadataSupported) {
+        requestBuilder.metadata(fetchData.metadata())
+      }
+      Some(requestBuilder)
     }
-    ResultWithPartitions(requestBuilder, partitionsWithError)
+
+    ResultWithPartitions(fetchRequestOpt, partitionsWithError)
   }
 
   /**
    * Truncate the log for each partition's epoch based on leader's returned epoch and offset.
    * The logic for finding the truncation offset is implemented in AbstractFetcherThread.getOffsetTruncationState
    */
-  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
-    val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
-    val partitionsWithError = mutable.Set[TopicPartition]()
+  override def truncate(tp: TopicPartition, epochEndOffset: EpochEndOffset): OffsetTruncationState = {
+    val replica = replicaMgr.getReplicaOrException(tp)
+    val partition = replicaMgr.getPartition(tp).get
 
-    fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
-      try {
-        val replica = replicaMgr.getReplicaOrException(tp)
-        val partition = replicaMgr.getPartition(tp).get
+    val offsetTruncationState = getOffsetTruncationState(tp, epochEndOffset, replica)
+    if (offsetTruncationState.offset < replica.highWatermark.messageOffset)
+      warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark ${replica.highWatermark.messageOffset}")
+    partition.truncateTo(offsetTruncationState.offset, isFuture = false)
 
-        if (leaderEpochOffset.hasError) {
-          info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${leaderEpochOffset.error}")
-          partitionsWithError += tp
-        } else {
-          val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset, replica)
-          if (offsetTruncationState.offset < replica.highWatermark.messageOffset)
-            warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark ${replica.highWatermark.messageOffset}")
-
-          partition.truncateTo(offsetTruncationState.offset, isFuture = false)
-          // mark the future replica for truncation only when we do last truncation
-          if (offsetTruncationState.truncationCompleted)
-            replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
-          fetchOffsets.put(tp, offsetTruncationState)
-        }
-      } catch {
-        case e: KafkaStorageException =>
-          info(s"Failed to truncate $tp", e)
-          partitionsWithError += tp
-      }
-    }
-
-    ResultWithPartitions(fetchOffsets, partitionsWithError)
+    // mark the future replica for truncation only when we do last truncation
+    if (offsetTruncationState.truncationCompleted)
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
+    offsetTruncationState
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
