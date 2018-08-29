@@ -196,6 +196,5 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         public boolean complete() {
             return true;
         }
-
     }
 }
