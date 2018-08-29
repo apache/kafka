@@ -62,8 +62,8 @@ object ClientQuotaManagerConfig {
   // Always have 10 whole windows + 1 current window
   val DefaultNumQuotaSamples = 11
   val DefaultQuotaWindowSizeSeconds = 1
-  // Purge sensors after 1 hour of inactivity
-  val InactiveSensorExpirationTimeSeconds  = 3600
+  // Do not expire quota sensors
+  val InactiveSensorExpirationTimeSeconds  = Int.MaxValue
   val QuotaRequestPercentDefault = Int.MaxValue.toDouble
   val NanosToPercentagePerSecond = 100.0 / TimeUnit.SECONDS.toNanos(1)
 
