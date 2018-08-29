@@ -17,7 +17,6 @@
 package kafka.cluster
 
 
-import java.util.Optional
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.yammer.metrics.core.Gauge
@@ -31,10 +30,11 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.AdminZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.Time
 
@@ -732,19 +732,14 @@ class Partition(val topic: String,
     *         offset of the first leader epoch larger than the leader epoch, or else the log end
     *         offset if the leader epoch is the latest leader epoch.
     */
-  def lastOffsetForLeaderEpoch(leaderEpoch: Option[Int]): EpochEndOffset = {
+  def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          leaderEpoch match {
-            case Some(lEpoch) => leaderReplica.epochs.get.endOffsetFor(lEpoch) match {
-              case (Some(e), Some(o)) => new EpochEndOffset(NONE, Optional.of(e), Optional.of(o))
-              case (None, None) => new EpochEndOffset(NONE, Optional.empty(), Optional.empty())
-            }
-            case None => new EpochEndOffset(NONE, Optional.empty(), Optional.empty())
-          }
+          val (epoch, offset) = leaderReplica.epochs.get.endOffsetFor(leaderEpoch)
+          new EpochEndOffset(NONE, epoch, offset)
         case None =>
-          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, Optional.empty(), Optional.empty())
+          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

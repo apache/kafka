@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.Errors;
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * The offset, fetched from a leader, for a particular partition.
@@ -32,19 +31,19 @@ public class EpochEndOffset {
     public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private Errors error;
-    private Optional<Integer> leaderEpoch;  // introduced in V1
-    private Optional<Long> endOffset;
+    private int leaderEpoch;  // introduced in V1
+    private long endOffset;
 
-    public EpochEndOffset(Errors error, Optional<Integer> leaderEpoch, Optional<Long> endOffset) {
+    public EpochEndOffset(Errors error, int leaderEpoch, long endOffset) {
         this.error = error;
-        leaderEpoch(leaderEpoch);
-        endOffset(endOffset);
+        this.leaderEpoch = leaderEpoch;
+        this.endOffset = endOffset;
     }
 
-    public EpochEndOffset(Optional<Integer> leaderEpoch, Optional<Long> endOffset) {
+    public EpochEndOffset(int leaderEpoch, long endOffset) {
         this.error = Errors.NONE;
-        endOffset(endOffset);
-        leaderEpoch(leaderEpoch);
+        this.leaderEpoch = leaderEpoch;
+        this.endOffset = endOffset;
     }
 
     public Errors error() {
@@ -55,11 +54,11 @@ public class EpochEndOffset {
         return error != Errors.NONE;
     }
 
-    public Optional<Long> endOffset() {
+    public long endOffset() {
         return endOffset;
     }
 
-    public Optional<Integer> leaderEpoch() {
+    public int leaderEpoch() {
         return leaderEpoch;
     }
 
@@ -87,21 +86,5 @@ public class EpochEndOffset {
     @Override
     public int hashCode() {
         return Objects.hash(error, leaderEpoch, endOffset);
-    }
-
-    private void leaderEpoch(Optional<Integer> leaderEpoch) {
-        if (leaderEpoch.isPresent() && leaderEpoch.get() < 0) {
-            this.leaderEpoch = Optional.empty();
-        } else {
-            this.leaderEpoch = leaderEpoch;
-        }
-    }
-
-    private void endOffset(Optional<Long> endOffset) {
-        if (endOffset.isPresent() && endOffset.get() < 0) {
-            this.endOffset = Optional.empty();
-        } else {
-            this.endOffset = endOffset;
-        }
     }
 }

@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
@@ -155,7 +154,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         Map<TopicPartition, EpochEndOffset> errorResponse = new HashMap<>();
         for (TopicPartition tp : epochsByPartition.keySet()) {
             errorResponse.put(tp, new EpochEndOffset(
-                error, Optional.empty(), Optional.empty()));
+                error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
         return new OffsetsForLeaderEpochResponse(errorResponse);
     }

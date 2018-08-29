@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
@@ -139,7 +138,7 @@ class ReplicaAlterLogDirsThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Option[Int]]] = {
+  def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
     def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
 
     val partitionEpochOpts = allPartitions
@@ -148,7 +147,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
@@ -157,26 +156,15 @@ class ReplicaAlterLogDirsThread(name: String,
    * @param partitions map of topic partition -> leader epoch of the future replica
    * @return map of topic partition -> end offset for a requested leader epoch
    */
-  def fetchEpochsFromLeader(partitions: Map[TopicPartition, Option[Int]]): Map[TopicPartition, EpochEndOffset] = {
+  def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = epoch match {
-          case Some(e) =>
-            replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(e) match {
-              case (Some(rawEpoch), Some(rawOffset)) =>
-                (Optional.of(rawEpoch.asInstanceOf[Integer]), Optional.of(rawOffset.asInstanceOf[java.lang.Long]))
-              case (None, None) => (Optional.empty[Integer](), Optional.empty[java.lang.Long]())
-            }
-          // this may happen if a bootstrapping follower sends a request with undefined epoch or
-          // a follower is on the older message format where leader epochs are not recorded
-          case None => (Optional.empty[Integer](), Optional.empty[java.lang.Long]())
-        }
-
+        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
-          tp -> new EpochEndOffset(Errors.forException(t), Optional.empty(), Optional.empty())
+          tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

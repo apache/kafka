@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -87,7 +86,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 TopicPartition tp = new TopicPartition(topic, partitionId);
                 int leaderEpoch = partitionAndEpoch.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
                 long endOffset = partitionAndEpoch.getLong(END_OFFSET_KEY_NAME);
-                epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, Optional.of(leaderEpoch), Optional.of(endOffset)));
+                epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, leaderEpoch, endOffset));
             }
         }
     }
@@ -128,10 +127,8 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
                 partitionStruct.set(ERROR_CODE, partitionEndOffset.getValue().error().code());
                 partitionStruct.set(PARTITION_ID, partitionEndOffset.getKey());
-                Optional<Integer> leaderEpoch = partitionEndOffset.getValue().leaderEpoch();
-                partitionStruct.setIfExists(LEADER_EPOCH, leaderEpoch.orElse(EpochEndOffset.UNDEFINED_EPOCH));
-                Optional<Long> endOffset = partitionEndOffset.getValue().endOffset();
-                partitionStruct.set(END_OFFSET_KEY_NAME, endOffset.orElse(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                partitionStruct.setIfExists(LEADER_EPOCH, partitionEndOffset.getValue().leaderEpoch());
+                partitionStruct.set(END_OFFSET_KEY_NAME, partitionEndOffset.getValue().endOffset());
                 partitions.add(partitionStruct);
             }
             topicStruct.set(PARTITIONS_KEY_NAME, partitions.toArray());

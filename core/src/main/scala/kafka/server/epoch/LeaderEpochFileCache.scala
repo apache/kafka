@@ -24,13 +24,12 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
-  def latestEpoch: Option[Int]
-  def endOffsetFor(epoch: Int): (Option[Int], Option[Long])
+  def latestEpoch: Int
+  def endOffsetFor(epoch: Int): (Int, Long)
   def clearAndFlushLatest(offset: Long)
   def clearAndFlushEarliest(offset: Long)
   def clearAndFlush()
@@ -59,7 +58,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch >= 0 && (latestEpoch.isEmpty || epoch > latestEpoch.get) && offset >= latestOffset) {
+      if (epoch >= 0 && epoch > latestEpoch && offset >= latestOffset) {
         info(s"Updated PartitionLeaderEpoch. ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
@@ -73,11 +72,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * Returns the current Leader Epoch. This is the latest epoch
     * which has messages assigned to it.
     *
-    * @return None is there is no leader epoch or the latest leader epoch in the cache
+    * @return
     */
-  override def latestEpoch: Option[Int] = {
+  override def latestEpoch(): Int = {
     inReadLock(lock) {
-      if (epochs.isEmpty) None else Some(epochs.last.epoch)
+      if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
     }
   }
 
@@ -93,26 +92,27 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * if requestedEpoch is < the first epoch cached, UNSUPPORTED_EPOCH_OFFSET will be returned
     * so that the follower falls back to High Water Mark.
     *
-    * @param requestedEpoch requested leader epoch. Must be non-negative
+    * @param requestedEpoch requested leader epoch
     * @return leader epoch and offset
     */
-  override def endOffsetFor(requestedEpoch: Int): (Option[Int], Option[Long]) = {
-    if (requestedEpoch < 0)
-      throw new IllegalStateException("Requested leaderEpoch cannot be negative")
-
+  override def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
     inReadLock(lock) {
       val epochAndOffset =
-        if (latestEpoch.contains(requestedEpoch)) {
-          (Some(requestedEpoch), Some(leo().messageOffset))
+        if (requestedEpoch == UNDEFINED_EPOCH) {
+          // this may happen if a bootstrapping follower sends a request with undefined epoch or
+          // a follower is on the older message format where leader epochs are not recorded
+          (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+        } else if (requestedEpoch == latestEpoch) {
+          (requestedEpoch, leo().messageOffset)
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
           if (subsequentEpochs.isEmpty || requestedEpoch < epochs.head.epoch)
             // no epochs recorded or requested epoch < the first epoch cached
-            (None, None)
+            (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           else {
             // we must get at least one element in previous epochs list, because if we are here,
             // it means that requestedEpoch >= epochs.head.epoch -- so at least the first epoch is
-            (Some(previousEpochs.last.epoch), Some(subsequentEpochs.head.startOffset))
+            (previousEpochs.last.epoch, subsequentEpochs.head.startOffset)
           }
         }
       debug(s"Processed offset for epoch request for partition ${topicPartition} epoch:$requestedEpoch and returning epoch ${epochAndOffset._1} and offset ${epochAndOffset._2} from epoch list of size ${epochs.size}")
@@ -193,11 +193,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:${latestEpoch.getOrElse(UNDEFINED_EPOCH)}, offset:$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:$latestEpoch, offset:$latestOffset} for Partition: $topicPartition"
 
   def validateAndMaybeWarn(epoch: Int, offset: Long) = {
     assert(epoch >= 0, s"Received a PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
-    if (epoch < latestEpoch.getOrElse(UNDEFINED_EPOCH))
+    if (epoch < latestEpoch())
       warn(s"Received a PartitionLeaderEpoch assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
     else if (offset < latestOffset())
