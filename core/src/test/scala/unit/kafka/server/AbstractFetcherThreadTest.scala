@@ -164,7 +164,6 @@ class AbstractFetcherThreadTest {
         MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes)))
     )
 
-
     override def processPartitionData(topicPartition: TopicPartition,
                                       fetchOffset: Long,
                                       partitionData: PD,
@@ -200,7 +199,6 @@ class AbstractFetcherThreadTest {
         fetchRequest.fetchData.asScala.mapValues(v => normalPartitionDataSet(v.fetchOffset.toInt)).toSeq
       }
     }
-
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
