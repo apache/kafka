@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.examples.pageview;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -66,7 +67,13 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings({"WeakerAccess", "unused"})
 public class PageViewTypedDemo {
 
-    public static class JSONSerde<T> implements Serializer<T>, Deserializer<T>, Serde<T> {
+    /**
+     * A serde for any class that implements {@link JSONSerdeCompatible}. Note that the classes also need to
+     * be registered in the {@code @JsonSubTypes} annotation on {@link JSONSerdeCompatible}.
+     *
+     * @param <T> The concrete type of the class that gets de/serialized
+     */
+    public static class JSONSerde<T extends JSONSerdeCompatible> implements Serializer<T>, Deserializer<T>, Serde<T> {
         private static final ObjectMapper objectMapper = new ObjectMapper();
 
         @Override
@@ -80,16 +87,7 @@ public class PageViewTypedDemo {
             }
 
             try {
-                final JsonNode jsonNode = objectMapper.readTree(data);
-                try {
-                    final String className = jsonNode.get("_class").asText();
-                    final Class<?> clazz = Class.forName(className);
-                    final ObjectNode objectNode = (ObjectNode) jsonNode;
-                    objectNode.remove("_class");
-                    return (T) objectMapper.convertValue(objectNode, clazz);
-                } catch (final ClassNotFoundException e) {
-                    throw new SerializationException(e);
-                }
+                return (T) objectMapper.readValue(data, JSONSerdeCompatible.class);
             } catch (final IOException e) {
                 throw new SerializationException(e);
             }
@@ -97,12 +95,12 @@ public class PageViewTypedDemo {
 
         @Override
         public byte[] serialize(final String topic, final T data) {
-            if (data == null) { return null; }
+            if (data == null) {
+                return null;
+            }
 
             try {
-                final ObjectNode jsonNode = objectMapper.convertValue(data, ObjectNode.class);
-                jsonNode.put("_class", data.getClass().getName());
-                return objectMapper.writeValueAsBytes(jsonNode);
+                return objectMapper.writeValueAsBytes(data);
             } catch (final Exception e) {
                 throw new SerializationException("Error serializing JSON message", e);
             }
@@ -122,8 +120,24 @@ public class PageViewTypedDemo {
         }
     }
 
+    /**
+     * An interface for registering types that can be de/serialized with {@link JSONSerde}.
+     */
+    @SuppressWarnings("DefaultAnnotationParam") // being explicit for the example
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "_t")
+    @JsonSubTypes({
+                      @JsonSubTypes.Type(value = PageView.class, name = "pv"),
+                      @JsonSubTypes.Type(value = UserProfile.class, name = "up"),
+                      @JsonSubTypes.Type(value = PageViewByRegion.class, name = "pvbr"),
+                      @JsonSubTypes.Type(value = WindowedPageViewByRegion.class, name = "wpvbr"),
+                      @JsonSubTypes.Type(value = RegionCount.class, name = "rc")
+                  })
+    public interface JSONSerdeCompatible {
+
+    }
+
     // POJO classes
-    static public class PageView {
+    static public class PageView implements JSONSerdeCompatible {
         public String user;
         public String page;
         public Long timestamp;
@@ -137,7 +151,7 @@ public class PageViewTypedDemo {
         }
     }
 
-    static public class UserProfile {
+    static public class UserProfile implements JSONSerdeCompatible {
         public String region;
         public Long timestamp;
 
@@ -149,13 +163,13 @@ public class PageViewTypedDemo {
         }
     }
 
-    static public class PageViewByRegion {
+    static public class PageViewByRegion implements JSONSerdeCompatible {
         public String user;
         public String page;
         public String region;
     }
 
-    static public class WindowedPageViewByRegion {
+    static public class WindowedPageViewByRegion implements JSONSerdeCompatible {
         public long windowStart;
         public String region;
 
@@ -168,12 +182,13 @@ public class PageViewTypedDemo {
         }
     }
 
-    static public class RegionCount {
+    static public class RegionCount implements JSONSerdeCompatible {
         public long count;
         public String region;
 
         @Override
-        public String toString() { return "RegionCount{count=" + count + ", region='" + region + '\'' + '}';
+        public String toString() {
+            return "RegionCount{count=" + count + ", region='" + region + '\'' + '}';
         }
     }
 
@@ -245,6 +260,7 @@ public class PageViewTypedDemo {
 
         try {
             streams.start();
+            // very simple data generators for demonstration purposes.
             {
 
                 final Properties config = new Properties();
@@ -263,6 +279,8 @@ public class PageViewTypedDemo {
 
                 System.out.println("produced");
             }
+
+            // again, for demonstration, This just polls until it gets any result data, and then stops polling.
             {
                 final Properties config = new Properties();
                 config.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
