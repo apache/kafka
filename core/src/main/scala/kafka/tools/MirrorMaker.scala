@@ -39,7 +39,7 @@ import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 import scala.util.control.ControlThrowable
 
 /**
@@ -270,39 +270,45 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
   }
 
-  def commitOffsets(consumerWrapper: ConsumerWrapper, retry: Int = Integer.MAX_VALUE): Unit = {
+  def commitOffsets(consumerWrapper: ConsumerWrapper): Unit = {
     if (!exitingOnSendFailure) {
-      trace("Committing offsets.")
-      try {
-        consumerWrapper.commit()
-        lastSuccessfulCommitTime = time.milliseconds
-      } catch {
-        case e: WakeupException =>
-          // we only call wakeup() once to close the consumer,
-          // so if we catch it in commit we can safely retry
-          // and re-throw to break the loop
-          commitOffsets(consumerWrapper, retry)
-          throw e
+      var retry = 0
+      var retryNeeded = true
+      while (retryNeeded) {
+        trace("Committing offsets.")
+        try {
+          consumerWrapper.commit()
+          lastSuccessfulCommitTime = time.milliseconds
+          retryNeeded = false
+        } catch {
+          case e: WakeupException =>
+            // we only call wakeup() once to close the consumer,
+            // so if we catch it in commit we can safely retry
+            // and re-throw to break the loop
+            commitOffsets(consumerWrapper)
+            throw e
 
-        case _: TimeoutException if retry > 0 =>
-          if (retry == Integer.MAX_VALUE) { // only try to remove offsets for nonexistent topics once
+          case _: TimeoutException =>
             Try(consumerWrapper.consumer.listTopics) match {
               case Success(visibleTopics) =>
                 consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
-              case _ =>
+              case Failure(e) =>
+                warn("Failed to list all authorized topics after committing offsets timed out: ", e)
             }
-          }
-          warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
-            s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
-            s"Last successful offset commit timestamp=${lastSuccessfulCommitTime}, retry count=${Integer.MAX_VALUE - retry}")
-          Thread.sleep(100)
-          commitOffsets(consumerWrapper, retry - 1)
 
-        case _: CommitFailedException =>
-          warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
-            "another instance. If you see this regularly, it could indicate that you need to either increase " +
-            s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
-            s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+            retry += 1
+            warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
+              s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
+              s"Last successful offset commit timestamp=${lastSuccessfulCommitTime}, retry count=${retry}")
+            Thread.sleep(100)
+
+          case _: CommitFailedException =>
+            retryNeeded = false
+            warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
+              "another instance. If you see this regularly, it could indicate that you need to either increase " +
+              s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
+              s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+        }
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
