@@ -45,9 +45,12 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
@@ -59,6 +62,65 @@ import static java.util.Collections.singleton;
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+
+    /**
+     * The expected Stream Task  state transition with the following defined states is:
+     *
+     * <pre>
+     *                 +--------------+
+     *         +<----- | Created (0)  |
+     *         |       +-----+--------+
+     *         |             |
+     *         |             v
+     *         |       +--------------+
+     *         +<----- | Restoring (1)|------+ (Error path)
+     *         |       +--------------+      |
+     *         |                             |
+     *         |                             |
+     *         |       +-----+--------+      |
+     *         |       | Idle (4)     |------+ (Error path)
+     *         |       +-----+--------+      |
+     *         |            |  ^             |
+     *         |            v  |             |
+     *         |       +--------------+      |
+     *         +------>| Running (2)  |      |
+     *                 +----+--+------+      |
+     *                      |  ^             |
+     *                      v  |             |
+     *                 +----+--+------+      |
+     *                 | Suspended (3)|<-----+
+     *                 +-----+--------+
+     *                       |
+     *                       v
+     *                 +-----+--------+
+     *                 | Closed (5)   |
+     *                 +-----+--------+
+     *
+     */
+    public enum State {
+        CREATED(1, 2), RESTORING(2, 3), RUNNING(3, 4), SUSPENDED(2, 5), IDLE(2, 3), CLOSED;
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer... validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
+        }
+    }
+
+    private void setState(final State newState) {
+        final State oldState = state;
+
+        if (!state.isValidTransition(newState)) {
+            throw new IllegalStateException("Stream task " + id + ": Unexpected state transition from " + oldState + " to " + newState);
+        } else {
+            state = newState;
+            log.debug("State transition from {} to {}", oldState, newState);
+        }
+    }
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -72,11 +134,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final PunctuationQueue systemTimePunctuationQueue;
     private final ProducerSupplier producerSupplier;
 
+    private State state;
     private Sensor closeSensor;
-    private long lastEnforcedProcessingTime;
+    private long idleStartTime;
     private Producer<byte[], byte[]> producer;
     private boolean commitRequested = false;
-    private boolean enforceProcessing = false;
     private boolean transactionInFlight = false;
 
     protected static final class TaskMetrics {
@@ -183,6 +245,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
+        this.state = State.CREATED;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
         this.closeSensor = closeSensor;
@@ -251,7 +314,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
-        return changelogPartitions().isEmpty();
+
+        if (changelogPartitions().isEmpty()) {
+            setState(State.RESTORING);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -276,7 +345,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         processorContext.initialized();
 
-        lastEnforcedProcessingTime = time.milliseconds();
+        setState(State.RUNNING);
 
         taskInitialized = true;
     }
@@ -304,15 +373,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * source topic partitions, or if it is enforced to be processable
      */
     boolean isProcessable(final long now) {
-        if (enforceProcessing) {
+        if (partitionGroup.allPartitionsBuffered()) {
+            idleStartTime = RecordQueue.NOT_KNOWN;
             return true;
-        } else if (partitionGroup.allPartitionsBuffered()) {
-            return true;
-        } else if (partitionGroup.numBuffered() > 0 && now - lastEnforcedProcessingTime > maxTaskIdleMs) {
-            taskMetrics.taskEnforcedProcessSensor.record();
-            lastEnforcedProcessingTime = now;
-            enforceProcessing = true;
-            return true;
+        } else if (partitionGroup.numBuffered() > 0) {
+            if (idleStartTime == RecordQueue.NOT_KNOWN) {
+                idleStartTime = now;
+            }
+
+            if (maxTaskIdleMs == 0 || now - idleStartTime > maxTaskIdleMs) {
+                taskMetrics.taskEnforcedProcessSensor.record();
+                return true;
+            } else {
+                return false;
+            }
         } else {
             return false;
         }
@@ -577,6 +651,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } else {
             maybeAbortTransactionAndCloseRecordCollector(isZombie);
         }
+
+        setState(State.SUSPENDED);
     }
 
     private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
@@ -655,6 +731,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (firstException != null) {
             throw firstException;
         }
+
+        setState(State.CLOSED);
     }
 
     /**
@@ -712,13 +790,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
             consumer.pause(singleton(partition));
-        }
-
-        // reset enforce processing flag once we've had data for all partitions: since we have
-        // reset the timer the last time we set this flag to true, it guarantees that we will
-        // re-timer ourselves for another period  of idleness.
-        if (partitionGroup.allPartitionsBuffered()) {
-            enforceProcessing = false;
         }
     }
 
