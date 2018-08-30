@@ -33,14 +33,13 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.concurrent.TimeoutException
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 import scala.util.control.ControlThrowable
 
 /**
@@ -71,6 +70,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
+  private var lastSuccessfulCommitTime = -1L
+  private val time = Time.SYSTEM
 
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
@@ -269,22 +270,33 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
   }
 
-  def commitOffsets(consumerWrapper: ConsumerWrapper) {
+  def commitOffsets(consumerWrapper: ConsumerWrapper, retry: Int = Integer.MAX_VALUE): Unit = {
     if (!exitingOnSendFailure) {
       trace("Committing offsets.")
       try {
         consumerWrapper.commit()
+        lastSuccessfulCommitTime = time.milliseconds
       } catch {
         case e: WakeupException =>
           // we only call wakeup() once to close the consumer,
           // so if we catch it in commit we can safely retry
           // and re-throw to break the loop
-          consumerWrapper.commit()
+          commitOffsets(consumerWrapper, retry)
           throw e
 
-        case _: TimeoutException =>
+        case _: TimeoutException if retry > 0 =>
+          if (retry == Integer.MAX_VALUE) { // only try to remove offsets for nonexistent topics once
+            Try(consumerWrapper.consumer.listTopics) match {
+              case Success(visibleTopics) =>
+                consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
+              case _ =>
+            }
+          }
           warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
-            s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG}")
+            s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
+            s"Last successful offset commit timestamp=${lastSuccessfulCommitTime}, retry count=${Integer.MAX_VALUE - retry}")
+          Thread.sleep(100)
+          commitOffsets(consumerWrapper, retry - 1)
 
         case _: CommitFailedException =>
           warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
@@ -428,14 +440,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   // Visible for testing
-  private[tools] class ConsumerWrapper(consumer: Consumer[Array[Byte], Array[Byte]],
+  private[tools] class ConsumerWrapper(private[tools] val consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        whitelistOpt: Option[String]) {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
-    private val offsets = new HashMap[TopicPartition, Long]()
+    // Visible for testing
+    private[tools] val offsets = new HashMap[TopicPartition, Long]()
 
     def init() {
       debug("Initiating consumer")
@@ -479,14 +492,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def commit() {
-      val existingTopics: Set[String] = Try(consumer.listTopics) match {
-        case Success(allTopics) => allTopics.keySet.asInstanceOf[Set[String]]
-        case Failure(_) => Set.empty
-      }
-      if (existingTopics.nonEmpty)
-        consumer.commitSync(offsets.filterKeys(tp => existingTopics.contains(tp.topic)).map { case (tp, offset) => (tp, new OffsetAndMetadata(offset, "")) }.asJava)
-      else
-        consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset, "")) }.asJava)
+      consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset)) }.asJava)
       offsets.clear()
     }
   }
