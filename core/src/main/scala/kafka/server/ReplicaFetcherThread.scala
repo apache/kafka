@@ -95,7 +95,7 @@ class ReplicaFetcherThread(name: String,
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   protected def getReplica(tp: TopicPartition): Option[Replica] = {
-    replicaMgr.getReplica(tp, Request.FutureLocalReplicaId)
+    replicaMgr.getReplica(tp)
   }
 
   override def initiateShutdown(): Boolean = {
@@ -286,8 +286,8 @@ class ReplicaFetcherThread(name: String,
     val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
       None
     } else {
-      val requestBuilder = FetchRequest.Builder.
-        forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend)
+      val requestBuilder = FetchRequest.Builder
+        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
       if (fetchMetadataSupported) {
