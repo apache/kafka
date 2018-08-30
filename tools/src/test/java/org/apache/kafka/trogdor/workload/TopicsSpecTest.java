@@ -26,6 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -76,5 +78,14 @@ public class TopicsSpecTest {
         assertEquals(Integer.valueOf(0), partsBNumbers.get(0));
         assertEquals(Integer.valueOf(1), partsBNumbers.get(1));
         assertEquals(2, partsBNumbers.size());
+    }
+
+    @Test
+    public void testPartitionsSpec() throws Exception {
+        String text = "{\"numPartitions\": 5, \"configs\": {\"foo\": \"bar\"}}";
+        PartitionsSpec spec = JsonUtil.JSON_SERDE.readValue(text, PartitionsSpec.class);
+        assertEquals(5, spec.numPartitions());
+        assertEquals("bar", spec.configs().get("foo"));
+        assertEquals(1, spec.configs().size());
     }
 }
