@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
-import org.easymock.EasyMock
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
@@ -87,7 +86,7 @@ class AbstractFetcherThreadTest {
 
   private def allMetricsNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
 
-  protected def fetchRequestBuilder(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest.Builder = {
+  protected def fetchRequestBuilder(partitionMap: collection.Map[TopicPartition, PartitionFetchState]): FetchRequest.Builder = {
     val partitionData = partitionMap.map { case (tp, fetchState) =>
       tp -> new FetchRequest.PartitionData(fetchState.fetchOffset, 0, 1024 * 1024)
     }.toMap.asJava
@@ -99,7 +98,6 @@ class AbstractFetcherThreadTest {
                            sourceBroker: BrokerEndPoint,
                            fetchBackOffMs: Int = 0)
     extends AbstractFetcherThread(name, clientId, sourceBroker,
-      brokerConfig = EasyMock.mock(classOf[KafkaConfig]),
       fetchBackOffMs,
       isInterruptible = true,
       includeLogTruncation = false) {
@@ -117,7 +115,7 @@ class AbstractFetcherThreadTest {
       fetchRequest.fetchData.asScala.mapValues(_ => new PartitionData[Records](Errors.NONE, 0, 0, 0,
         Seq.empty.asJava, MemoryRecords.EMPTY)).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
+    override protected def buildFetch(partitionMap: collection.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
       ResultWithPartitions(Some(fetchRequestBuilder(partitionMap)), Set())
     }
 
@@ -200,7 +198,7 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
+    override protected def buildFetch(partitionMap: collection.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
       partitionMap.foreach { case (topicPartition, partitionFetchState) =>
         // Add backoff delay check

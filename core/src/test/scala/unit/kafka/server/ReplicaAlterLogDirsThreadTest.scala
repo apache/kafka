@@ -479,8 +479,9 @@ class ReplicaAlterLogDirsThreadTest {
       brokerTopicStats = null)
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) =
-      thread.buildFetchRequest(Seq((t1p0, new PartitionFetchState(150)), (t1p1, new PartitionFetchState(160))))
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
+      t1p0 -> new PartitionFetchState(150),
+      t1p1 -> new PartitionFetchState(160)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
@@ -525,10 +526,9 @@ class ReplicaAlterLogDirsThreadTest {
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
     // one partition is ready and one is truncating
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) =
-      thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(150)),
-        (t1p1, new PartitionFetchState(160, truncatingLog=true))))
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
+        t1p0 -> new PartitionFetchState(150),
+        t1p1 -> new PartitionFetchState(160, truncatingLog=true)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
@@ -540,10 +540,9 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
-    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) =
-      thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(140)),
-        (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
+    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.buildFetch(Map(
+        t1p0 -> new PartitionFetchState(140),
+        t1p1 -> new PartitionFetchState(160, delay=new DelayedItem(5000))))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -555,10 +554,9 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
-    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) =
-      thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(140, delay=new DelayedItem(5000))),
-        (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
+    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
+        t1p0 -> new PartitionFetchState(140, delay=new DelayedItem(5000)),
+        t1p1 -> new PartitionFetchState(160, delay=new DelayedItem(5000))))
     assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3Opt.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }
