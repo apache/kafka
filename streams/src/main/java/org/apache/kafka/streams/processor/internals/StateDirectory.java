@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -215,11 +216,20 @@ public class StateDirectory {
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
-            locks.remove(taskId);
-            try (final FileChannel fileChannel = channels.remove(taskId)) {
+            boolean isClosedChannelException = true;
+            try {
                 lockAndOwner.lock.release();
-                log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
+            } catch (ClosedChannelException cce){
+                log.error("{} Closed Channel Exception Occured supposed to Ignore", logPrefix(), cce);
+                isClosedChannelException = false;
             }
+            log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
+
+            final FileChannel fileChannel = channels.remove(taskId);
+            if (fileChannel != null && isClosedChannelException) {
+                fileChannel.close();
+            }
+            locks.remove(taskId);
         }
     }
 
