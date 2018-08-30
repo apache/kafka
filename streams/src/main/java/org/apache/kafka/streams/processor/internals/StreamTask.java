@@ -45,12 +45,9 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
@@ -62,65 +59,6 @@ import static java.util.Collections.singleton;
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
-
-    /**
-     * The expected Stream Task  state transition with the following defined states is:
-     *
-     * <pre>
-     *                 +--------------+
-     *         +<----- | Created (0)  |
-     *         |       +-----+--------+
-     *         |             |
-     *         |             v
-     *         |       +--------------+
-     *         +<----- | Restoring (1)|------+ (Error path)
-     *         |       +--------------+      |
-     *         |                             |
-     *         |                             |
-     *         |       +-----+--------+      |
-     *         |       | Idle (4)     |------+ (Error path)
-     *         |       +-----+--------+      |
-     *         |            |  ^             |
-     *         |            v  |             |
-     *         |       +--------------+      |
-     *         +------>| Running (2)  |      |
-     *                 +----+--+------+      |
-     *                      |  ^             |
-     *                      v  |             |
-     *                 +----+--+------+      |
-     *                 | Suspended (3)|<-----+
-     *                 +-----+--------+
-     *                       |
-     *                       v
-     *                 +-----+--------+
-     *                 | Closed (5)   |
-     *                 +-----+--------+
-     *
-     */
-    public enum State {
-        CREATED(1, 2), RESTORING(2, 3), RUNNING(3, 4), SUSPENDED(2, 5), IDLE(2, 3), CLOSED;
-
-        private final Set<Integer> validTransitions = new HashSet<>();
-
-        State(final Integer... validTransitions) {
-            this.validTransitions.addAll(Arrays.asList(validTransitions));
-        }
-
-        public boolean isValidTransition(final State newState) {
-            return validTransitions.contains(newState.ordinal());
-        }
-    }
-
-    private void setState(final State newState) {
-        final State oldState = state;
-
-        if (!state.isValidTransition(newState)) {
-            throw new IllegalStateException("Stream task " + id + ": Unexpected state transition from " + oldState + " to " + newState);
-        } else {
-            state = newState;
-            log.debug("State transition from {} to {}", oldState, newState);
-        }
-    }
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -134,7 +72,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final PunctuationQueue systemTimePunctuationQueue;
     private final ProducerSupplier producerSupplier;
 
-    private State state;
     private Sensor closeSensor;
     private long idleStartTime;
     private Producer<byte[], byte[]> producer;
@@ -245,7 +182,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
-        this.state = State.CREATED;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
         this.closeSensor = closeSensor;
@@ -315,12 +251,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         log.trace("Initializing state stores");
         registerStateStores();
 
-        if (changelogPartitions().isEmpty()) {
-            setState(State.RESTORING);
-            return true;
-        } else {
-            return false;
-        }
+        return changelogPartitions().isEmpty();
     }
 
     /**
@@ -345,9 +276,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         processorContext.initialized();
 
-        setState(State.RUNNING);
-
         taskInitialized = true;
+
+        idleStartTime = RecordQueue.NOT_KNOWN;
     }
 
     /**
@@ -381,7 +312,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 idleStartTime = now;
             }
 
-            if (maxTaskIdleMs == 0 || now - idleStartTime > maxTaskIdleMs) {
+            if (now - idleStartTime >= maxTaskIdleMs) {
                 taskMetrics.taskEnforcedProcessSensor.record();
                 return true;
             } else {
@@ -651,8 +582,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } else {
             maybeAbortTransactionAndCloseRecordCollector(isZombie);
         }
-
-        setState(State.SUSPENDED);
     }
 
     private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
@@ -731,8 +660,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (firstException != null) {
             throw firstException;
         }
-
-        setState(State.CLOSED);
     }
 
     /**

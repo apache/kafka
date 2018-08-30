@@ -21,10 +21,13 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -127,7 +130,7 @@ public class StreamTaskTest {
     };
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
-    private final Metrics metrics = new Metrics();
+    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
@@ -512,7 +515,10 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
+        final MetricName enforcedProcessMetric = metrics.metricName("enforced-processing-total", "stream-task-metrics", mkMap(mkEntry("client-id", "test"), mkEntry("task-id", taskId00.toString())));
+
         assertFalse(task.isProcessable(0L));
+        assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
@@ -522,21 +528,29 @@ public class StreamTaskTest {
 
         assertFalse(task.isProcessable(time.milliseconds() + 50L));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 101L));
+        assertTrue(task.isProcessable(time.milliseconds() + 100L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // once decided to enforce, continue doing that
-        assertTrue(task.isProcessable(time.milliseconds() + 102L));
+        assertTrue(task.isProcessable(time.milliseconds() + 101L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
         assertTrue(task.isProcessable(time.milliseconds() + 130L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // one resumed to normal processing, the timer should be reset
         task.process();
 
-        assertFalse(task.isProcessable(time.milliseconds() + 201L));
+        assertFalse(task.isProcessable(time.milliseconds() + 150L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertTrue(task.isProcessable(time.milliseconds() + 202L));
+        assertFalse(task.isProcessable(time.milliseconds() + 249L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertTrue(task.isProcessable(time.milliseconds() + 250L));
+        assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
     }
 
 
