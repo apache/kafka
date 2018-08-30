@@ -44,7 +44,7 @@ public class StreamsBrokerDownResilienceTest {
 
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
             System.exit(1);
@@ -72,7 +72,7 @@ public class StreamsBrokerDownResilienceTest {
         // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
         // streams_broker_down_resilience_test and passed as args
         if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            Map<String, String> updated = updatedConfigs(additionalConfigs);
+            final Map<String, String> updated = updatedConfigs(additionalConfigs);
             System.out.println("Updating configs with " + updated);
             streamsProperties.putAll(updated);
         }
@@ -94,7 +94,7 @@ public class StreamsBrokerDownResilienceTest {
             .peek(new ForeachAction<String, String>() {
                 int messagesProcessed = 0;
                 @Override
-                public void apply(String key, String value) {
+                public void apply(final String key, final String value) {
                     System.out.println("received key " + key + " and value " + value);
                     messagesProcessed++;
                     System.out.println("processed" + messagesProcessed + "messages");
@@ -127,7 +127,7 @@ public class StreamsBrokerDownResilienceTest {
 
     }
 
-    private static boolean confirmCorrectConfigs(Properties properties) {
+    private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
@@ -141,11 +141,11 @@ public class StreamsBrokerDownResilienceTest {
      * @param formattedConfigs the formatted config string
      * @return HashMap with keys and values inserted
      */
-    private static Map<String, String> updatedConfigs(String formattedConfigs) {
-        String[] parts = formattedConfigs.split(",");
-        Map<String, String> updatedConfigs = new HashMap<>();
-        for (String part : parts) {
-            String[] keyValue = part.split("=");
+    private static Map<String, String> updatedConfigs(final String formattedConfigs) {
+        final String[] parts = formattedConfigs.split(",");
+        final Map<String, String> updatedConfigs = new HashMap<>();
+        for (final String part : parts) {
+            final String[] keyValue = part.split("=");
             updatedConfigs.put(keyValue[KEY], keyValue[VALUE]);
         }
         return updatedConfigs;

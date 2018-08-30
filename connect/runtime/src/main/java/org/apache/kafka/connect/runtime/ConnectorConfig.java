@@ -120,7 +120,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_RETRY_MAX_DELAY_DOC = "The maximum duration in milliseconds between consecutive retry attempts. " +
             "Jitter will be added to the delay once this limit is reached to prevent thundering herd issues.";
 
-    public static final String ERRORS_TOLERANCE_CONFIG = "errors.allowed.max";
+    public static final String ERRORS_TOLERANCE_CONFIG = "errors.tolerance";
     public static final String ERRORS_TOLERANCE_DISPLAY = "Error Tolerance";
     public static final ToleranceType ERRORS_TOLERANCE_DEFAULT = ToleranceType.NONE;
     public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'none' is the default value " +
@@ -168,6 +168,11 @@ public class ConnectorConfig extends AbstractConfig {
                         if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
+                    }
+
+                    @Override
+                    public String toString() {
+                        return "unique transformation aliases";
                     }
                 }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,

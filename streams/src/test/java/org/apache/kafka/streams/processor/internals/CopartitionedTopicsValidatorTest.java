@@ -46,7 +46,7 @@ public class CopartitionedTopicsValidatorTest {
         partitions.put(new TopicPartition("second", 1), new PartitionInfo("second", 1, null, null, null));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = IllegalStateException.class)
     public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
         validator.validate(Collections.singleton("topic"),
                            Collections.<String, StreamsPartitionAssignor.InternalTopicMetadata>emptyMap(),
@@ -96,27 +96,6 @@ public class CopartitionedTopicsValidatorTest {
         assertThat(one.numPartitions, equalTo(15));
         assertThat(two.numPartitions, equalTo(15));
         assertThat(three.numPartitions, equalTo(15));
-    }
-
-    @Test
-    public void shouldSetRepartitionTopicsPartitionCountToNotAvailableIfAnyNotAvaliable() {
-        final StreamsPartitionAssignor.InternalTopicMetadata one = createTopicMetadata("one", 1);
-        final StreamsPartitionAssignor.InternalTopicMetadata two = createTopicMetadata("two", StreamsPartitionAssignor.NOT_AVAILABLE);
-        final Map<String, StreamsPartitionAssignor.InternalTopicMetadata> repartitionTopicConfig = new HashMap<>();
-
-        repartitionTopicConfig.put(one.config.name(), one);
-        repartitionTopicConfig.put(two.config.name(), two);
-
-        validator.validate(Utils.mkSet("first",
-                                       "second",
-                                       one.config.name(),
-                                       two.config.name()),
-                           repartitionTopicConfig,
-                           cluster.withPartitions(partitions));
-
-        assertThat(one.numPartitions, equalTo(StreamsPartitionAssignor.NOT_AVAILABLE));
-        assertThat(two.numPartitions, equalTo(StreamsPartitionAssignor.NOT_AVAILABLE));
-
     }
 
     private StreamsPartitionAssignor.InternalTopicMetadata createTopicMetadata(final String repartitionTopic,

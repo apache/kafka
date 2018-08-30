@@ -22,9 +22,9 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
+import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -38,6 +38,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -45,7 +46,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class FileRecordsTest {
+public class FileRecordsTest extends EasyMockSupport {
 
     private byte[][] values = new byte[][] {
             "abcd".getBytes(),
@@ -59,6 +60,35 @@ public class FileRecordsTest {
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
         this.time = new MockTime();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendProtectsFromOverflow() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        EasyMock.expect(fileChannelMock.size()).andStubReturn((long) Integer.MAX_VALUE);
+        EasyMock.expect(fileChannelMock.position(Integer.MAX_VALUE)).andReturn(fileChannelMock);
+
+        replayAll();
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        append(records, values);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testOpenOversizeFile() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        EasyMock.expect(fileChannelMock.size()).andStubReturn(Integer.MAX_VALUE + 5L);
+
+        replayAll();
+
+        new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testOutOfRangeSlice() throws Exception {
+        this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes();
     }
 
     /**
@@ -121,7 +151,7 @@ public class FileRecordsTest {
      */
     @Test
     public void testRead() throws IOException {
-        FileRecords read = fileRecords.read(0, fileRecords.sizeInBytes());
+        FileRecords read = fileRecords.slice(0, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes(), read.sizeInBytes());
         TestUtils.checkEquals(fileRecords.batches(), read.batches());
 
@@ -129,35 +159,35 @@ public class FileRecordsTest {
         RecordBatch first = items.get(0);
 
         // read from second message until the end
-        read = fileRecords.read(first.sizeInBytes(), fileRecords.sizeInBytes() - first.sizeInBytes());
+        read = fileRecords.slice(first.sizeInBytes(), fileRecords.sizeInBytes() - first.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read starting from the second message", items.subList(1, items.size()), batches(read));
 
         // read from second message and size is past the end of the file
-        read = fileRecords.read(first.sizeInBytes(), fileRecords.sizeInBytes());
+        read = fileRecords.slice(first.sizeInBytes(), fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read starting from the second message", items.subList(1, items.size()), batches(read));
 
         // read from second message and position + size overflows
-        read = fileRecords.read(first.sizeInBytes(), Integer.MAX_VALUE);
+        read = fileRecords.slice(first.sizeInBytes(), Integer.MAX_VALUE);
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read starting from the second message", items.subList(1, items.size()), batches(read));
 
         // read from second message and size is past the end of the file on a view/slice
-        read = fileRecords.read(1, fileRecords.sizeInBytes() - 1)
-                .read(first.sizeInBytes() - 1, fileRecords.sizeInBytes());
+        read = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
+                .slice(first.sizeInBytes() - 1, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read starting from the second message", items.subList(1, items.size()), batches(read));
 
         // read from second message and position + size overflows on a view/slice
-        read = fileRecords.read(1, fileRecords.sizeInBytes() - 1)
-                .read(first.sizeInBytes() - 1, Integer.MAX_VALUE);
+        read = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
+                .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read starting from the second message", items.subList(1, items.size()), batches(read));
 
         // read a single message starting from second message
         RecordBatch second = items.get(1);
-        read = fileRecords.read(first.sizeInBytes(), second.sizeInBytes());
+        read = fileRecords.slice(first.sizeInBytes(), second.sizeInBytes());
         assertEquals(second.sizeInBytes(), read.sizeInBytes());
         assertEquals("Read a single message starting from the second message",
                 Collections.singletonList(second), batches(read));
@@ -207,9 +237,9 @@ public class FileRecordsTest {
         RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
-        FileRecords slice = fileRecords.read(start, size);
+        FileRecords slice = fileRecords.slice(start, size);
         assertEquals(Collections.singletonList(batch), batches(slice));
-        FileRecords slice2 = fileRecords.read(start, size - 1);
+        FileRecords slice2 = fileRecords.slice(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
 
@@ -344,7 +374,7 @@ public class FileRecordsTest {
         RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
-        FileRecords slice = fileRecords.read(start, size - 1);
+        FileRecords slice = fileRecords.slice(start, size - 1);
         Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
@@ -430,10 +460,6 @@ public class FileRecordsTest {
         }
     }
 
-    private String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
-    }
-
     private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,
                                              List<Long> initialOffsets,
                                              FileRecords fileRecords,
@@ -441,13 +467,11 @@ public class FileRecordsTest {
                                              byte toMagic,
                                              long firstOffset,
                                              Time time) {
-        long numBatches = 0;
         long minBatchSize = Long.MAX_VALUE;
         long maxBatchSize = Long.MIN_VALUE;
         for (RecordBatch batch : fileRecords.batches()) {
             minBatchSize = Math.min(minBatchSize, batch.sizeInBytes());
             maxBatchSize = Math.max(maxBatchSize, batch.sizeInBytes());
-            numBatches++;
         }
 
         // Test the normal down-conversion path
@@ -469,21 +493,6 @@ public class FileRecordsTest {
             Iterator<ConvertedRecords> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
-
-            // Check if chunking works as expected. The only way to predictably test for this is by testing the edge cases.
-            // 1. If maximum read size is greater than the size of all batches combined, we must get all down-conversion
-            //    records in exactly two batches; the first chunk is pre down-converted and returned, and the second chunk
-            //    contains the remaining batches.
-            // 2. If maximum read size is just smaller than the size of all batches combined, we must get results in two
-            //    chunks.
-            // 3. If maximum read size is less than the size of a single record, we get one batch in each chunk.
-            if (readSize >= fileRecords.sizeInBytes())
-                assertEquals(2, convertedRecords.size());
-            else if (readSize == fileRecords.sizeInBytes() - 1)
-                assertEquals(2, convertedRecords.size());
-            else if (readSize <= minBatchSize)
-                assertEquals(numBatches, convertedRecords.size());
-
             verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
             convertedRecords.clear();
         }

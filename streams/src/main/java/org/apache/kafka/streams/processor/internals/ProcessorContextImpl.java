@@ -33,6 +33,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
+    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -54,7 +55,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public RecordCollector recordCollector() {
-        return this.collector;
+        return collector;
     }
 
     /**
@@ -116,7 +117,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             if (sendTo != null) {
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
-                    throw new StreamsException("Unknown processor name: " + sendTo);
+                    throw new StreamsException("Unknown downstream node: " + sendTo + " either does not exist or is not" +
+                            " connected to this processor.");
                 }
                 forward(child, key, value);
             } else {
@@ -150,6 +152,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return task.schedule(interval, type, callback);
+    }
+
+    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
+        this.streamTimeSupplier = streamTimeSupplier;
+    }
+
+    @Override
+    public long streamTime() {
+        return streamTimeSupplier.get();
     }
 
 }

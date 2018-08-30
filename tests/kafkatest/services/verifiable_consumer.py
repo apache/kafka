@@ -161,7 +161,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO"):
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None):
+        """
+        :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
+        """
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
         
@@ -178,6 +181,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.event_handlers = {}
         self.global_position = {}
         self.global_committed = {}
+        self.jaas_override_variables = jaas_override_variables or {}
 
         for node in self.nodes:
             node.version = version
@@ -198,7 +202,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file
-        self.security_config = self.kafka.security_config.client_config(self.prop_file, node)
+        self.security_config = self.kafka.security_config.client_config(self.prop_file, node,
+                                                                        self.jaas_override_variables)
         self.security_config.setup_node(node)
         self.prop_file += str(self.security_config)
         self.logger.info("verifiable_consumer.properties:")

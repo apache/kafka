@@ -48,18 +48,19 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 versions += [
   activation: "1.1.1",
-  apacheda: "1.0.1",
+  apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.59",
   easymock: "3.6",
-  jackson: "2.9.5",
-  jetty: "9.4.10.v20180503",
+  jackson: "2.9.6",
+  jetty: "9.4.11.v20180605",
   jersey: "2.27",
   jmh: "1.21",
   log4j: "1.2.17",
   scalaLogging: "3.9.0",
   jaxb: "2.3.0",
+  jaxrs: "2.1",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
   junit: "4.12",
@@ -75,13 +76,13 @@ versions += [
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
   reflections: "0.9.11",
-  rocksDB: "5.7.3",
+  rocksDB: "5.14.2",
   scalatest: "3.0.5",
   scoverage: "1.3.1",
   slf4j: "1.7.25",
-  snappy: "1.1.7.1",
+  snappy: "1.1.7.2",
   zkclient: "0.10",
-  zookeeper: "3.4.12"
+  zookeeper: "3.4.13"
 ]
 
 libs += [
@@ -101,13 +102,13 @@ libs += [
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
+  jaxrsApi: "javax.ws.rs:javax.ws.rs-api:$versions.jaxrs",
   jettyServer: "org.eclipse.jetty:jetty-server:$versions.jetty",
   jettyClient: "org.eclipse.jetty:jetty-client:$versions.jetty",
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
   jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
   jerseyHk2: "org.glassfish.jersey.inject:jersey-hk2:$versions.jersey",
-  jfreechart: "1.0.0",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",

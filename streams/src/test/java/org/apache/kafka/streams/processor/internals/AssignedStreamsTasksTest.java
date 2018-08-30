@@ -90,7 +90,7 @@ public class AssignedStreamsTasksTest {
 
         assignedTasks.initializeNewTasks();
 
-        Collection<StreamTask> restoring = assignedTasks.restoringTasks();
+        final Collection<StreamTask> restoring = assignedTasks.restoringTasks();
         assertThat(restoring.size(), equalTo(1));
         assertSame(restoring.iterator().next(), t1);
     }
@@ -293,7 +293,7 @@ public class AssignedStreamsTasksTest {
         try {
             assignedTasks.commit();
             fail("Should have thrown exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
@@ -337,6 +337,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
+        EasyMock.expect(t1.isProcessable()).andReturn(true);
         t1.process();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
@@ -350,6 +351,32 @@ public class AssignedStreamsTasksTest {
         } catch (final TaskMigratedException expected) { /* ignore */ }
 
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldNotProcessUnprocessableTasks() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.isProcessable()).andReturn(false);
+        EasyMock.replay(t1);
+        addAndInitTask();
+
+        assertThat(assignedTasks.process(), equalTo(0));
+
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldAlwaysProcessProcessableTasks() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.isProcessable()).andReturn(true);
+        EasyMock.expect(t1.process()).andReturn(true).once();
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+
+        assertThat(assignedTasks.process(), equalTo(1));
+
         EasyMock.verify(t1);
     }
 

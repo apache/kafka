@@ -547,27 +547,12 @@
             <ul>
             <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
             <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
-                <a href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing passwords on disk, you can plug in your own implementation of
-                <code>javax.security.auth.spi.LoginModule</code> that provides usernames and passwords from an external source. The login module implementation should
-                provide username as the public credential and password as the private credential of the <code>Subject</code>. The default implementation
-                <code>org.apache.kafka.common.security.plain.PlainLoginModule</code> can be used as an example.</li>
-            <li>In production systems, external authentication servers may implement password authentication. Kafka brokers can be integrated with these servers by adding
-                your own implementation of <code>javax.security.sasl.SaslServer</code>. The default implementation included in Kafka in the package
-                <code>org.apache.kafka.common.security.plain</code> can be used as an example to get started.
-                <ul>
-                <li>New providers must be installed and registered in the JVM. Providers can be installed by adding provider classes to
-                the normal <tt>CLASSPATH</tt> or bundled as a jar file and added to <tt><i>JAVA_HOME</i>/lib/ext</tt>.</li>
-                <li>Providers can be registered statically by adding a provider to the security properties file
-                <tt><i>JAVA_HOME</i>/lib/security/java.security</tt>.
-                <pre>    security.provider.n=providerClassName</pre>
-                where <i>providerClassName</i> is the fully qualified name of the new provider and <i>n</i> is the preference order with
-                lower numbers indicating higher preference.</li>
-                <li>Alternatively, you can register providers dynamically at runtime by invoking <code>Security.addProvider</code> at the beginning of the client
-                application or in a static initializer in the login module. For example:
-                <pre>    Security.addProvider(new PlainSaslServerProvider());</pre></li>
-                <li>For more details, see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA Reference</a>.</li>
-                </ul>
-            </li>
+                <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
+                by configuring your own callback handlers that obtain username and password from an external source using the configuration options
+                <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
+            <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
+                you can plug in your own callback handlers that use external authentication servers for password verification by configuring
+                <code>sasl.server.callback.handler.class</code>.</li>
             </ul>
         </li>
         </ol>
@@ -667,8 +652,8 @@
             against brute force attacks if Zookeeper security is compromised.</li>
             <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
             protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
-            <li>The default SASL/SCRAM implementation may be overridden using custom login modules in installations
-            where Zookeeper is not secure. See <a href="#security_sasl_plain_production">here</a> for details.</li>
+            <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
+            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
             <li>For more details on security considerations, refer to
             <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
             </ul>
@@ -730,6 +715,8 @@
                 <pre>
     security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
     sasl.mechanism=OAUTHBEARER</pre></li>
+             <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
+                 Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
             </ol>
         </li>
         <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
@@ -761,6 +748,13 @@
                  example: <tt>unsecuredLoginListClaim_fubar="|value1|value2"</tt>. Any valid
                  claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
                  automatically generated).</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginExtension_&lt;extensionname&gt;="value"</tt></td>
+                 <td>Creates a <tt>String</tt> extension with the given name and value.
+                 For example: <tt>unsecuredLoginExtension_traceId="123"</tt>. A valid extension name
+                 is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
+                 A valid extension value is any combination of characters with ASCII codes 1-127.
                  </tr>
                  <tr>
                  <td><tt>unsecuredLoginPrincipalClaimName</tt></td>
@@ -1022,7 +1016,7 @@
     <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <code>authorizer.class.name</code> in server.properties. To enable the out of the box implementation use:
     <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
-    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the acl structure on KIP-11. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if a Resource R has no associated acls, no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
+    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
     One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
     <pre>super.users=User:Bob;User:Alice</pre>
@@ -1083,21 +1077,33 @@
         </tr>
         <tr>
             <td>--cluster</td>
-            <td>Specifies cluster as resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on the singular cluster resource.</td>
             <td></td>
-            <td>Resource</td>
+            <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--topic [topic-name]</td>
-            <td>Specifies the topic as resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on topic resource pattern(s).</td>
             <td></td>
-            <td>Resource</td>
+            <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--group [group-name]</td>
-            <td>Specifies the consumer-group as resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on consumer-group resource pattern(s)</td>
             <td></td>
-            <td>Resource</td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--resource-pattern-type [pattern-type]</td>
+            <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
+                When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
+                When listing or removing acls, a specific pattern type filter can be used to list or remove acls from a specific type of resource pattern,
+                or the filter values of 'any' or 'match' can be used, where 'any' will match any pattern type, but will match the resource name exactly,
+                and 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s).<br>
+                WARNING: 'match', when used in combination with the '--remove' switch, should be used with care.
+            </td>
+            <td>literal</td>
+            <td>Configuration</td>
         </tr>
         <tr>
             <td>--allow-principal</td>
@@ -1160,15 +1166,31 @@
             By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
             Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
-            Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+            Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
+            You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
+            You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</pre>
+            You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
+            You can do that by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</pre>
+            Note, --resource-pattern-type defaults to 'literal', which only affects resources with the exact same name or, in the case of the wildcard resource name '*', a resource with any name.</li>
 
         <li><b>Removing Acls</b><br>
                 Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
-            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre></li>
+            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre>
+            If you wan to remove the acl added to the prefixed resource pattern above we can execute the CLI with following options:
+            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed</pre></li>
 
         <li><b>List Acls</b><br>
-                We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
-                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
+                We can list acls for any resource by specifying the --list option with the resource. To list all acls on the literal resource pattern Test-topic, we can execute the CLI with following options:
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre>
+                However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
+                e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</pre>
+                However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
+                We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</pre>
+                This will list acls on all matching literal, wildcard and prefixed resource patterns.</li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
                 The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
@@ -1264,7 +1286,7 @@
         <li> Set the configuration property <tt>zookeeper.set.acl</tt> in each broker to true</li>
     </ol>
 
-    The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper if the new Java consumer and producer clients are used).
+    The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper).
 
     <h4><a id="zk_authz_migration" href="#zk_authz_migration">7.6.2 Migrating clusters</a></h4>
     If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:

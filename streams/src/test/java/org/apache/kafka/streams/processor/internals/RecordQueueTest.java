@@ -62,7 +62,6 @@ public class RecordQueueTest {
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
             null,
-            null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
             skippedRecordsSensor
@@ -102,7 +101,7 @@ public class RecordQueueTest {
 
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(TimestampTracker.NOT_KNOWN, queue.timestamp());
+        assertEquals(RecordQueue.NOT_KNOWN, queue.timestamp());
 
         // add three 3 out-of-order records with timestamp 2, 1, 3
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -113,20 +112,17 @@ public class RecordQueueTest {
         queue.addRawRecords(list1);
 
         assertEquals(3, queue.size());
-        assertEquals(1L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
+        assertEquals(2L, queue.timestamp());
 
         // poll the first record, now with 1, 3
         assertEquals(2L, queue.poll().timestamp);
         assertEquals(2, queue.size());
-        assertEquals(1L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
+        assertEquals(2L, queue.timestamp());
 
         // poll the second record, now with 3
         assertEquals(1L, queue.poll().timestamp);
         assertEquals(1, queue.size());
         assertEquals(3L, queue.timestamp());
-        assertEquals(1, queue.timeTracker().size());
 
         // add three 3 out-of-order records with timestamp 4, 1, 2
         // now with 3, 4, 1, 2
@@ -139,28 +135,23 @@ public class RecordQueueTest {
 
         assertEquals(4, queue.size());
         assertEquals(3L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
 
         // poll the third record, now with 4, 1, 2
         assertEquals(3L, queue.poll().timestamp);
         assertEquals(3, queue.size());
-        assertEquals(3L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
+        assertEquals(4L, queue.timestamp());
 
         // poll the rest records
         assertEquals(4L, queue.poll().timestamp);
-        assertEquals(3L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
+        assertEquals(4L, queue.timestamp());
 
         assertEquals(1L, queue.poll().timestamp);
-        assertEquals(3L, queue.timestamp());
-        assertEquals(1, queue.timeTracker().size());
+        assertEquals(4L, queue.timestamp());
 
         assertEquals(2L, queue.poll().timestamp);
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(3L, queue.timestamp());
-        assertEquals(0, queue.timeTracker().size());
+        assertEquals(4L, queue.timestamp());
 
         // add three more records with 4, 5, 6
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
@@ -177,14 +168,12 @@ public class RecordQueueTest {
         assertEquals(4L, queue.poll().timestamp);
         assertEquals(2, queue.size());
         assertEquals(5L, queue.timestamp());
-        assertEquals(2, queue.timeTracker().size());
 
         // clear the queue
         queue.clear();
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(0, queue.timeTracker().size());
-        assertEquals(TimestampTracker.NOT_KNOWN, queue.timestamp());
+        assertEquals(RecordQueue.NOT_KNOWN, queue.timestamp());
 
         // re-insert the three records with 4, 5, 6
         queue.addRawRecords(list3);

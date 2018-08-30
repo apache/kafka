@@ -17,11 +17,11 @@
 
 package kafka.admin
 
+import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService, KafkaConsumerGroupService, ZkConsumerGroupService}
-import kafka.consumer.{OldConsumer, Whitelist}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -40,8 +40,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   val topic = "foo"
   val group = "test.group"
 
-  @deprecated("This field will be removed in a future release", "0.11.0.0")
-  private val oldConsumers = new ArrayBuffer[OldConsumer]
   private var consumerGroupService: List[ConsumerGroupService] = List()
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()
 
@@ -55,23 +53,14 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    adminZkClient.createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1)
   }
 
   @After
   override def tearDown(): Unit = {
     consumerGroupService.foreach(_.close())
     consumerGroupExecutors.foreach(_.shutdown())
-    oldConsumers.foreach(_.stop())
     super.tearDown()
-  }
-
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
-  def createOldConsumer(): Unit = {
-    val consumerProps = new Properties
-    consumerProps.setProperty("group.id", group)
-    consumerProps.setProperty("zookeeper.connect", zkConnect)
-    oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
   }
 
   def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
@@ -93,13 +82,9 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     }
   }
 
-  def stopRandomOldConsumer(): Unit = {
-    oldConsumers.head.stop()
-  }
-
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
     val opts = new ConsumerGroupCommandOptions(args)
-    val service = if (opts.useOldConsumer) new ZkConsumerGroupService(opts) else new KafkaConsumerGroupService(opts)
+    val service = new ConsumerGroupService(opts)
     consumerGroupService = service :: consumerGroupService
     service
   }
@@ -107,8 +92,9 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   def addConsumerGroupExecutor(numConsumers: Int,
                                topic: String = topic,
                                group: String = group,
-                               strategy: String = classOf[RangeAssignor].getName): ConsumerGroupExecutor = {
-    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy)
+                               strategy: String = classOf[RangeAssignor].getName,
+                               customPropsOpt: Option[Properties] = None): ConsumerGroupExecutor = {
+    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy, customPropsOpt)
     addExecutor(executor)
     executor
   }
@@ -129,9 +115,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
 object ConsumerGroupCommandTest {
 
-  abstract class AbstractConsumerRunnable(broker: String, groupId: String) extends Runnable {
+  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
     val props = new Properties
     configure(props)
+    customPropsOpt.foreach(props.asScala ++= _.asScala)
     val consumer = new KafkaConsumer(props)
 
     def configure(props: Properties): Unit = {
@@ -147,7 +134,7 @@ object ConsumerGroupCommandTest {
       try {
         subscribe()
         while (true)
-          consumer.poll(Long.MaxValue)
+          consumer.poll(Duration.ofMillis(Long.MaxValue))
       } catch {
         case _: WakeupException => // OK
       } finally {
@@ -160,8 +147,8 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String)
-    extends AbstractConsumerRunnable(broker, groupId) {
+  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String, customPropsOpt: Option[Properties] = None)
+    extends AbstractConsumerRunnable(broker, groupId, customPropsOpt) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
@@ -197,11 +184,12 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String)
+  class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String,
+                              customPropsOpt: Option[Properties] = None)
     extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
-      submit(new ConsumerRunnable(broker, groupId, topic, strategy))
+      submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt))
     }
 
   }

@@ -18,9 +18,8 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
-
 import org.apache.kafka.common.TopicPartition
-
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -40,7 +39,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    group = new GroupMetadata("groupId", initialState = Empty)
+    group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
   }
 
   @Test
@@ -267,8 +266,7 @@ class GroupMetadataTest extends JUnitSuite {
       protocolType, List(("roundrobin", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
-    member.awaitingJoinCallback = _ => ()
-    group.add(member)
+    group.add(member, _ => ())
 
     assertEquals(0, group.generationId)
     assertNull(group.protocolOrNull)

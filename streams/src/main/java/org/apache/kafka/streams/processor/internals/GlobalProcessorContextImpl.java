@@ -92,8 +92,12 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
+    @Override
+    public long streamTime() {
+        throw new RuntimeException("Stream time is not implemented for the global processor context.");
+    }
 }

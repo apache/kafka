@@ -156,28 +156,28 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.restore(key, value);
     }
 
-    private void assertStateRestoreListenerOnStartNotification(MockStateRestoreListener restoreListener) {
+    private void assertStateRestoreListenerOnStartNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_START));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.restoreStartOffset, is(startOffset));
         assertThat(restoreListener.restoreEndOffset, is(endOffset));
     }
 
-    private void assertStateRestoreListenerOnBatchCompleteNotification(MockStateRestoreListener restoreListener) {
+    private void assertStateRestoreListenerOnBatchCompleteNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_BATCH));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.restoredBatchOffset, is(batchOffset));
         assertThat(restoreListener.numBatchRestored, is(numberRestored));
     }
 
-    private void assertStateRestoreOnEndNotification(MockStateRestoreListener restoreListener) {
+    private void assertStateRestoreOnEndNotification(final MockStateRestoreListener restoreListener) {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_END));
         assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.totalNumRestored, is(numberRestored));
     }
 
 
-    private void setUpCompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
+    private void setUpCompositeRestoreListener(final StateRestoreCallback stateRestoreCallback) {
         compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
         compositeRestoreListener.setUserRestoreListener(reportingStoreListener);
     }

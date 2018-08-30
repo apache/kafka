@@ -95,7 +95,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
 
         @Override
-        public void process(K key, Change<V> change) {
+        public void process(final K key, final Change<V> change) {
             final V1 newValue = computeValue(key, change.newValue);
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
@@ -112,7 +112,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         private final KTableValueGetter<K, V> parentGetter;
 
-        KTableMapValuesValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableMapValuesValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 

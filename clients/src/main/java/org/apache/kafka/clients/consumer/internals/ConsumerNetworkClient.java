@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -62,7 +63,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Time time;
     private final long retryBackoffMs;
     private final int maxPollTimeoutMs;
-    private final long unsentExpiryMs;
+    private final int requestTimeoutMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
     // We do not need high throughput, so use a fair lock to try to avoid starvation
@@ -83,7 +84,7 @@ public class ConsumerNetworkClient implements Closeable {
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs,
+                                 int requestTimeoutMs,
                                  int maxPollTimeoutMs) {
         this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
@@ -91,12 +92,20 @@ public class ConsumerNetworkClient implements Closeable {
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.maxPollTimeoutMs = Math.min(maxPollTimeoutMs, MAX_POLL_TIMEOUT_MS);
-        this.unsentExpiryMs = requestTimeoutMs;
+        this.requestTimeoutMs = requestTimeoutMs;
+    }
+
+
+    /**
+     * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
+     */
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+        return send(node, requestBuilder, requestTimeoutMs);
     }
 
     /**
      * Send a new request. Note that the request is not actually transmitted on the
-     * network until one of the {@link #poll(long)} variants is invoked. At this
+     * network until one of the {@link #poll(Timer)} variants is invoked. At this
      * point the request will either be transmitted successfully or will fail.
      * Use the returned future to obtain the result of the send. Note that there is no
      * need to check for disconnects explicitly on the {@link ClientResponse} object;
@@ -104,13 +113,18 @@ public class ConsumerNetworkClient implements Closeable {
      *
      * @param node The destination of the request
      * @param requestBuilder A builder for the request payload
+     * @param requestTimeoutMs Maximum time in milliseconds to await a response before disconnecting the socket and
+     *                         cancelling the request. The request may be cancelled sooner if the socket disconnects
+     *                         for any reason.
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+    public RequestFuture<ClientResponse> send(Node node,
+                                              AbstractRequest.Builder<?> requestBuilder,
+                                              int requestTimeoutMs) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                completionHandler);
+                requestTimeoutMs, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -137,26 +151,18 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Block until the metadata has been refreshed.
-     */
-    public void awaitMetadataUpdate() {
-        awaitMetadataUpdate(Long.MAX_VALUE);
-    }
-
-    /**
      * Block waiting on the metadata refresh with a timeout.
      *
      * @return true if update succeeded, false otherwise.
      */
-    public boolean awaitMetadataUpdate(long timeout) {
-        long startMs = time.milliseconds();
+    public boolean awaitMetadataUpdate(Timer timer) {
         int version = this.metadata.requestUpdate();
         do {
-            poll(timeout);
+            poll(timer);
             AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
             if (ex != null)
                 throw ex;
-        } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
+        } while (this.metadata.version() == version && timer.notExpired());
         return this.metadata.version() > version;
     }
 
@@ -164,9 +170,9 @@ public class ConsumerNetworkClient implements Closeable {
      * Ensure our metadata is fresh (if an update is expected, this will block
      * until it has completed).
      */
-    boolean ensureFreshMetadata(final long timeout) {
-        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0) {
-            return awaitMetadataUpdate(timeout);
+    boolean ensureFreshMetadata(Timer timer) {
+        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(timer.currentTimeMs()) == 0) {
+            return awaitMetadataUpdate(timer);
         } else {
             // the metadata is already fresh
             return true;
@@ -179,7 +185,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void wakeup() {
         // wakeup should be safe without holding the client lock since it simply delegates to
-        // Selector's wakeup, which is threadsafe
+        // Selector's wakeup, which is thread-safe
         log.debug("Received user wakeup");
         this.wakeup.set(true);
         this.client.wakeup();
@@ -193,56 +199,50 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(Long.MAX_VALUE, time.milliseconds(), future);
+            poll(time.timer(Long.MAX_VALUE), future);
     }
 
     /**
      * Block until the provided request future request has finished or the timeout has expired.
      * @param future The request future to wait for
-     * @param timeout The maximum duration (in ms) to wait for the request
+     * @param timer Timer bounding how long this method can block
      * @return true if the future is done, false otherwise
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      * @throws InterruptException if the calling thread is interrupted
      */
-    public boolean poll(RequestFuture<?> future, long timeout) {
-        long begin = time.milliseconds();
-        long remaining = timeout;
-        long now = begin;
+    public boolean poll(RequestFuture<?> future, Timer timer) {
         do {
-            poll(remaining, now, future);
-            now = time.milliseconds();
-            long elapsed = now - begin;
-            remaining = timeout - elapsed;
-        } while (!future.isDone() && remaining > 0);
+            poll(timer, future);
+        } while (!future.isDone() && timer.notExpired());
         return future.isDone();
     }
 
     /**
      * Poll for any network IO.
-     * @param timeout The maximum time to wait for an IO event.
+     * @param timer Timer bounding how long this method can block
      * @throws WakeupException if {@link #wakeup()} is called from another thread
      * @throws InterruptException if the calling thread is interrupted
      */
-    public void poll(long timeout) {
-        poll(timeout, time.milliseconds(), null);
+    public void poll(Timer timer) {
+        poll(timer, null);
     }
 
     /**
      * Poll for any network IO.
-     * @param timeout timeout in milliseconds
-     * @param now current time in milliseconds
+     * @param timer Timer bounding how long this method can block
+     * @param pollCondition Nullable blocking condition
      */
-    public void poll(long timeout, long now, PollCondition pollCondition) {
-        poll(timeout, now, pollCondition, false);
+    public void poll(Timer timer, PollCondition pollCondition) {
+        poll(timer, pollCondition, false);
     }
 
     /**
      * Poll for any network IO.
-     * @param timeout timeout in milliseconds
-     * @param now current time in milliseconds
+     * @param timer Timer bounding how long this method can block
+     * @param pollCondition Nullable blocking condition
      * @param disableWakeup If TRUE disable triggering wake-ups
      */
-    public void poll(long timeout, long now, PollCondition pollCondition, boolean disableWakeup) {
+    public void poll(Timer timer, PollCondition pollCondition, boolean disableWakeup) {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
@@ -252,26 +252,26 @@ public class ConsumerNetworkClient implements Closeable {
             handlePendingDisconnects();
 
             // send all the requests we can send now
-            long pollDelayMs = trySend(now);
-            timeout = Math.min(timeout, pollDelayMs);
+            long pollDelayMs = trySend(timer.currentTimeMs());
 
             // check whether the poll is still needed by the caller. Note that if the expected completion
             // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
             // handler), the client will be woken up.
             if (pendingCompletion.isEmpty() && (pollCondition == null || pollCondition.shouldBlock())) {
                 // if there are no requests in flight, do not block longer than the retry backoff
+                long pollTimeout = Math.min(timer.remainingMs(), pollDelayMs);
                 if (client.inFlightRequestCount() == 0)
-                    timeout = Math.min(timeout, retryBackoffMs);
-                client.poll(Math.min(maxPollTimeoutMs, timeout), now);
-                now = time.milliseconds();
+                    pollTimeout = Math.min(pollTimeout, retryBackoffMs);
+                client.poll(pollTimeout, timer.currentTimeMs());
             } else {
-                client.poll(0, now);
+                client.poll(0, timer.currentTimeMs());
             }
+            timer.update();
 
             // handle any disconnects by failing the active requests. note that disconnects must
             // be checked immediately following poll since any subsequent call to client.ready()
             // will reset the disconnect status
-            checkDisconnects(now);
+            checkDisconnects(timer.currentTimeMs());
             if (!disableWakeup) {
                 // trigger wakeups after checking for disconnects so that the callbacks will be ready
                 // to be fired on the next call to poll()
@@ -282,10 +282,10 @@ public class ConsumerNetworkClient implements Closeable {
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
-            trySend(now);
+            trySend(timer.currentTimeMs());
 
             // fail requests that couldn't be sent if they have expired
-            failExpiredRequests(now);
+            failExpiredRequests(timer.currentTimeMs());
 
             // clean unsent requests collection to keep the map from growing indefinitely
             unsent.clean();
@@ -301,24 +301,19 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for network IO and return immediately. This will not trigger wakeups.
      */
     public void pollNoWakeup() {
-        poll(0, time.milliseconds(), null, true);
+        poll(time.timer(0), null, true);
     }
 
     /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
-     * @param timeoutMs The maximum time in milliseconds to block
+     * @param timer Timer bounding how long this method can block
      * @return true If all requests finished, false if the timeout expired first
      */
-    public boolean awaitPendingRequests(Node node, long timeoutMs) {
-        long startMs = time.milliseconds();
-        long remainingMs = timeoutMs;
-
-        while (hasPendingRequests(node) && remainingMs > 0) {
-            poll(remainingMs);
-            remainingMs = timeoutMs - (time.milliseconds() - startMs);
+    public boolean awaitPendingRequests(Node node, Timer timer) {
+        while (hasPendingRequests(node) && timer.notExpired()) {
+            poll(timer);
         }
-
         return !hasPendingRequests(node);
     }
 
@@ -444,10 +439,10 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
+        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now);
         for (ClientRequest request : expiredRequests) {
             RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-            handler.onFailure(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
+            handler.onFailure(new TimeoutException("Failed to send request after " + request.requestTimeoutMs() + " ms."));
         }
     }
 
@@ -466,7 +461,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private long trySend(long now) {
-        long pollDelayMs = Long.MAX_VALUE;
+        long pollDelayMs = maxPollTimeoutMs;
 
         // send any requests that can be sent now
         for (Node node : unsent.nodes()) {
@@ -655,13 +650,14 @@ public class ConsumerNetworkClient implements Closeable {
             return false;
         }
 
-        public Collection<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+        private Collection<ClientRequest> removeExpiredRequests(long now) {
             List<ClientRequest> expiredRequests = new ArrayList<>();
             for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values()) {
                 Iterator<ClientRequest> requestIterator = requests.iterator();
                 while (requestIterator.hasNext()) {
                     ClientRequest request = requestIterator.next();
-                    if (request.createdTimeMs() < now - unsentExpiryMs) {
+                    long elapsedMs = Math.max(0, now - request.createdTimeMs());
+                    if (elapsedMs > request.requestTimeoutMs()) {
                         expiredRequests.add(request);
                         requestIterator.remove();
                     } else

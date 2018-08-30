@@ -136,7 +136,7 @@ public class KafkaStreams {
     private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
-    private final StreamThread[] threads;
+    protected final StreamThread[] threads;
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
@@ -209,10 +209,10 @@ public class KafkaStreams {
     }
 
     private final Object stateLock = new Object();
-    private volatile State state = State.CREATED;
+    protected volatile State state = State.CREATED;
 
     private boolean waitOnState(final State targetState, final long waitMs) {
-        long begin = time.milliseconds();
+        final long begin = time.milliseconds();
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != targetState) {
@@ -223,7 +223,7 @@ public class KafkaStreams {
                         // it is ok: just move on to the next iteration
                     }
                 } else if (waitMs > elapsedMs) {
-                    long remainingMs = waitMs - elapsedMs;
+                    final long remainingMs = waitMs - elapsedMs;
                     try {
                         stateLock.wait(remainingMs);
                     } catch (final InterruptedException e) {
@@ -382,12 +382,12 @@ public class KafkaStreams {
      *
      * @return Map of all metrics.
      */
-    // TODO: we can add metrics for admin client as well
     public Map<MetricName, ? extends Metric> metrics() {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
         for (final StreamThread thread : threads) {
             result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
+            result.putAll(thread.adminClientMetrics());
         }
         if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
         result.putAll(metrics.metrics());
@@ -449,7 +449,7 @@ public class KafkaStreams {
                                           final ThreadStateTransitionValidator abstractOldState) {
             // StreamThreads first
             if (thread instanceof StreamThread) {
-                StreamThread.State newState = (StreamThread.State) abstractNewState;
+                final StreamThread.State newState = (StreamThread.State) abstractNewState;
                 threadState.put(thread.getId(), newState);
 
                 if (newState == StreamThread.State.PARTITIONS_REVOKED && state != State.REBALANCING) {
@@ -461,7 +461,7 @@ public class KafkaStreams {
                 }
             } else if (thread instanceof GlobalStreamThread) {
                 // global stream thread has different invariants
-                GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
+                final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
                 globalThreadState = newState;
 
                 // special case when global thread is dead
@@ -599,7 +599,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(topology, config, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -663,7 +663,8 @@ public class KafkaStreams {
         reporters.add(new JmxReporter(JMX_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time);
 
-        internalTopologyBuilder.setApplicationId(applicationId);
+        // re-write the physical topology according to the config
+        internalTopologyBuilder.rewriteTopology(config);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         internalTopologyBuilder.build();
@@ -725,7 +726,7 @@ public class KafkaStreams {
         if (globalTaskTopology != null) {
             globalStreamThread.setStateListener(streamStateListener);
         }
-        for (StreamThread thread : threads) {
+        for (final StreamThread thread : threads) {
             thread.setStateListener(streamStateListener);
         }
 
@@ -1042,7 +1043,7 @@ public class KafkaStreams {
     public Set<ThreadMetadata> localThreadsMetadata() {
         validateIsRunning();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
-        for (StreamThread thread : threads) {
+        for (final StreamThread thread : threads) {
             threadMetadata.add(thread.threadMetadata());
         }
         return threadMetadata;

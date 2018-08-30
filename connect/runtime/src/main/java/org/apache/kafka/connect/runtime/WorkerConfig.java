@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -44,6 +45,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -192,16 +195,18 @@ public class WorkerConfig extends AbstractConfig {
             + "/opt/connectors";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC = "List of configuration providers. "
-            + "This is a comma-separated list of the fully-qualified names of the ConfigProvider implementations, "
-            + "in the order they will be created, configured, and used.";
+    protected static final String CONFIG_PROVIDERS_DOC =
+            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
+            + "in the order specified. Implementing the interface  "
+            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
+            + "such as for externalized secrets. ";
 
     public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
     protected static final String REST_EXTENSION_CLASSES_DOC =
             "Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called "
             + "in the order specified. Implementing the interface  "
-            + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources  like filters. "
-            + "Typically used to add custom capability like logging, security, etc.";
+            + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
+            + "Typically used to add custom capability like logging, security, etc. ";
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
@@ -336,7 +341,7 @@ public class WorkerConfig extends AbstractConfig {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<String>()
-                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
+                         : Arrays.asList(COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {

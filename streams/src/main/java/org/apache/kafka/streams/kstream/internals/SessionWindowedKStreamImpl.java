@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -44,12 +45,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    private final Merger<K, Long> countMerger = new Merger<K, Long>() {
-        @Override
-        public Long apply(final K aggKey, final Long aggOne, final Long aggTwo) {
-            return aggOne + aggTwo;
-        }
-    };
+    private final Merger<K, Long> countMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
 
     SessionWindowedKStreamImpl(final SessionWindows windows,
                                final InternalStreamsBuilder builder,
@@ -57,8 +53,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                final String name,
                                final Serde<K> keySerde,
                                final Serde<V> valSerde,
-                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder) {
-        super(builder, name, sourceNodes);
+                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+                               final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
         this.keySerde = keySerde;
@@ -84,7 +81,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         return doCount(materialized);
     }
 
-    @SuppressWarnings("unchecked")
     private KTable<Windowed<K>, Long> doCount(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
@@ -95,19 +91,24 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             materializedInternal.withValueSerde(Serdes.Long());
         }
 
-        return (KTable<Windowed<K>, Long>) aggregateBuilder.build(
-            new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, countMerger),
+        return aggregateBuilder.build(
+            new KStreamSessionWindowAggregate<>(
+                windows, materializedInternal.storeName(),
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator,
+                countMerger
+            ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable());
+            materializedInternal.isQueryable()
+        );
     }
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer) {
-        return reduce(reducer, Materialized.<K, V, SessionStore<Bytes, byte[]>>with(keySerde, valSerde));
+        return reduce(reducer, Materialized.with(keySerde, valSerde));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                          final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
@@ -123,21 +124,27 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             materializedInternal.withValueSerde(valSerde);
         }
 
-        return (KTable<Windowed<K>, V>) aggregateBuilder.build(
-                new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, reduceAggregator, mergerForAggregator(reduceAggregator)),
-                REDUCE_NAME,
-                materialize(materializedInternal),
-                materializedInternal.isQueryable());
+        return aggregateBuilder.build(
+            new KStreamSessionWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                aggregateBuilder.reduceInitializer,
+                reduceAggregator,
+                mergerForAggregator(reduceAggregator)
+            ),
+            REDUCE_NAME,
+            materialize(materializedInternal),
+            materializedInternal.isQueryable()
+        );
     }
 
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                                 final Aggregator<? super K, ? super V, T> aggregator,
                                                 final Merger<? super K, T> sessionMerger) {
-        return aggregate(initializer, aggregator, sessionMerger, Materialized.<K, T, SessionStore<Bytes, byte[]>>with(keySerde, null));
+        return aggregate(initializer, aggregator, sessionMerger, Materialized.with(keySerde, null));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
@@ -153,22 +160,47 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
-        return (KTable<Windowed<K>, VR>) aggregateBuilder.build(
-                new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator, sessionMerger),
-                AGGREGATE_NAME,
-                materialize(materializedInternal),
-                materializedInternal.isQueryable());
+        return aggregateBuilder.build(
+            new KStreamSessionWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                initializer,
+                aggregator,
+                sessionMerger
+            ),
+            AGGREGATE_NAME,
+            materialize(materializedInternal),
+            materializedInternal.isQueryable()
+        );
     }
 
+    @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.persistentSessionStore(materialized.storeName(),
-                                                     windows.maintainMs());
+            // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
+            // to be (windows.inactivityGap() + windows.grace()). This will yield the same default behavior.
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs();
+
+            if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the session store "
+                                                       + materialized.storeName()
+                                                       + " must be no smaller than the session inactivity gap plus the"
+                                                       + " grace period."
+                                                       + " Got gap=[" + windows.inactivityGap() + "],"
+                                                       + " grace=[" + windows.gracePeriodMs() + "],"
+                                                       + " retention=[" + retentionPeriod + "]");
+            }
+            supplier = Stores.persistentSessionStore(
+                materialized.storeName(),
+                retentionPeriod
+            );
         }
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(supplier,
-                                                                                     materialized.keySerde(),
-                                                                                     materialized.valueSerde());
+        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde()
+        );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -183,23 +215,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
     }
 
     private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {
-        return new Merger<K, V>() {
-            @Override
-            public V apply(final K aggKey, final V aggOne, final V aggTwo) {
-                return aggregator.apply(aggKey, aggTwo, aggOne);
-            }
-        };
+        return (aggKey, aggOne, aggTwo) -> aggregator.apply(aggKey, aggTwo, aggOne);
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
-        return new Aggregator<K, V, V>() {
-            @Override
-            public V apply(final K aggKey, final V value, final V aggregate) {
-                if (aggregate == null) {
-                    return value;
-                }
-                return reducer.apply(aggregate, value);
-            }
-        };
+        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
     }
 }

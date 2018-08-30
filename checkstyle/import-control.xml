@@ -111,6 +111,7 @@
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.common.resource" />
     </subpackage>
 
     <subpackage name="record">
@@ -146,7 +147,7 @@
     </subpackage>
 
     <subpackage name="utils">
-      <allow pkg="org.apache.kafka.common.metrics" />
+      <allow pkg="org.apache.kafka.common" />
     </subpackage>
   </subpackage>
 
@@ -193,6 +194,7 @@
     <allow pkg="javax.servlet" />
     <allow pkg="javax.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
@@ -210,8 +212,6 @@
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
-    <!-- Temporary until EosTestDriver migrates to the Java AdminClient -->
-    <allow pkg="kafka.admin" exact-match="true"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -230,11 +230,9 @@
       <allow pkg="kafka.server" />
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
-      <allow pkg="kafka.zk" />
-      <allow pkg="kafka.zookeeper" />
       <allow pkg="kafka.log" />
       <allow pkg="scala" />
-      <allow pkg="scala.collection" />
+      <allow class="kafka.zk.EmbeddedZookeeper"/>
     </subpackage>
 
     <subpackage name="test">

@@ -39,7 +39,7 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
-  def unsentExpiryMs: Int
+  def requestTimeoutMs: Int
   private val unsentRequests = new UnsentRequests
 
   def hasUnsentRequests = unsentRequests.iterator().hasNext
@@ -57,7 +57,8 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString, request.request, now, true, completionHandler))
+        networkClient.newClientRequest(request.destination.idString, request.request, now, true,
+          requestTimeoutMs, completionHandler))
     }
 
     try {
@@ -118,9 +119,9 @@ abstract class InterBrokerSendThread(name: String,
 
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
-    val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
-    for (request <- expiredRequests.asScala) {
-      debug(s"Failed to send the following request after $unsentExpiryMs ms: $request")
+    val timedOutRequests = unsentRequests.removeAllTimedOut(now)
+    for (request <- timedOutRequests.asScala) {
+      debug(s"Failed to send the following request after ${request.requestTimeoutMs} ms: $request")
       completeWithDisconnect(request, now, null)
     }
   }
@@ -152,14 +153,15 @@ private class UnsentRequests {
     requests.add(request)
   }
 
-  def removeExpiredRequests(now: Long, unsentExpiryMs: Long): Collection[ClientRequest] = {
+  def removeAllTimedOut(now: Long): Collection[ClientRequest] = {
     val expiredRequests = new ArrayList[ClientRequest]
     for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
         val request = requestIterator.next
-        if (request.createdTimeMs < now - unsentExpiryMs) {
+        val elapsedMs = Math.max(0, now - request.createdTimeMs)
+        if (elapsedMs > request.requestTimeoutMs) {
           expiredRequests.add(request)
           requestIterator.remove()
           foundExpiredRequest = true

@@ -33,11 +33,11 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     public boolean closed;
     public boolean initialized;
 
-    public MockProcessorNode(long scheduleInterval) {
+    public MockProcessorNode(final long scheduleInterval) {
         this(scheduleInterval, PunctuationType.STREAM_TIME);
     }
 
-    public MockProcessorNode(long scheduleInterval, PunctuationType punctuationType) {
+    public MockProcessorNode(final long scheduleInterval, final PunctuationType punctuationType) {
         this(new MockProcessor<K, V>(punctuationType, scheduleInterval));
     }
 
@@ -58,7 +58,7 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void process(K key, V value) {
+    public void process(final K key, final V value) {
         processor().process(key, value);
     }
 

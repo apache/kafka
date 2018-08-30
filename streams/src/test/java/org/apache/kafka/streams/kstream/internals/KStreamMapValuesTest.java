@@ -39,40 +39,40 @@ public class KStreamMapValuesTest {
     private String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMapValues() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueMapper<CharSequence, Integer> mapper =
+        final ValueMapper<CharSequence, Integer> mapper =
             new ValueMapper<CharSequence, Integer>() {
                 @Override
-                public Integer apply(CharSequence value) {
+                public Integer apply(final CharSequence value) {
                     return value.length();
                 }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.mapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
             }
         }
-        String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
+        final String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
     public void testMapValuesWithKeys() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueMapperWithKey<Integer, CharSequence, Integer> mapper =
+        final ValueMapperWithKey<Integer, CharSequence, Integer> mapper =
                 new ValueMapperWithKey<Integer, CharSequence, Integer>() {
             @Override
             public Integer apply(final Integer readOnlyKey, final CharSequence value) {
@@ -82,15 +82,15 @@ public class KStreamMapValuesTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.mapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
             }
         }
-        String[] expected = {"1:2", "10:12", "100:103", "1000:1004"};
+        final String[] expected = {"1:2", "10:12", "100:103", "1000:1004"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

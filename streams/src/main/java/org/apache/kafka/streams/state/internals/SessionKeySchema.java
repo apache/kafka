@@ -57,7 +57,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public Bytes upperRange(Bytes key, long to) {
+    public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
             .putLong(to)
             // start can at most be equal to end
@@ -67,7 +67,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public Bytes lowerRange(Bytes key, long from) {
+    public Bytes lowerRange(final Bytes key, final long from) {
         return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 

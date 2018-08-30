@@ -83,6 +83,8 @@ public class MockClient implements KafkaClient {
     private final TransientSet<Node> blackedOut;
     // Nodes which will always fail to connect, but can be chosen by leastLoadedNode
     private final TransientSet<Node> unreachable;
+    // Nodes which have a delay before ultimately succeeding to connect
+    private final TransientSet<Node> delayedReady;
 
     private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
@@ -105,6 +107,7 @@ public class MockClient implements KafkaClient {
         this.unavailableTopics = Collections.emptySet();
         this.blackedOut = new TransientSet<>(time);
         this.unreachable = new TransientSet<>(time);
+        this.delayedReady = new TransientSet<>(time);
     }
 
     @Override
@@ -121,6 +124,9 @@ public class MockClient implements KafkaClient {
             blackout(node, 100);
             return false;
         }
+
+        if (delayedReady.contains(node, now))
+            return false;
 
         ready.add(node.idString());
         return true;
@@ -143,6 +149,10 @@ public class MockClient implements KafkaClient {
     public void setUnreachable(Node node, long durationMs) {
         disconnect(node.idString());
         unreachable.add(node, durationMs);
+    }
+
+    public void delayReady(Node node, long durationMs) {
+        delayedReady.add(node, durationMs);
     }
 
     public void authenticationFailed(Node node, long blackoutMs) {
@@ -267,9 +277,9 @@ public class MockClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
         maybeAwaitWakeup();
+        checkTimeoutOfPendingRequests(now);
 
         List<ClientResponse> copy = new ArrayList<>(this.responses);
-
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (cluster != null)
@@ -294,6 +304,19 @@ public class MockClient implements KafkaClient {
         }
 
         return copy;
+    }
+
+    private long elapsedTimeMs(long currentTimeMs, long startTimeMs) {
+        return Math.max(0, currentTimeMs - startTimeMs);
+    }
+
+    private void checkTimeoutOfPendingRequests(long nowMs) {
+        ClientRequest request = requests.peek();
+        while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) > request.requestTimeoutMs()) {
+            disconnect(request.destination());
+            requests.poll();
+            request = requests.peek();
+        }
     }
 
     public Queue<ClientRequest> requests() {
@@ -327,7 +350,9 @@ public class MockClient implements KafkaClient {
 
 
     public void respond(AbstractResponse response, boolean disconnected) {
-        ClientRequest request = requests.remove();
+        ClientRequest request = null;
+        if (requests.size() > 0)
+            request = requests.remove();
         short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
@@ -467,7 +492,7 @@ public class MockClient implements KafkaClient {
     }
 
     public boolean hasPendingResponses() {
-        return !responses.isEmpty();
+        return !responses.isEmpty() || !futureResponses.isEmpty();
     }
 
     @Override
@@ -493,18 +518,23 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse) {
-        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, 5000, null);
     }
 
     @Override
-    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
-                                          boolean expectResponse, RequestCompletionHandler callback) {
+    public ClientRequest newClientRequest(String nodeId,
+                                          AbstractRequest.Builder<?> requestBuilder,
+                                          long createdTimeMs,
+                                          boolean expectResponse,
+                                          int requestTimeoutMs,
+                                          RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
-                expectResponse, callback);
+                expectResponse, requestTimeoutMs, callback);
     }
 
     @Override
     public void close() {
+        metadata.close();
     }
 
     @Override

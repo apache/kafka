@@ -61,13 +61,14 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private long streamTime = -1L;
 
     public InternalMockProcessorContext() {
         this(null,
             null,
             null,
             new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
         );
@@ -76,6 +77,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
         this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final StreamsConfig config) {
+        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -91,12 +99,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             serdes.keySerde(),
             serdes.valueSerde(),
             new StreamsMetricsImpl(metrics, "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            () -> collector,
             null
         );
     }
@@ -110,13 +114,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             keySerde,
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            () -> collector,
             cache
         );
     }
@@ -133,6 +132,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
+        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -172,6 +172,15 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void initialized() {}
 
+    public void setStreamTime(final long currentTime) {
+        streamTime = currentTime;
+    }
+
+    @Override
+    public long streamTime() {
+        return streamTime;
+    }
+
     @Override
     public File stateDir() {
         if (stateDir == null) {
@@ -194,7 +203,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
@@ -293,15 +302,19 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
-
+    public StateRestoreListener getRestoreListener(final String storeName) {
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
+        return getStateRestoreListener(restoreCallback);
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
-        List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-        for (KeyValue<byte[], byte[]> keyValue : changeLog) {
+        final List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+        for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
             records.add(keyValue);
         }
 
@@ -310,7 +323,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         restoreListener.onRestoreEnd(null, storeName, 0L);
     }
 
-    private StateRestoreListener getStateRestoreListener(StateRestoreCallback restoreCallback) {
+    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
         if (restoreCallback instanceof StateRestoreListener) {
             return (StateRestoreListener) restoreCallback;
         }
@@ -318,12 +331,11 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback restoreCallback) {
         if (restoreCallback instanceof BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) restoreCallback;
         }
 
         return new WrappedBatchingStateRestoreCallback(restoreCallback);
     }
-
 }

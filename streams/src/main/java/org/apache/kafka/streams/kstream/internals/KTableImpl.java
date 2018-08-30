@@ -30,9 +30,13 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Objects;
 import java.util.Set;
@@ -80,8 +84,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final ProcessorSupplier<?, ?> processorSupplier,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
-                      final boolean isQueryable) {
-        super(builder, name, sourceNodes);
+                      final boolean isQueryable,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = null;
@@ -96,8 +101,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final Serde<V> valSerde,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
-                      final boolean isQueryable) {
-        super(builder, name, sourceNodes);
+                      final boolean isQueryable,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = keySerde;
@@ -115,32 +121,45 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
+                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                   final boolean filterNot) {
         final String name = builder.newProcessorName(FILTER_NAME);
 
         // only materialize if the state store is queryable
-        final boolean shouldMaterialize = materialized != null && materialized.isQueryable();
+        final boolean shouldMaterialize = materializedInternal != null && materializedInternal.isQueryable();
 
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this,
-                predicate,
-                filterNot,
-                shouldMaterialize ? materialized.storeName() : null);
+        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(
+            this,
+            predicate,
+            filterNot,
+            shouldMaterialize ? materializedInternal.storeName() : null
+        );
 
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+            new ProcessorParameters<>(processorSupplier, name)
+        );
 
-        if (shouldMaterialize) {
-            this.builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), name);
-        }
+        final StreamsGraphNode tableNode = new TableProcessorNode<>(
+            name,
+            processorParameters,
+            materializedInternal,
+            null
+        );
 
-        return new KTableImpl<>(builder,
-                name,
-                processorSupplier,
-                this.keySerde,
-                this.valSerde,
-                sourceNodes,
-                shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
-                shouldMaterialize);
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
+
+
+        return new KTableImpl<>(
+            builder,
+            name,
+            processorSupplier,
+            this.keySerde,
+            this.valSerde,
+            sourceNodes,
+            shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
+            shouldMaterialize,
+            tableNode
+        );
     }
 
     @Override
@@ -178,24 +197,41 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                           final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                           final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
         // only materialize if the state store is queryable
-        final boolean shouldMaterialize = materialized != null && materialized.isQueryable();
+        final boolean shouldMaterialize = materializedInternal != null && materializedInternal.isQueryable();
 
         final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(
-                this,
-                mapper,
-                shouldMaterialize ? materialized.storeName() : null);
+            this,
+            mapper,
+            shouldMaterialize ? materializedInternal.storeName() : null
+        );
 
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        // leaving in calls to ITB until building topology with graph
 
-        if (shouldMaterialize) {
-            this.builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), name);
-        }
+        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+            new ProcessorParameters<>(processorSupplier, name)
+        );
+        final StreamsGraphNode tableNode = new TableProcessorNode<>(
+            name,
+            processorParameters,
+            materializedInternal,
+            null
+        );
 
-        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, shouldMaterialize ? materialized.storeName() : this.queryableStoreName, shouldMaterialize);
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
+
+        return new KTableImpl<>(
+            builder,
+            name,
+            processorSupplier,
+            sourceNodes,
+            shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
+            shouldMaterialize,
+            tableNode
+        );
     }
 
     @Override
@@ -265,17 +301,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             transformerSupplier,
             shouldMaterialize ? materialized.storeName() : null);
 
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+            new ProcessorParameters<>(processorSupplier, name)
+        );
 
-        if (stateStoreNames.length > 0) {
-            builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
-        }
+        final StreamsGraphNode tableNode = new TableProcessorNode<>(
+            name,
+            processorParameters,
+            materialized,
+            stateStoreNames
+        );
 
-        if (shouldMaterialize) {
-            builder.internalTopologyBuilder.addStateStore(
-                new KeyValueStoreMaterializer<>(materialized).materialize(),
-                name);
-        }
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
 
         return new KTableImpl<>(
             builder,
@@ -283,21 +320,28 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             processorSupplier,
             sourceNodes,
             shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
-            shouldMaterialize);
+            shouldMaterialize,
+            tableNode);
     }
 
     @Override
     public KStream<K, V> toStream() {
-        String name = builder.newProcessorName(TOSTREAM_NAME);
+        final String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
-            @Override
-            public V apply(final K key, final Change<V> change) {
-                return change.newValue;
-            }
-        }), this.name);
+        final ProcessorSupplier<K, Change<V>> kStreamMapValues = new KStreamMapValues<>((key, change) -> change.newValue);
+        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+            new ProcessorParameters<>(kStreamMapValues, name)
+        );
 
-        return new KStreamImpl<>(builder, name, sourceNodes, false);
+        final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
+            name,
+            processorParameters,
+            false
+        );
+
+        builder.addGraphNode(this.streamsGraphNode, toStreamNode);
+
+        return new KStreamImpl<>(builder, name, sourceNodes, false, toStreamNode);
     }
 
     @Override
@@ -315,8 +359,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        Objects.requireNonNull(other, "other can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
@@ -334,6 +376,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
 
@@ -350,35 +393,33 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
+
         return doJoin(other, joiner, materializedInternal, true, false);
     }
 
     @SuppressWarnings("unchecked")
     private <VO, VR> KTable<K, VR> doJoin(final KTable<K, VO> other,
                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                           final boolean leftOuter,
                                           final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
-        final String internalQueryableName = materialized == null ? null : materialized.storeName();
+        final String internalQueryableName = materializedInternal == null ? null : materializedInternal.storeName();
         final String joinMergeName = builder.newProcessorName(MERGE_NAME);
-        final KTable<K, VR> result = buildJoin((AbstractStream<K>) other,
-                                               joiner,
-                                               leftOuter,
-                                               rightOuter,
-                                               joinMergeName,
-                                               internalQueryableName);
 
-        // only materialize if specified in Materialized
-        if (materialized != null) {
-            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
-                    = new KeyValueStoreMaterializer<>(materialized).materialize();
-            builder.internalTopologyBuilder.addStateStore(storeBuilder, joinMergeName);
-        }
-        return result;
+        return buildJoin(
+            (AbstractStream<K>) other,
+            joiner,
+            leftOuter,
+            rightOuter,
+            joinMergeName,
+            internalQueryableName,
+            materializedInternal
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -387,7 +428,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                            final boolean leftOuter,
                                            final boolean rightOuter,
                                            final String joinMergeName,
-                                           final String internalQueryableName) {
+                                           final String internalQueryableName,
+                                           final MaterializedInternal materializedInternal) {
         final Set<String> allSourceNodes = ensureJoinableWith(other);
 
         if (leftOuter) {
@@ -416,23 +458,64 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-                new KTableImpl<K, V, R>(builder, joinThisName, joinThis, sourceNodes, this.queryableStoreName, false),
-                new KTableImpl<K, V1, R>(builder, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes,
-                        ((KTableImpl<K, ?, ?>) other).queryableStoreName, false),
-                internalQueryableName
+            new KTableImpl<K, V, R>(
+                builder,
+                joinThisName,
+                joinThis,
+                sourceNodes,
+                this.queryableStoreName,
+                false,
+                null
+            ),
+            new KTableImpl<K, V1, R>(
+                builder,
+                joinOtherName,
+                joinOther,
+                ((KTableImpl<K, ?, ?>) other).sourceNodes,
+                ((KTableImpl<K, ?, ?>) other).queryableStoreName,
+                false,
+                null
+            ),
+            internalQueryableName
         );
 
-        builder.internalTopologyBuilder.addProcessor(joinThisName, joinThis, this.name);
-        builder.internalTopologyBuilder.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
-        builder.internalTopologyBuilder.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
-        builder.internalTopologyBuilder.connectProcessorAndStateStores(joinThisName, ((KTableImpl) other).valueGetterSupplier().storeNames());
-        builder.internalTopologyBuilder.connectProcessorAndStateStores(joinOtherName, valueGetterSupplier().storeNames());
-        return new KTableImpl<>(builder, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null);
+        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
+
+        // only materialize if specified in Materialized
+        if (materializedInternal != null) {
+            kTableJoinNodeBuilder.withMaterializedInternal(materializedInternal);
+        }
+        kTableJoinNodeBuilder.withNodeName(joinMergeName);
+
+        final ProcessorParameters joinThisProcessorParameters = new ProcessorParameters(joinThis, joinThisName);
+        final ProcessorParameters joinOtherProcessorParameters = new ProcessorParameters(joinOther, joinOtherName);
+        final ProcessorParameters joinMergeProcessorParameters = new ProcessorParameters(joinMerge, joinMergeName);
+
+        kTableJoinNodeBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParameters)
+            .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
+            .withJoinThisProcessorParameters(joinThisProcessorParameters)
+            .withJoinThisStoreNames(valueGetterSupplier().storeNames())
+            .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
+            .withOtherJoinSideNodeName(((KTableImpl) other).name)
+            .withThisJoinSideNodeName(name);
+
+        final KTableKTableJoinNode kTableKTableJoinNode = kTableJoinNodeBuilder.build();
+        builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
+
+        return new KTableImpl<>(
+            builder,
+            joinMergeName,
+            joinMerge,
+            allSourceNodes,
+            internalQueryableName,
+            internalQueryableName != null,
+            kTableKTableJoinNode
+        );
     }
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
-        return this.groupBy(selector, Serialized.<K1, V1>with(null, null));
+        return this.groupBy(selector, Serialized.with(null, null));
     }
 
     @Override
@@ -440,25 +523,36 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                   final Serialized<K1, V1> serialized) {
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
-        String selectName = builder.newProcessorName(SELECT_NAME);
+        final String selectName = builder.newProcessorName(SELECT_NAME);
 
-        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        builder.internalTopologyBuilder.addProcessor(selectName, selectSupplier, this.name);
+        final ProcessorGraphNode<K1, V1> groupByMapNode = new ProcessorGraphNode<>(
+            selectName,
+            processorParameters,
+            false
+        );
+
+        builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
+
         this.enableSendingOldValues();
-        final SerializedInternal<K1, V1> serializedInternal  = new SerializedInternal<>(serialized);
-        return new KGroupedTableImpl<>(builder,
-                                       selectName,
-                                       this.name,
-                                       serializedInternal.keySerde(),
-                                       serializedInternal.valueSerde());
+        final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
+        return new KGroupedTableImpl<>(
+            builder,
+            selectName,
+            this.name,
+            serializedInternal.keySerde(),
+            serializedInternal.valueSerde(),
+            groupByMapNode
+        );
     }
 
     @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
-            KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
+            final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
             return new KTableSourceValueGetterSupplier<>(source.storeName);
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
             return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
@@ -471,7 +565,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     void enableSendingOldValues() {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
-                KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
+                final KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
@@ -484,6 +578,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     boolean sendingOldValueEnabled() {
         return sendOldValues;
+    }
+
+    /**
+     * We conflate V with Change<V> in many places. It might be nice to fix that eventually.
+     * For now, I'm just explicitly lying about the parameterized type.
+     */
+    @SuppressWarnings("unchecked")
+    private <VR> ProcessorParameters<K, VR> unsafeCastProcessorParametersToCompletelyDifferentType(final ProcessorParameters<K, Change<V>> kObjectProcessorParameters) {
+        return (ProcessorParameters<K, VR>) kObjectProcessorParameters;
     }
 
 }
