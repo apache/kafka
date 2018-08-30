@@ -26,6 +26,8 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Before, Test}
+import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -74,13 +76,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     GroupResources -> AclCommand.getAcls(Users, Allow, Set(Read), Hosts)
   )
 
-  private val CmdToResourcesToAcl = Map[Array[String], Map[Set[Resource], Set[Acl]]](
-    Array[String]("--producer") -> ProducerResourceToAcls(),
-    Array[String]("--producer", "--idempotent") -> ProducerResourceToAcls(enableIdempotence = true),
-    Array[String]("--consumer") -> ConsumerResourceToAcls,
-    Array[String]("--producer", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
+  private val CmdToResourcesToAcl = Map[List[String], Map[Set[Resource], Set[Acl]]](
+    List[String]("--producer") -> ProducerResourceToAcls(),
+    List[String]("--producer", "--idempotent") -> ProducerResourceToAcls(enableIdempotence = true),
+    List[String]("--consumer") -> ConsumerResourceToAcls,
+    List[String]("--producer", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
       ProducerResourceToAcls().getOrElse(k, Set.empty[Acl])) },
-    Array[String]("--producer", "--idempotent", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
+    List[String]("--producer", "--idempotent", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
       ProducerResourceToAcls(enableIdempotence = true).getOrElse(k, Set.empty[Acl])) }
   )
 
@@ -156,6 +158,19 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+  }
+
+  @Test
+  def testDeleteAclWithConfirmation() {
+    AclCommand.main(zkArgs ++ getCmd(Allow) ++  ResourceToCommand(TopicResources) :+ "--add" :+ "--producer" )
+    val inputStream = new ByteArrayInputStream("y\nn\n".getBytes(StandardCharsets.UTF_8))
+    Console.withIn(inputStream) {
+      AclCommand.main(zkArgs ++ ResourceToCommand(TopicResources) :+ "--remove")
+    }
+    withAuthorizer() { authorizer =>
+      TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, Resource(Topic, "test-1", LITERAL))
+      TestUtils.waitAndVerifyAcls(CmdToResourcesToAcl(List("--producer"))(TopicResources), authorizer, Resource(Topic, "test-2", LITERAL))
+    }
   }
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], brokerProps: Properties) {

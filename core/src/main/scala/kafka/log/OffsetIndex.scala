@@ -20,7 +20,6 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 
-import kafka.common.IndexOffsetOverflowException
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.errors.InvalidOffsetException
 
