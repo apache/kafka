@@ -24,7 +24,7 @@ import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
-import kafka.security.auth.SimpleAclAuthorizer.{VersionedAcls, NoAcls}
+import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{BadVersionException, Code, NodeExistsException}
-import org.apache.zookeeper.OpResult.ErrorResult
+import org.apache.zookeeper.OpResult.{ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
@@ -95,26 +95,57 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
   def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
+    val timestamp = time.milliseconds()
+
+    // Create /controller_epoch if not exists
     maybeCreateControllerEpochZNode()
 
+    // Read /controller_epoch to get the current controller epoch and zkVersion
     val (curEpoch, curEpochStat) = getControllerEpoch.get
 
-    // Create /controller
-    val expectedControllerEpochZkVersion = curEpochStat.getVersion
-    debug(s"Try to create ${ControllerZNode.path} with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-    maybeCreateControllerZNode(controllerId, expectedControllerEpochZkVersion)
-
-    // Update /controller_epoch
+    // Create /controller and update /controller_epoch atomically
     val newControllerEpoch = curEpoch + 1
-    debug(s"Try to increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-    val setDataResponse = setControllerEpochRaw(newControllerEpoch, expectedControllerEpochZkVersion)
-    setDataResponse.resultCode match {
-      case Code.OK =>
-        (newControllerEpoch, setDataResponse.stat.getVersion)
-      case Code.BADVERSION =>
+    val expectedControllerEpochZkVersion = curEpochStat.getVersion
+
+    def controllerNodeExistsHandler(): (Int, Int) = {
+      val getDataRequest = GetDataRequest(ControllerZNode.path)
+      val getDataResponse = retryRequestUntilConnected(getDataRequest)
+      getDataResponse.resultCode match {
+        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
+          error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
+            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        case code@Code.OK =>
+          getControllerEpoch match {
+            case Some((epoch, stat)) if stat.getEphemeralOwner == zooKeeperClient.sessionId =>
+              (newControllerEpoch, stat.getVersion)
+            case _ =>
+              throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+          }
+        case Code.NONODE =>
+          throw new ControllerMovedException(
+            s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
+              s"Aborting controller startup procedure")
+        case code =>
+          error(s"Error while creating ephemeral at ${ControllerZNode.path} as it already exists and error getting the node data due to $code")
+          throw KeeperException.create(code)
+      }
+    }
+
+    debug(s"Try to create ${ControllerZNode.path} and increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
+    try {
+      val transaction = zooKeeperClient.createTransaction()
+      transaction.check(ControllerEpochZNode.path, expectedControllerEpochZkVersion)
+      transaction.create(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp),
+        acls(ControllerZNode.path).asJava, CreateMode.EPHEMERAL)
+      transaction.setData(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), expectedControllerEpochZkVersion)
+      val results = transaction.commit()
+      val setDataResult = results.get(2).asInstanceOf[SetDataResult]
+      (newControllerEpoch, setDataResult.getStat.getVersion)
+    } catch {
+      case _: NodeExistsException => controllerNodeExistsHandler()
+      case _: BadVersionException =>
         throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-      case code =>
-        throw KeeperException.create(code)
     }
   }
 
@@ -126,44 +157,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       case code =>
         throw KeeperException.create(code)
     }
-  }
-
-  private def maybeCreateControllerZNode(controllerId: Int, expectedControllerEpochZkVersion: Int): Unit = {
-    val timestamp = time.milliseconds()
-
-    def createControllerZNode(): Unit = {
-      try {
-        val transaction = zooKeeperClient.createTransaction()
-        transaction.check(ControllerEpochZNode.path, expectedControllerEpochZkVersion)
-        transaction.create(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp),
-          acls(ControllerZNode.path).asJava, CreateMode.EPHEMERAL)
-        transaction.commit()
-      } catch {
-        case _: NodeExistsException => controllerNodeExistsHandler()
-        case _: BadVersionException =>
-          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-      }
-    }
-
-    def controllerNodeExistsHandler(): Unit = {
-      val getDataRequest = GetDataRequest(ControllerZNode.path)
-      val getDataResponse = retryRequestUntilConnected(getDataRequest)
-      getDataResponse.resultCode match {
-        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
-          error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
-            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
-          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-        case code@Code.OK =>
-        case Code.NONODE =>
-          info(s"The ephemeral node at ${ControllerZNode.path} went away while reading it, attempting create() again")
-          createControllerZNode()
-        case code =>
-          error(s"Error while creating ephemeral at ${ControllerZNode.path} as it already exists and error getting the node data due to $code")
-          throw KeeperException.create(code)
-      }
-    }
-
-    createControllerZNode()
   }
 
   def updateBrokerInfo(brokerInfo: BrokerInfo): Unit = {
@@ -1715,9 +1708,12 @@ object KafkaZkClient {
         if (zkVersionCheck.checkPath.equals(ControllerEpochZNode.path))
           zkVersionCheckResult.opResult match {
             case errorResult: ErrorResult =>
-              if (errorResult.getErr == Code.BADVERSION.intValue())
+              val errorCode = Code.get(errorResult.getErr)
+              if (errorCode == Code.BADVERSION)
               // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
                 throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${zkVersionCheck.expectedZkVersion}")
+              else if (errorCode != Code.OK)
+                throw KeeperException.create(errorCode, zkVersionCheck.checkPath)
             case _ =>
           }
       case None =>

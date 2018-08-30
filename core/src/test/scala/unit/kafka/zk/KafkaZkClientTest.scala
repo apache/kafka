@@ -103,10 +103,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createRecursive("/delete/some/random/path")
     assertTrue(zkClient.pathExists("/delete/some/random/path"))
-    zkClient.deleteRecursive("/delete")
-    assertFalse(zkClient.pathExists("/delete/some/random/path"))
-    assertFalse(zkClient.pathExists("/delete/some/random"))
-    assertFalse(zkClient.pathExists("/delete/some"))
+    assertTrue(zkClient.deleteRecursive("/delete"))
     assertFalse(zkClient.pathExists("/delete"))
 
     intercept[IllegalArgumentException](zkClient.deleteRecursive("delete-invalid-path"))
@@ -121,10 +118,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     intercept[ControllerMovedException](
       zkClient.deleteRecursive("/delete", controllerEpochZkVersion + 1))
 
-    zkClient.deleteRecursive("/delete", controllerEpochZkVersion)
-    assertFalse(zkClient.pathExists("/delete/some/random/path"))
-    assertFalse(zkClient.pathExists("/delete/some/random"))
-    assertFalse(zkClient.pathExists("/delete/some"))
+    assertTrue(zkClient.deleteRecursive("/delete", controllerEpochZkVersion))
     assertFalse(zkClient.pathExists("/delete"))
 
     intercept[IllegalArgumentException](zkClient.deleteRecursive(
@@ -310,7 +304,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals(Set("0000000000", "0000000002"), zkClient.getAllIsrChangeNotifications.toSet)
     zkClient.deleteIsrChangeNotifications(controllerEpochZkVersion)
-    assertEquals(Seq.empty,zkClient.getAllIsrChangeNotifications)
+    assertEquals(Seq.empty, zkClient.getAllIsrChangeNotifications)
   }
 
   @Test

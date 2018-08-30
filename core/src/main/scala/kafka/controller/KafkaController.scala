@@ -52,6 +52,11 @@ object KafkaController extends Logging {
     override def process(): Unit = ()
   }
 
+  private[controller] case class AwaitOnLatch(val latch: CountDownLatch) extends ControllerEvent {
+    override def state: ControllerState = ControllerState.ControllerChange
+    override def process(): Unit = latch.await()
+  }
+
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
@@ -70,7 +75,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // visible for testing
   private[controller] val eventManager = new ControllerEventManager(config.brokerId,
-    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => clearEventQueueAndReelect())
+    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => onControllerMove())
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager, zkClient)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this, stateChangeLogger)
@@ -969,10 +974,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private def clearEventQueueAndReelect(): Unit = {
-    eventManager.clearAndPut(Reelect)
-  }
-
   case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
 
     def state = ControllerState.AutoLeaderBalance
@@ -1169,10 +1170,45 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def triggerControllerMove(): Unit = {
-    val controllerEpochZkVersion = controllerContext.epochZkVersion
-    onControllerResignation()
+    if (!isActive)
+      warn("Controller has already moved when trying to trigger controller movement")
+    else {
+      try {
+        val expectedControllerEpochZkVersion = controllerContext.epochZkVersion
+        clearEventQueueAndResign()
+        zkClient.deleteController(expectedControllerEpochZkVersion)
+      } catch {
+        case _: ControllerMovedException =>
+          warn("Controller has already moved when trying to trigger controller movement")
+      }
+    }
+  }
+
+  private def maybeResign(): Unit = {
+    val wasActiveBeforeChange = isActive
+    zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
+    activeControllerId = zkClient.getControllerId.getOrElse(-1)
+    if (wasActiveBeforeChange && !isActive) {
+      onControllerResignation()
+    }
+  }
+
+  private def clearEventQueueAndResign(): Unit = {
+    // Stop processing previously enqueued events due to controller movement
+    eventManager.clear()
+
+    // Resign as an controller
     activeControllerId = -1
-    zkClient.deleteController(controllerEpochZkVersion)
+    onControllerResignation()
+  }
+
+  private def onControllerMove(): Unit = {
+    // Clear event queue and resign immediately
+    clearEventQueueAndResign()
+
+    // Try to become the controller. This is needed because clearing the event queue may make this broker
+    // miss controller election
+    elect()
   }
 
   private def elect(): Unit = {
@@ -1199,18 +1235,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       onControllerFailover()
     } catch {
       case e: ControllerMovedException =>
-        // If someone else has written the path, then
-        activeControllerId = zkClient.getControllerId.getOrElse(-1)
-
-        if (activeControllerId != -1)
-          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
-        else
-          warn("A controller has been elected but just resigned, this will result in another round of election", e)
-
-        throw e
+        error(s"Error while electing or becoming controller on broker ${config.brokerId} " +
+          s"because controller moved to another broker", e)
+        onControllerMove()
 
       case t: Throwable =>
-        error(s"Error while electing or becoming controller on broker ${config.brokerId}", t)
+        error(s"Error while electing or becoming controller on broker ${config.brokerId}. " +
+          s"Trigger controller movement immediately", t)
         triggerControllerMove()
     }
   }
@@ -1476,12 +1507,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      val wasActiveBeforeChange = isActive
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
-      activeControllerId = zkClient.getControllerId.getOrElse(-1)
-      if (wasActiveBeforeChange && !isActive) {
-        onControllerResignation()
-      }
+      maybeResign()
     }
   }
 
@@ -1489,12 +1515,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      val wasActiveBeforeChange = isActive
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
-      activeControllerId = zkClient.getControllerId.getOrElse(-1)
-      if (wasActiveBeforeChange && !isActive) {
-        onControllerResignation()
-      }
+      maybeResign()
       elect()
     }
   }

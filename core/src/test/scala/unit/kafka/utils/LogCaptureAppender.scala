@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
+package kafka.utils
 
 import org.apache.log4j.{AppenderSkeleton, Level, Logger}
 import org.apache.log4j.spi.LoggingEvent
@@ -37,13 +37,17 @@ class LogCaptureAppender extends AppenderSkeleton {
     }
   }
 
-  override def close(): Unit = {}
+  override def close(): Unit =  {
+    events.synchronized {
+      events.clear()
+    }
+  }
 
   override def requiresLayout: Boolean = false
 }
 
 object LogCaptureAppender {
-  def createAndRegister: LogCaptureAppender = {
+  def createAndRegister(): LogCaptureAppender = {
     val logCaptureAppender: LogCaptureAppender = new LogCaptureAppender
     Logger.getRootLogger.addAppender(logCaptureAppender)
     logCaptureAppender
