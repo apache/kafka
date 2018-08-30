@@ -117,7 +117,11 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
           throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
         case code@Code.OK =>
           getControllerEpoch match {
-            case Some((epoch, stat)) if stat.getEphemeralOwner == zooKeeperClient.sessionId =>
+            case Some((epoch, stat)) if epoch == newControllerEpoch =>
+              // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
+              // is associated with the current broker during controller election because we already knew that the zk
+              // transaction succeeds based on the controller znode ephemeral owner verification. Other rounds of controller
+              // election will result in larger epoch number written in zk.
               (newControllerEpoch, stat.getVersion)
             case _ =>
               throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
