@@ -108,11 +108,11 @@ class ReplicaFetcherThreadTest {
     * If a partition doesn't have an epoch in the cache, this means it either
     *   does not support epochs (log message format below 0.11) or it is a bootstrapping follower.
     *
-    * In both cases, he has an undefined epoch
+    * In both cases, the partition has an undefined epoch
     *   and there is no use to send the request, as we know the broker will answer with that epoch
     */
   @Test
-  def shouldNotIssueLeaderEpochRequestIfIfBrokerProtocolAbove11AllTopicsDontSupportEpochs(): Unit = {
+  def shouldNotSendEpochRequestIfLastEpochUndefinedForAllPartitions(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "1.0.0")
     val config = KafkaConfig.fromProps(props)
@@ -149,7 +149,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldFetchLeaderEpochRequestIfNotAllTopicsMessageFormatSupportsEpochRequests(): Unit = {
+  def shouldFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
