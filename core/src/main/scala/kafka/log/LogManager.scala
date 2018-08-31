@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.util
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 import kafka.utils._
@@ -28,17 +29,18 @@ import kafka.common.{KafkaException, KafkaStorageException}
 import kafka.server.{BrokerState, OffsetCheckpoint, RecoveringFromUncleanShutdown}
 import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
 
+import kafka.utils.file.DiskPartitioner
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
  * All read and write operations are delegated to the individual log instances.
- * 
+ *
  * The log manager maintains logs in one or more directories. New logs are created in the data directory
  * with the fewest logs. No attempt is made to move partitions after the fact or balance based on
  * size or I/O rate.
- * 
+ *
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
@@ -72,13 +74,13 @@ class LogManager(val logDirs: Array[File],
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
     else
       null
-  
+
   /**
    * Create and check validity of the given directories, specifically:
    * <ol>
    * <li> Ensure that there are no duplicates in the directory list
    * <li> Create each directory if it doesn't exist
-   * <li> Check that each path is a readable directory 
+   * <li> Check that each path is a readable directory
    * </ol>
    */
   private def createAndValidateLogDirs(dirs: Seq[File]) {
@@ -95,7 +97,7 @@ class LogManager(val logDirs: Array[File],
         throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
     }
   }
-  
+
   /**
    * Lock all the given directories
    */
@@ -103,12 +105,12 @@ class LogManager(val logDirs: Array[File],
     dirs.map { dir =>
       val lock = new FileLock(new File(dir, LockFile))
       if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath + 
+        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
                                ". A Kafka instance in another process or thread is using this directory.")
       lock
     }
   }
-  
+
   /**
    * Recover and load all logs in the given data directories
    */
@@ -202,10 +204,10 @@ class LogManager(val logDirs: Array[File],
                          period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
-      scheduler.schedule("kafka-log-flusher", 
-                         flushDirtyLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = flushCheckMs, 
+      scheduler.schedule("kafka-log-flusher",
+                         flushDirtyLogs,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          checkpointRecoveryPointOffsets,
@@ -329,7 +331,7 @@ class LogManager(val logDirs: Array[File],
   }
 
   /**
-   * Write out the current recovery point for all logs to a text file in the log directory 
+   * Write out the current recovery point for all logs to a text file in the log directory
    * to avoid recovering the whole log on startup.
    */
   def checkpointRecoveryPointOffsets() {
@@ -395,14 +397,14 @@ class LogManager(val logDirs: Array[File],
         }
       }
     } catch {
-      case e: Throwable => 
+      case e: Throwable =>
         error(s"Exception in kafka-delete-logs thread.", e)
     }
 }
 
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and 
-    * add it in the queue for deletion. 
+    * add it in the queue for deletion.
     * @param topicPartition TopicPartition that needs to be deleted
     */
   def asyncDelete(topicPartition: TopicPartition) = {
@@ -449,10 +451,12 @@ class LogManager(val logDirs: Array[File],
       val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
       val zeros = logDirs.map(dir => (dir.getPath, 0)).toMap
       var dirCounts = (zeros ++ logCounts).toBuffer
-    
+
       // choose the directory with the least logs in it
-      val leastLoaded = dirCounts.sortBy(_._2).head
-      new File(leastLoaded._1)
+      val dirCountsMap = new util.HashMap[String, Integer]()
+      dirCounts.foreach(tuple2 => dirCountsMap.put(tuple2._1, tuple2._2))
+      val leastLoaded = new DiskPartitioner().partitioner(dirCountsMap)
+      new File(leastLoaded)
     }
   }
 
