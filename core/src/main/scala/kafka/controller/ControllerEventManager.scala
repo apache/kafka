@@ -42,7 +42,6 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   // Visible for test
   private[controller] val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
   private val time = Time.SYSTEM
-  private var isShuttingDown = false
 
   private val eventQueueTimeHist = newHistogram("EventQueueTimeMs")
 
@@ -61,10 +60,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   def start(): Unit = thread.start()
 
   def close(): Unit = {
-    inLock(putLock) {
-      clearAndPut(KafkaController.ShutdownEventThread)
-      isShuttingDown = true
-    }
+    clearAndPut(KafkaController.ShutdownEventThread)
     thread.awaitShutdown()
   }
 
@@ -72,14 +68,8 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
     queue.put(event)
   }
 
-  def clear(): Unit = inLock(putLock) {
-    if (!isShuttingDown) {
-      queue.clear()
-    }
-  }
-
   def clearAndPut(event: ControllerEvent): Unit = inLock(putLock) {
-    clear()
+    queue.clear()
     put(event)
   }
 

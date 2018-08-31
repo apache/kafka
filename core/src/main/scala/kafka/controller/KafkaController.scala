@@ -52,7 +52,7 @@ object KafkaController extends Logging {
     override def process(): Unit = ()
   }
 
-  private[controller] case class AwaitOnLatch(val latch: CountDownLatch) extends ControllerEvent {
+  private[controller] case class AwaitOnLatch(latch: CountDownLatch) extends ControllerEvent {
     override def state: ControllerState = ControllerState.ControllerChange
     override def process(): Unit = latch.await()
   }
@@ -75,7 +75,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // visible for testing
   private[controller] val eventManager = new ControllerEventManager(config.brokerId,
-    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => onControllerMove())
+    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => markInactiveAndResign())
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager, zkClient)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this, stateChangeLogger)
@@ -1175,7 +1175,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     else {
       try {
         val expectedControllerEpochZkVersion = controllerContext.epochZkVersion
-        clearEventQueueAndResign()
+        markInactiveAndResign()
         zkClient.deleteController(expectedControllerEpochZkVersion)
       } catch {
         case _: ControllerMovedException =>
@@ -1193,22 +1193,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private def clearEventQueueAndResign(): Unit = {
-    // Stop processing previously enqueued events due to controller movement
-    eventManager.clear()
-
-    // Resign as an controller
+  private def markInactiveAndResign(): Unit = {
     activeControllerId = -1
     onControllerResignation()
-  }
-
-  private def onControllerMove(): Unit = {
-    // Clear event queue and resign immediately
-    clearEventQueueAndResign()
-
-    // Try to become the controller. This is needed because clearing the event queue may make this broker
-    // miss controller election
-    elect()
   }
 
   private def elect(): Unit = {
@@ -1237,7 +1224,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       case e: ControllerMovedException =>
         error(s"Error while electing or becoming controller on broker ${config.brokerId} " +
           s"because controller moved to another broker", e)
-        onControllerMove()
+        markInactiveAndResign()
 
       case t: Throwable =>
         error(s"Error while electing or becoming controller on broker ${config.brokerId}. " +
