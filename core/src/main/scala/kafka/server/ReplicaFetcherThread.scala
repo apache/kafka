@@ -95,7 +95,8 @@ class ReplicaFetcherThread(name: String,
   private val minBytes = brokerConfig.replicaFetchMinBytes
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
-  private val shouldSendLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
+  private val brokerSupportsLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
+
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
@@ -346,19 +347,29 @@ class ReplicaFetcherThread(name: String,
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
     debug(s"Build leaderEpoch request $partitionsWithEpoch")
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     var result: Map[TopicPartition, EpochEndOffset] = null
-    if (shouldSendLeaderEpochRequest) {
-      val partitionsAsJava = partitions.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
+    if (brokerSupportsLeaderEpochRequest) {
+      // skip request for partitions without epoch, as their topic log message format doesn't support epochs
+      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epoch) => epoch != UNDEFINED_EPOCH }
+      val resultWithoutEpoch = partitionsWithoutEpoch.map { case (tp, _) => (tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)) }
+
+      if (partitionsWithEpoch.isEmpty) {
+        debug("Skipping leaderEpoch request since all partitions do not have an epoch")
+        return resultWithoutEpoch
+      }
+
+      val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
-        result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
-        debug(s"Receive leaderEpoch response $result")
+
+        result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala ++ resultWithoutEpoch
+        debug(s"Receive leaderEpoch response $result; Skipped request for partitions ${partitionsWithoutEpoch.keys}")
       } catch {
         case t: Throwable =>
           warn(s"Error when sending leader epoch request for $partitions", t)

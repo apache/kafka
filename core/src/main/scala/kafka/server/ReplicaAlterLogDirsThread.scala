@@ -147,7 +147,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
