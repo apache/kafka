@@ -61,8 +61,25 @@ import java.util.concurrent.TimeUnit;
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
  * Before running this example you must create the input topics and the output topic (e.g. via
- * bin/kafka-topics.sh --create ...), and write some data to the input topics (e.g. via
- * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * bin/kafka-topics --create ...), and write some data to the input topics (e.g. via
+ * bin/kafka-console-producer). Otherwise you won't see any data arriving in the output topic.
+ *
+ * The inputs for this example are:
+ * - Topic: streams-pageview-input
+ *   Key Format: (String) USER_ID
+ *   Value Format: (JSON) {"_t": "pv", "user": (String USER_ID), "page": (String PAGE_ID), "timestamp": (long ms TIMESTAMP)}
+ *
+ * - Topic: streams-userprofile-input
+ *   Key Format: (String) USER_ID
+ *   Value Format: (JSON) {"_t": "up", "region": (String REGION), "timestamp": (long ms TIMESTAMP)}
+ *
+ * To observe the results, read the output topic (e.g., via bin/kafka-console-consumer)
+ * - Topic: streams-pageviewstats-typed-output
+ *   Key Format: (JSON) {"_t": "wpvbr", "windowStart": (long ms WINDOW_TIMESTAMP), "region": (String REGION)}
+ *   Value Format: (JSON) {"_t": "rc", "count": (long REGION_COUNT), "region": (String REGION)}
+ *
+ * Note, the "_t" field is necessary to help Jackson identify the correct class for deserialization in the
+ * generic {@link JSONSerde}. If you instead specify a specific serde per class, you won't need the extra "_t" field.
  */
 @SuppressWarnings({"WeakerAccess", "unused"})
 public class PageViewTypedDemo {
@@ -141,26 +158,11 @@ public class PageViewTypedDemo {
         public String user;
         public String page;
         public Long timestamp;
-
-        public PageView() {}
-
-        public PageView(final String user, final String page, final Long timestamp) {
-            this.user = user;
-            this.page = page;
-            this.timestamp = timestamp;
-        }
     }
 
     static public class UserProfile implements JSONSerdeCompatible {
         public String region;
         public Long timestamp;
-
-        public UserProfile() {}
-
-        public UserProfile(final String region, final Long timestamp) {
-            this.region = region;
-            this.timestamp = timestamp;
-        }
     }
 
     static public class PageViewByRegion implements JSONSerdeCompatible {
@@ -172,24 +174,11 @@ public class PageViewTypedDemo {
     static public class WindowedPageViewByRegion implements JSONSerdeCompatible {
         public long windowStart;
         public String region;
-
-        @Override
-        public String toString() {
-            return "WindowedPageViewByRegion{" +
-                "windowStart=" + windowStart +
-                ", region='" + region + '\'' +
-                '}';
-        }
     }
 
     static public class RegionCount implements JSONSerdeCompatible {
         public long count;
         public String region;
-
-        @Override
-        public String toString() {
-            return "RegionCount{count=" + count + ", region='" + region + '\'' + '}';
-        }
     }
 
     public static void main(final String[] args) {
@@ -260,45 +249,6 @@ public class PageViewTypedDemo {
 
         try {
             streams.start();
-            // very simple data generators for demonstration purposes.
-            {
-
-                final Properties config = new Properties();
-                config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-                final KafkaProducer<String, PageView> viewKafkaProducer = new KafkaProducer<>(config, new StringSerializer(), new JSONSerde<>());
-                final KafkaProducer<String, UserProfile> profileKafkaProducer = new KafkaProducer<>(config, new StringSerializer(), new JSONSerde<>());
-
-                for (int i = 0; i < 5; i++) {
-                    profileKafkaProducer.send(new ProducerRecord<>("streams-userprofile-input", "user" + i, new UserProfile("region" + (i % 3), System.currentTimeMillis())));
-                }
-                for (int i = 0; i < 1000; i++) {
-                    viewKafkaProducer.send(new ProducerRecord<>("streams-pageview-input", "user" + (i % 5), new PageView("user" + (i % 5), "page" + (i % 20), System.currentTimeMillis())));
-                }
-                viewKafkaProducer.close();
-                profileKafkaProducer.close();
-
-                System.out.println("produced");
-            }
-
-            // again, for demonstration, This just polls until it gets any result data, and then stops polling.
-            {
-                final Properties config = new Properties();
-                config.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
-                config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-                final KafkaConsumer<WindowedPageViewByRegion, RegionCount> results = new KafkaConsumer<>(config, new JSONSerde<>(), new JSONSerde<>());
-                results.subscribe(Collections.singleton("streams-pageviewstats-typed-output"));
-                while (true) {
-                    final ConsumerRecords<WindowedPageViewByRegion, RegionCount> poll = results.poll(Duration.ofSeconds(5));
-                    System.out.println("polled: " + poll.count());
-                    for (final ConsumerRecord<WindowedPageViewByRegion, RegionCount> record : poll) {
-                        System.out.println(record.key() + ": " + record.value());
-                    }
-                    if (!poll.isEmpty()) {
-                        break;
-                    }
-                }
-            }
-
             latch.await();
         } catch (final Throwable e) {
             e.printStackTrace();
