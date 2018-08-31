@@ -844,6 +844,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * process of getting reassigned).
      * @return The set of partitions currently assigned to this consumer
      */
+    @Override
     public Set<TopicPartition> assignment() {
         acquireAndEnsureOpen();
         try {
@@ -858,6 +859,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, or an empty set if no such call has been made.
      * @return The set of topics currently subscribed to
      */
+    @Override
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
@@ -1016,6 +1018,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
      */
+    @Override
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {

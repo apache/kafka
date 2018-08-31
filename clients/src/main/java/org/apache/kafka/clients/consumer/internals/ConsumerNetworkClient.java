@@ -671,12 +671,7 @@ public class ConsumerNetworkClient implements Closeable {
             // the lock protects removal from a concurrent put which could otherwise mutate the
             // queue after it has been removed from the map
             synchronized (unsent) {
-                Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
-                while (iterator.hasNext()) {
-                    ConcurrentLinkedQueue<ClientRequest> requests = iterator.next();
-                    if (requests.isEmpty())
-                        iterator.remove();
-                }
+                unsent.values().removeIf(ConcurrentLinkedQueue::isEmpty);
             }
         }
 

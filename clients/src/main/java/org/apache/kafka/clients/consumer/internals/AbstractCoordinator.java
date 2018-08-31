@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -353,7 +352,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void closeHeartbeatThread() {
-        HeartbeatThread thread = null;
+        HeartbeatThread thread;
         synchronized (this) {
             if (heartbeatThread == null)
                 return;
@@ -513,7 +512,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     if (state != MemberState.REBALANCING) {
                         // if the consumer was woken up before a rebalance completes, we may have already left
                         // the group. In this case, we do not want to continue with the sync group.
-                        future.raise(new UnjoinedGroupException());
+                        future.raise(new UnJoinedGroupException());
                     } else {
                         AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
                                 joinResponse.memberId(), joinResponse.groupProtocol());
@@ -919,12 +918,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     "The max time taken for a group sync"), new Max());
             this.syncLatency.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
 
-            Measurable lastHeartbeat =
-                new Measurable() {
-                    public double measure(MetricConfig config, long now) {
-                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
-                    }
-                };
+            Measurable lastHeartbeat = (config, now) -> TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
             metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
@@ -1106,7 +1100,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private static class UnjoinedGroupException extends RetriableException {
+    private static class UnJoinedGroupException extends RetriableException {
 
     }
 

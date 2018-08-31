@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Struct;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,6 +26,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public final class CollectionUtils {
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
 
     private CollectionUtils() {}
 
@@ -48,11 +51,7 @@ public final class CollectionUtils {
         for (Map.Entry<TopicPartition, ? extends T> entry: data.entrySet()) {
             String topic = entry.getKey().topic();
             int partition = entry.getKey().partition();
-            Map<Integer, T> topicData = dataByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new HashMap<>();
-                dataByTopic.put(topic, topicData);
-            }
+            Map<Integer, T> topicData = dataByTopic.computeIfAbsent(topic, k -> new HashMap<>());
             topicData.put(partition, entry.getValue());
         }
         return dataByTopic;
@@ -67,13 +66,29 @@ public final class CollectionUtils {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp: partitions) {
             String topic = tp.topic();
-            List<Integer> topicData = partitionsByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new ArrayList<>();
-                partitionsByTopic.put(topic, topicData);
-            }
+            List<Integer> topicData = partitionsByTopic.computeIfAbsent(topic, k -> new ArrayList<>());
             topicData.add(tp.partition());
         }
         return  partitionsByTopic;
+    }
+
+    /**
+     * Abstract duplicate code from StickAssignor and ConsumerProtocol
+     *
+     * @param struct                 data source
+     * @param topicPartitionsKeyName Topic Partitions key names
+     * @return list of TopicPartition from struct
+     */
+    public static List<TopicPartition> getTopicPartitionFromStruct(Struct struct, String topicPartitionsKeyName) {
+        List<TopicPartition> partitions = new ArrayList<>();
+        for (Object structObj : struct.getArray(topicPartitionsKeyName)) {
+            Struct assignment = (Struct) structObj;
+            String topic = assignment.getString(TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
+                Integer partition = (Integer) partitionObj;
+                partitions.add(new TopicPartition(topic, partition));
+            }
+        }
+        return partitions;
     }
 }
