@@ -18,21 +18,13 @@ package org.apache.kafka.streams.examples.pageview;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -44,8 +36,6 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -91,7 +81,7 @@ public class PageViewTypedDemo {
      * @param <T> The concrete type of the class that gets de/serialized
      */
     public static class JSONSerde<T extends JSONSerdeCompatible> implements Serializer<T>, Deserializer<T>, Serde<T> {
-        private static final ObjectMapper objectMapper = new ObjectMapper();
+        private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
         @Override
         public void configure(final Map<String, ?> configs, final boolean isKey) {}
@@ -104,7 +94,7 @@ public class PageViewTypedDemo {
             }
 
             try {
-                return (T) objectMapper.readValue(data, JSONSerdeCompatible.class);
+                return (T) OBJECT_MAPPER.readValue(data, JSONSerdeCompatible.class);
             } catch (final IOException e) {
                 throw new SerializationException(e);
             }
@@ -117,7 +107,7 @@ public class PageViewTypedDemo {
             }
 
             try {
-                return objectMapper.writeValueAsBytes(data);
+                return OBJECT_MAPPER.writeValueAsBytes(data);
             } catch (final Exception e) {
                 throw new SerializationException("Error serializing JSON message", e);
             }
