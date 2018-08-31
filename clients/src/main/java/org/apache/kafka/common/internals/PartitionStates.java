@@ -93,6 +93,10 @@ public class PartitionStates<S> {
         return result;
     }
 
+    public LinkedHashMap<TopicPartition, S> partitionStateMap() {
+        return new LinkedHashMap<>(map);
+    }
+
     /**
      * Returns the partition state values in order.
      */
