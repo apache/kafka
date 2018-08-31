@@ -38,6 +38,14 @@ public interface Authenticator extends Closeable {
     void authenticate() throws AuthenticationException, IOException;
 
     /**
+     * Perform any processing related to authentication failure. This is invoked when the channel is about to be closed
+     * because of an {@link AuthenticationException} thrown from a prior {@link #authenticate()} call.
+     * @throws IOException if read/write fails due to an I/O error
+     */
+    default void handleAuthenticationFailure() throws IOException {
+    }
+
+    /**
      * Returns Principal using PrincipalBuilder
      */
     KafkaPrincipal principal();
@@ -46,5 +54,4 @@ public interface Authenticator extends Closeable {
      * returns true if authentication is complete otherwise returns false;
      */
     boolean complete();
-
 }

@@ -86,6 +86,7 @@ import java.util.concurrent.TimeUnit;
 public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
+    public static final int NO_FAILED_AUTHENTICATION_DELAY = 0;
 
     private enum CloseMode {
         GRACEFUL(true),            // process outstanding staged receives, notify disconnect
@@ -119,8 +120,11 @@ public class Selector implements Selectable, AutoCloseable {
     private final int maxReceiveSize;
     private final boolean recordTimePerConnection;
     private final IdleExpiryManager idleExpiryManager;
+    private final LinkedHashMap<String, DelayedAuthenticationFailureClose> delayedClosingChannels;
     private final MemoryPool memoryPool;
     private final long lowMemThreshold;
+    private final int failedAuthenticationDelayMs;
+
     //indicates if the previous call to poll was able to make progress in reading already-buffered data.
     //this is used to prevent tight loops when memory is not available to read any more data
     private boolean madeReadProgressLastPoll = true;
@@ -129,6 +133,8 @@ public class Selector implements Selectable, AutoCloseable {
      * Create a new nioSelector
      * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
+     * @param failedAuthenticationDelayMs Minimum time by which failed authentication response and channel close should be delayed by.
+     *                                    Use {@link #NO_FAILED_AUTHENTICATION_DELAY} to disable this delay.
      * @param metrics Registry for Selector metrics
      * @param time Time implementation
      * @param metricGrpPrefix Prefix for the group of metrics registered by Selector
@@ -139,6 +145,7 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
+            int failedAuthenticationDelayMs,
             Metrics metrics,
             Time time,
             String metricGrpPrefix,
@@ -174,7 +181,38 @@ public class Selector implements Selectable, AutoCloseable {
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
         this.log = logContext.logger(Selector.class);
+        this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
+        this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
     }
+
+    public Selector(int maxReceiveSize,
+                    long connectionMaxIdleMs,
+                    Metrics metrics,
+                    Time time,
+                    String metricGrpPrefix,
+                    Map<String, String> metricTags,
+                    boolean metricsPerConnection,
+                    boolean recordTimePerConnection,
+                    ChannelBuilder channelBuilder,
+                    MemoryPool memoryPool,
+                    LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags,
+                metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool, logContext);
+    }
+
+    public Selector(int maxReceiveSize,
+                long connectionMaxIdleMs,
+                int failedAuthenticationDelayMs,
+                Metrics metrics,
+                Time time,
+                String metricGrpPrefix,
+                Map<String, String> metricTags,
+                boolean metricsPerConnection,
+                ChannelBuilder channelBuilder,
+                LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
+    }
+
 
     public Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
@@ -185,11 +223,15 @@ public class Selector implements Selectable, AutoCloseable {
             boolean metricsPerConnection,
             ChannelBuilder channelBuilder,
             LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
+        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, channelBuilder, logContext);
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
+    }
+
+    public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
     }
 
     /**
@@ -435,6 +477,9 @@ public class Selector implements Selectable, AutoCloseable {
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
 
+        // Close channels that were delayed and are now ready to be closed
+        completeDelayedChannelClose(endIo);
+
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
@@ -457,15 +502,14 @@ public class Selector implements Selectable, AutoCloseable {
         for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
+            boolean sendFailed = false;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
             if (idleExpiryManager != null)
                 idleExpiryManager.update(channel.id(), currentTimeNanos);
 
-            boolean sendFailed = false;
             try {
-
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
                     if (channel.finishConnect()) {
@@ -477,8 +521,9 @@ public class Selector implements Selectable, AutoCloseable {
                                 socketChannel.socket().getSendBufferSize(),
                                 socketChannel.socket().getSoTimeout(),
                                 channel.id());
-                    } else
+                    } else {
                         continue;
+                    }
                 }
 
                 /* if channel is not ready finish prepare */
@@ -532,7 +577,11 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
+
+                if (e instanceof DelayedResponseAuthenticationException)
+                    maybeDelayCloseOnAuthenticationFailure(channel);
+                else
+                    close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -631,6 +680,18 @@ public class Selector implements Selectable, AutoCloseable {
             unmute(channel);
     }
 
+    // package-private for testing
+    void completeDelayedChannelClose(long currentTimeNanos) {
+        if (delayedClosingChannels == null)
+            return;
+
+        while (!delayedClosingChannels.isEmpty()) {
+            DelayedAuthenticationFailureClose delayedClose = delayedClosingChannels.values().iterator().next();
+            if (!delayedClose.tryClose(currentTimeNanos))
+                break;
+        }
+    }
+
     private void maybeCloseOldestConnection(long currentTimeNanos) {
         if (idleExpiryManager == null)
             return;
@@ -657,6 +718,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+
         // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
@@ -667,6 +729,7 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
+
         for (String channel : this.failedSends)
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
         this.failedSends.clear();
@@ -707,6 +770,24 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    private void maybeDelayCloseOnAuthenticationFailure(KafkaChannel channel) {
+        DelayedAuthenticationFailureClose delayedClose = new DelayedAuthenticationFailureClose(channel, failedAuthenticationDelayMs);
+        if (delayedClosingChannels != null)
+            delayedClosingChannels.put(channel.id(), delayedClose);
+        else
+            delayedClose.closeNow();
+    }
+
+    private void handleCloseOnAuthenticationFailure(KafkaChannel channel) {
+        try {
+            channel.completeCloseOnAuthenticationFailure();
+        } catch (Exception e) {
+            log.error("Exception handling close on authentication failure node {}", channel.id(), e);
+        } finally {
+            close(channel, CloseMode.GRACEFUL);
+        }
+    }
+
     /**
      * Begin closing this connection.
      * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but staged receives
@@ -735,9 +816,13 @@ public class Selector implements Selectable, AutoCloseable {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
             log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
-        } else
+        } else {
             doClose(channel, closeMode.notifyDisconnect);
+        }
         this.channels.remove(channel.id());
+
+        if (delayedClosingChannels != null)
+            delayedClosingChannels.remove(channel.id());
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());
@@ -1064,6 +1149,46 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    /**
+     * Encapsulate a channel that must be closed after a specific delay has elapsed due to authentication failure.
+     */
+    private class DelayedAuthenticationFailureClose {
+        private final KafkaChannel channel;
+        private final long endTimeNanos;
+        private boolean closed;
+
+        /**
+         * @param channel The channel whose close is being delayed
+         * @param delayMs The amount of time by which the operation should be delayed
+         */
+        public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
+            this.channel = channel;
+            this.endTimeNanos = time.nanoseconds() + (delayMs * 1000L * 1000L);
+            this.closed = false;
+        }
+
+        /**
+         * Try to close this channel if the delay has expired.
+         * @param currentTimeNanos The current time
+         * @return True if the delay has expired and the channel was closed; false otherwise
+         */
+        public final boolean tryClose(long currentTimeNanos) {
+            if (endTimeNanos <= currentTimeNanos)
+                closeNow();
+            return closed;
+        }
+
+        /**
+         * Close the channel now, regardless of whether the delay has expired or not.
+         */
+        public final void closeNow() {
+            if (closed)
+                throw new IllegalStateException("Attempt to close a channel that has already been closed");
+            handleCloseOnAuthenticationFailure(channel);
+            closed = true;
+        }
+    }
+
     // helper class for tracking least recently used connections to enable idle connection closing
     private static class IdleExpiryManager {
         private final Map<String, Long> lruConnections;
@@ -1113,5 +1238,10 @@ public class Selector implements Selectable, AutoCloseable {
     //package-private for testing
     boolean isMadeReadProgressLastPoll() {
         return madeReadProgressLastPoll;
+    }
+
+    // package-private for testing
+    Map<?, ?> delayedClosingChannels() {
+        return delayedClosingChannels;
     }
 }
