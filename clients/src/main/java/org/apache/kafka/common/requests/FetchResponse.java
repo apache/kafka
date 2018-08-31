@@ -180,10 +180,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // V9 adds the current leader epoch (see KIP-320)
     private static final Schema FETCH_RESPONSE_V9 = FETCH_RESPONSE_V8;
 
+    // V10 bumped up to indicate ZStandard capability. (see KIP-110)
+    private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
-            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9};
+            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9, FETCH_RESPONSE_V10};
     }
 
     public static final long INVALID_HIGHWATERMARK = -1L;

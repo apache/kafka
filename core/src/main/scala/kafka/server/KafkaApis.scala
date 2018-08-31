@@ -31,6 +31,8 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.log.{Log, LogManager, TimestampOffset}
+import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
@@ -558,18 +560,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
         errorResponse(Errors.UNSUPPORTED_VERSION)
       } else {
-        val convertedRecords =
-          downConvertMagic.map { magic =>
-            trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-            // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-            // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
-            // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
-            // client.
-            new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
-          }.getOrElse(unconvertedRecords)
-        new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
-          convertedRecords)
+        if (logConfig.forall(_.compressionType == "zstd") && versionId < 10) {
+          trace(s"Fetching messages is disabled for Zstd compressed partition $tp. Sending unsupported version response to $clientId.")
+          errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+        } else {
+          val convertedRecords =
+            downConvertMagic.map { magic =>
+              trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+              // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
+              // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
+              // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
+              // client.
+              new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
+            }.getOrElse(unconvertedRecords)
+          new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+            convertedRecords)
+        }
       }
     }
 
