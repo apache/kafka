@@ -913,6 +913,12 @@ public class KafkaAdminClientTest {
                     node1);
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
+                            Errors.COORDINATOR_LOAD_IN_PROGRESS,
+                            Collections.emptyList()
+                    ),
+                    node1);
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
                             Errors.NONE,
                             asList(
                                     new ListGroupsResponse.Group("group-2", ConsumerProtocol.PROTOCOL_TYPE),

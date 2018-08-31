@@ -2567,11 +2567,11 @@ public class KafkaAdminClient extends AdminClient {
                         void handleResponse(AbstractResponse abstractResponse) {
                             final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
                             synchronized (results) {
-                                if (response.error() != Errors.NONE) {
-                                    ApiException exception = response.error().exception();
-                                    if (exception instanceof RetriableException)
-                                        throw exception;
-                                    results.addError(exception, node);
+                                Errors error = response.error();
+                                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                                    throw error.exception();
+                                } else if (error != Errors.NONE) {
+                                    results.addError(error.exception(), node);
                                 } else {
                                     for (ListGroupsResponse.Group group : response.groups()) {
                                         maybeAddConsumerGroup(group);
