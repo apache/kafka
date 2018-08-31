@@ -23,7 +23,6 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, PatternType.LITERAL)
-  val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
@@ -42,6 +41,8 @@ object Resource {
         }
     }
   }
+
+  def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
 }
 
 /**
@@ -53,11 +54,8 @@ object Resource {
  */
 case class Resource(resourceType: ResourceType, name: String, patternType: PatternType) {
 
-  if (patternType == PatternType.MATCH || patternType == PatternType.ANY)
-    throw new IllegalArgumentException("patternType must not be " + patternType)
-
-  if (patternType == PatternType.UNKNOWN)
-    throw new IllegalArgumentException("patternType must not be UNKNOWN")
+  if (!patternType.isSpecific)
+    throw new IllegalArgumentException(s"patternType must not be $patternType")
 
   /**
     * Create an instance of this class with the provided parameters.
