@@ -2568,7 +2568,10 @@ public class KafkaAdminClient extends AdminClient {
                             final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
                             synchronized (results) {
                                 if (response.error() != Errors.NONE) {
-                                    results.addError(response.error().exception(), node);
+                                    ApiException exception = response.error().exception();
+                                    if (exception instanceof RetriableException)
+                                        throw exception;
+                                    results.addError(exception, node);
                                 } else {
                                     for (ListGroupsResponse.Group group : response.groups()) {
                                         maybeAddConsumerGroup(group);
