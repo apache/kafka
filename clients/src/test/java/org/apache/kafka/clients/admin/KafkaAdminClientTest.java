@@ -36,7 +36,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
@@ -46,6 +45,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -863,9 +863,11 @@ public class KafkaAdminClientTest {
         Node node0 = new Node(0, "localhost", 8121);
         Node node1 = new Node(1, "localhost", 8122);
         Node node2 = new Node(2, "localhost", 8123);
+        Node node3 = new Node(3, "localhost", 8124);
         nodes.put(0, node0);
         nodes.put(1, node1);
         nodes.put(2, node2);
+        nodes.put(3, node3);
 
         final Cluster cluster = new Cluster(
                 "mockClusterId",
@@ -902,13 +904,19 @@ public class KafkaAdminClientTest {
                             )),
                     node0);
 
+            // handle retriable errors
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
                             Errors.COORDINATOR_NOT_AVAILABLE,
                             Collections.emptyList()
                     ),
                     node1);
-
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.COORDINATOR_LOAD_IN_PROGRESS,
+                            Collections.emptyList()
+                    ),
+                    node1);
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
                             Errors.NONE,
@@ -916,15 +924,37 @@ public class KafkaAdminClientTest {
                                     new ListGroupsResponse.Group("group-2", ConsumerProtocol.PROTOCOL_TYPE),
                                     new ListGroupsResponse.Group("group-connect-2", "connector")
                             )),
+                    node1);
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.NONE,
+                            asList(
+                                    new ListGroupsResponse.Group("group-3", ConsumerProtocol.PROTOCOL_TYPE),
+                                    new ListGroupsResponse.Group("group-connect-3", "connector")
+                            )),
                     node2);
 
+            // fatal error
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.UNKNOWN_SERVER_ERROR,
+                            Collections.emptyList()),
+                    node3);
+
+
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            TestUtils.assertFutureError(result.all(), CoordinatorNotAvailableException.class);
+            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+
             Collection<ConsumerGroupListing> listings = result.valid().get();
-            assertEquals(2, listings.size());
+            assertEquals(3, listings.size());
+
+            Set<String> groupIds = new HashSet<>();
             for (ConsumerGroupListing listing : listings) {
-                assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
+                groupIds.add(listing.groupId());
             }
+
+            assertEquals(Utils.mkSet("group-1", "group-2", "group-3"), groupIds);
             assertEquals(1, result.errors().get().size());
         }
     }
