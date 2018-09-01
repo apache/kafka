@@ -216,17 +216,15 @@ public class StateDirectory {
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
-            boolean isClosedChannelException = true;
             try {
                 lockAndOwner.lock.release();
             } catch (ClosedChannelException cce){
-                log.error("{} Closed Channel Exception Occured supposed to Ignore", logPrefix(), cce);
-                isClosedChannelException = false;
+                log.warn("{} Channel closed unexpectedly before lock release.", logPrefix(), cce);
             }
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
 
             final FileChannel fileChannel = channels.remove(taskId);
-            if (fileChannel != null && isClosedChannelException) {
+            if (fileChannel != null) {
                 fileChannel.close();
             }
             locks.remove(taskId);
