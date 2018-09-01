@@ -267,7 +267,7 @@ public class FetchRequest extends AbstractRequest {
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
-        private List<TopicPartition> toForget = Collections.<TopicPartition>emptyList();
+        private List<TopicPartition> toForget = Collections.emptyList();
 
         public static Builder forConsumer(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
             return new Builder(ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(),
