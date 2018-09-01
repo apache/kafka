@@ -396,14 +396,14 @@ class ReplicaManager(val config: KafkaConfig,
   private def offlinePartitionsIterator: Iterator[Partition] =
     allPartitions.values.iterator.filter(_ eq ReplicaManager.OfflinePartition)
 
-  def getReplicaOrException(topicPartition: TopicPartition, brokerId: Int): Replica = {
+  def getPartitionAndReplicaOrException(topicPartition: TopicPartition, brokerId: Int = localBrokerId): (Partition, Replica) = {
     getPartition(topicPartition) match {
       case Some(partition) =>
         if (partition eq ReplicaManager.OfflinePartition)
           throw new KafkaStorageException(s"Replica $brokerId is in an offline log directory for partition $topicPartition")
         else
-          partition.getReplica(brokerId).getOrElse(
-            throw new ReplicaNotAvailableException(s"Replica $brokerId is not available for partition $topicPartition"))
+          (partition, partition.getReplica(brokerId).getOrElse(
+            throw new ReplicaNotAvailableException(s"Replica $brokerId is not available for partition $topicPartition")))
 
       case None if metadataCache.contains(topicPartition) =>
         throw new ReplicaNotAvailableException(s"Replica $brokerId is not available for partition $topicPartition")
@@ -413,8 +413,9 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def getReplicaOrException(topicPartition: TopicPartition): Replica = {
-    getReplicaOrException(topicPartition, localBrokerId)
+  def getReplicaOrException(topicPartition: TopicPartition, brokerId: Int = localBrokerId): Replica = {
+    val (_, replica) = getPartitionAndReplicaOrException(topicPartition, brokerId)
+    replica
   }
 
   def getLeaderReplicaIfLocal(topicPartition: TopicPartition): Replica =  {

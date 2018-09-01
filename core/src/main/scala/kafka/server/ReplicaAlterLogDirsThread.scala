@@ -88,8 +88,8 @@ class ReplicaAlterLogDirsThread(name: String,
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData[Records],
                            records: MemoryRecords) {
-    val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val (partition, futureReplica) = replicaMgr.getPartitionAndReplicaOrException(topicPartition,
+      Request.FutureLocalReplicaId)
 
     if (fetchOffset != futureReplica.logEndOffset.messageOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
@@ -108,8 +108,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
     val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
-    val currentReplica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val (partition, currentReplica) = replicaMgr.getPartitionAndReplicaOrException(topicPartition)
     val logEndOffset: Long = currentReplica.logEndOffset.messageOffset
 
     if (logEndOffset < futureReplica.logEndOffset.messageOffset) {

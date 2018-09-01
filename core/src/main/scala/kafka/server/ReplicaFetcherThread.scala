@@ -106,8 +106,7 @@ class ReplicaFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD, records: MemoryRecords) {
-    val replica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val (partition, replica) = replicaMgr.getPartitionAndReplicaOrException(topicPartition)
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
@@ -155,8 +154,7 @@ class ReplicaFetcherThread(name: String,
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
-    val replica = replicaMgr.getReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val (partition, replica) = replicaMgr.getPartitionAndReplicaOrException(topicPartition)
 
     /**
      * Unclean leader election: A follower goes down, in the meanwhile the leader keeps appending messages. The follower comes back up
@@ -300,8 +298,7 @@ class ReplicaFetcherThread(name: String,
    * The logic for finding the truncation offset is implemented in AbstractFetcherThread.getOffsetTruncationState
    */
   override def truncate(tp: TopicPartition, epochEndOffset: EpochEndOffset): OffsetTruncationState = {
-    val replica = replicaMgr.getReplicaOrException(tp)
-    val partition = replicaMgr.getPartition(tp).get
+    val (partition, replica) = replicaMgr.getPartitionAndReplicaOrException(tp)
 
     val offsetTruncationState = getOffsetTruncationState(tp, epochEndOffset, replica)
     if (offsetTruncationState.offset < replica.highWatermark.messageOffset)
