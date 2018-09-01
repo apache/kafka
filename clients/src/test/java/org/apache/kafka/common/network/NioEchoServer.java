@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
@@ -69,7 +69,13 @@ public class NioEchoServer extends Thread {
     private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
+    }
+
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+                         int failedAuthenticationDelayMs, Time time) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -89,7 +95,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
     }
 

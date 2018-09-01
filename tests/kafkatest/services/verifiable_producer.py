@@ -103,7 +103,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def prop_file(self, node):
         idx = self.idx(node)
-        prop_file = str(self.security_config)
+        prop_file = self.render('producer.properties', request_timeout_ms=(self.request_timeout_sec * 1000))
+        prop_file += "\n{}".format(str(self.security_config))
         if self.compression_types is not None:
             compression_index = idx - 1
             self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
@@ -129,7 +130,6 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
 
-        producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
         if self.enable_idempotence:
             self.logger.info("Setting up an idempotent producer")
             producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"

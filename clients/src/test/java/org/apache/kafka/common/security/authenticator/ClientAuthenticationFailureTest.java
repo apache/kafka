@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,6 +49,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ClientAuthenticationFailureTest {
+    private static MockTime time = new MockTime(50);
 
     private NioEchoServer server;
     private Map<String, Object> saslServerConfigs;
@@ -147,6 +149,6 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), new CredentialCache());
+                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
     }
 }

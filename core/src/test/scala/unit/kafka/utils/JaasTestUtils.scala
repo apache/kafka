@@ -170,8 +170,8 @@ object JaasTestUtils {
   }
 
   // Returns the dynamic configuration, using credentials for user #1
-  def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser).toString
+  def clientLoginModule(mechanism: String, keytabLocation: Option[File], serviceName: String = serviceName): String =
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser, serviceName).toString
 
   def tokenClientLoginModule(tokenId: String, password: String): String = {
     ScramLoginModule(
@@ -223,10 +223,11 @@ object JaasTestUtils {
   }
 
   // consider refactoring if more mechanisms are added
-  private def kafkaClientModule(mechanism: String, 
+  private def kafkaClientModule(mechanism: String,
       keytabLocation: Option[File], clientPrincipal: String,
       plainUser: String, plainPassword: String, 
-      scramUser: String, scramPassword: String, oauthBearerUser: String): JaasModule = {
+      scramUser: String, scramPassword: String,
+      oauthBearerUser: String, serviceName: String = serviceName): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(

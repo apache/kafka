@@ -292,4 +292,21 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         </Or>
         <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
+
+    <!-- Suppress warnings for unused members that are undetectably used by Jackson -->
+    <Match>
+        <Package name="org.apache.kafka.streams.examples.pageview"/>
+        <Bug pattern="NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Package name="org.apache.kafka.streams.examples.pageview"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Package name="org.apache.kafka.streams.examples.pageview"/>
+        <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
+
 </FindBugsFilter>

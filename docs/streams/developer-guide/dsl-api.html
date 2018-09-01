@@ -591,7 +591,30 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Peek</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Merge</strong></p>
+                        <ul class="last simple">
+                            <li>KStream &rarr; KStream</li>
+                        </ul>
+                    </td>
+                        <td><p class="first">Merges records of two streams into one larger stream.
+                            (<a class="reference external"
+                            href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-">details</a>)
+                            <p>There is no ordering guarantee between records
+                            from different streams in the merged stream. Relative order is preserved within each input stream though (ie, records within the same input stream are processed in order)</p>
+                            <div class="last highlight-java">
+                              <div class="highlight">
+                                <pre>
+<span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream1</span> <span class="o">=</span> <span class="o">...;</span>
+
+<span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream2</span> <span class="o">=</span> <span class="o">...;</span>
+
+<span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">merged</span> <span class="o">=</span> <span class="n">stream1</span><span class="o">.</span><span class="na">merge</span><span class="o">(</span><span class="n">stream2</span><span class="o">);</span>
+                                </pre>
+                              </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="row-odd"><td><p class="first"><strong>Peek</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -622,7 +645,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Print</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Print</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; void</li>
                         </ul>
@@ -641,7 +664,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>SelectKey</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>SelectKey</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -669,7 +692,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Table to Stream</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Table to Stream</strong></p>
                         <ul class="last simple">
                             <li>KTable &rarr; KStream</li>
                         </ul>
