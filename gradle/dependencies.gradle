@@ -54,7 +54,7 @@ versions += [
   bcpkix: "1.59",
   easymock: "3.6",
   jackson: "2.9.6",
-  jetty: "9.4.11.v20180605",
+  jetty: "9.4.12.v20180830",
   jersey: "2.27",
   jmh: "1.21",
   log4j: "1.2.17",
