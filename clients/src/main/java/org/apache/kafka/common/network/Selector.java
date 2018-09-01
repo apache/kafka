@@ -353,8 +353,9 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void close() {
         List<String> connections = new ArrayList<>(channels.keySet());
-        for (String id : connections)
+        for (String id : connections) {
             close(id);
+        }
         try {
             this.nioSelector.close();
         } catch (IOException | SecurityException e) {
@@ -362,6 +363,10 @@ public class Selector implements Selectable, AutoCloseable {
         }
         sensors.close();
         channelBuilder.close();
+        for (Map.Entry<String, KafkaChannel> entry : this.closingChannels.entrySet()) {
+            doClose(entry.getValue(), false);
+        }
+        this.closingChannels.clear();
     }
 
     /**
@@ -593,6 +598,7 @@ public class Selector implements Selectable, AutoCloseable {
         //this may cause starvation of reads when memory is low. to address this we shuffle the keys if memory is low.
         if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
             List<SelectionKey> shuffledKeys = new ArrayList<>(selectionKeys);
+            log.warn("memory low: " + memoryPool.availableMemory() + " < " + lowMemThreshold);
             Collections.shuffle(shuffledKeys);
             return shuffledKeys;
         } else {
@@ -886,6 +892,24 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public KafkaChannel closingChannel(String id) {
         return closingChannels.get(id);
+    }
+
+    /**
+     * @return the number of Channels in closingChannels Map
+     */
+    int countOfClosingChannel() {
+        return closingChannels.size();
+    }
+
+    int countOfMutedChannels() {
+        return explicitlyMutedChannels.size();
+    }
+    int countOfConnectedChannels() {
+        int count = 0;
+        for (KafkaChannel channel : channels.values()) {
+            if (!channel.isDisconnected()) count++;
+        }
+        return count;
     }
 
     /**

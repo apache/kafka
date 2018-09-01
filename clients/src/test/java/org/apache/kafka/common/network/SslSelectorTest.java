@@ -76,6 +76,9 @@ public class SslSelectorTest extends SelectorTest {
     @After
     public void tearDown() throws Exception {
         this.selector.close();
+        assertEquals(0, selector.countOfClosingChannel());
+        assertEquals(0, this.selector.countOfMutedChannels());
+        assertEquals(0, this.selector.countOfConnectedChannels());
         this.server.close();
         this.metrics.close();
     }

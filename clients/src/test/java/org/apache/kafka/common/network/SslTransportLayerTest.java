@@ -87,8 +87,12 @@ public class SslTransportLayerTest {
 
     @After
     public void teardown() throws Exception {
-        if (selector != null)
+        if (selector != null) {
             this.selector.close();
+            assertEquals(0, this.selector.countOfClosingChannel());
+            assertEquals(0, this.selector.countOfMutedChannels());
+            assertEquals(0, this.selector.countOfConnectedChannels());
+        }
         if (server != null)
             this.server.close();
     }

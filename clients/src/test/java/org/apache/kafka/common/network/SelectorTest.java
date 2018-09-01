@@ -95,6 +95,10 @@ public class SelectorTest {
             verifySelectorEmpty();
         } finally {
             this.selector.close();
+
+            assertEquals(0, this.selector.countOfClosingChannel());
+            assertEquals(0, this.selector.countOfMutedChannels());
+            assertEquals(0, this.selector.countOfConnectedChannels());
             this.server.close();
             this.metrics.close();
         }
