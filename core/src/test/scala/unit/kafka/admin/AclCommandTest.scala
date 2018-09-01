@@ -121,13 +121,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     testAclCli(adminArgs)
   }
 
-  def createServer(): Unit = {
+  private def createServer(): Unit = {
     servers = Seq(TestUtils.createServer(KafkaConfig.fromProps(brokerProps)))
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName))
   }
 
-  def testAclCli(cmdArgs: Array[String]) {
+  private def testAclCli(cmdArgs: Array[String]) {
     for ((resources, resourceCmd) <- ResourceToCommand) {
       for (permissionType <- PermissionType.values) {
         val operationToCmd = ResourceToOperations(resources)
@@ -155,7 +155,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     testProducerConsumerCli(adminArgs)
   }
 
-  def testProducerConsumerCli(cmdArgs: Array[String]) {
+  private def testProducerConsumerCli(cmdArgs: Array[String]) {
     for ((cmd, resourcesToAcls) <- CmdToResourcesToAcl) {
       val resourceCommand: Array[String] = resourcesToAcls.keys.map(ResourceToCommand).foldLeft(Array[String]())(_ ++ _)
       AclCommand.main(cmdArgs ++ getCmd(Allow) ++ resourceCommand ++ cmd :+ "--add")
@@ -181,7 +181,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     testAclsOnPrefixedResources(adminArgs)
   }
 
-  def testAclsOnPrefixedResources(cmdArgs: Array[String]): Unit = {
+  private def testAclsOnPrefixedResources(cmdArgs: Array[String]): Unit = {
     val cmd = Array("--allow-principal", principal.toString, "--producer", "--topic", "Test-", "--resource-pattern-type", "Prefixed")
 
     AclCommand.main(cmdArgs ++ cmd :+ "--add")
@@ -257,7 +257,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
-  def withAuthorizer()(f: Authorizer => Unit) {
+  private def withAuthorizer()(f: Authorizer => Unit) {
     val kafkaConfig = KafkaConfig.fromProps(brokerProps, doLog = false)
     val authZ = new SimpleAclAuthorizer
     try {

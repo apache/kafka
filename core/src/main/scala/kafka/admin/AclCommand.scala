@@ -103,11 +103,8 @@ object AclCommand extends Logging {
       }
     }
 
-  private def addAcl(opts: AclCommandOptions): Unit = {
-    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
-    if (!patternType.isSpecific)
-      CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
-
+    def addAcls(): Unit = {
+      validateResourcePatternType(opts)
       withAdminClient(opts) { adminClient =>
         val resourceToAcl = getResourceFilterToAcls(opts).map {
           case (filter, acls) =>
@@ -215,10 +212,7 @@ object AclCommand extends Logging {
     }
 
     def addAcls(): Unit = {
-      val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
-      if (patternType == PatternType.MATCH || patternType == PatternType.ANY)
-        CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
-
+      validateResourcePatternType(opts)
       withAuthorizer() { authorizer =>
         val resourceToAcl = getResourceFilterToAcls(opts).map {
           case (filter, acls) =>
@@ -280,6 +274,12 @@ object AclCommand extends Logging {
     private def getAcls(authorizer: Authorizer, filter: ResourcePatternFilter): Map[Resource, Set[Acl]] =
       authorizer.getAcls()
         .filter { case (resource, acl) => filter.matches(resource.toPattern) }
+  }
+
+  private def validateResourcePatternType(opts: AclCommandOptions): Unit = {
+    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    if (!patternType.isSpecific)
+      CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
   }
 
   private def getResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[Acl]] = {
@@ -436,8 +436,8 @@ object AclCommand extends Logging {
     val parser = new OptionParser(false)
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka server(s) to connect to. " +
-      "This is required for acl management using admin client API.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "A list of host/port pairs to use for establishing the connection to the Kafka cluster." +
+      " This list should be in the form host1:port1,host2:port2,... This config is required for acl management using admin client API.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -567,7 +567,6 @@ object AclCommand extends Logging {
       if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
-      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt))
 
       //when --producer or --consumer is specified , user should not specify operations as they are inferred and we also disallow --deny-principals and --deny-hosts.
