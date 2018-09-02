@@ -101,7 +101,8 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     maybeCreateControllerEpochZNode()
 
     // Read /controller_epoch to get the current controller epoch and zkVersion
-    val (curEpoch, curEpochStat) = getControllerEpoch.get
+    val (curEpoch, curEpochStat) = getControllerEpoch.getOrElse(
+      throw new IllegalStateException(s"${ControllerEpochZNode.path} does not exist while trying to create ${ControllerZNode.path}"))
 
     // Create /controller and update /controller_epoch atomically
     val newControllerEpoch = curEpoch + 1
@@ -111,20 +112,22 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       val getDataRequest = GetDataRequest(ControllerZNode.path)
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
       getDataResponse.resultCode match {
-        case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
-          error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
-            s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
-          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-        case code@Code.OK =>
-          getControllerEpoch match {
-            case Some((epoch, stat)) if epoch == newControllerEpoch =>
-              // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
-              // is associated with the current broker during controller election because we already knew that the zk
-              // transaction succeeds based on the controller znode ephemeral owner verification. Other rounds of controller
-              // election will result in larger epoch number written in zk.
-              (newControllerEpoch, stat.getVersion)
-            case _ =>
-              throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        case Code.OK =>
+          if (getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId) {
+            error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
+              s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
+            throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+          } else {
+            getControllerEpoch match {
+              case Some((epoch, stat)) if epoch == newControllerEpoch =>
+                // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
+                // is associated with the current broker during controller election because we already knew that the zk
+                // transaction succeeds based on the controller znode ephemeral owner verification. Other rounds of controller
+                // election will result in larger epoch number written in zk.
+                (newControllerEpoch, stat.getVersion)
+              case _ =>
+                throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+            }
           }
         case Code.NONODE =>
           throw new ControllerMovedException(

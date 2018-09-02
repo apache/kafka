@@ -75,7 +75,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // visible for testing
   private[controller] val eventManager = new ControllerEventManager(config.brokerId,
-    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => markInactiveAndResign())
+    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics(), () => maybeResign())
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager, zkClient)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this, stateChangeLogger)
@@ -1175,7 +1175,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     else {
       try {
         val expectedControllerEpochZkVersion = controllerContext.epochZkVersion
-        markInactiveAndResign()
+        activeControllerId = -1
+        onControllerResignation()
         zkClient.deleteController(expectedControllerEpochZkVersion)
       } catch {
         case _: ControllerMovedException =>
@@ -1191,11 +1192,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (wasActiveBeforeChange && !isActive) {
       onControllerResignation()
     }
-  }
-
-  private def markInactiveAndResign(): Unit = {
-    activeControllerId = -1
-    onControllerResignation()
   }
 
   private def elect(): Unit = {
@@ -1222,9 +1218,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       onControllerFailover()
     } catch {
       case e: ControllerMovedException =>
-        error(s"Error while electing or becoming controller on broker ${config.brokerId} " +
-          s"because controller moved to another broker", e)
-        markInactiveAndResign()
+        maybeResign()
+
+        if (activeControllerId != -1)
+          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
+        else
+          warn("A controller has been elected but just resigned, this will result in another round of election", e)
 
       case t: Throwable =>
         error(s"Error while electing or becoming controller on broker ${config.brokerId}. " +
