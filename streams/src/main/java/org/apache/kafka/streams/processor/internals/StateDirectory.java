@@ -218,7 +218,7 @@ public class StateDirectory {
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
             try {
                 lockAndOwner.lock.release();
-            } catch (ClosedChannelException cce){
+            } catch (final ClosedChannelException cce) {
                 log.warn("{} Channel closed unexpectedly before lock release.", logPrefix(), cce);
             }
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
