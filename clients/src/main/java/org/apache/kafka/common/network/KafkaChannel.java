@@ -106,8 +106,9 @@ public class KafkaChannel {
         this.disconnected = true;
         Utils.closeAll(transportLayer, authenticator, receive);
     }
+
     boolean isDisconnected() {
-      return this.disconnected;
+        return this.disconnected;
     }
 
     /**
