@@ -79,21 +79,6 @@ else
   rocksdb_lib_dir=$streams_lib_dir
 fi
 
-
-for file in "$clients_lib_dir"/kafka-clients*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
-for file in "$streams_lib_dir"/kafka-streams*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
   do
@@ -111,6 +96,21 @@ else
     fi
   done
 fi
+
+
+for file in "$clients_lib_dir"/kafka-clients*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for file in "$streams_lib_dir"/kafka-streams*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
 
 for file in "$rocksdb_lib_dir"/rocksdb*.jar;
 do
