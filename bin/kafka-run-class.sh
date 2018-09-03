@@ -19,7 +19,7 @@ then
   echo "USAGE: $0 [-daemon] [-name servicename] [-loggc] classname [opts]"
   exit 1
 fi
-echo "FOUND THIS>>>>> $UPGRADE_KAFKA_STREAMS_TEST_VERSION"
+
 # CYGINW == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
@@ -79,6 +79,21 @@ else
   rocksdb_lib_dir=$streams_lib_dir
 fi
 
+
+for file in "$clients_lib_dir"/kafka-clients*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for file in "$streams_lib_dir"/kafka-streams*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
   do
@@ -96,21 +111,6 @@ else
     fi
   done
 fi
-
-
-for file in "$clients_lib_dir"/kafka-clients*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
-
-for file in "$streams_lib_dir"/kafka-streams*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
-done
 
 for file in "$rocksdb_lib_dir"/rocksdb*.jar;
 do
@@ -303,6 +303,5 @@ CLASSPATH=${CLASSPATH#:}
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
   nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
 else
-  echo "THE Classpath is $CLASSPATH"
   exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@"
 fi
