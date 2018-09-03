@@ -299,7 +299,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             retry += 1
             warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
               s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
-              s"Last successful offset commit timestamp=${lastSuccessfulCommitTime}, retry count=${retry}")
+              s"Last successful offset commit timestamp=$lastSuccessfulCommitTime, retry count=$retry")
             Thread.sleep(100)
 
           case _: CommitFailedException =>
