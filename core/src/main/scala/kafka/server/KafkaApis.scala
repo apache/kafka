@@ -1950,7 +1950,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           SecurityUtils.convertToResourceAndAcl(aclCreation.acl.toFilter) match {
             case Left(apiError) => new AclCreationResponse(apiError)
             case Right((resource, acl)) => try {
-                if (resource.resourceType.equals(Cluster) && !Resource.isClusterResource(resource.name))
+                if (resource.resourceType.equals(Cluster) && !SecurityUtils.isClusterResource(resource.name))
                   throw new InvalidRequestException("The only valid name for the CLUSTER resource is " +
                       Resource.ClusterResourceName)
                 if (resource.name.isEmpty)

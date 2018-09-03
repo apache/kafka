@@ -50,4 +50,5 @@ object SecurityUtils {
     new AclBinding(resourcePattern, entry)
   }
 
+  def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
 }

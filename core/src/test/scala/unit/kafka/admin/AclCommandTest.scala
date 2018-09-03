@@ -21,8 +21,9 @@ import java.util.Properties
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.auth._
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Before, Test}
@@ -156,6 +157,35 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+  }
+
+  @Test
+  def testPatternTypes() {
+    Exit.setExitProcedure { (status, _) =>
+      if (status == 1)
+        throw new RuntimeException("Exiting command")
+      else
+        throw new AssertionError(s"Unexpected exit with status $status")
+    }
+    def verifyPatternType(cmd: Array[String], isValid: Boolean): Unit = {
+      if (isValid)
+        AclCommand.main(cmd)
+      else
+        intercept[RuntimeException](AclCommand.main(cmd))
+    }
+    try {
+      PatternType.values.foreach { patternType =>
+        val addCmd = zkArgs ++ Array("--allow-principal", principal.toString, "--producer", "--topic", "Test",
+          "--add", "--resource-pattern-type", patternType.toString)
+        verifyPatternType(addCmd, isValid = patternType.isSpecific)
+        val listCmd = zkArgs ++ Array("--topic", "Test", "--list", "--resource-pattern-type", patternType.toString)
+        verifyPatternType(listCmd, isValid = patternType != PatternType.UNKNOWN)
+        val removeCmd = zkArgs ++ Array("--topic", "Test", "--force", "--remove", "--resource-pattern-type", patternType.toString)
+        verifyPatternType(removeCmd, isValid = patternType != PatternType.UNKNOWN)
+      }
+    } finally {
+      Exit.resetExitProcedure()
+    }
   }
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], brokerProps: Properties) {

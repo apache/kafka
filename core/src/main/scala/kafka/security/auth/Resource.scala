@@ -23,6 +23,7 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, PatternType.LITERAL)
+  val ProducerIdResourceName = "producer-id" // This is not used since we don't have a producer id resource
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
@@ -41,8 +42,6 @@ object Resource {
         }
     }
   }
-
-  def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
 }
 
 /**
