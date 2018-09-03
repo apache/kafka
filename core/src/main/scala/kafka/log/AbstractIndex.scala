@@ -203,7 +203,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def renameTo(f: File) {
     maybeLock(lock) {
-      val position = if (this.mmap == null) 0 else this.mmap.position
+      val position = if (this.mmap == null) 0 else this.mmap.position()
       if (OperatingSystem.IS_WINDOWS && this.mmap != null)
         forceUnmap()
       try {
