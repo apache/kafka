@@ -202,8 +202,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    maybeLock(lock) {
+      val position = if (this.mmap == null) 0 else this.mmap.position
+      if (OperatingSystem.IS_WINDOWS && this.mmap != null)
+        forceUnmap()
+      try {
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+        if (OperatingSystem.IS_WINDOWS) {
+          val raf = new RandomAccessFile(f, "rw")
+          try {
+            val len = raf.length()
+            this.mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+            this.mmap.position(position)
+          } finally {
+            CoreUtils.swallow(raf.close(), this)
+          }
+        }
+      } finally {
+        file = f
+      }
+    }
   }
 
   /**
@@ -228,7 +246,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
       // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      safeForceUnmap()
+      CoreUtils.swallow(forceUnmap(), this)
+      // Accessing unmapped mmap crashes JVM by SEGV.
+      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
+      mmap = null
     }
     Files.deleteIfExists(file.toPath)
   }
@@ -251,6 +272,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+    inLock(lock) {
+      if (OperatingSystem.IS_WINDOWS)
+        forceUnmap()
+    }
   }
 
   def closeHandler(): Unit = {

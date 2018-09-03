@@ -438,16 +438,20 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
         if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
-                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
+            if (fileAlreadyExists) {
+                return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ);
             } else {
-                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                if (preallocate) {
+                    try (RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw")) {
+                        randomAccessFile.setLength(initFileSize);
+                    }
+                    return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ);
+                } else {
+                    return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
+                }
             }
         } else {
-            return FileChannel.open(file.toPath());
+            return FileChannel.open(file.toPath(), StandardOpenOption.READ);
         }
     }
 
