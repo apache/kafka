@@ -1750,11 +1750,7 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
-    val deletedFileSuffix = new StringBuilder(".")
-      .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
-      .append(DeletedFileSuffix)
-      .toString()
-    segment.changeFileSuffixes("", deletedFileSuffix)
+    segment.changeFileSuffixes("", Log.DeletedFileSuffix)
 
     def deleteSeg() {
       info(s"Deleting segment ${segment.baseOffset}")
