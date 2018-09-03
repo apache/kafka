@@ -1751,7 +1751,6 @@ class Log(@volatile var dir: File,
    */
   private def asyncDeleteSegment(segment: LogSegment) {
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
-
     def deleteSeg() {
       info(s"Deleting segment ${segment.baseOffset}")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
