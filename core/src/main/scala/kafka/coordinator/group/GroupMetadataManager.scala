@@ -20,6 +20,7 @@ package kafka.coordinator.group
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -441,7 +442,7 @@ class GroupMetadataManager(brokerId: Int,
     if (group == null) {
       topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
         val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-          RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
+          Optional.empty(), "", Errors.NONE)
         topicPartition -> partitionData
       }.toMap
     } else {
@@ -449,7 +450,7 @@ class GroupMetadataManager(brokerId: Int,
         if (group.is(Dead)) {
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
             val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-              RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
+              Optional.empty(), "", Errors.NONE)
             topicPartition -> partitionData
           }.toMap
         } else {
@@ -459,7 +460,7 @@ class GroupMetadataManager(brokerId: Int,
               // that commit offsets to Kafka.)
               group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
                 topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                  RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetAndMetadata.metadata, Errors.NONE)
+                  Optional.empty(), offsetAndMetadata.metadata, Errors.NONE)
               }
 
             case Some(topicPartitions) =>
@@ -467,10 +468,10 @@ class GroupMetadataManager(brokerId: Int,
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
                     new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                      RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE)
+                      Optional.empty(), "", Errors.NONE)
                   case Some(offsetAndMetadata) =>
                     new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                      RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetAndMetadata.metadata, Errors.NONE)
+                      Optional.empty(), offsetAndMetadata.metadata, Errors.NONE)
                 }
                 topicPartition -> partitionData
               }.toMap

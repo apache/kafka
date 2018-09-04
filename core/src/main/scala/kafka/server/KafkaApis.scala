@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
@@ -796,7 +796,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
         ListOffsetResponse.UNKNOWN_TIMESTAMP,
         ListOffsetResponse.UNKNOWN_OFFSET,
-        RecordBatch.NO_PARTITION_LEADER_EPOCH)
+        Optional.empty())
     })
 
     val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
@@ -806,7 +806,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         (topicPartition, new ListOffsetResponse.PartitionData(Errors.INVALID_REQUEST,
           ListOffsetResponse.UNKNOWN_TIMESTAMP,
           ListOffsetResponse.UNKNOWN_OFFSET,
-          RecordBatch.NO_PARTITION_LEADER_EPOCH))
+          Optional.empty()))
       } else {
         try {
           // ensure leader exists
@@ -837,7 +837,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH))
+            Optional.empty()))
         } catch {
           // NOTE: These exceptions are special cased since these error messages are typically transient or the client
           // would have received a clear exception and there is no value in logging the entire stack trace for the same
@@ -850,13 +850,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
               ListOffsetResponse.UNKNOWN_TIMESTAMP,
               ListOffsetResponse.UNKNOWN_OFFSET,
-              RecordBatch.NO_PARTITION_LEADER_EPOCH))
+              Optional.empty()))
           case e: Throwable =>
             error("Error while responding to offset request", e)
             (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
               ListOffsetResponse.UNKNOWN_TIMESTAMP,
               ListOffsetResponse.UNKNOWN_OFFSET,
-              RecordBatch.NO_PARTITION_LEADER_EPOCH))
+              Optional.empty()))
         }
       }
     }
@@ -1124,7 +1124,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   payloadOpt match {
                     case Some(payload) =>
                       (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH, OffsetFetchResponse.NO_METADATA, Errors.NONE))
+                        Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.NONE))
                     case None =>
                       (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                   }
@@ -1132,7 +1132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               } catch {
                 case e: Throwable =>
                   (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH, OffsetFetchResponse.NO_METADATA, Errors.forException(e)))
+                    Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.forException(e)))
               }
             }.toMap
 

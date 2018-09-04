@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -33,7 +33,6 @@ import kafka.zk.KafkaZkClient
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -176,7 +175,7 @@ class ReplicaManagerTest {
 
       // Fetch some messages
       val fetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         minBytes = 100000)
       assertFalse(fetchResult.isFired)
 
@@ -279,12 +278,12 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(numRecords, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(numRecords, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // fetch should return empty since LSO should be stuck at 0
       var consumerFetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
       var fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
@@ -294,7 +293,7 @@ class ReplicaManagerTest {
 
       // delayed fetch should timeout and return nothing
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 1000)
       assertFalse(consumerFetchResult.isFired)
       timer.advanceClock(1001)
@@ -314,7 +313,7 @@ class ReplicaManagerTest {
       // the LSO has advanced, but the appended commit marker has not been replicated, so
       // none of the data from the transaction should be visible yet
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       fetchData = consumerFetchResult.assertFired
@@ -323,12 +322,12 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(numRecords + 1, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(numRecords + 1, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // now all of the records should be fetchable
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       fetchData = consumerFetchResult.assertFired
@@ -380,13 +379,13 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(numRecords + 1, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(numRecords + 1, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // Set the minBytes in order force this request to enter purgatory. When it returns, we should still
       // see the newly aborted transaction.
       val fetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
-        new PartitionData(0, 0, 100000, NO_PARTITION_LEADER_EPOCH),
+        new PartitionData(0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 10000)
       assertFalse(fetchResult.isFired)
 
@@ -434,14 +433,14 @@ class ReplicaManagerTest {
 
       // Fetch a message above the high watermark as a follower
       val followerFetchResult = fetchAsFollower(rm, new TopicPartition(topic, 0),
-        new PartitionData(1, 0, 100000, NO_PARTITION_LEADER_EPOCH))
+        new PartitionData(1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
       assertEquals("Should not give an exception", Errors.NONE, followerFetchData.error)
       assertTrue("Should return some data", followerFetchData.records.batches.iterator.hasNext)
 
       // Fetch a message above the high watermark as a consumer
       val consumerFetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
-        new PartitionData(1, 0, 100000, NO_PARTITION_LEADER_EPOCH))
+        new PartitionData(1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
       assertEquals("Should not give an exception", Errors.NONE, consumerFetchData.error)
       assertEquals("Should return empty response", MemoryRecords.EMPTY, consumerFetchData.records)
@@ -513,8 +512,8 @@ class ReplicaManagerTest {
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(
-          tp0 -> new PartitionData(1, 0, 100000, NO_PARTITION_LEADER_EPOCH),
-          tp1 -> new PartitionData(1, 0, 100000, NO_PARTITION_LEADER_EPOCH)),
+          tp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
+          tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED
       )

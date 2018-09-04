@@ -19,6 +19,8 @@ package org.apache.kafka.common;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Optional;
+
 public class PartitionInfoTest {
 
     @Test
@@ -32,7 +34,8 @@ public class PartitionInfoTest {
         Node[] replicas = new Node[] {leader, r1, r2};
         Node[] inSyncReplicas = new Node[] {leader, r1};
         Node[] offlineReplicas = new Node[] {r2};
-        PartitionInfo partitionInfo = new PartitionInfo(topic, partition, leader, leaderEpoch, replicas, inSyncReplicas, offlineReplicas);
+        PartitionInfo partitionInfo = new PartitionInfo(topic, partition, leader, Optional.of(leaderEpoch),
+                replicas, inSyncReplicas, offlineReplicas);
 
         String expected = String.format("Partition(topic = %s, partition = %d, leader = %s, leaderEpoch = %d, replicas = %s, isr = %s, offlineReplicas = %s)",
                 topic, partition, leader.idString(), leaderEpoch, "[0,1,2]", "[0,1]", "[2]");

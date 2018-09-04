@@ -44,7 +44,7 @@ public class ConsumerRecord<K, V> {
     private final Headers headers;
     private final K key;
     private final V value;
-    private final Integer leaderEpoch;
+    private final Optional<Integer> leaderEpoch;
 
     private volatile Long checksum;
 
@@ -169,7 +169,7 @@ public class ConsumerRecord<K, V> {
         this.key = key;
         this.value = value;
         this.headers = headers;
-        this.leaderEpoch = leaderEpoch.orElse(null);
+        this.leaderEpoch = leaderEpoch;
     }
 
     /**
@@ -268,7 +268,7 @@ public class ConsumerRecord<K, V> {
      * @return the leader epoch or empty for legacy record formats
      */
     public Optional<Integer> leaderEpoch() {
-        return Optional.ofNullable(leaderEpoch);
+        return leaderEpoch;
     }
 
     @Override

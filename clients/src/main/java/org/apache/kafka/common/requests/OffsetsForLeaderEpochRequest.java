@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -90,7 +89,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             this.epochsByPartition = epochsByPartition;
         }
 
-        public Builder add(TopicPartition topicPartition, Integer currentEpoch, Integer searchEpoch) {
+        public Builder add(TopicPartition topicPartition, Optional<Integer> currentEpoch, Integer searchEpoch) {
             epochsByPartition.put(topicPartition, new PartitionData(currentEpoch, searchEpoch));
             return this;
         }
@@ -129,9 +128,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                 Struct partitionAndEpoch = (Struct) partitionAndEpochObj;
                 int partitionId = partitionAndEpoch.get(PARTITION_ID);
                 int searchEpoch = partitionAndEpoch.get(LEADER_EPOCH);
-                int currentEpoch = partitionAndEpoch.getOrElse(CURRENT_LEADER_EPOCH,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH);
-
+                Optional<Integer> currentEpoch = RequestUtils.getLeaderEpoch(partitionAndEpoch, CURRENT_LEADER_EPOCH);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
                 epochsByPartition.put(tp, new PartitionData(currentEpoch, searchEpoch));
             }
@@ -161,7 +158,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                 partitionStruct.set(LEADER_EPOCH, partitionData.searchLeaderEpoch);
 
                 // Current leader epoch introduced in v2
-                partitionStruct.setIfExists(CURRENT_LEADER_EPOCH, partitionData.currentLeaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionStruct, CURRENT_LEADER_EPOCH, partitionData.currentLeaderEpoch);
                 partitions.add(partitionStruct);
             }
             topicsStruct.set(PARTITIONS_KEY_NAME, partitions.toArray());
@@ -183,18 +180,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     public static class PartitionData {
-        private final int currentLeaderEpoch;
+        public final Optional<Integer> currentLeaderEpoch;
         public final int searchLeaderEpoch;
 
-        public PartitionData(int currentLeaderEpoch, int searchLeaderEpoch) {
+        public PartitionData(Optional<Integer> currentLeaderEpoch, int searchLeaderEpoch) {
             this.currentLeaderEpoch = currentLeaderEpoch;
             this.searchLeaderEpoch = searchLeaderEpoch;
-        }
-
-        public Optional<Integer> currentLeaderEpoch() {
-            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(currentLeaderEpoch);
         }
 
     }

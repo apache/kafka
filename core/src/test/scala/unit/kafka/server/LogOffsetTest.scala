@@ -19,14 +19,14 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Properties, Random}
+import java.util.{Optional, Properties, Random}
 
 import kafka.log.{Log, LogSegment}
 import kafka.network.SocketServer
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, ListOffsetRequest, ListOffsetResponse}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
@@ -122,7 +122,7 @@ class LogOffsetTest extends BaseRequestTest {
     // try to fetch using latest offset
     val fetchRequest = FetchRequest.Builder.forConsumer(0, 1,
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
-        300 * 1024, RecordBatch.NO_PARTITION_LEADER_EPOCH)).asJava).build()
+        300 * 1024, Optional.empty())).asJava).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
     assertFalse(fetchResponse.responseData.get(topicPartition).records.batches.iterator.hasNext)
   }

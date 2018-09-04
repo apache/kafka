@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -129,7 +128,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public final List<Long> offsets;
         public final Long timestamp;
         public final Long offset;
-        public final int leaderEpoch;
+        public final Optional<Integer> leaderEpoch;
 
         /**
          * Constructor for ListOffsetResponse v0
@@ -140,24 +139,18 @@ public class ListOffsetResponse extends AbstractResponse {
             this.offsets = offsets;
             this.timestamp = null;
             this.offset = null;
-            this.leaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
+            this.leaderEpoch = Optional.empty();
         }
 
         /**
          * Constructor for ListOffsetResponse v1
          */
-        public PartitionData(Errors error, long timestamp, long offset, int leaderEpoch) {
+        public PartitionData(Errors error, long timestamp, long offset, Optional<Integer> leaderEpoch) {
             this.error = error;
             this.timestamp = timestamp;
             this.offset = offset;
             this.offsets = null;
             this.leaderEpoch = leaderEpoch;
-        }
-
-        public Optional<Integer> leaderEpoch() {
-            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(leaderEpoch);
         }
 
         @Override
@@ -216,7 +209,7 @@ public class ListOffsetResponse extends AbstractResponse {
                 } else {
                     long timestamp = partitionResponse.get(TIMESTAMP);
                     long offset = partitionResponse.get(OFFSET);
-                    int leaderEpoch = partitionResponse.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                    Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionResponse, LEADER_EPOCH);
                     partitionData = new PartitionData(error, timestamp, offset, leaderEpoch);
                 }
                 responseData.put(new TopicPartition(topic, partition), partitionData);
@@ -266,7 +259,7 @@ public class ListOffsetResponse extends AbstractResponse {
                 } else {
                     partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
                     partitionData.set(OFFSET, offsetPartitionData.offset);
-                    partitionData.setIfExists(LEADER_EPOCH, offsetPartitionData.leaderEpoch);
+                    RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, offsetPartitionData.leaderEpoch);
                 }
                 partitionArray.add(partitionData);
             }

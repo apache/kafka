@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -169,9 +168,9 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         public final long offset;
         public final String metadata;
-        private final int leaderEpoch;
+        public final Optional<Integer> leaderEpoch;
 
-        private PartitionData(long offset, int leaderEpoch, long timestamp, String metadata) {
+        private PartitionData(long offset, Optional<Integer> leaderEpoch, long timestamp, String metadata) {
             this.offset = offset;
             this.leaderEpoch = leaderEpoch;
             this.timestamp = timestamp;
@@ -180,17 +179,11 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         @Deprecated
         public PartitionData(long offset, long timestamp, String metadata) {
-            this(offset, RecordBatch.NO_PARTITION_LEADER_EPOCH, timestamp, metadata);
+            this(offset, Optional.empty(), timestamp, metadata);
         }
 
-        public PartitionData(long offset, int leaderEpoch, String metadata) {
+        public PartitionData(long offset, Optional<Integer> leaderEpoch, String metadata) {
             this(offset, leaderEpoch, DEFAULT_TIMESTAMP, metadata);
-        }
-
-        public Optional<Integer> leaderEpoch() {
-            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(leaderEpoch);
         }
 
         @Override
@@ -288,8 +281,8 @@ public class OffsetCommitRequest extends AbstractRequest {
                     long timestamp = partitionDataStruct.get(COMMIT_TIMESTAMP);
                     partitionOffset = new PartitionData(offset, timestamp, metadata);
                 } else {
-                    int leaderEpoch = partitionDataStruct.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                    partitionOffset = new PartitionData(offset, leaderEpoch, metadata);
+                    Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionDataStruct, LEADER_EPOCH);
+                    partitionOffset = new PartitionData(offset, leaderEpochOpt, metadata);
                 }
                 offsetData.put(new TopicPartition(topic, partition), partitionOffset);
             }
@@ -316,7 +309,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 // Only for v1
                 partitionData.setIfExists(COMMIT_TIMESTAMP, fetchPartitionData.timestamp);
                 // Only for v6
-                partitionData.setIfExists(LEADER_EPOCH, fetchPartitionData.leaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, fetchPartitionData.leaderEpoch);
                 partitionData.set(COMMIT_METADATA, fetchPartitionData.metadata);
                 partitionArray.add(partitionData);
             }

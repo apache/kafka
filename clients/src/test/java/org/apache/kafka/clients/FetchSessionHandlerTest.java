@@ -19,7 +19,6 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,6 +33,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -94,8 +94,7 @@ public class FetchSessionHandlerTest {
 
         ReqEntry(String topic, int partition, long fetchOffset, long logStartOffset, int maxBytes) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            this.data = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes, Optional.empty());
         }
     }
 
@@ -184,9 +183,9 @@ public class FetchSessionHandlerTest {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
                                new ReqEntry("foo", 1, 10, 110, 210)),
@@ -202,7 +201,7 @@ public class FetchSessionHandlerTest {
 
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertEquals(INVALID_SESSION_ID, data2.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data2.metadata().epoch());
@@ -218,9 +217,9 @@ public class FetchSessionHandlerTest {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
             new ReqEntry("foo", 1, 10, 110, 210)),
@@ -237,11 +236,11 @@ public class FetchSessionHandlerTest {
         // Test an incremental fetch request which adds one partition and modifies another.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder2.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 120, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 120, 210, Optional.empty()));
         builder2.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 200, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(20, 200, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertFalse(data2.metadata().isFull());
         assertMapEquals(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
@@ -265,11 +264,11 @@ public class FetchSessionHandlerTest {
 
         FetchSessionHandler.Builder builder4 = handler.newBuilder();
         builder4.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder4.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 120, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 120, 210, Optional.empty()));
         builder4.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 200, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(20, 200, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data4 = builder4.build();
         assertTrue(data4.metadata().isFull());
         assertEquals(data2.metadata().sessionId(), data4.metadata().sessionId());
@@ -288,7 +287,7 @@ public class FetchSessionHandlerTest {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.build();
         try {
             builder.build();
@@ -303,11 +302,11 @@ public class FetchSessionHandlerTest {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         builder.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 120, 220, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
             new ReqEntry("foo", 1, 10, 110, 210),
@@ -325,7 +324,7 @@ public class FetchSessionHandlerTest {
         // Test an incremental fetch request which removes two partitions.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertFalse(data2.metadata().isFull());
         assertEquals(123, data2.metadata().sessionId());
@@ -345,7 +344,7 @@ public class FetchSessionHandlerTest {
         handler.handleResponse(resp2);
         FetchSessionHandler.Builder builder3 = handler.newBuilder();
         builder3.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data3 = builder3.build();
         assertTrue(data3.metadata().isFull());
         assertEquals(INVALID_SESSION_ID, data3.metadata().sessionId());

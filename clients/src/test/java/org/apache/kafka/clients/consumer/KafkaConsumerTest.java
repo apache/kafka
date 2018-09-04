@@ -46,7 +46,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -92,6 +91,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -1656,7 +1656,7 @@ public class KafkaConsumerTest {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(),
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH, "", error));
+                    Optional.empty(), "", error));
         }
         return new OffsetFetchResponse(Errors.NONE, partitionData);
     }
@@ -1671,13 +1671,13 @@ public class KafkaConsumerTest {
         for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(Errors.NONE,
                     ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionOffset.getValue(),
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH));
+                    Optional.empty()));
         }
 
         for (Map.Entry<TopicPartition, Errors> partitionError : partitionErrors.entrySet()) {
             partitionData.put(partitionError.getKey(), new ListOffsetResponse.PartitionData(
                     partitionError.getValue(), ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                    ListOffsetResponse.UNKNOWN_OFFSET, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+                    ListOffsetResponse.UNKNOWN_OFFSET, Optional.empty()));
         }
 
         return new ListOffsetResponse(partitionData);

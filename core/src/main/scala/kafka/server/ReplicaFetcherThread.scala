@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Optional
+
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LogAppendInfo, LogConfig}
@@ -27,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, Records}
+import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
@@ -203,7 +205,7 @@ class ReplicaFetcherThread(name: String,
 
   private def fetchOffsetFromLeader(topicPartition: TopicPartition, earliestOrLatest: Long): Long = {
     val requestPartitionData = ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(earliestOrLatest,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH)
+      Optional.empty())
     val requestPartitions = Map(topicPartition -> requestPartitionData)
     val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
       .setTargetTimes(requestPartitions.asJava)
@@ -232,7 +234,7 @@ class ReplicaFetcherThread(name: String,
         try {
           val logStartOffset = replicaMgr.getReplicaOrException(topicPartition).logStartOffset
           builder.add(topicPartition, new FetchRequest.PartitionData(
-            partitionFetchState.fetchOffset, logStartOffset, fetchSize, RecordBatch.NO_PARTITION_LEADER_EPOCH))
+            partitionFetchState.fetchOffset, logStartOffset, fetchSize, Optional.empty()))
         } catch {
           case _: KafkaStorageException =>
             // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
@@ -293,7 +295,7 @@ class ReplicaFetcherThread(name: String,
       }
 
       val partitionsAsJava = partitions.map { case (tp, epoch) => tp ->
-        new OffsetsForLeaderEpochRequest.PartitionData(RecordBatch.NO_PARTITION_LEADER_EPOCH, epoch.asInstanceOf[Integer])
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), epoch.asInstanceOf[Integer])
       }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {

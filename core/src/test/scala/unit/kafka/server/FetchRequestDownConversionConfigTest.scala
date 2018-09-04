@@ -17,14 +17,14 @@
 package kafka.server
 
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -73,7 +73,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
       partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L,
-        maxPartitionBytes, RecordBatch.NO_PARTITION_LEADER_EPOCH))
+        maxPartitionBytes, Optional.empty()))
     }
     partitionMap
   }

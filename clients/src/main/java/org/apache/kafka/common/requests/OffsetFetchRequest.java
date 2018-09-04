@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -175,7 +175,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         if (versionId < 2) {
             OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
                     OffsetFetchResponse.INVALID_OFFSET,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                    Optional.empty(),
                     OffsetFetchResponse.NO_METADATA,
                     error);
 

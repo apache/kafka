@@ -25,7 +25,7 @@ public class PartitionInfo {
     private final String topic;
     private final int partition;
     private final Node leader;
-    private final Integer leaderEpoch;
+    private final Optional<Integer> leaderEpoch;
     private final Node[] replicas;
     private final Node[] inSyncReplicas;
     private final Node[] offlineReplicas;
@@ -41,19 +41,16 @@ public class PartitionInfo {
                          Node[] replicas,
                          Node[] inSyncReplicas,
                          Node[] offlineReplicas) {
-        this(topic, partition, leader, null, replicas, inSyncReplicas, offlineReplicas);
+        this(topic, partition, leader, Optional.empty(), replicas, inSyncReplicas, offlineReplicas);
     }
 
     public PartitionInfo(String topic,
                          int partition,
                          Node leader,
-                         Integer leaderEpoch,
+                         Optional<Integer> leaderEpoch,
                          Node[] replicas,
                          Node[] inSyncReplicas,
                          Node[] offlineReplicas) {
-        if (leaderEpoch != null && leaderEpoch < 0)
-            throw new IllegalArgumentException("Invalid negative leader epoch");
-
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
@@ -113,7 +110,7 @@ public class PartitionInfo {
      * @return The leader epoch or empty if it is not known
      */
     public Optional<Integer> leaderEpoch() {
-        return Optional.ofNullable(leaderEpoch);
+        return leaderEpoch;
     }
 
     @Override
@@ -122,7 +119,7 @@ public class PartitionInfo {
                              topic,
                              partition,
                              leader == null ? "none" : leader.idString(),
-                             leaderEpoch == null ? "unknown" : leaderEpoch.toString(),
+                             leaderEpoch.isPresent() ? leaderEpoch.get().toString() : "unknown",
                              formatNodeIds(replicas),
                              formatNodeIds(inSyncReplicas),
                              formatNodeIds(offlineReplicas));

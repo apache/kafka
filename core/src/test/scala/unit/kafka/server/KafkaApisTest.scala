@@ -20,7 +20,7 @@ package kafka.server
 import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
 import kafka.cluster.Replica
@@ -378,8 +378,7 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
 
-    val targetTimes = Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(timestamp,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH))
+    val targetTimes = Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(timestamp, Optional.empty()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
@@ -422,7 +421,7 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
     val targetTimes = Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(ListOffsetRequest.EARLIEST_TIMESTAMP,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH))
+      Optional.empty()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
@@ -514,7 +513,7 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
     val targetTimes = Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(ListOffsetRequest.LATEST_TIMESTAMP,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH))
+      Optional.empty()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)

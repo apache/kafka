@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -258,7 +257,7 @@ public class MetadataResponse extends AbstractResponse {
                 Errors partitionError = Errors.forCode(partitionInfo.get(ERROR_CODE));
                 int partition = partitionInfo.get(PARTITION_ID);
                 int leader = partitionInfo.get(LEADER);
-                int leaderEpoch = partitionInfo.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionInfo, LEADER_EPOCH);
                 Node leaderNode = leader == -1 ? null : brokers.get(leader);
 
                 Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
@@ -374,13 +373,11 @@ public class MetadataResponse extends AbstractResponse {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    Integer leaderEpoch = partitionMetadata.leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                            null : partitionMetadata.leaderEpoch;
                     partitions.add(new PartitionInfo(
                             metadata.topic,
                             partitionMetadata.partition,
                             partitionMetadata.leader,
-                            leaderEpoch,
+                            partitionMetadata.leaderEpoch,
                             partitionMetadata.replicas.toArray(new Node[0]),
                             partitionMetadata.isr.toArray(new Node[0]),
                             partitionMetadata.offlineReplicas.toArray(new Node[0])));
@@ -475,7 +472,7 @@ public class MetadataResponse extends AbstractResponse {
         private final Errors error;
         private final int partition;
         private final Node leader;
-        private final int leaderEpoch;
+        private final Optional<Integer> leaderEpoch;
         private final List<Node> replicas;
         private final List<Node> isr;
         private final List<Node> offlineReplicas;
@@ -483,7 +480,7 @@ public class MetadataResponse extends AbstractResponse {
         public PartitionMetadata(Errors error,
                                  int partition,
                                  Node leader,
-                                 int leaderEpoch,
+                                 Optional<Integer> leaderEpoch,
                                  List<Node> replicas,
                                  List<Node> isr,
                                  List<Node> offlineReplicas) {
@@ -509,9 +506,7 @@ public class MetadataResponse extends AbstractResponse {
         }
 
         public Optional<Integer> leaderEpoch() {
-            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(leaderEpoch);
+            return leaderEpoch;
         }
 
         public Node leader() {
@@ -581,7 +576,7 @@ public class MetadataResponse extends AbstractResponse {
                 partitionData.set(LEADER, partitionMetadata.leaderId());
 
                 // Leader epoch exists in v7 forward
-                partitionData.setIfExists(LEADER_EPOCH, partitionMetadata.leaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, partitionMetadata.leaderEpoch);
 
                 ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
                 for (Node node : partitionMetadata.replicas)

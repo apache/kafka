@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{Seq, Set, mutable}
@@ -31,7 +31,6 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
 /**
@@ -91,7 +90,7 @@ class MetadataCache(brokerId: Int) extends Logging {
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
             new MetadataResponse.PartitionMetadata(error, partitionId.toInt, Node.noNode(),
-              RecordBatch.NO_PARTITION_LEADER_EPOCH, replicaInfo.asJava, java.util.Collections.emptyList(),
+              Optional.empty(), replicaInfo.asJava, java.util.Collections.emptyList(),
               offlineReplicaInfo.asJava)
 
           case Some(leader) =>
@@ -103,14 +102,14 @@ class MetadataCache(brokerId: Int) extends Logging {
                 s"following brokers ${replicas.filterNot(replicaInfo.map(_.id).contains).mkString(",")}")
 
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                leaderEpoch, replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+                Optional.empty(), replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             } else if (isrInfo.size < isr.size) {
               debug(s"Error while fetching metadata for $topicPartition: in sync replica information not available for " +
                 s"following brokers ${isr.filterNot(isrInfo.map(_.id).contains).mkString(",")}")
               new MetadataResponse.PartitionMetadata(Errors.REPLICA_NOT_AVAILABLE, partitionId.toInt, leader,
-                leaderEpoch, replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
+                Optional.empty(), replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             } else {
-              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId.toInt, leader, leaderEpoch,
+              new MetadataResponse.PartitionMetadata(Errors.NONE, partitionId.toInt, leader, Optional.of(leaderEpoch),
                 replicaInfo.asJava, isrInfo.asJava, offlineReplicaInfo.asJava)
             }
         }

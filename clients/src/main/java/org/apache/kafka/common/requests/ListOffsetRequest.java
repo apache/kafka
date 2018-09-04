@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -183,9 +182,9 @@ public class ListOffsetRequest extends AbstractRequest {
         public final long timestamp;
         @Deprecated
         public final int maxNumOffsets; // only supported in v0
-        private final int currentLeaderEpoch;
+        public final Optional<Integer> currentLeaderEpoch;
 
-        private PartitionData(long timestamp, int maxNumOffsets, int currentLeaderEpoch) {
+        private PartitionData(long timestamp, int maxNumOffsets, Optional<Integer> currentLeaderEpoch) {
             this.timestamp = timestamp;
             this.maxNumOffsets = maxNumOffsets;
             this.currentLeaderEpoch = currentLeaderEpoch;
@@ -193,17 +192,11 @@ public class ListOffsetRequest extends AbstractRequest {
 
         @Deprecated
         public PartitionData(long timestamp, int maxNumOffsets) {
-            this(timestamp, maxNumOffsets, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            this(timestamp, maxNumOffsets, Optional.empty());
         }
 
-        public static PartitionData withCurrentLeaderEpoch(long timestamp, int currentLeaderEpoch) {
+        public static PartitionData withCurrentLeaderEpoch(long timestamp, Optional<Integer> currentLeaderEpoch) {
             return new PartitionData(timestamp, 1, currentLeaderEpoch);
-        }
-
-        public Optional<Integer> currentLeaderEpoch() {
-            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(currentLeaderEpoch);
         }
 
         @Override
@@ -250,8 +243,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 TopicPartition tp = new TopicPartition(topic, partition);
 
                 int maxNumOffsets = partitionResponse.getOrElse(MAX_NUM_OFFSETS, 1);
-                int currentLeaderEpoch = partitionResponse.getOrElse(CURRENT_LEADER_EPOCH,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                Optional<Integer> currentLeaderEpoch = RequestUtils.getLeaderEpoch(partitionResponse, CURRENT_LEADER_EPOCH);
                 PartitionData partitionData = new PartitionData(timestamp, maxNumOffsets, currentLeaderEpoch);
                 if (partitionTimestamps.put(tp, partitionData) != null)
                     duplicatePartitions.add(tp);
@@ -268,8 +260,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
         ListOffsetResponse.PartitionData partitionError = versionId == 0 ?
                 new ListOffsetResponse.PartitionData(Errors.forException(e), Collections.emptyList()) :
-                new ListOffsetResponse.PartitionData(Errors.forException(e), -1L, -1L,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                new ListOffsetResponse.PartitionData(Errors.forException(e), -1L, -1L, Optional.empty());
         for (TopicPartition partition : partitionTimestamps.keySet()) {
             responseData.put(partition, partitionError);
         }
@@ -327,7 +318,8 @@ public class ListOffsetRequest extends AbstractRequest {
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
                 partitionData.setIfExists(MAX_NUM_OFFSETS, offsetPartitionData.maxNumOffsets);
-                partitionData.setIfExists(CURRENT_LEADER_EPOCH, offsetPartitionData.currentLeaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionData, CURRENT_LEADER_EPOCH,
+                        offsetPartitionData.currentLeaderEpoch);
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());

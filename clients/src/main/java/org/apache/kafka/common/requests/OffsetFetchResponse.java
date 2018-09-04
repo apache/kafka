@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -125,9 +124,9 @@ public class OffsetFetchResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
     public static final String NO_METADATA = "";
     public static final PartitionData UNKNOWN_PARTITION = new PartitionData(INVALID_OFFSET,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH, NO_METADATA, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            Optional.empty(), NO_METADATA, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     public static final PartitionData UNAUTHORIZED_PARTITION = new PartitionData(INVALID_OFFSET,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH, NO_METADATA, Errors.TOPIC_AUTHORIZATION_FAILED);
+            Optional.empty(), NO_METADATA, Errors.TOPIC_AUTHORIZATION_FAILED);
 
     private static final List<Errors> PARTITION_ERRORS = Collections.singletonList(Errors.UNKNOWN_TOPIC_OR_PARTITION);
 
@@ -139,22 +138,16 @@ public class OffsetFetchResponse extends AbstractResponse {
         public final long offset;
         public final String metadata;
         public final Errors error;
-        private final int leaderEpoch;
+        public final Optional<Integer> leaderEpoch;
 
         public PartitionData(long offset,
-                             int leaderEpoch,
+                             Optional<Integer> leaderEpoch,
                              String metadata,
                              Errors error) {
             this.offset = offset;
             this.leaderEpoch = leaderEpoch;
             this.metadata = metadata;
             this.error = error;
-        }
-
-        public Optional<Integer> leaderEpoch() {
-            if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(leaderEpoch);
         }
 
         public boolean hasError() {
@@ -195,11 +188,13 @@ public class OffsetFetchResponse extends AbstractResponse {
                 int partition = partitionResponse.get(PARTITION_ID);
                 long offset = partitionResponse.get(COMMIT_OFFSET);
                 String metadata = partitionResponse.get(METADATA);
-                int leaderEpoch = partitionResponse.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionResponse, LEADER_EPOCH);
+
                 Errors error = Errors.forCode(partitionResponse.get(ERROR_CODE));
                 if (error != Errors.NONE && !PARTITION_ERRORS.contains(error))
                     topLevelError = error;
-                PartitionData partitionData = new PartitionData(offset, leaderEpoch, metadata, error);
+
+                PartitionData partitionData = new PartitionData(offset, leaderEpochOpt, metadata, error);
                 this.responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -261,7 +256,7 @@ public class OffsetFetchResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(COMMIT_OFFSET, fetchPartitionData.offset);
-                partitionData.setIfExists(LEADER_EPOCH, fetchPartitionData.leaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, fetchPartitionData.leaderEpoch);
                 partitionData.set(METADATA, fetchPartitionData.metadata);
                 partitionData.set(ERROR_CODE, fetchPartitionData.error.code());
                 partitionArray.add(partitionData);

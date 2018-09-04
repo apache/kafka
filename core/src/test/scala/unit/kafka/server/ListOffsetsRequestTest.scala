@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util.Optional
+
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -32,7 +34,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
     val targetTimes = Map(partition -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
-      ListOffsetRequest.EARLIEST_TIMESTAMP, 0)).asJava
+      ListOffsetRequest.EARLIEST_TIMESTAMP, Optional.of(0))).asJava
 
     val consumerRequest = ListOffsetRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)

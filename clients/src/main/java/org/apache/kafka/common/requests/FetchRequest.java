@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -217,19 +216,13 @@ public class FetchRequest extends AbstractRequest {
         public final long fetchOffset;
         public final long logStartOffset;
         public final int maxBytes;
-        private final int currentLeaderEpoch;
+        public final Optional<Integer> currentLeaderEpoch;
 
-        public PartitionData(long fetchOffset, long logStartOffset, int maxBytes, int currentLeaderEpoch) {
+        public PartitionData(long fetchOffset, long logStartOffset, int maxBytes, Optional<Integer> currentLeaderEpoch) {
             this.fetchOffset = fetchOffset;
             this.logStartOffset = logStartOffset;
             this.maxBytes = maxBytes;
             this.currentLeaderEpoch = currentLeaderEpoch;
-        }
-
-        public Optional<Integer> currentLeaderEpoch() {
-            if (currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                return Optional.empty();
-            return Optional.of(currentLeaderEpoch);
         }
 
         @Override
@@ -417,8 +410,7 @@ public class FetchRequest extends AbstractRequest {
                 long logStartOffset = partitionResponse.getOrElse(LOG_START_OFFSET, INVALID_LOG_START_OFFSET);
 
                 // Current leader epoch added in v9
-                int currentLeaderEpoch = partitionResponse.getOrElse(CURRENT_LEADER_EPOCH,
-                        RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                Optional<Integer> currentLeaderEpoch = RequestUtils.getLeaderEpoch(partitionResponse, CURRENT_LEADER_EPOCH);
                 PartitionData partitionData = new PartitionData(offset, logStartOffset, maxBytes, currentLeaderEpoch);
                 fetchData.put(new TopicPartition(topic, partition), partitionData);
             }
@@ -510,7 +502,7 @@ public class FetchRequest extends AbstractRequest {
                 partitionData.set(FETCH_OFFSET, fetchPartitionData.fetchOffset);
                 partitionData.set(PARTITION_MAX_BYTES, fetchPartitionData.maxBytes);
                 partitionData.setIfExists(LOG_START_OFFSET, fetchPartitionData.logStartOffset);
-                partitionData.setIfExists(CURRENT_LEADER_EPOCH, fetchPartitionData.currentLeaderEpoch);
+                RequestUtils.setLeaderEpochIfExists(partitionData, CURRENT_LEADER_EPOCH, fetchPartitionData.currentLeaderEpoch);
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());

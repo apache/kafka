@@ -90,7 +90,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
 
 /**
@@ -690,7 +689,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
                         timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
                 ListOffsetRequest.PartitionData partitionData = ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
-                        entry.getValue(), NO_PARTITION_LEADER_EPOCH);
+                        entry.getValue(), Optional.empty());
                 topicData.put(entry.getKey(), partitionData);
             }
         }
@@ -773,7 +772,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp,
-                                partitionData.leaderEpoch());
+                                partitionData.leaderEpoch);
                         fetchedOffsets.put(topicPartition, offsetData);
                     }
                 }
@@ -866,7 +865,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 long position = this.subscriptions.position(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
-                    this.fetchSize, NO_PARTITION_LEADER_EPOCH));
+                    this.fetchSize, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
@@ -988,6 +987,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
+            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
             TimestampType timestampType = batch.timestampType();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
@@ -1000,11 +1000,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         timestamp, timestampType, record.checksumOrNull(),
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
-                                        key, value, headers);
+                                        key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
+    }
+
+    private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
     @Override

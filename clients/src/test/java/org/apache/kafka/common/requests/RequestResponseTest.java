@@ -72,6 +72,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
@@ -628,9 +629,9 @@ public class RequestResponseTest {
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, 15));
+                1000000, Optional.of(15)));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, 25));
+                1000000, Optional.of(25)));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
             metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
     }
@@ -638,9 +639,9 @@ public class RequestResponseTest {
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, 15));
+                1000000, Optional.of(15)));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, 25));
+                1000000, Optional.of(25)));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
             isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
@@ -648,9 +649,9 @@ public class RequestResponseTest {
     private FetchRequest createFetchRequest(int version) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, 15));
+                1000000, Optional.of(15)));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, 25));
+                1000000, Optional.of(25)));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
     }
 
@@ -767,7 +768,7 @@ public class RequestResponseTest {
         } else if (version == 1) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
-                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, RecordBatch.NO_PARTITION_LEADER_EPOCH));
+                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, Optional.empty()));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(offsetData)
@@ -775,7 +776,7 @@ public class RequestResponseTest {
         } else if (version == 2) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
-                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, 5));
+                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, Optional.of(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(offsetData)
@@ -795,7 +796,7 @@ public class RequestResponseTest {
         } else if (version == 1 || version == 2) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
             responseData.put(new TopicPartition("test", 0),
-                    new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L, 27));
+                    new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L, Optional.of(27)));
             return new ListOffsetResponse(responseData);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
@@ -815,12 +816,12 @@ public class RequestResponseTest {
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
                 asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node,
-                        5, replicas, isr, offlineReplicas))));
+                        Optional.of(5), replicas, isr, offlineReplicas))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.emptyList()));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic3", false,
             asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, replicas, isr, offlineReplicas))));
+                Optional.empty(), replicas, isr, offlineReplicas))));
 
         return new MetadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
@@ -851,9 +852,9 @@ public class RequestResponseTest {
     private OffsetFetchResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(
-                100L, RecordBatch.NO_PARTITION_LEADER_EPOCH, "", Errors.NONE));
+                100L, Optional.empty(), "", Errors.NONE));
         responseData.put(new TopicPartition("test", 1), new OffsetFetchResponse.PartitionData(
-                100L, 10, null, Errors.NONE));
+                100L, Optional.of(10), null, Errors.NONE));
         return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
@@ -1036,11 +1037,11 @@ public class RequestResponseTest {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();
 
         epochs.put(new TopicPartition("topic1", 0),
-                new OffsetsForLeaderEpochRequest.PartitionData(0, 1));
+                new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
         epochs.put(new TopicPartition("topic1", 1),
-                new OffsetsForLeaderEpochRequest.PartitionData(0, 1));
+                new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
         epochs.put(new TopicPartition("topic2", 2),
-                new OffsetsForLeaderEpochRequest.PartitionData(RecordBatch.NO_PARTITION_LEADER_EPOCH, 3));
+                new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 3));
 
         return new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), epochs).build();
     }

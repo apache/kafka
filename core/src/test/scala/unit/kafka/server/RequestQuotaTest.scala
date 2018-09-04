@@ -15,7 +15,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import java.util.{Collections, LinkedHashMap, Properties}
+import java.util.{Collections, LinkedHashMap, Optional, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import kafka.log.LogConfig
@@ -31,7 +31,6 @@ import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
@@ -208,7 +207,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.FETCH =>
           val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-          partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, 15))
+          partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
           FetchRequest.Builder.forConsumer(0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
@@ -217,7 +216,7 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.LIST_OFFSETS =>
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
             .setTargetTimes(Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
-              0L, 15)).asJava)
+              0L, Optional.of(15))).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue,
@@ -293,7 +292,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitProducerIdRequest.Builder("abc")
 
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-          new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion).add(tp, 15, 0)
+          new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion)
+            .add(tp, Optional.of(15), 0)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
