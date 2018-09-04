@@ -13,17 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark.resource import cluster
-from ducktape.tests.test import Test
-from ducktape.mark import ignore, matrix, parametrize
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, DEV_BRANCH, DEV_VERSION, KafkaVersion
 import random
 import time
+from ducktape.mark import matrix, parametrize
+from ducktape.mark.resource import cluster
+from ducktape.tests.test import Test
+from kafkatest.services.kafka import KafkaService
+from kafkatest.services.streams import StreamsSmokeTestDriverService, \
+    StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, \
+    LATEST_0_11_0, LATEST_1_0, LATEST_1_1, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
-broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
+broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_BRANCH)]
 simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
@@ -166,10 +168,10 @@ class StreamsUpgradeTest(Test):
         self.driver.stop()
 
     #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
-    #@parametrize(new_version=str(LATEST_0_10_2)) we cannot run this test until Kafka 0.10.2.2 is released
-    #@parametrize(new_version=str(LATEST_0_11_0)) we cannot run this test until Kafka 0.11.0.3 is released
-    #@parametrize(new_version=str(LATEST_1_0)) we cannot run this test until Kafka 1.0.2 is released
-    #@parametrize(new_version=str(LATEST_1_1)) we cannot run this test until Kafka 1.1.1 is released
+    @parametrize(new_version=str(LATEST_0_10_2))
+    @parametrize(new_version=str(LATEST_0_11_0))
+    @parametrize(new_version=str(LATEST_1_0))
+    @parametrize(new_version=str(LATEST_1_1))
     @parametrize(new_version=str(DEV_VERSION))
     def test_metadata_upgrade(self, new_version):
         """
