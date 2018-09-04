@@ -29,9 +29,9 @@ broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 # we can add the following versions to `backward_compatible_metadata_2_versions` after the corresponding
-# bug-fix release 0.10.1.2, 0.10.2.2, 0.11.0.3, 1.0.2, and 1.1.1 are available:
-# str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)
-backward_compatible_metadata_2_versions = []
+# bug-fix release 0.10.1.2 is available:
+# str(LATEST_0_10_1),
+backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_versions = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
