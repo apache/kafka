@@ -78,7 +78,7 @@ public class FileConfigProvider implements ConfigProvider {
         try {
             Map<String, String> data = Files.list(path)
                     .filter(Files::isRegularFile)
-                    .collect(Collectors.toMap(file -> file.getFileName().toString(), this::toString));
+                    .collect(Collectors.toMap(file -> file.getFileName().toString(), this::readAll));
             return new ConfigData(data);
         } catch (IOException e) {
             throw new ConfigException("Could not read from directory " + path);
@@ -89,7 +89,7 @@ public class FileConfigProvider implements ConfigProvider {
         Map<String, String> data = keys.stream()
                 .map(path::resolve)
                 .filter(Files::isRegularFile)
-                .collect(Collectors.toMap(file -> file.getFileName().toString(), this::toString));
+                .collect(Collectors.toMap(file -> file.getFileName().toString(), this::readAll));
         return new ConfigData(data);
     }
 
@@ -129,7 +129,7 @@ public class FileConfigProvider implements ConfigProvider {
         }
     }
 
-    private String toString(Path path) {
+    private String readAll(Path path) {
         try {
             return new String(Files.readAllBytes(path), UTF_8);
         } catch (IOException e) {
