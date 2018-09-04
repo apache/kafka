@@ -108,37 +108,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     val newControllerEpoch = curEpoch + 1
     val expectedControllerEpochZkVersion = curEpochStat.getVersion
 
-    def controllerNodeExistsHandler(): (Int, Int) = {
-      val getDataRequest = GetDataRequest(ControllerZNode.path)
-      val getDataResponse = retryRequestUntilConnected(getDataRequest)
-      getDataResponse.resultCode match {
-        case Code.OK =>
-          if (getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId) {
-            error(s"Error while creating ephemeral at ${ControllerZNode.path}, node already exists and owner " +
-              s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
-            throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-          } else {
-            getControllerEpoch match {
-              case Some((epoch, stat)) if epoch == newControllerEpoch =>
-                // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
-                // is associated with the current broker during controller election because we already knew that the zk
-                // transaction succeeds based on the controller znode ephemeral owner verification. Other rounds of controller
-                // election will result in larger epoch number written in zk.
-                (newControllerEpoch, stat.getVersion)
-              case _ =>
-                throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-            }
-          }
-        case Code.NONODE =>
-          throw new ControllerMovedException(
-            s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
-              s"Aborting controller startup procedure")
-        case code =>
-          error(s"Error while creating ephemeral at ${ControllerZNode.path} as it already exists and error getting the node data due to $code")
-          throw KeeperException.create(code)
-      }
-    }
-
     debug(s"Try to create ${ControllerZNode.path} and increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
     try {
       val transaction = zooKeeperClient.createTransaction()
@@ -150,7 +119,21 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       val setDataResult = results.get(2).asInstanceOf[SetDataResult]
       (newControllerEpoch, setDataResult.getStat.getVersion)
     } catch {
-      case _: NodeExistsException => controllerNodeExistsHandler()
+      case _: NodeExistsException =>
+        val curControllerId = getControllerId.getOrElse(throw new ControllerMovedException(
+          s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
+          s"Aborting controller startup procedure"))
+        if (controllerId == curControllerId) {
+          val (epoch, stat)  = getControllerEpoch.getOrElse(throw new ControllerMovedException(
+            "Controller moved to another broker. Aborting controller startup procedure"))
+          // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
+          // is associated with the current broker during controller election because we already knew that the zk
+          // transaction succeeds based on the controller znode verification. Other rounds of controller
+          // election will result in larger epoch number written in zk.
+          if (epoch == newControllerEpoch)
+            (newControllerEpoch, stat.getVersion)
+        }
+        throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
       case _: BadVersionException =>
         throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
     }

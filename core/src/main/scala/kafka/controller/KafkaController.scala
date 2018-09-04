@@ -52,6 +52,7 @@ object KafkaController extends Logging {
     override def process(): Unit = ()
   }
 
+  // Used only by test
   private[controller] case class AwaitOnLatch(latch: CountDownLatch) extends ControllerEvent {
     override def state: ControllerState = ControllerState.ControllerChange
     override def process(): Unit = latch.await()
