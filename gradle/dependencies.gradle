@@ -61,8 +61,8 @@ versions += [
   junit: "4.12",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
-  kafka_0102: "0.10.2.1",
-  kafka_0110: "0.11.0.2",
+  kafka_0102: "0.10.2.2",
+  kafka_0110: "0.11.0.3",
   lz4: "1.4",
   metrics: "2.2.0",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
