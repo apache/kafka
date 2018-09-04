@@ -53,7 +53,7 @@ object Produced {
    * @see KStream#through(String, Produced)
    * @see KStream#to(String, Produced)
    */
-  def `with`[K, V](partitioner: StreamPartitioner[_ >: K, _ >: V])(implicit keySerde: Serde[K],
-                                                                   valueSerde: Serde[V]): ProducedJ[K, V] =
+  def `with`[K, V](partitioner: StreamPartitioner[K, V])(implicit keySerde: Serde[K],
+                                                         valueSerde: Serde[V]): ProducedJ[K, V] =
     ProducedJ.`with`(keySerde, valueSerde, partitioner)
 }
