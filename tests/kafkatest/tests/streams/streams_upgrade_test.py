@@ -76,8 +76,7 @@ class StreamsUpgradeTest(KafkaTest):
         self.driver.stop()
 
     #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
-    #@parametrize(new_version=str(LATEST_0_10_2)) we cannot run this test until Kafka 0.10.2.2 is released
-    @parametrize(new_version=str(DEV_VERSION))
+    @parametrize(new_version=str(LATEST_0_10_2))
     def test_metadata_upgrade(self, new_version):
         """
         Starts 3 KafkaStreams instances with version 0.10.0, and upgrades one-by-one to <new_version>
