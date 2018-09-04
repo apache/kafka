@@ -23,8 +23,10 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, PatternType.LITERAL)
-  val ProducerIdResourceName = "producer-id" // This is not used since we don't have a producer id resource
   val WildCardResource = "*"
+
+  @deprecated("This resource name is not used by Kafka and will be removed in a future release", since = "2.1")
+  val ProducerIdResourceName = "producer-id" // This is not used since we don't have a producer id resource
 
   def fromString(str: String): Resource = {
     ResourceType.values.find(resourceType => str.startsWith(resourceType.name + Separator)) match {
