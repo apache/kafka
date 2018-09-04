@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -32,16 +41,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.junit.Test;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class RecordCollectorTest {
 
@@ -148,7 +147,7 @@ public class RecordCollectorTest {
     public void shouldUnwrapAndThrowProducerFencedExceptionFromCallToSend() {
         final MockProducer<byte[], byte[]> producer =
             new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer);
-        final RecordCollector collector = new RecordCollectorImpl(producer, "test", logContext);
+        final RecordCollector collector = new RecordCollectorImpl(producer, "test");
 
         producer.initTransactions();
         producer.fenceProducer();
