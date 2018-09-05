@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.util.Optional
 
 import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
@@ -371,7 +372,8 @@ class AbstractFetcherThreadTest {
       partitionMap.foreach { case (partition, state) =>
         if (state.isReadyForFetch) {
           val replicaState = replicaPartitionState(partition)
-          fetchData.put(partition, new FetchRequest.PartitionData(state.fetchOffset, replicaState.logStartOffset, 1024 * 1024))
+          fetchData.put(partition, new FetchRequest.PartitionData(state.fetchOffset, replicaState.logStartOffset,
+            1024 * 1024, Optional.empty()))
         }
       }
       val fetchRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 1, fetchData.asJava)
