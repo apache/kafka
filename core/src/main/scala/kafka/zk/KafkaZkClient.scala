@@ -34,7 +34,7 @@ import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.zookeeper.KeeperException.{BadVersionException, Code, NodeExistsException}
+import org.apache.zookeeper.KeeperException.{BadVersionException, Code, ConnectionLossException, NodeExistsException}
 import org.apache.zookeeper.OpResult.{ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
@@ -97,53 +97,58 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
     val timestamp = time.milliseconds()
 
-    // Create /controller_epoch if not exists
-    maybeCreateControllerEpochZNode()
-
-    // Read /controller_epoch to get the current controller epoch and zkVersion
-    val (curEpoch, curEpochStat) = getControllerEpoch.getOrElse(
-      throw new IllegalStateException(s"${ControllerEpochZNode.path} does not exist while trying to create ${ControllerZNode.path}"))
+    // Read /controller_epoch to get the current controller epoch and zkVersion,
+    // create /controller_epoch with initial value if not exists
+    val (curEpoch, curEpochZkVersion) = getControllerEpoch
+      .map(e => (e._1, e._2.getVersion))
+      .getOrElse(createControllerEpochZNode())
 
     // Create /controller and update /controller_epoch atomically
     val newControllerEpoch = curEpoch + 1
-    val expectedControllerEpochZkVersion = curEpochStat.getVersion
+    val expectedControllerEpochZkVersion = curEpochZkVersion
 
     debug(s"Try to create ${ControllerZNode.path} and increment controller epoch to $newControllerEpoch with expected controller epoch zkVersion $expectedControllerEpochZkVersion")
-    try {
-      val transaction = zooKeeperClient.createTransaction()
-      transaction.check(ControllerEpochZNode.path, expectedControllerEpochZkVersion)
-      transaction.create(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp),
-        acls(ControllerZNode.path).asJava, CreateMode.EPHEMERAL)
-      transaction.setData(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), expectedControllerEpochZkVersion)
-      val results = transaction.commit()
-      val setDataResult = results.get(2).asInstanceOf[SetDataResult]
-      (newControllerEpoch, setDataResult.getStat.getVersion)
-    } catch {
-      case _: NodeExistsException =>
-        val curControllerId = getControllerId.getOrElse(throw new ControllerMovedException(
-          s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
-          s"Aborting controller startup procedure"))
-        if (controllerId == curControllerId) {
-          val (epoch, stat)  = getControllerEpoch.getOrElse(throw new ControllerMovedException(
-            "Controller moved to another broker. Aborting controller startup procedure"))
-          // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
-          // is associated with the current broker during controller election because we already knew that the zk
-          // transaction succeeds based on the controller znode verification. Other rounds of controller
-          // election will result in larger epoch number written in zk.
-          if (epoch == newControllerEpoch)
-            (newControllerEpoch, stat.getVersion)
-        }
-        throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-      case _: BadVersionException =>
-        throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+    def tryCreateControllerZNodeAndIncrementEpoch(): (Int, Int) = {
+      try {
+        val transaction = zooKeeperClient.createTransaction()
+        transaction.create(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp),
+          acls(ControllerZNode.path).asJava, CreateMode.EPHEMERAL)
+        transaction.setData(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), expectedControllerEpochZkVersion)
+        val results = transaction.commit()
+        val setDataResult = results.get(1).asInstanceOf[SetDataResult]
+        (newControllerEpoch, setDataResult.getStat.getVersion)
+      } catch {
+        case _: NodeExistsException =>
+          val curControllerId = getControllerId.getOrElse(throw new ControllerMovedException(
+            s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
+              s"Aborting controller startup procedure"))
+          if (controllerId == curControllerId) {
+            val (epoch, stat)  = getControllerEpoch.getOrElse(throw new ControllerMovedException(
+              "Controller moved to another broker. Aborting controller startup procedure"))
+            // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
+            // is associated with the current broker during controller election because we already knew that the zk
+            // transaction succeeds based on the controller znode verification. Other rounds of controller
+            // election will result in larger epoch number written in zk.
+            if (epoch == newControllerEpoch)
+              return (newControllerEpoch, stat.getVersion)
+          }
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        case _: BadVersionException =>
+          throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
+        case _: ConnectionLossException => tryCreateControllerZNodeAndIncrementEpoch()
+      }
     }
+
+    tryCreateControllerZNodeAndIncrementEpoch()
   }
 
-  private def maybeCreateControllerEpochZNode(): Unit = {
+  private def createControllerEpochZNode(): (Int, Int) = {
     createControllerEpochRaw(KafkaController.InitialControllerEpoch - 1).resultCode match {
       case Code.OK =>
         info(s"Successfully create ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch - 1}")
+        (KafkaController.InitialControllerEpoch - 1, KafkaController.InitialControllerEpochZkVersion - 1)
       case Code.NODEEXISTS =>
+        throw new ControllerMovedException(s"Controller moved to another broker while creating ${ControllerEpochZNode.path}. Aborting controller startup procedure")
       case code =>
         throw KeeperException.create(code)
     }

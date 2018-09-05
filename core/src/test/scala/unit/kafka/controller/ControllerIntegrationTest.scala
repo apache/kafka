@@ -407,7 +407,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
       val latch = new CountDownLatch(1)
 
-      // Let the controller event thread await on a latch before the pre-defined logic is triggered and before it processes controller change.
+      // Let the controller event thread await on a latch before the pre-defined logic is triggered.
       // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
       controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
       // Execute pre-defined logic. This can be topic creation/deletion, preferred leader election, etc.
