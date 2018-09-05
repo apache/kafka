@@ -835,11 +835,10 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-
-      checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
-      checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
       removedLog.close()
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
+      checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
+      checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {
