@@ -63,12 +63,19 @@ Generate coverage reports for the whole project:
     ./gradlew reportCoverage
 
 ### Generating an API compatibility report between trunk and your local branch ###
-*Note that the branches need to be local*
+*Note that the branches need to be local.*
+
     ./gradlew checkApiCompatibility
+
+By default it just lists the incompatible changes. If you want a more complete report, you can set the `onlyIncompatible`
+flag to false:
+
+    ./gradlew checkApiCompatibility -PonlyIncompatible=false
 
 ### Generating an API compatibility report between branches or commits  ###
 *Note that the branches need to be local*
-     ./gradlew checkApiCompatibility -PoldRef=0.9.0 -PnewRef=trunk
+
+     ./gradlew checkApiCompatibility -PbaseBranch=1.1.0 -PnewBranch=1.1.1
 
 Generate coverage for a single module, i.e.: 
 
