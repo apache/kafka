@@ -1269,11 +1269,12 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysCommitIfEosEnabled() {
+        task = createStatelessTask(true);
+
         final RecordCollectorImpl recordCollector =  new RecordCollectorImpl("StreamTask",
                 new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler());
         recordCollector.init(producer);
 
-        task = createStatelessTask(true);
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
@@ -1355,7 +1356,7 @@ public class StreamTaskTest {
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
-    private StreamTask createTaskThatThrowsException(final boolean enableEos) {
+    private StreamTask createTaskThatThrowsException(final boolean eosEnabled) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
                 Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
                 new HashMap<String, SourceNode>() {
@@ -1371,7 +1372,7 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source3.addChild(processorSystemTime);
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, config,
+        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
             streamsMetrics, stateDirectory, null, time, new StreamTask.ProducerSupplier() {
                 @Override
                 public Producer<byte[], byte[]> get() {
