@@ -114,17 +114,17 @@ public class Field {
             this.docString = docString;
         }
 
-        public Field withFields(Field ... fields) {
+        public Field withFields(Field... fields) {
             Schema elementType = new Schema(fields);
             return new Field(name, new ArrayOf(elementType), docString, false, null);
         }
 
-        public Field nullableWithFields(Field ... fields) {
+        public Field nullableWithFields(Field... fields) {
             Schema elementType = new Schema(fields);
             return new Field(name, ArrayOf.nullable(elementType), docString, false, null);
         }
 
-        public Field withFields(String docStringOverride, Field ... fields) {
+        public Field withFields(String docStringOverride, Field... fields) {
             Schema elementType = new Schema(fields);
             return new Field(name, new ArrayOf(elementType), docStringOverride, false, null);
         }
