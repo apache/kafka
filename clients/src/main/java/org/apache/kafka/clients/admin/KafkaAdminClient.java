@@ -134,6 +134,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -2376,8 +2377,10 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
-        // all consumer groups this coordinator host
+        final Map<Integer, Queue<String>> coordinators = new HashMap<>();
+        final Map<Integer, FindCoordinatorResponse> fcResponses = new HashMap<>();
+        final Queue<String> returnedGroupId = new LinkedList<>();
+
         for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
             // skip sending request for those futures that already failed.
             if (entry.getValue().isCompletedExceptionally())
@@ -2387,6 +2390,7 @@ public class KafkaAdminClient extends AdminClient {
 
             final long startFindCoordinatorMs = time.milliseconds();
             final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
 
             runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
                 @Override
@@ -2401,69 +2405,100 @@ public class KafkaAdminClient extends AdminClient {
                     if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
                         return;
 
-                    final long nowDescribeConsumerGroups = time.milliseconds();
                     final int nodeId = fcResponse.node().id();
-                    runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
-                        @Override
-                        AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
-                        }
 
-                        @Override
-                        void handleResponse(AbstractResponse abstractResponse) {
-                            final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+                    fcResponses.putIfAbsent(nodeId, fcResponse);
 
-                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                            final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+                    Queue<String> groupIdsForNode = coordinators.getOrDefault(nodeId, new LinkedList<>());
+                    groupIdsForNode.add(groupId);
+                    coordinators.put(nodeId, groupIdsForNode);
+                    returnedGroupId.add(groupId);
 
-                            final Errors groupError = groupMetadata.error();
-                            if (groupError != Errors.NONE) {
-                                // TODO: KAFKA-6789, we can retry based on the error code
-                                future.completeExceptionally(groupError.exception());
-                            } else {
-                                final String protocolType = groupMetadata.protocolType();
-                                if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
-                                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
-                                    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
-
-                                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                                        Set<TopicPartition> partitions = Collections.emptySet();
-                                        if (groupMember.memberAssignment().remaining() > 0) {
-                                            final PartitionAssignor.Assignment assignment = ConsumerProtocol.
-                                                deserializeAssignment(groupMember.memberAssignment().duplicate());
-                                            partitions = new HashSet<>(assignment.partitions());
-                                        }
-                                        final MemberDescription memberDescription =
-                                            new MemberDescription(groupMember.memberId(),
-                                                groupMember.clientId(),
-                                                groupMember.clientHost(),
-                                                new MemberAssignment(partitions));
-                                        memberDescriptions.add(memberDescription);
-                                    }
-                                    final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId,
-                                                protocolType.isEmpty(),
-                                                memberDescriptions,
-                                                groupMetadata.protocol(),
-                                                ConsumerGroupState.parse(groupMetadata.state()),
-                                                fcResponse.node());
-                                    future.complete(consumerGroupDescription);
-                                }
-                            }
-                        }
-
-                        @Override
-                        void handleFailure(Throwable throwable) {
-                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                            future.completeExceptionally(throwable);
-                        }
-                    }, nowDescribeConsumerGroups);
+                    // If all the groupIds are processed, send the group request.
+                    if (returnedGroupId.size() == groupIds.size()) {
+                        sendGroupRequests();
+                    }
                 }
 
                 @Override
                 void handleFailure(Throwable throwable) {
                     KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
                     future.completeExceptionally(throwable);
+
+                    returnedGroupId.add(groupId);
+
+                    // If all the groupIds are processed, send the group request.
+                    if (returnedGroupId.size() == groupIds.size()) {
+                        sendGroupRequests();
+                    }
+                }
+
+                void sendGroupRequests() {
+                    final long nowDescribeConsumerGroups = time.milliseconds();
+                    final long deadline = calcDeadlineMs(nowDescribeConsumerGroups, options.timeoutMs());
+
+                    for (final Map.Entry<Integer, Queue<String>> entry: coordinators.entrySet()) {
+                        final int nodeId = entry.getKey();
+                        runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
+                            @Override
+                            AbstractRequest.Builder createRequest(int timeoutMs) {
+                                return new DescribeGroupsRequest.Builder(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+                            }
+
+                            @Override
+                            void handleResponse(AbstractResponse abstractResponse) {
+                                final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+
+                                for (String groupId: entry.getValue()) {
+                                    KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                                    final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+
+                                    final Errors groupError = groupMetadata.error();
+                                    if (groupError != Errors.NONE) {
+                                        // TODO: KAFKA-6789, we can retry based on the error code
+                                        future.completeExceptionally(groupError.exception());
+                                    } else {
+                                        final String protocolType = groupMetadata.protocolType();
+                                        if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                            final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                                            final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
+
+                                            for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                                Set<TopicPartition> partitions = Collections.emptySet();
+                                                if (groupMember.memberAssignment().remaining() > 0) {
+                                                    final PartitionAssignor.Assignment assignment = ConsumerProtocol.
+                                                            deserializeAssignment(groupMember.memberAssignment().duplicate());
+                                                    partitions = new HashSet<>(assignment.partitions());
+                                                }
+                                                final MemberDescription memberDescription =
+                                                        new MemberDescription(groupMember.memberId(),
+                                                                              groupMember.clientId(),
+                                                                              groupMember.clientHost(),
+                                                                              new MemberAssignment(partitions));
+                                                memberDescriptions.add(memberDescription);
+                                            }
+                                            final ConsumerGroupDescription consumerGroupDescription =
+                                                    new ConsumerGroupDescription(groupId,
+                                                                                 protocolType.isEmpty(),
+                                                                                 memberDescriptions,
+                                                                                 groupMetadata.protocol(),
+                                                                                 ConsumerGroupState.parse(groupMetadata.state()),
+                                                                                 fcResponses.get(nodeId).node());
+                                            future.complete(consumerGroupDescription);
+                                        }
+                                    }
+                                }
+                            }
+
+                            @Override
+                            void handleFailure(Throwable throwable) {
+                                for (String groupId: entry.getValue()) {
+                                    KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                                    future.completeExceptionally(throwable);
+                                }
+                            }
+                        }, nowDescribeConsumerGroups);
+                    }
                 }
             }, startFindCoordinatorMs);
         }
