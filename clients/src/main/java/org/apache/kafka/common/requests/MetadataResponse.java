@@ -22,7 +22,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -58,139 +57,144 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
 
-    private static final String BROKERS_KEY_NAME = "brokers";
-    private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
+    private static final Field.ComplexArray BROKERS = new Field.ComplexArray("brokers",
+            "Host and port information for all brokers.");
+    private static final Field.ComplexArray TOPIC_METADATA = new Field.ComplexArray("topic_metadata",
+            "Metadata for requested topics");
+
+    // cluster level fields
+    private static final Field.NullableStr CLUSTER_ID = new Field.NullableStr("cluster_id",
+            "The cluster id that this broker belongs to.");
+    private static final Field.Int32 CONTROLLER_ID = new Field.Int32("controller_id",
+            "The broker id of the controller broker.");
 
     // broker level fields
     private static final Field.Int32 NODE_ID = new Field.Int32("node_id", "The broker id.");
     private static final Field.Str HOST = new Field.Str("host", "The hostname of the broker.");
     private static final Field.Int32 PORT = new Field.Int32("port", "The port on which the broker accepts requests.");
+    private static final Field.NullableStr RACK = new Field.NullableStr("rack", "The rack of the broker.");
 
-    private static final String PARTITION_METADATA_KEY_NAME = "partition_metadata";
+    // topic level fields
+    private static final Field.ComplexArray PARTITION_METADATA = new Field.ComplexArray("partition_metadata",
+            "Metadata for each partition of the topic.");
+    private static final Field.Bool IS_INTERNAL = new Field.Bool("is_internal",
+            "Indicates if the topic is considered a Kafka internal topic");
 
-
+    // partition level fields
     private static final Field.Int32 LEADER = new Field.Int32("leader",
             "The id of the broker acting as leader for this partition.");
-    private static final String REPLICAS_KEY_NAME = "replicas";
-    private static final String ISR_KEY_NAME = "isr";
-    private static final String OFFLINE_REPLICAS_KEY_NAME = "offline_replicas";
+    private static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch",
+            "The current leader epoch");
+    private static final Field.Array REPLICAS = new Field.Array("replicas", INT32,
+            "The set of all nodes that host this partition.");
+    private static final Field.Array ISR = new Field.Array("isr", INT32,
+            "The set of nodes that are in sync with the leader for this partition.");
+    private static final Field.Array OFFLINE_REPLICAS = new Field.Array("offline_replicas", INT32,
+            "The set of offline replicas of this partition.");
 
-    private static final Schema METADATA_BROKER_V0 = new Schema(
+    private static final Field METADATA_BROKER_V0 = BROKERS.withFields(
             NODE_ID,
             HOST,
             PORT);
 
-    private static final Schema PARTITION_METADATA_V0 = new Schema(
+    private static final Field PARTITION_METADATA_V0 = PARTITION_METADATA.withFields(
             ERROR_CODE,
             PARTITION_ID,
             LEADER,
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."));
+            REPLICAS,
+            ISR);
 
-    private static final Schema TOPIC_METADATA_V0 = new Schema(
+    private static final Field TOPIC_METADATA_V0 = TOPIC_METADATA.withFields(
             ERROR_CODE,
             TOPIC_NAME,
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V0), "Metadata for each partition of the topic."));
+            PARTITION_METADATA_V0);
 
     private static final Schema METADATA_RESPONSE_V0 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V0), "Host and port information for all brokers."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V0)));
+            METADATA_BROKER_V0,
+            TOPIC_METADATA_V0);
 
     // V1 adds fields for the rack of each broker, the controller id, and whether or not the topic is internal
-    private static final Field.NullableStr RACK = new Field.NullableStr("rack", "The rack of the broker.");
-    private static final Field.Int32 CONTROLLER_ID = new Field.Int32("controller_id",
-            "The broker id of the controller broker.");
-    private static final Field.Bool IS_INTERNAL = new Field.Bool("is_internal",
-            "Indicates if the topic is considered a Kafka internal topic");
-
-    private static final Schema METADATA_BROKER_V1 = new Schema(
+    private static final Field METADATA_BROKER_V1 = BROKERS.withFields(
             NODE_ID,
             HOST,
             PORT,
             RACK);
 
-    private static final Schema TOPIC_METADATA_V1 = new Schema(
+    private static final Field TOPIC_METADATA_V1 = TOPIC_METADATA.withFields(
             ERROR_CODE,
             TOPIC_NAME,
             IS_INTERNAL,
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V0), "Metadata for each partition of the topic."));
+            PARTITION_METADATA_V0);
 
     private static final Schema METADATA_RESPONSE_V1 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            METADATA_BROKER_V1,
             CONTROLLER_ID,
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            TOPIC_METADATA_V1);
 
     // V2 added a field for the cluster id
-    private static final Field.NullableStr CLUSTER_ID = new Field.NullableStr("cluster_id",
-            "The cluster id that this broker belongs to.");
-
     private static final Schema METADATA_RESPONSE_V2 = new Schema(
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            METADATA_BROKER_V1,
             CLUSTER_ID,
             CONTROLLER_ID,
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            TOPIC_METADATA_V1);
 
     // V3 adds the throttle time to the response
     private static final Schema METADATA_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            METADATA_BROKER_V1,
             CLUSTER_ID,
             CONTROLLER_ID,
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            TOPIC_METADATA_V1);
 
     private static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
 
     // V5 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
-    private static final Schema PARTITION_METADATA_V5 = new Schema(
+    private static final Field PARTITION_METADATA_V5 = PARTITION_METADATA.withFields(
             ERROR_CODE,
             PARTITION_ID,
             LEADER,
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."),
-            new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of offline replicas of this partition."));
+            REPLICAS,
+            ISR,
+            OFFLINE_REPLICAS);
 
-    private static final Schema TOPIC_METADATA_V5 = new Schema(
+    private static final Field TOPIC_METADATA_V5 = TOPIC_METADATA.withFields(
             ERROR_CODE,
             TOPIC_NAME,
             IS_INTERNAL,
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V5), "Metadata for each partition of the topic."));
+            PARTITION_METADATA_V5);
 
     private static final Schema METADATA_RESPONSE_V5 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            METADATA_BROKER_V1,
             CLUSTER_ID,
             CONTROLLER_ID,
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V5)));
+            TOPIC_METADATA_V5);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V6 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema METADATA_RESPONSE_V6 = METADATA_RESPONSE_V5;
 
     // V7 adds the leader epoch to the partition metadata
-    private static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The current leader epoch");
-
-    private static final Schema PARTITION_METADATA_V7 = new Schema(
+    private static final Field PARTITION_METADATA_V7 = PARTITION_METADATA.withFields(
             ERROR_CODE,
             PARTITION_ID,
             LEADER,
             LEADER_EPOCH,
-            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that host this partition."),
-            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The set of nodes that are in sync with the leader for this partition."),
-            new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of offline replicas of this partition."));
+            REPLICAS,
+            ISR,
+            OFFLINE_REPLICAS);
 
-    private static final Schema TOPIC_METADATA_V7 = new Schema(
+    private static final Field TOPIC_METADATA_V7 = TOPIC_METADATA.withFields(
             ERROR_CODE,
             TOPIC_NAME,
             IS_INTERNAL,
-            new Field(PARTITION_METADATA_KEY_NAME, new ArrayOf(PARTITION_METADATA_V7), "Metadata for each partition of the topic."));
+            PARTITION_METADATA_V7);
 
     private static final Schema METADATA_RESPONSE_V7 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
+            METADATA_BROKER_V1,
             CLUSTER_ID,
             CONTROLLER_ID,
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V7)));
+            TOPIC_METADATA_V7);
 
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,
@@ -221,7 +225,7 @@ public class MetadataResponse extends AbstractResponse {
     public MetadataResponse(Struct struct) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         Map<Integer, Node> brokers = new HashMap<>();
-        Object[] brokerStructs = (Object[]) struct.get(BROKERS_KEY_NAME);
+        Object[] brokerStructs = struct.get(BROKERS);
         for (Object brokerStruct : brokerStructs) {
             Struct broker = (Struct) brokerStruct;
             int nodeId = broker.get(NODE_ID);
@@ -241,7 +245,7 @@ public class MetadataResponse extends AbstractResponse {
         this.clusterId = struct.getOrElse(CLUSTER_ID, null);
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
-        Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
+        Object[] topicInfos = struct.get(TOPIC_METADATA);
         for (Object topicInfoObj : topicInfos) {
             Struct topicInfo = (Struct) topicInfoObj;
             Errors topicError = Errors.forCode(topicInfo.get(ERROR_CODE));
@@ -251,7 +255,7 @@ public class MetadataResponse extends AbstractResponse {
             boolean isInternal = topicInfo.getOrElse(IS_INTERNAL, false);
             List<PartitionMetadata> partitionMetadata = new ArrayList<>();
 
-            Object[] partitionInfos = (Object[]) topicInfo.get(PARTITION_METADATA_KEY_NAME);
+            Object[] partitionInfos = topicInfo.get(PARTITION_METADATA);
             for (Object partitionInfoObj : partitionInfos) {
                 Struct partitionInfo = (Struct) partitionInfoObj;
                 Errors partitionError = Errors.forCode(partitionInfo.get(ERROR_CODE));
@@ -260,14 +264,13 @@ public class MetadataResponse extends AbstractResponse {
                 Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionInfo, LEADER_EPOCH);
                 Node leaderNode = leader == -1 ? null : brokers.get(leader);
 
-                Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
+                Object[] replicas = partitionInfo.get(REPLICAS);
                 List<Node> replicaNodes = convertToNodes(brokers, replicas);
 
-                Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
+                Object[] isr = partitionInfo.get(ISR);
                 List<Node> isrNodes = convertToNodes(brokers, isr);
 
-                Object[] offlineReplicas = partitionInfo.hasField(OFFLINE_REPLICAS_KEY_NAME) ?
-                    (Object[]) partitionInfo.get(OFFLINE_REPLICAS_KEY_NAME) : new Object[0];
+                Object[] offlineReplicas = partitionInfo.getOrEmpty(OFFLINE_REPLICAS);
                 List<Node> offlineNodes = convertToNodes(brokers, offlineReplicas);
 
                 partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, leaderEpoch,
@@ -544,7 +547,7 @@ public class MetadataResponse extends AbstractResponse {
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> brokerArray = new ArrayList<>();
         for (Node node : brokers) {
-            Struct broker = struct.instance(BROKERS_KEY_NAME);
+            Struct broker = struct.instance(BROKERS);
             broker.set(NODE_ID, node.id());
             broker.set(HOST, node.host());
             broker.set(PORT, node.port());
@@ -552,7 +555,7 @@ public class MetadataResponse extends AbstractResponse {
             broker.setIfExists(RACK, node.rack());
             brokerArray.add(broker);
         }
-        struct.set(BROKERS_KEY_NAME, brokerArray.toArray());
+        struct.set(BROKERS, brokerArray.toArray());
 
         // This field only exists in v1+
         struct.setIfExists(CONTROLLER_ID, controller == null ? NO_CONTROLLER_ID : controller.id());
@@ -562,7 +565,7 @@ public class MetadataResponse extends AbstractResponse {
 
         List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
         for (TopicMetadata metadata : topicMetadata) {
-            Struct topicData = struct.instance(TOPIC_METADATA_KEY_NAME);
+            Struct topicData = struct.instance(TOPIC_METADATA);
             topicData.set(TOPIC_NAME, metadata.topic);
             topicData.set(ERROR_CODE, metadata.error.code());
             // This field only exists in v1+
@@ -570,7 +573,7 @@ public class MetadataResponse extends AbstractResponse {
 
             List<Struct> partitionMetadataArray = new ArrayList<>(metadata.partitionMetadata.size());
             for (PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITION_METADATA);
                 partitionData.set(ERROR_CODE, partitionMetadata.error.code());
                 partitionData.set(PARTITION_ID, partitionMetadata.partition);
                 partitionData.set(LEADER, partitionMetadata.leaderId());
@@ -581,24 +584,24 @@ public class MetadataResponse extends AbstractResponse {
                 ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
                 for (Node node : partitionMetadata.replicas)
                     replicas.add(node.id());
-                partitionData.set(REPLICAS_KEY_NAME, replicas.toArray());
+                partitionData.set(REPLICAS, replicas.toArray());
                 ArrayList<Integer> isr = new ArrayList<>(partitionMetadata.isr.size());
                 for (Node node : partitionMetadata.isr)
                     isr.add(node.id());
-                partitionData.set(ISR_KEY_NAME, isr.toArray());
-                if (partitionData.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
+                partitionData.set(ISR, isr.toArray());
+                if (partitionData.hasField(OFFLINE_REPLICAS)) {
                     ArrayList<Integer> offlineReplicas = new ArrayList<>(partitionMetadata.offlineReplicas.size());
                     for (Node node : partitionMetadata.offlineReplicas)
                         offlineReplicas.add(node.id());
-                    partitionData.set(OFFLINE_REPLICAS_KEY_NAME, offlineReplicas.toArray());
+                    partitionData.set(OFFLINE_REPLICAS, offlineReplicas.toArray());
                 }
                 partitionMetadataArray.add(partitionData);
 
             }
-            topicData.set(PARTITION_METADATA_KEY_NAME, partitionMetadataArray.toArray());
+            topicData.set(PARTITION_METADATA, partitionMetadataArray.toArray());
             topicMetadataArray.add(topicData);
         }
-        struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
+        struct.set(TOPIC_METADATA, topicMetadataArray.toArray());
         return struct;
     }
 

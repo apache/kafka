@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -41,43 +40,50 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
+    // top level fields
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
+            "Topics to commit offsets");
 
-    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
+            "Partitions to commit offsets");
+
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
             COMMITTED_OFFSET,
             COMMITTED_METADATA);
+
+    private static final Field TOPICS_V0 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V0);
 
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
             TRANSACTIONAL_ID,
             GROUP_ID,
             PRODUCER_ID,
             PRODUCER_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
-                    "The partitions to write markers for."));
+            TOPICS_V0);
 
     // V1 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V1 = TXN_OFFSET_COMMIT_REQUEST_V0;
 
     // V2 adds the leader epoch to the partition data
-    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V2 = new Schema(
+    private static final Field PARTITIONS_V2 = PARTITIONS.withFields(
             PARTITION_ID,
             COMMITTED_LEADER_EPOCH,
             COMMITTED_OFFSET,
             COMMITTED_METADATA);
+
+    private static final Field TOPICS_V2 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V2);
 
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V2 = new Schema(
             TRANSACTIONAL_ID,
             GROUP_ID,
             PRODUCER_ID,
             PRODUCER_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V2)))),
-                    "The partitions to write markers for."));
+            TOPICS_V2);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1, TXN_OFFSET_COMMIT_REQUEST_V2};
@@ -151,11 +157,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         this.producerEpoch = struct.get(PRODUCER_EPOCH);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPICS_KEY_NAME);
+        Object[] topicPartitionsArray = struct.get(TOPICS);
         for (Object topicPartitionObj : topicPartitionsArray) {
             Struct topicPartitionStruct = (Struct) topicPartitionObj;
             String topic = topicPartitionStruct.get(TOPIC_NAME);
-            for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionObj : topicPartitionStruct.get(PARTITIONS)) {
                 Struct partitionStruct = (Struct) partitionObj;
                 TopicPartition partition = new TopicPartition(topic, partitionStruct.get(PARTITION_ID));
                 long offset = partitionStruct.get(COMMITTED_OFFSET);
@@ -199,14 +205,14 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, CommittedOffset>> topicAndPartitions : mappedPartitionOffsets.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPICS_KEY_NAME);
+            Struct topicPartitionsStruct = struct.instance(TOPICS);
             topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
 
             Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
             Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
             int j = 0;
             for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
-                Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
+                Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS);
                 partitionOffsetStruct.set(PARTITION_ID, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
                 partitionOffsetStruct.set(COMMITTED_OFFSET, committedOffset.offset);
@@ -215,11 +221,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                         committedOffset.leaderEpoch);
                 partitionOffsetsArray[j++] = partitionOffsetStruct;
             }
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionOffsetsArray);
+            topicPartitionsStruct.set(PARTITIONS, partitionOffsetsArray);
             partitionsArray[i++] = topicPartitionsStruct;
         }
 
-        struct.set(TOPICS_KEY_NAME, partitionsArray);
+        struct.set(TOPICS, partitionsArray);
         return struct;
     }
 

@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -53,22 +52,23 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  * GROUP_AUTHORIZATION_FAILED (30)
  */
 public class OffsetCommitResponse extends AbstractResponse {
-    private static final String RESPONSES_KEY_NAME = "responses";
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
+            "Responses by topic for committed partitions");
 
     // topic level fields
-    private static final String PARTITIONS_KEY_NAME = "partition_responses";
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
+            "Responses for committed partitions");
 
-    private static final Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
             ERROR_CODE);
 
-    private static final Schema OFFSET_COMMIT_RESPONSE_TOPIC_V0 = new Schema(
+    private static final Field TOPICS_V0 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_PARTITION_V0)));
+            PARTITIONS_V0);
 
     private static final Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
-
+            TOPICS_V0);
 
     // V1 adds timestamp and group membership information (generation and memberId) to the request
     private static final Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
@@ -79,7 +79,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     // V3 adds throttle time
     private static final Schema OFFSET_COMMIT_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
+            TOPICS_V0);
 
     // V4 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema OFFSET_COMMIT_RESPONSE_V4 = OFFSET_COMMIT_RESPONSE_V3;
@@ -110,10 +110,10 @@ public class OffsetCommitResponse extends AbstractResponse {
     public OffsetCommitResponse(Struct struct) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         responseData = new HashMap<>();
-        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
+        for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 Errors error = Errors.forCode(partitionResponse.get(ERROR_CODE));
@@ -130,19 +130,19 @@ public class OffsetCommitResponse extends AbstractResponse {
         Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Errors>> entries: topicsData.entrySet()) {
-            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            Struct topicData = struct.instance(TOPICS);
             topicData.set(TOPIC_NAME, entries.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, Errors> partitionEntry : entries.getValue().entrySet()) {
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITIONS);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(ERROR_CODE, partitionEntry.getValue().code());
                 partitionArray.add(partitionData);
             }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);
         }
-        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+        struct.set(TOPICS, topicArray.toArray());
 
         return struct;
     }

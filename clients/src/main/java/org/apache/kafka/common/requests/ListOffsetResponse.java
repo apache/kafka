@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -52,69 +51,73 @@ public class ListOffsetResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
 
-    private static final String RESPONSES_KEY_NAME = "responses";
+    // top level fields
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
+            "The listed offsets by topic");
 
-    // topic level field names
-    private static final String PARTITIONS_KEY_NAME = "partition_responses";
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
+            "The listed offsets by partition");
 
+    // partition level fields
     // This key is only used by ListOffsetResponse v0
     @Deprecated
-    private static final String OFFSETS_KEY_NAME = "offsets";
+    private static final Field.Array OFFSETS = new Field.Array("offsets'", INT64, "A list of offsets.");
     private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",
             "The timestamp associated with the returned offset");
     private static final Field.Int64 OFFSET = new Field.Int64("offset",
             "The offset found");
 
-    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
             ERROR_CODE,
-            new Field(OFFSETS_KEY_NAME, new ArrayOf(INT64), "A list of offsets."));
+            OFFSETS);
 
-    private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(
+    private static final Field TOPICS_V0 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
+            PARTITIONS_V0);
 
     private static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
+            TOPICS_V0);
 
     // V1 bumped for the removal of the offsets array
-    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(
+    private static final Field PARTITIONS_V1 = PARTITIONS.withFields(
             PARTITION_ID,
             ERROR_CODE,
             TIMESTAMP,
             OFFSET);
 
-    private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V1 = new Schema(
+    private static final Field TOPICS_V1 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
+            PARTITIONS_V1);
 
     private static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+            TOPICS_V1);
 
     // V2 bumped for the addition of the throttle time
     private static final Schema LIST_OFFSET_RESPONSE_V2 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+            TOPICS_V1);
 
     // V3 bumped to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema LIST_OFFSET_RESPONSE_V3 = LIST_OFFSET_RESPONSE_V2;
 
     // V4 bumped for the addition of the current leader epoch in the request schema and the
     // leader epoch in the response partition data
-    private static final Schema LIST_OFFSET_RESPONSE_PARTITION_V4 = new Schema(
+    private static final Field PARTITIONS_V4 = PARTITIONS.withFields(
             PARTITION_ID,
             ERROR_CODE,
             TIMESTAMP,
             OFFSET,
             LEADER_EPOCH);
 
-    private static final Schema LIST_OFFSET_RESPONSE_TOPIC_V4 = new Schema(
+    private static final Field TOPICS_V4 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V4)));
+            PARTITIONS_V4);
 
     private static final Schema LIST_OFFSET_RESPONSE_V4 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V4)));
+            TOPICS_V4);
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2,
@@ -192,16 +195,16 @@ public class ListOffsetResponse extends AbstractResponse {
     public ListOffsetResponse(Struct struct) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         responseData = new HashMap<>();
-        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
+        for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 Errors error = Errors.forCode(partitionResponse.get(ERROR_CODE));
                 PartitionData partitionData;
-                if (partitionResponse.hasField(OFFSETS_KEY_NAME)) {
-                    Object[] offsets = partitionResponse.getArray(OFFSETS_KEY_NAME);
+                if (partitionResponse.hasField(OFFSETS)) {
+                    Object[] offsets = partitionResponse.get(OFFSETS);
                     List<Long> offsetsList = new ArrayList<>();
                     for (Object offset : offsets)
                         offsetsList.add((Long) offset);
@@ -246,16 +249,16 @@ public class ListOffsetResponse extends AbstractResponse {
 
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
-            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            Struct topicData = struct.instance(TOPICS);
             topicData.set(TOPIC_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData offsetPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITIONS);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(ERROR_CODE, offsetPartitionData.error.code());
                 if (version == 0) {
-                    partitionData.set(OFFSETS_KEY_NAME, offsetPartitionData.offsets.toArray());
+                    partitionData.set(OFFSETS, offsetPartitionData.offsets.toArray());
                 } else {
                     partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
                     partitionData.set(OFFSET, offsetPartitionData.offset);
@@ -263,10 +266,10 @@ public class ListOffsetResponse extends AbstractResponse {
                 }
                 partitionArray.add(partitionData);
             }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);
         }
-        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+        struct.set(TOPICS, topicArray.toArray());
 
         return struct;
     }

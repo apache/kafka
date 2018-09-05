@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -47,10 +46,29 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
 
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String FORGOTTEN_TOPICS_DATA = "forgotten_topics_data";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
+            "Topics to fetch in the order provided.");
+    private static final Field.ComplexArray FORGOTTEN_TOPICS = new Field.ComplexArray("forgotten_topics_data",
+            "Topics to remove from the fetch session.");
+    private static final Field.Int32 MAX_BYTES = new Field.Int32("max_bytes",
+            "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+                    "if the first message in the first non-empty partition of the fetch is larger than this " +
+                    "value, the message will still be returned to ensure that progress can be made.");
+    private static final Field.Int8 ISOLATION_LEVEL = new Field.Int8("isolation_level",
+            "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
+                    "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
+                    "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
+                    "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
+                    "and enables the inclusion of the list of aborted transactions in the result, which allows " +
+                    "consumers to discard ABORTED transactional records");
+    private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
+    private static final Field.Int32 SESSION_EPOCH = new Field.Int32("session_epoch", "The fetch session epoch");
 
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
+            "Partitions to fetch.");
+
+    // partition level fields
     private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
             "Broker id of the follower. For normal consumers, use -1.");
     private static final Field.Int64 FETCH_OFFSET = new Field.Int64("fetch_offset", "Message offset.");
@@ -60,21 +78,24 @@ public class FetchRequest extends AbstractRequest {
             "Maximum time in ms to wait for the response.");
     private static final Field.Int32 MIN_BYTES = new Field.Int32("min_bytes",
             "Minimum bytes to accumulate in the response.");
+    private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
+            "Earliest available offset of the follower replica. " +
+                    "The field is only used when request is sent by follower. ");
 
-    private static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
             FETCH_OFFSET,
             PARTITION_MAX_BYTES);
 
-    private static final Schema FETCH_REQUEST_TOPIC_V0 = new Schema(
+    private static final Field TOPICS_V0 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V0), "Partitions to fetch."));
+            PARTITIONS_V0);
 
     private static final Schema FETCH_REQUEST_V0 = new Schema(
             REPLICA_ID,
             MAX_WAIT_TIME,
             MIN_BYTES,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch."));
+            TOPICS_V0);
 
     // The V1 Fetch Request body is the same as V0.
     // Only the version number is incremented to indicate a newer client
@@ -85,26 +106,14 @@ public class FetchRequest extends AbstractRequest {
 
     // V3 added top level max_bytes field - the total size of partition data to accumulate in response.
     // The partition ordering is now relevant - partitions will be processed in order they appear in request.
-    private static final Field.Int32 MAX_BYTES = new Field.Int32("max_bytes",
-            "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
-            "if the first message in the first non-empty partition of the fetch is larger than this " +
-            "value, the message will still be returned to ensure that progress can be made.");
-
     private static final Schema FETCH_REQUEST_V3 = new Schema(
             REPLICA_ID,
             MAX_WAIT_TIME,
             MIN_BYTES,
             MAX_BYTES,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
+            TOPICS_V0);
 
     // V4 adds the fetch isolation level and exposes magic v2 (via the response).
-    private static final Field.Int8 ISOLATION_LEVEL = new Field.Int8("isolation_level",
-            "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
-            "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
-            "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
-            "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
-            "and enables the inclusion of the list of aborted transactions in the result, which allows " +
-            "consumers to discard ABORTED transactional records");
 
     private static final Schema FETCH_REQUEST_V4 = new Schema(
             REPLICA_ID,
@@ -112,23 +121,19 @@ public class FetchRequest extends AbstractRequest {
             MIN_BYTES,
             MAX_BYTES,
             ISOLATION_LEVEL,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch in the order provided."));
+            TOPICS_V0);
 
 
     // V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
-    private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
-            "Earliest available offset of the follower replica. " +
-                    "The field is only used when request is sent by follower. ");
-
-    private static final Schema FETCH_REQUEST_PARTITION_V5 = new Schema(
+    private static final Field PARTITIONS_V5 = PARTITIONS.withFields(
             PARTITION_ID,
             FETCH_OFFSET,
             LOG_START_OFFSET,
             PARTITION_MAX_BYTES);
 
-    private static final Schema FETCH_REQUEST_TOPIC_V5 = new Schema(
+    private static final Field TOPICS_V5 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V5), "Partitions to fetch."));
+            PARTITIONS_V5);
 
     private static final Schema FETCH_REQUEST_V5 = new Schema(
             REPLICA_ID,
@@ -136,20 +141,18 @@ public class FetchRequest extends AbstractRequest {
             MIN_BYTES,
             MAX_BYTES,
             ISOLATION_LEVEL,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V5), "Topics to fetch in the order provided."));
+            TOPICS_V5);
 
     // V6 bumped up to indicate that the client supports KafkaStorageException. The KafkaStorageException will be
     // translated to NotLeaderForPartitionException in the response if version <= 5
     private static final Schema FETCH_REQUEST_V6 = FETCH_REQUEST_V5;
 
     // V7 added incremental fetch requests.
-    private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
-    private static final Field.Int32 SESSION_EPOCH = new Field.Int32("session_epoch", "The fetch session epoch");
-
-    private static final Schema FORGOTTEN_TOPIC_DATA = new Schema(
+    private static final Field.Array FORGOTTEN_PARTITIONS = new Field.Array("partitions", Type.INT32,
+            "Partitions to remove from the fetch session.");
+    private static final Field FORGOTTEN_TOPIC_DATA_V7 = FORGOTTEN_TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32),
-                    "Partitions to remove from the fetch session."));
+            FORGOTTEN_PARTITIONS);
 
     private static final Schema FETCH_REQUEST_V7 = new Schema(
             REPLICA_ID,
@@ -159,23 +162,23 @@ public class FetchRequest extends AbstractRequest {
             ISOLATION_LEVEL,
             SESSION_ID,
             SESSION_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V5), "Topics to fetch in the order provided."),
-            new Field(FORGOTTEN_TOPICS_DATA, new ArrayOf(FORGOTTEN_TOPIC_DATA), "Topics to remove from the fetch session."));
+            TOPICS_V5,
+            FORGOTTEN_TOPIC_DATA_V7);
 
     // V8 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema FETCH_REQUEST_V8 = FETCH_REQUEST_V7;
 
     // V9 adds the current leader epoch (see KIP-320)
-    private static final Schema FETCH_REQUEST_PARTITION_V9 = new Schema(
+    private static final Field FETCH_REQUEST_PARTITION_V9 = PARTITIONS.withFields(
             PARTITION_ID,
             CURRENT_LEADER_EPOCH,
             FETCH_OFFSET,
             LOG_START_OFFSET,
             PARTITION_MAX_BYTES);
 
-    private static final Schema FETCH_REQUEST_TOPIC_V9 = new Schema(
+    private static final Field FETCH_REQUEST_TOPIC_V9 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_REQUEST_PARTITION_V9), "Partitions to fetch."));
+            FETCH_REQUEST_PARTITION_V9);
 
     private static final Schema FETCH_REQUEST_V9 = new Schema(
             REPLICA_ID,
@@ -185,14 +188,13 @@ public class FetchRequest extends AbstractRequest {
             ISOLATION_LEVEL,
             SESSION_ID,
             SESSION_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V9), "Topics to fetch in the order provided."),
-            new Field(FORGOTTEN_TOPICS_DATA, new ArrayOf(FORGOTTEN_TOPIC_DATA), "Topics to remove from the fetch session."));
-
+            FETCH_REQUEST_TOPIC_V9,
+            FORGOTTEN_TOPIC_DATA_V7);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
             FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7, FETCH_REQUEST_V8, FETCH_REQUEST_V9};
-    };
+    }
 
     // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
@@ -385,11 +387,11 @@ public class FetchRequest extends AbstractRequest {
         else
             isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         toForget = new ArrayList<>(0);
-        if (struct.hasField(FORGOTTEN_TOPICS_DATA)) {
-            for (Object forgottenTopicObj : struct.getArray(FORGOTTEN_TOPICS_DATA)) {
+        if (struct.hasField(FORGOTTEN_TOPICS)) {
+            for (Object forgottenTopicObj : struct.get(FORGOTTEN_TOPICS)) {
                 Struct forgottenTopic = (Struct) forgottenTopicObj;
                 String topicName = forgottenTopic.get(TOPIC_NAME);
-                for (Object partObj : forgottenTopic.getArray(PARTITIONS_KEY_NAME)) {
+                for (Object partObj : forgottenTopic.get(FORGOTTEN_PARTITIONS)) {
                     Integer part = (Integer) partObj;
                     toForget.add(new TopicPartition(topicName, part));
                 }
@@ -399,10 +401,10 @@ public class FetchRequest extends AbstractRequest {
             struct.getOrElse(SESSION_EPOCH, FINAL_EPOCH));
 
         fetchData = new LinkedHashMap<>();
-        for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
+        for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 long offset = partitionResponse.get(FETCH_OFFSET);
@@ -492,12 +494,12 @@ public class FetchRequest extends AbstractRequest {
 
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
-            Struct topicData = struct.instance(TOPICS_KEY_NAME);
+            Struct topicData = struct.instance(TOPICS);
             topicData.set(TOPIC_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITIONS);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(FETCH_OFFSET, fetchPartitionData.fetchOffset);
                 partitionData.set(PARTITION_MAX_BYTES, fetchPartitionData.maxBytes);
@@ -505,11 +507,11 @@ public class FetchRequest extends AbstractRequest {
                 RequestUtils.setLeaderEpochIfExists(partitionData, CURRENT_LEADER_EPOCH, fetchPartitionData.currentLeaderEpoch);
                 partitionArray.add(partitionData);
             }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);
         }
-        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
-        if (struct.hasField(FORGOTTEN_TOPICS_DATA)) {
+        struct.set(TOPICS, topicArray.toArray());
+        if (struct.hasField(FORGOTTEN_TOPICS)) {
             Map<String, List<Integer>> topicsToPartitions = new HashMap<>();
             for (TopicPartition part : toForget) {
                 List<Integer> partitions = topicsToPartitions.computeIfAbsent(part.topic(), topic -> new ArrayList<>());
@@ -517,12 +519,12 @@ public class FetchRequest extends AbstractRequest {
             }
             List<Struct> toForgetStructs = new ArrayList<>();
             for (Map.Entry<String, List<Integer>> entry : topicsToPartitions.entrySet()) {
-                Struct toForgetStruct = struct.instance(FORGOTTEN_TOPICS_DATA);
+                Struct toForgetStruct = struct.instance(FORGOTTEN_TOPICS);
                 toForgetStruct.set(TOPIC_NAME, entry.getKey());
-                toForgetStruct.set(PARTITIONS_KEY_NAME, entry.getValue().toArray());
+                toForgetStruct.set(FORGOTTEN_PARTITIONS, entry.getValue().toArray());
                 toForgetStructs.add(toForgetStruct);
             }
-            struct.set(FORGOTTEN_TOPICS_DATA, toForgetStructs.toArray());
+            struct.set(FORGOTTEN_TOPICS, toForgetStructs.toArray());
         }
         return struct;
     }

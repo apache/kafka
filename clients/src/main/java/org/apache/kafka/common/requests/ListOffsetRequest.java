@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -46,46 +45,9 @@ public class ListOffsetRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
+    // top level fields
     private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
             "Broker id of the follower. For normal consumers, use -1.");
-    private static final String TOPICS_KEY_NAME = "topics";
-
-    // topic level field names
-    private static final String PARTITIONS_KEY_NAME = "partitions";
-
-    // partition level field names
-    private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",
-            "The target timestamp for the partition.");
-    private static final Field.Int32 MAX_NUM_OFFSETS = new Field.Int32("max_num_offsets",
-            "Maximum offsets to return.");
-
-    private static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(
-            PARTITION_ID,
-            TIMESTAMP,
-            MAX_NUM_OFFSETS);
-
-    private static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V0), "Partitions to list offset."));
-
-    private static final Schema LIST_OFFSET_REQUEST_V0 = new Schema(
-            REPLICA_ID,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V0), "Topics to list offsets."));
-
-    // V1 removes max_num_offsets
-    private static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(
-            PARTITION_ID,
-            TIMESTAMP);
-
-    private static final Schema LIST_OFFSET_REQUEST_TOPIC_V1 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V1), "Partitions to list offset."));
-
-    private static final Schema LIST_OFFSET_REQUEST_V1 = new Schema(
-            REPLICA_ID,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));
-
-    // V2 adds a field for the isolation level
     private static final Field.Int8 ISOLATION_LEVEL = new Field.Int8("isolation_level",
             "This setting controls the visibility of transactional records. " +
                     "Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED " +
@@ -93,29 +55,68 @@ public class ListOffsetRequest extends AbstractRequest {
                     "To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current " +
                     "LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the " +
                     "result, which allows consumers to discard ABORTED transactional records");
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
+            "Topics to list offsets.");
 
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
+            "Partitions to list offset.");
+
+    // partition level fields
+    private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",
+            "The target timestamp for the partition.");
+    private static final Field.Int32 MAX_NUM_OFFSETS = new Field.Int32("max_num_offsets",
+            "Maximum offsets to return.");
+
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
+            PARTITION_ID,
+            TIMESTAMP,
+            MAX_NUM_OFFSETS);
+
+    private static final Field TOPICS_V0 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V0);
+
+    private static final Schema LIST_OFFSET_REQUEST_V0 = new Schema(
+            REPLICA_ID,
+            TOPICS_V0);
+
+    // V1 removes max_num_offsets
+    private static final Field PARTITIONS_V1 = PARTITIONS.withFields(
+            PARTITION_ID,
+            TIMESTAMP);
+
+    private static final Field TOPICS_V1 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V1);
+
+    private static final Schema LIST_OFFSET_REQUEST_V1 = new Schema(
+            REPLICA_ID,
+            TOPICS_V1);
+
+    // V2 adds a field for the isolation level
     private static final Schema LIST_OFFSET_REQUEST_V2 = new Schema(
             REPLICA_ID,
             ISOLATION_LEVEL,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));;
+            TOPICS_V1);
 
     // V3 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema LIST_OFFSET_REQUEST_V3 = LIST_OFFSET_REQUEST_V2;
 
     // V4 introduces the current leader epoch, which is used for fencing
-    private static final Schema LIST_OFFSET_REQUEST_PARTITION_V4 = new Schema(
+    private static final Field PARTITIONS_V4 = PARTITIONS.withFields(
             PARTITION_ID,
             CURRENT_LEADER_EPOCH,
             TIMESTAMP);
 
-    private static final Schema LIST_OFFSET_REQUEST_TOPIC_V4 = new Schema(
+    private static final Field TOPICS_V4 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V4), "Partitions to list offset."));
+            PARTITIONS_V4);
 
     private static final Schema LIST_OFFSET_REQUEST_V4 = new Schema(
             REPLICA_ID,
             ISOLATION_LEVEL,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V4), "Topics to list offsets."));;
+            TOPICS_V4);
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
@@ -233,10 +234,10 @@ public class ListOffsetRequest extends AbstractRequest {
                 IsolationLevel.forId(struct.get(ISOLATION_LEVEL)) :
                 IsolationLevel.READ_UNCOMMITTED;
         partitionTimestamps = new HashMap<>();
-        for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
+        for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 long timestamp = partitionResponse.get(TIMESTAMP);
@@ -309,12 +310,12 @@ public class ListOffsetRequest extends AbstractRequest {
 
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
-            Struct topicData = struct.instance(TOPICS_KEY_NAME);
+            Struct topicData = struct.instance(TOPICS);
             topicData.set(TOPIC_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData offsetPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITIONS);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
                 partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
                 partitionData.setIfExists(MAX_NUM_OFFSETS, offsetPartitionData.maxNumOffsets);
@@ -322,10 +323,10 @@ public class ListOffsetRequest extends AbstractRequest {
                         offsetPartitionData.currentLeaderEpoch);
                 partitionArray.add(partitionData);
             }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);
         }
-        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        struct.set(TOPICS, topicArray.toArray());
         return struct;
     }
 }

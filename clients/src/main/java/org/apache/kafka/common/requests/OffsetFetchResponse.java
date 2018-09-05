@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -34,6 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_METADATA;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_OFFSET;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
@@ -52,68 +54,58 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  *   - GROUP_AUTHORIZATION_FAILED (30)
  */
 public class OffsetFetchResponse extends AbstractResponse {
-
-    private static final String RESPONSES_KEY_NAME = "responses";
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
+            "Responses by topic for fetched offsets");
 
     // topic level fields
-    private static final String PARTITIONS_KEY_NAME = "partition_responses";
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
+            "Responses by partition for fetched offsets");
 
-    // partition level fields
-    private static final Field.Int64 COMMIT_OFFSET = new Field.Int64("offset",
-            "Last committed message offset.");
-    private static final Field.NullableStr METADATA = new Field.NullableStr("metadata",
-            "Any associated metadata the client wants to keep.");
-
-    private static final Schema OFFSET_FETCH_RESPONSE_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
-            COMMIT_OFFSET,
-            METADATA,
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA,
             ERROR_CODE);
 
-    private static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V0 = new Schema(
+    private static final Field TOPICS_V0 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0)));
+            PARTITIONS_V0);
 
     private static final Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
+            TOPICS_V0);
 
     // V1 begins support for fetching offsets from the internal __consumer_offsets topic
     private static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
 
     // V2 adds top-level error code
     private static final Schema OFFSET_FETCH_RESPONSE_V2 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            TOPICS_V0,
             ERROR_CODE);
 
     // V3 request includes throttle time
     private static final Schema OFFSET_FETCH_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            TOPICS_V0,
             ERROR_CODE);
 
     // V4 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema OFFSET_FETCH_RESPONSE_V4 = OFFSET_FETCH_RESPONSE_V3;
 
     // V5 adds the leader epoch to the committed offset
-    private static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch",
-            "The leader epoch, if provided is derived from the last consumed record. " +
-                    "This is used by the consumer to check for log truncation and to ensure partition " +
-                    "metadata is up to date following a group rebalance.");
-
-    private static final Schema OFFSET_FETCH_RESPONSE_PARTITION_V5 = new Schema(
+    private static final Field PARTITIONS_V5 = PARTITIONS.withFields(
             PARTITION_ID,
-            LEADER_EPOCH,
-            COMMIT_OFFSET,
-            METADATA,
+            COMMITTED_LEADER_EPOCH,
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA,
             ERROR_CODE);
 
-    private static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V5 = new Schema(
+    private static final Field TOPICS_V5 = TOPICS.withFields(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V5)));
+            PARTITIONS_V5);
 
     private static final Schema OFFSET_FETCH_RESPONSE_V5 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V5)),
+            TOPICS_V5,
             ERROR_CODE);
 
     public static Schema[] schemaVersions() {
@@ -180,15 +172,15 @@ public class OffsetFetchResponse extends AbstractResponse {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         Errors topLevelError = Errors.NONE;
         this.responseData = new HashMap<>();
-        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
+        for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
-                long offset = partitionResponse.get(COMMIT_OFFSET);
-                String metadata = partitionResponse.get(METADATA);
-                Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionResponse, LEADER_EPOCH);
+                long offset = partitionResponse.get(COMMITTED_OFFSET);
+                String metadata = partitionResponse.get(COMMITTED_METADATA);
+                Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionResponse, COMMITTED_LEADER_EPOCH);
 
                 Errors error = Errors.forCode(partitionResponse.get(ERROR_CODE));
                 if (error != Errors.NONE && !PARTITION_ERRORS.contains(error))
@@ -248,23 +240,23 @@ public class OffsetFetchResponse extends AbstractResponse {
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> entries : topicsData.entrySet()) {
-            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            Struct topicData = struct.instance(TOPICS);
             topicData.set(TOPIC_NAME, entries.getKey());
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : entries.getValue().entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = topicData.instance(PARTITIONS);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
-                partitionData.set(COMMIT_OFFSET, fetchPartitionData.offset);
-                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, fetchPartitionData.leaderEpoch);
-                partitionData.set(METADATA, fetchPartitionData.metadata);
+                partitionData.set(COMMITTED_OFFSET, fetchPartitionData.offset);
+                RequestUtils.setLeaderEpochIfExists(partitionData, COMMITTED_LEADER_EPOCH, fetchPartitionData.leaderEpoch);
+                partitionData.set(COMMITTED_METADATA, fetchPartitionData.metadata);
                 partitionData.set(ERROR_CODE, fetchPartitionData.error.code());
                 partitionArray.add(partitionData);
             }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);
         }
-        struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+        struct.set(TOPICS, topicArray.toArray());
 
         if (version > 1)
             struct.set(ERROR_CODE, this.error.code());
