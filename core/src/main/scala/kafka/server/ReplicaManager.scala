@@ -1482,7 +1482,7 @@ class ReplicaManager(val config: KafkaConfig,
           if (partition eq ReplicaManager.OfflinePartition)
             new EpochEndOffset(Errors.KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           else
-            partition.lastOffsetForLeaderEpoch(partitionData.searchLeaderEpoch)
+            partition.lastOffsetForLeaderEpoch(partitionData.leaderEpoch)
 
         case None if metadataCache.contains(tp) =>
           new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)

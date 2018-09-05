@@ -89,8 +89,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             this.epochsByPartition = epochsByPartition;
         }
 
-        public Builder add(TopicPartition topicPartition, Optional<Integer> currentEpoch, Integer searchEpoch) {
-            epochsByPartition.put(topicPartition, new PartitionData(currentEpoch, searchEpoch));
+        public Builder add(TopicPartition topicPartition, Optional<Integer> currentEpoch, int leaderEpoch) {
+            epochsByPartition.put(topicPartition, new PartitionData(currentEpoch, leaderEpoch));
             return this;
         }
 
@@ -155,7 +155,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                 partitionStruct.set(PARTITION_ID, partitionEpoch.getKey());
 
                 PartitionData partitionData = partitionEpoch.getValue();
-                partitionStruct.set(LEADER_EPOCH, partitionData.searchLeaderEpoch);
+                partitionStruct.set(LEADER_EPOCH, partitionData.leaderEpoch);
 
                 // Current leader epoch introduced in v2
                 RequestUtils.setLeaderEpochIfExists(partitionStruct, CURRENT_LEADER_EPOCH, partitionData.currentLeaderEpoch);
@@ -181,11 +181,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
     public static class PartitionData {
         public final Optional<Integer> currentLeaderEpoch;
-        public final int searchLeaderEpoch;
+        public final int leaderEpoch;
 
-        public PartitionData(Optional<Integer> currentLeaderEpoch, int searchLeaderEpoch) {
+        public PartitionData(Optional<Integer> currentLeaderEpoch, int leaderEpoch) {
             this.currentLeaderEpoch = currentLeaderEpoch;
-            this.searchLeaderEpoch = searchLeaderEpoch;
+            this.leaderEpoch = leaderEpoch;
         }
 
     }
