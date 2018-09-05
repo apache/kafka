@@ -34,6 +34,19 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
+/**
+ *
+ * Possible error codes:
+ *   InvalidProducerEpoch
+ *   NotCoordinator
+ *   CoordinatorNotAvailable
+ *   CoordinatorLoadInProgress
+ *   OffsetMetadataTooLarge
+ *   GroupAuthorizationFailed
+ *   InvalidCommitOffsetSize
+ *   TransactionalIdAuthorizationFailed
+ *   RequestTimedOut
+ */
 public class TxnOffsetCommitResponse extends AbstractResponse {
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -49,25 +62,15 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),
                     "Errors per partition from writing markers."));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V1 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema TXN_OFFSET_COMMIT_RESPONSE_V1 = TXN_OFFSET_COMMIT_RESPONSE_V0;
 
-    public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_RESPONSE_V0, TXN_OFFSET_COMMIT_RESPONSE_V1};
-    }
+    // V2 adds the leader epoch to the partition data
+    private static final Schema TXN_OFFSET_COMMIT_RESPONSE_V2 = TXN_OFFSET_COMMIT_RESPONSE_V1;
 
-    // Possible error codes:
-    //   InvalidProducerEpoch
-    //   NotCoordinator
-    //   CoordinatorNotAvailable
-    //   CoordinatorLoadInProgress
-    //   OffsetMetadataTooLarge
-    //   GroupAuthorizationFailed
-    //   InvalidCommitOffsetSize
-    //   TransactionalIdAuthorizationFailed
-    //   RequestTimedOut
+    public static Schema[] schemaVersions() {
+        return new Schema[]{TXN_OFFSET_COMMIT_RESPONSE_V0, TXN_OFFSET_COMMIT_RESPONSE_V1, TXN_OFFSET_COMMIT_RESPONSE_V2};
+    }
 
     private final Map<TopicPartition, Errors> errors;
     private final int throttleTimeMs;

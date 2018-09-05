@@ -1098,7 +1098,9 @@ public class RequestResponseTest {
     private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
         final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
         offsets.put(new TopicPartition("topic", 73),
-                    new TxnOffsetCommitRequest.CommittedOffset(100, null));
+                    new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
+        offsets.put(new TopicPartition("topic", 74),
+                new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
         return new TxnOffsetCommitRequest.Builder("transactionalId", "groupId", 21L, (short) 42, offsets).build();
     }
 

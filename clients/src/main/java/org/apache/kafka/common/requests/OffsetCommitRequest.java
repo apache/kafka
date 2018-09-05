@@ -32,6 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_METADATA;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_OFFSET;
 import static org.apache.kafka.common.protocol.CommonFields.GENERATION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.MEMBER_ID;
@@ -47,16 +50,10 @@ public class OffsetCommitRequest extends AbstractRequest {
     // topic level field names
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    // partition level field names
-    private static final Field.Int64 COMMIT_OFFSET = new Field.Int64("offset",
-            "Message offset to be committed.");
-    private static final Field.NullableStr COMMIT_METADATA = new Field.NullableStr("metadata",
-            "Any associated metadata the client wants to keep.");
-
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            COMMIT_OFFSET,
-            COMMIT_METADATA);
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,
@@ -72,9 +69,9 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(
             PARTITION_ID,
-            COMMIT_OFFSET,
+            COMMITTED_OFFSET,
             COMMIT_TIMESTAMP,
-            COMMIT_METADATA);
+            COMMITTED_METADATA);
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V1 = new Schema(
             TOPIC_NAME,
@@ -92,8 +89,8 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(
             PARTITION_ID,
-            COMMIT_OFFSET,
-            COMMIT_METADATA);
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V2 = new Schema(
             TOPIC_NAME,
@@ -120,16 +117,11 @@ public class OffsetCommitRequest extends AbstractRequest {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
 
     // V6 adds the leader epoch to the partition data
-    private static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch",
-            "The leader epoch, if provided is derived from the last consumed record. " +
-                    "This is used by the consumer to check for log truncation and to ensure partition " +
-                    "metadata is up to date following a group rebalance.");
-
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V6 = new Schema(
             PARTITION_ID,
-            LEADER_EPOCH,
-            COMMIT_OFFSET,
-            COMMIT_METADATA);
+            COMMITTED_LEADER_EPOCH,
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
 
     private static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V6 = new Schema(
             TOPIC_NAME,
@@ -273,15 +265,16 @@ public class OffsetCommitRequest extends AbstractRequest {
             for (Object partitionDataObj : topicData.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionDataStruct = (Struct) partitionDataObj;
                 int partition = partitionDataStruct.get(PARTITION_ID);
-                long offset = partitionDataStruct.get(COMMIT_OFFSET);
-                String metadata = partitionDataStruct.get(COMMIT_METADATA);
+                long offset = partitionDataStruct.get(COMMITTED_OFFSET);
+                String metadata = partitionDataStruct.get(COMMITTED_METADATA);
                 PartitionData partitionOffset;
                 // This field only exists in v1
                 if (partitionDataStruct.hasField(COMMIT_TIMESTAMP)) {
                     long timestamp = partitionDataStruct.get(COMMIT_TIMESTAMP);
                     partitionOffset = new PartitionData(offset, timestamp, metadata);
                 } else {
-                    Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionDataStruct, LEADER_EPOCH);
+                    Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionDataStruct,
+                            COMMITTED_LEADER_EPOCH);
                     partitionOffset = new PartitionData(offset, leaderEpochOpt, metadata);
                 }
                 offsetData.put(new TopicPartition(topic, partition), partitionOffset);
@@ -305,12 +298,12 @@ public class OffsetCommitRequest extends AbstractRequest {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_ID, partitionEntry.getKey());
-                partitionData.set(COMMIT_OFFSET, fetchPartitionData.offset);
+                partitionData.set(COMMITTED_OFFSET, fetchPartitionData.offset);
                 // Only for v1
                 partitionData.setIfExists(COMMIT_TIMESTAMP, fetchPartitionData.timestamp);
                 // Only for v6
-                RequestUtils.setLeaderEpochIfExists(partitionData, LEADER_EPOCH, fetchPartitionData.leaderEpoch);
-                partitionData.set(COMMIT_METADATA, fetchPartitionData.metadata);
+                RequestUtils.setLeaderEpochIfExists(partitionData, COMMITTED_LEADER_EPOCH, fetchPartitionData.leaderEpoch);
+                partitionData.set(COMMITTED_METADATA, fetchPartitionData.metadata);
                 partitionArray.add(partitionData);
             }
             topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());

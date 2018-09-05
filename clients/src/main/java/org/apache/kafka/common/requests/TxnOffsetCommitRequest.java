@@ -28,26 +28,26 @@ import org.apache.kafka.common.utils.CollectionUtils;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_METADATA;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_OFFSET;
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String OFFSET_KEY_NAME = "offset";
-    private static final String METADATA_KEY_NAME = "metadata";
 
     private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
             PARTITION_ID,
-            new Field(OFFSET_KEY_NAME, INT64),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING));
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
 
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
             TRANSACTIONAL_ID,
@@ -59,13 +59,28 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
                     "The partitions to write markers for."));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V1 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V1 = TXN_OFFSET_COMMIT_REQUEST_V0;
 
+    // V2 adds the leader epoch to the partition data
+    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V2 = new Schema(
+            PARTITION_ID,
+            COMMITTED_LEADER_EPOCH,
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
+
+    private static final Schema TXN_OFFSET_COMMIT_REQUEST_V2 = new Schema(
+            TRANSACTIONAL_ID,
+            GROUP_ID,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V2)))),
+                    "The partitions to write markers for."));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1};
+        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1, TXN_OFFSET_COMMIT_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
@@ -143,9 +158,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionStruct = (Struct) partitionObj;
                 TopicPartition partition = new TopicPartition(topic, partitionStruct.get(PARTITION_ID));
-                long offset = partitionStruct.getLong(OFFSET_KEY_NAME);
-                String metadata = partitionStruct.getString(METADATA_KEY_NAME);
-                offsets.put(partition, new CommittedOffset(offset, metadata));
+                long offset = partitionStruct.get(COMMITTED_OFFSET);
+                String metadata = partitionStruct.get(COMMITTED_METADATA);
+                Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionStruct, COMMITTED_LEADER_EPOCH);
+                offsets.put(partition, new CommittedOffset(offset, metadata, leaderEpoch));
             }
         }
         this.offsets = offsets;
@@ -193,8 +209,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
                 partitionOffsetStruct.set(PARTITION_ID, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
-                partitionOffsetStruct.set(OFFSET_KEY_NAME, committedOffset.offset);
-                partitionOffsetStruct.set(METADATA_KEY_NAME, committedOffset.metadata);
+                partitionOffsetStruct.set(COMMITTED_OFFSET, committedOffset.offset);
+                partitionOffsetStruct.set(COMMITTED_METADATA, committedOffset.metadata);
+                RequestUtils.setLeaderEpochIfExists(partitionOffsetStruct, COMMITTED_LEADER_EPOCH,
+                        committedOffset.leaderEpoch);
                 partitionOffsetsArray[j++] = partitionOffsetStruct;
             }
             topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionOffsetsArray);
@@ -219,27 +237,22 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static class CommittedOffset {
-        private final long offset;
-        private final String metadata;
+        public final long offset;
+        public final String metadata;
+        public final Optional<Integer> leaderEpoch;
 
-        public CommittedOffset(long offset, String metadata) {
+        public CommittedOffset(long offset, String metadata, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.metadata = metadata;
+            this.leaderEpoch = leaderEpoch;
         }
 
         @Override
         public String toString() {
             return "CommittedOffset(" +
                     "offset=" + offset +
+                    ", leaderEpoch=" + leaderEpoch +
                     ", metadata='" + metadata + "')";
-        }
-
-        public long offset() {
-            return offset;
-        }
-
-        public String metadata() {
-            return metadata;
         }
     }
 

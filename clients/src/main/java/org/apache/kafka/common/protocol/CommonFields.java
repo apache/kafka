@@ -63,4 +63,13 @@ public class CommonFields {
     public static final Field.Str PRINCIPAL_TYPE = new Field.Str("principal_type", "principalType of the Kafka principal");
     public static final Field.Str PRINCIPAL_NAME = new Field.Str("name", "name of the Kafka principal");
 
+    public static final Field.Int64 COMMITTED_OFFSET = new Field.Int64("offset",
+            "Message offset to be committed");
+    public static final Field.NullableStr COMMITTED_METADATA = new Field.NullableStr("metadata",
+            "Any associated metadata the client wants to keep.");
+    public static final Field.Int32 COMMITTED_LEADER_EPOCH = new Field.Int32("leader_epoch",
+            "The leader epoch, if provided is derived from the last consumed record. " +
+                    "This is used by the consumer to check for log truncation and to ensure partition " +
+                    "metadata is up to date following a group rebalance.");
+
 }
