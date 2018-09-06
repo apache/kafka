@@ -397,7 +397,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
-  def testControllerMove(fun: () => Unit): Unit = {
+  private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
