@@ -126,12 +126,12 @@ class ReplicaAlterLogDirsThread(name: String,
 
   override protected def isUncleanLeaderElectionAllowed(topicPartition: TopicPartition): Boolean = true
 
-  override protected def fetchOffsetFromLeader(topicPartition: TopicPartition, timestamp: Long): Long = {
-    val currentReplica = replicaMgr.getReplicaOrException(topicPartition)
-    if (timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-      currentReplica.logStartOffset
-    else
-      currentReplica.logEndOffset.messageOffset
+  override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition): Long = {
+    replicaMgr.getReplicaOrException(topicPartition).logStartOffset
+  }
+
+  override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition): Long = {
+    replicaMgr.getReplicaOrException(topicPartition).logEndOffset.messageOffset
   }
 
   /**

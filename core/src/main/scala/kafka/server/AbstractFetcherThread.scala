@@ -89,8 +89,9 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, PD)]
 
-  protected def fetchOffsetFromLeader(topicPartition: TopicPartition, earliestOrLatest: Long): Long
+  protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition): Long
 
+  protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition): Long
 
   override def shutdown() {
     initiateShutdown()
@@ -455,7 +456,7 @@ abstract class AbstractFetcherThread(name: String,
      *
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
-    val leaderEndOffset = fetchOffsetFromLeader(topicPartition, ListOffsetRequest.LATEST_TIMESTAMP)
+    val leaderEndOffset = fetchLatestOffsetFromLeader(topicPartition)
     if (leaderEndOffset < replicaEndOffset) {
       // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
       // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
@@ -493,7 +494,7 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's log start offset.
        */
-      val leaderStartOffset = fetchOffsetFromLeader(topicPartition, ListOffsetRequest.EARLIEST_TIMESTAMP)
+      val leaderStartOffset = fetchEarliestOffsetFromLeader(topicPartition)
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch = Math.max(leaderStartOffset, replicaEndOffset)

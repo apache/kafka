@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, ListOffsetRequest}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -444,12 +444,12 @@ class AbstractFetcherThreadTest {
       }.toSeq
     }
 
-    override def fetchOffsetFromLeader(topicPartition: TopicPartition, earliestOrLatest: Long): Long = {
-      val state = leaderPartitionState(topicPartition)
-      if (earliestOrLatest == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        state.logStartOffset
-      else
-        state.logEndOffset
+    override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition): Long = {
+      leaderPartitionState(topicPartition).logStartOffset
+    }
+
+    override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition): Long = {
+      leaderPartitionState(topicPartition).logEndOffset
     }
   }
 
