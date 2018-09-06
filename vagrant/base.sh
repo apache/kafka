@@ -63,7 +63,7 @@ get_kafka() {
     scala_version=$2
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz
     # the .tgz above does not include the streams test jar hence we need to get it separately
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
@@ -88,8 +88,8 @@ get_kafka 0.10.0.1 2.11
 chmod a+rw /opt/kafka-0.10.0.1
 get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
-get_kafka 0.10.2.1 2.11
-chmod a+rw /opt/kafka-0.10.2.1
+get_kafka 0.10.2.2 2.11
+chmod a+rw /opt/kafka-0.10.2.2
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
