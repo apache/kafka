@@ -135,7 +135,9 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
           throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
         case _: BadVersionException =>
           throw new ControllerMovedException("Controller moved to another broker. Aborting controller startup procedure")
-        case _: ConnectionLossException => tryCreateControllerZNodeAndIncrementEpoch()
+        case _: ConnectionLossException =>
+          zooKeeperClient.waitUntilConnected()
+          tryCreateControllerZNodeAndIncrementEpoch()
       }
     }
 
@@ -143,12 +145,13 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   private def createControllerEpochZNode(): (Int, Int) = {
-    createControllerEpochRaw(KafkaController.InitialControllerEpoch - 1).resultCode match {
+    createControllerEpochRaw(KafkaController.InitialControllerEpoch).resultCode match {
       case Code.OK =>
-        info(s"Successfully create ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch - 1}")
-        (KafkaController.InitialControllerEpoch - 1, KafkaController.InitialControllerEpochZkVersion - 1)
+        info(s"Successfully create ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch}")
+        (KafkaController.InitialControllerEpoch, KafkaController.InitialControllerEpochZkVersion)
       case Code.NODEEXISTS =>
-        throw new ControllerMovedException(s"Controller moved to another broker while creating ${ControllerEpochZNode.path}. Aborting controller startup procedure")
+        val (epoch, stat) = getControllerEpoch.getOrElse(throw new IllegalStateException(s"${ControllerEpochZNode.path} existed before but goes away while trying to read it"))
+        (epoch, stat.getVersion)
       case code =>
         throw KeeperException.create(code)
     }

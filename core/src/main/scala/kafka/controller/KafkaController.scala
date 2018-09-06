@@ -41,8 +41,8 @@ import scala.collection._
 import scala.util.Try
 
 object KafkaController extends Logging {
-  val InitialControllerEpoch = 1
-  val InitialControllerEpochZkVersion = 1
+  val InitialControllerEpoch = 0
+  val InitialControllerEpochZkVersion = 0
 
   /**
    * ControllerEventThread will shutdown once it sees this event
