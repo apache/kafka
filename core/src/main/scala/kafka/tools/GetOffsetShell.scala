@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
@@ -61,6 +62,10 @@ object GetOffsetShell {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
+    val configOpt = parser.accepts("config", s"Configuration properties file. Useful for configuring authentication. Note that all argument options take precedence over this config.")
+      .withOptionalArg()
+      .describedAs("config file")
+      .ofType(classOf[String])
 
    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting topic offsets.")
@@ -89,7 +94,10 @@ object GetOffsetShell {
     }
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
-    val config = new Properties
+    val config = if (options.has(configOpt))
+      Utils.loadProps(options.valueOf(configOpt))
+    else
+      new Properties
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
     val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
