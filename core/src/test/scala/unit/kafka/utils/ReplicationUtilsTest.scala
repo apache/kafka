@@ -39,7 +39,6 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     zkClient.makeSurePersistentPathExists(TopicZNode.path(topic))
-    zkClient.makeSurePersistentPathExists(ControllerEpochZNode.path)
     val topicPartition = new TopicPartition(topic, partition)
     val leaderAndIsr = LeaderAndIsr(leader, leaderEpoch, isr, 1)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)

@@ -1491,6 +1491,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   /**
    * Deletes the given zk path recursively
    * @param path
+   * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @return true if path gets deleted successfully, false if root path doesn't exist
    * @throws KeeperException if there is an error while deleting the znodes
    */
@@ -1693,7 +1694,7 @@ object KafkaZkClient {
 
 
   private def controllerZkVersionCheck(version: Int): Option[ZkVersionCheck] = {
-    if (version < 0)
+    if (version < KafkaController.InitialControllerEpochZkVersion)
       None
     else
       Some(ZkVersionCheck(ControllerEpochZNode.path, version))
