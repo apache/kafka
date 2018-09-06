@@ -13,11 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
-from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsUpgradeTestJobRunnerService
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, DEV_VERSION
 import random
+from ducktape.mark import parametrize
+from kafkatest.services.streams import StreamsSmokeTestDriverService, \
+    StreamsUpgradeTestJobRunnerService
+from kafkatest.tests.kafka_test import KafkaTest
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, \
+    DEV_VERSION
+
 
 class StreamsUpgradeTest(KafkaTest):
     """
@@ -77,6 +80,7 @@ class StreamsUpgradeTest(KafkaTest):
 
     #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
     @parametrize(new_version=str(LATEST_0_10_2))
+    @parametrize(new_version=str(DEV_VERSION))
     def test_metadata_upgrade(self, new_version):
         """
         Starts 3 KafkaStreams instances with version 0.10.0, and upgrades one-by-one to <new_version>
