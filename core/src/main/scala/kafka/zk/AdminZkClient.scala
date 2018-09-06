@@ -140,6 +140,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
     )
 
+    val allBrokerIds = zkClient.getSortedBrokerList()
+    partitionReplicaAssignment.values.foreach ( reps =>
+      if (reps.filterNot(allBrokerIds.contains(_)).size == reps.size)
+        throw new InvalidReplicaAssignmentException("At lest one replica of partition should be alive.")
+    )
+
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update)
       LogConfig.validate(config)
