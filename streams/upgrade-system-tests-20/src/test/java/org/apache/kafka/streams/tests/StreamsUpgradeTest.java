@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.util.Properties;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -26,13 +27,9 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-import java.util.Properties;
-
 public class StreamsUpgradeTest {
 
-    /**
-     * This test cannot be executed, as long as Kafka 2.1 is not released
-     */
+
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
