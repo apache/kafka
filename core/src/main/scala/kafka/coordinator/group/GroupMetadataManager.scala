@@ -510,7 +510,9 @@ class GroupMetadataManager(brokerId: Int,
 
       case Some(log) =>
         var currOffset = log.logStartOffset
-        lazy val buffer = ByteBuffer.allocate(config.loadBufferSize)
+
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
@@ -525,15 +527,19 @@ class GroupMetadataManager(brokerId: Int,
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
               val sizeInBytes = fileRecords.sizeInBytes
-              val recordsBuffer = if (sizeInBytes > buffer.capacity) {
-                warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($sizeInBytes bytes) than configured offsets.load.buffer.size")
-                ByteBuffer.allocate(sizeInBytes)
+              val bytesNeeded = Math.max(config.loadBufferSize, sizeInBytes)
+
+              if (buffer.capacity < bytesNeeded) {
+                if (config.loadBufferSize < bytesNeeded)
+                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than configured offsets.load.buffer.size")
+
+                buffer = ByteBuffer.allocate(bytesNeeded)
               } else {
                 buffer.clear()
-                buffer
               }
-              fileRecords.readInto(recordsBuffer, 0)
-              MemoryRecords.readableRecords(recordsBuffer)
+
+              fileRecords.readInto(buffer, 0)
+              MemoryRecords.readableRecords(buffer)
           }
 
           memRecords.batches.asScala.foreach { batch =>
