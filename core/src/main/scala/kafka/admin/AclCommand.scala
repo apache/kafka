@@ -104,19 +104,12 @@ object AclCommand extends Logging {
     }
 
     def addAcls(): Unit = {
-      validateResourcePatternType(opts)
+      val resourceToAcl = getResourceToAcls(opts)
       withAdminClient(opts) { adminClient =>
-        val resourceToAcl = getResourceFilterToAcls(opts).map {
-          case (filter, acls) =>
-            new ResourcePattern(filter.resourceType(), filter.name(), filter.patternType()) -> acls
-        }
-
-        if (resourceToAcl.values.exists(_.isEmpty))
-          CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
-
         for ((resource, acls) <- resourceToAcl) {
-          println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          val aclBindings = acls.map(acl => new AclBinding(resource, getAccessControlEntry(acl))).asJavaCollection
+          val resourcePattern = resource.toPattern
+          println(s"Adding ACLs for resource `$resourcePattern`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+          val aclBindings = acls.map(acl => new AclBinding(resourcePattern, getAccessControlEntry(acl))).asJavaCollection
           adminClient.createAcls(aclBindings).all().get()
         }
 
@@ -212,16 +205,8 @@ object AclCommand extends Logging {
     }
 
     def addAcls(): Unit = {
-      validateResourcePatternType(opts)
+      val resourceToAcl = getResourceToAcls(opts)
       withAuthorizer() { authorizer =>
-        val resourceToAcl = getResourceFilterToAcls(opts).map {
-          case (filter, acls) =>
-            Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), filter.patternType()) -> acls
-        }
-
-        if (resourceToAcl.values.exists(_.isEmpty))
-          CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
-
         for ((resource, acls) <- resourceToAcl) {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           authorizer.addAcls(acls, resource)
@@ -276,10 +261,20 @@ object AclCommand extends Logging {
         .filter { case (resource, acl) => filter.matches(resource.toPattern) }
   }
 
-  private def validateResourcePatternType(opts: AclCommandOptions): Unit = {
+  private def getResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
     val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
     if (!patternType.isSpecific)
       CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
+
+    val resourceToAcl = getResourceFilterToAcls(opts).map {
+      case (filter, acls) =>
+        Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), filter.patternType()) -> acls
+    }
+
+    if (resourceToAcl.values.exists(_.isEmpty))
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
+
+    resourceToAcl
   }
 
   private def getResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[Acl]] = {
