@@ -150,6 +150,9 @@ do
   fi
 done
 
+# CONFLUENT: classpath addition for releases with LSB-style layout
+CLASSPATH="$CLASSPATH":"$base_dir/share/java/kafka/*"
+
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   if should_include_file "$file"; then
