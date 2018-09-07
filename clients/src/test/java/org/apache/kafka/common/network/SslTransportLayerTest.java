@@ -27,7 +27,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
@@ -64,6 +63,7 @@ import static org.junit.Assert.fail;
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
+    private static Time time = Time.SYSTEM;
 
     private NioEchoServer server;
     private Selector selector;
@@ -82,7 +82,7 @@ public class SslTransportLayerTest {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @After
@@ -204,7 +204,7 @@ public class SslTransportLayerTest {
         };
         serverChannelBuilder.configure(sslServerConfigs);
         server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL,
-                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder, null);
+                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder, null, time);
         server.start();
 
         createSelector(sslClientConfigs);
@@ -786,7 +786,7 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(sslClientConfigs);
-            this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+            this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -829,7 +829,7 @@ public class SslTransportLayerTest {
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
                     SecurityProtocol.SSL, new TestSecurityConfig(sslServerConfigs),
-                    "localhost", serverChannelBuilder, null);
+                    "localhost", serverChannelBuilder, null, time);
             server.start();
             createSelector(sslClientConfigs);
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -855,7 +855,7 @@ public class SslTransportLayerTest {
         String node = "0";
         server = createEchoServer(securityProtocol);
         clientChannelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", clientChannelBuilder, new LogContext());
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -895,7 +895,7 @@ public class SslTransportLayerTest {
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
                 false, securityProtocol, config, null, null);
         server = new NioEchoServer(listenerName, securityProtocol, config,
-                "localhost", serverChannelBuilder, null);
+                "localhost", serverChannelBuilder, null, time);
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
@@ -955,7 +955,7 @@ public class SslTransportLayerTest {
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
                 false, securityProtocol, config, null, null);
         server = new NioEchoServer(listenerName, securityProtocol, config,
-                "localhost", serverChannelBuilder, null);
+                "localhost", serverChannelBuilder, null, time);
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
@@ -1027,12 +1027,12 @@ public class SslTransportLayerTest {
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         this.channelBuilder = channelBuilder;
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs), null);
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs), null, time);
     }
 
     private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {

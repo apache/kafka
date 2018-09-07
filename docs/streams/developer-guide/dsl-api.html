@@ -654,6 +654,7 @@
                             caveats.
                             (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#print--">details</a>)</p>
                             <p>Calling <code class="docutils literal"><span class="pre">print()</span></code> is the same as calling <code class="docutils literal"><span class="pre">foreach((key,</span> <span class="pre">value)</span> <span class="pre">-&gt;</span> <span class="pre">System.out.println(key</span> <span class="pre">+</span> <span class="pre">&quot;,</span> <span class="pre">&quot;</span> <span class="pre">+</span> <span class="pre">value))</span></code></p>
+                            <p><code class="docutils literal"><span class="pre">print</span></code> is mainly for debugging/testing purposes, and it will try to flush on each record print. Hence it <strong>should not</strong> be used for production usage if performance requirements are concerned.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="c1">// print to sysout</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">print</span><span class="o">();</span>

@@ -359,6 +359,9 @@ public interface KStream<K, V> {
 
     /**
      * Print the records of this KStream using the options provided by {@link Printed}
+     * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
+     * It <em>SHOULD NOT</em> be used for production usage if performance requirements are concerned.
+     *
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);

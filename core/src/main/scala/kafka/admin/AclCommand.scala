@@ -88,7 +88,7 @@ object AclCommand extends Logging {
 
   private def addAcl(opts: AclCommandOptions) {
     val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
-    if (patternType == PatternType.MATCH || patternType == PatternType.ANY)
+    if (!patternType.isSpecific)
       CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
     withAuthorizer(opts) { authorizer =>

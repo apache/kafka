@@ -138,8 +138,12 @@ trait SaslSetup {
     props
   }
 
-  def jaasClientLoginModule(clientSaslMechanism: String): String =
-    JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  def jaasClientLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
+    if (serviceName.isDefined)
+      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
+    else
+      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")
