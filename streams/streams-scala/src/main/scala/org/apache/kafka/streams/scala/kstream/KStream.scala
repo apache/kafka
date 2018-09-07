@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
-import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
+import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -297,6 +297,41 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
                         stateStoreNames: String*): KStream[K1, V1] =
     inner.transform(transformerSupplier, stateStoreNames: _*)
+
+
+  /**
+   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+   * can be altered arbitrarily).
+   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
+   * and computes zero or more output records.
+   * In order to assign a state, the state must be created and registered
+   * beforehand via stores added via `addStateStore` or `addGlobalStore`
+   * before they can be connected to the `Transformer`
+   *
+   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer` (this function variant expects a transformer that returns a (key, value) tuple)
+   * @param stateStoreNames     the names of the state stores used by the processor
+   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
+   * @see `org.apache.kafka.streams.kstream.KStream#transform`
+   */
+  def transform[K1, V1](transformerSupplier: () => Transformer[K, V, (K1, V1)],
+                        stateStoreNames: String*): KStream[K1, V1] = {
+    val transformerSupplierJ = new TransformerSupplier[K, V, KeyValue[K1, V1]] {
+      override def get(): Transformer[K, V, KeyValue[K1, V1]] = {
+        val scalaTransformer = transformerSupplier()
+        new Transformer[K, V, KeyValue[K1, V1]] {
+          override def init(context: ProcessorContext): Unit = scalaTransformer.init(context)
+          override def transform(key: K, value: V): KeyValue[K1, V1] = {
+            scalaTransformer.transform(key, value) match {
+              case (k1, v1) => KeyValue.pair(k1, v1)
+              case _ => null
+            }
+          }
+          override def close(): Unit = scalaTransformer.close()
+        }
+      }
+    }
+    inner.transform(transformerSupplierJ, stateStoreNames: _*)
+  }
 
   /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
