@@ -2610,7 +2610,7 @@ public class FetcherTest {
                         Errors.NONE,
                         partitionInfo.partition(),
                         partitionInfo.leader(),
-                        partitionInfo.leaderEpoch(),
+                        Optional.empty(),
                         Arrays.asList(partitionInfo.replicas()),
                         Arrays.asList(partitionInfo.inSyncReplicas()),
                         Arrays.asList(partitionInfo.offlineReplicas())));

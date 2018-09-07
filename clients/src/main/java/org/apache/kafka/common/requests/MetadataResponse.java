@@ -380,7 +380,6 @@ public class MetadataResponse extends AbstractResponse {
                             metadata.topic,
                             partitionMetadata.partition,
                             partitionMetadata.leader,
-                            partitionMetadata.leaderEpoch,
                             partitionMetadata.replicas.toArray(new Node[0]),
                             partitionMetadata.isr.toArray(new Node[0]),
                             partitionMetadata.offlineReplicas.toArray(new Node[0])));
