@@ -497,9 +497,7 @@ sealed trait ZkAclStore {
 
 object ZkAclStore {
   private val storesByType: Map[PatternType, ZkAclStore] = PatternType.values
-    .filter(patternType => patternType != PatternType.MATCH)
-    .filter(patternType => patternType != PatternType.ANY)
-    .filter(patternType => patternType != PatternType.UNKNOWN)
+    .filter(_.isSpecific)
     .map(patternType => (patternType, create(patternType)))
     .toMap
 
