@@ -1264,6 +1264,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
      * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
+     * @throws org.apache.kafka.clients.consumer.OffsetOutOfRangeException if the offset is out of range
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
      *             or if there is an active group with the same groupId which is using group management.
