@@ -278,7 +278,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         taskInitialized = true;
 
-        idleStartTime = RecordQueue.NOT_KNOWN;
+        idleStartTime = RecordQueue.UNKNOWN;
     }
 
     /**
@@ -305,10 +305,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     boolean isProcessable(final long now) {
         if (partitionGroup.allPartitionsBuffered()) {
-            idleStartTime = RecordQueue.NOT_KNOWN;
+            idleStartTime = RecordQueue.UNKNOWN;
             return true;
         } else if (partitionGroup.numBuffered() > 0) {
-            if (idleStartTime == RecordQueue.NOT_KNOWN) {
+            if (idleStartTime == RecordQueue.UNKNOWN) {
                 idleStartTime = now;
             }
 
@@ -465,8 +465,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             } else {
                 consumer.commitSync(consumedOffsetsAndMetadata);
             }
-        } catch (final CommitFailedException | ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final CommitFailedException | ProducerFencedException error) {
+            throw new TaskMigratedException(this, error);
         }
 
         commitNeeded = false;
@@ -787,7 +787,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
-        if (timestamp == RecordQueue.NOT_KNOWN) {
+        if (timestamp == RecordQueue.UNKNOWN) {
             return false;
         } else {
             final boolean punctuated = streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);

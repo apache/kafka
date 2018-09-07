@@ -875,10 +875,13 @@ public class StreamThread extends Thread {
 
                 if (maybePunctuate() || maybeCommit()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else if (timeSinceLastPoll < maxPollTimeMs / 2) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                    break;
                 } else if (processed > 0) {
                     numIterations++;
                 }
-            } while (processed > 0 && timeSinceLastPoll < maxPollTimeMs / 2);
+            } while (processed > 0);
         }
 
         // update standby tasks and maybe commit the standby tasks as well
@@ -1002,7 +1005,7 @@ public class StreamThread extends Thread {
     boolean maybeCommit() {
         int committed = 0;
 
-        if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
+        if (commitTimeMs >= 0 && now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
@@ -1025,9 +1028,7 @@ public class StreamThread extends Thread {
 
             lastCommitMs = now;
             processStandbyRecords = true;
-        }
-
-        if (committed == 0) {
+        } else {
             final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (commitPerRequested > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, now);
