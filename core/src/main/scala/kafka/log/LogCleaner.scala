@@ -600,10 +600,10 @@ private[log] class Cleaner(val id: Int,
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
-      stats.readMessages(result.messagesRead, result.bytesRead)
+      stats.readMessages(result.messagesRead, result.totalBytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
-      position += result.bytesRead
+      position += result.totalBytesRead
 
       // if any messages are to be retained, write them out
       val outputBuffer = result.output
@@ -620,8 +620,8 @@ private[log] class Cleaner(val id: Int,
       }
 
       // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
-      // `result.bytesRead` contains bytes from `messagesRead` and any discarded batches.
-      if (readBuffer.limit() > 0 && result.bytesRead == 0)
+      // `result.totalBytesRead` contains bytes from `messagesRead` and any discarded batches.
+      if (readBuffer.limit() > 0 && result.totalBytesRead == 0)
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()

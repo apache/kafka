@@ -593,7 +593,7 @@ public class MemoryRecordsTest {
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
                               BufferSupplier.NO_CACHING);
 
-            buffer.position(buffer.position() + result.bytesRead);
+            buffer.position(buffer.position() + result.totalBytesRead);
             result.output.flip();
 
             if (output != result.output)
@@ -671,7 +671,7 @@ public class MemoryRecordsTest {
 
         assertEquals(7, result.messagesRead);
         assertEquals(4, result.messagesRetained);
-        assertEquals(buffer.limit(), result.bytesRead);
+        assertEquals(buffer.limit(), result.totalBytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp);

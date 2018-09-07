@@ -157,21 +157,48 @@ public class MemoryRecords extends AbstractRecords {
         return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
     }
 
+    private static class FilteredBatchesMetadata {
+        long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        long shallowOffsetOfMaxTimestamp = -1L;
+        long maxOffset = -1L;
+        int messagesRead = 0;
+        int messagesRetained = 0;
+        int bytesRead = 0;
+        int bytesRetained = 0;
+
+        private void validateBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset) {
+            if (maxTimestamp != RecordBatch.NO_TIMESTAMP && shallowOffsetOfMaxTimestamp < 0)
+                throw new IllegalArgumentException("shallowOffset undefined for maximum timestamp " + maxTimestamp);
+            if (maxOffset < 0)
+                throw new IllegalArgumentException("maxOffset undefined");
+        }
+
+        public void addRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
+                                             int messagesRead, int bytesRead, int messagesRetained, int bytesRetained) {
+            validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
+
+            if (maxTimestamp > this.maxTimestamp) {
+                this.maxTimestamp = maxTimestamp;
+                this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
+            }
+            this.maxOffset = Math.max(maxOffset, this.maxOffset);
+            this.messagesRead += messagesRead;
+            this.messagesRetained += messagesRetained;
+            this.bytesRetained += bytesRetained;
+        }
+    }
+
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
                                          BufferSupplier decompressionBufferSupplier) {
-        long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        long maxOffset = -1L;
-        long shallowOffsetOfMaxTimestamp = -1L;
-        int messagesRead = 0;
-        int bytesRead = 0; // bytes processed from `batches`
-        int messagesRetained = 0;
-        int bytesRetained = 0;
-
+        FilteredBatchesMetadata filteredBatchesMetadata = new FilteredBatchesMetadata();
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
+        int totalBytesRead = 0; // bytes processed from `batches`
 
         for (MutableRecordBatch batch : batches) {
-            bytesRead += batch.sizeInBytes();
+            long maxOffset = -1L;
+            int messagesRead = 0;
+            totalBytesRead += batch.sizeInBytes();
 
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
             if (batchRetention == BatchRetention.DELETE)
@@ -210,20 +237,12 @@ public class MemoryRecords extends AbstractRecords {
             if (!retainedRecords.isEmpty()) {
                 if (writeOriginalBatch) {
                     batch.writeTo(bufferOutputStream);
-                    messagesRetained += retainedRecords.size();
-                    bytesRetained += batch.sizeInBytes();
-                    if (batch.maxTimestamp() > maxTimestamp) {
-                        maxTimestamp = batch.maxTimestamp();
-                        shallowOffsetOfMaxTimestamp = batch.lastOffset();
-                    }
+                    filteredBatchesMetadata.addRetainedBatchMetadata(batch.maxTimestamp(), batch.lastOffset(),
+                            batch.lastOffset(), messagesRead, batch.sizeInBytes(), retainedRecords.size(), batch.sizeInBytes());
                 } else {
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
-
-                    messagesRetained += retainedRecords.size();
-                    bytesRetained += filteredBatchSize;
-
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                         log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
                                         "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
@@ -231,10 +250,8 @@ public class MemoryRecords extends AbstractRecords {
                                 partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
                     MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                    if (info.maxTimestamp > maxTimestamp) {
-                        maxTimestamp = info.maxTimestamp;
-                        shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
-                    }
+                    filteredBatchesMetadata.addRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
+                            maxOffset, messagesRead, batch.sizeInBytes(), retainedRecords.size(), filteredBatchSize);
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
@@ -245,18 +262,18 @@ public class MemoryRecords extends AbstractRecords {
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
                         batch.isTransactional(), batch.isControlBatch());
+                filteredBatchesMetadata.addRetainedBatchMetadata(batch.maxTimestamp(), batch.lastOffset(),
+                        batch.lastOffset(), messagesRead, batch.sizeInBytes(), retainedRecords.size(), 0);
             }
 
             // If we had to allocate a new buffer to fit the filtered output (see KAFKA-5316), return early to
             // avoid the need for additional allocations.
             ByteBuffer outputBuffer = bufferOutputStream.buffer();
             if (outputBuffer != destinationBuffer)
-                return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
-                        maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+                return new FilterResult(outputBuffer, totalBytesRead, filteredBatchesMetadata);
         }
 
-        return new FilterResult(destinationBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
-                maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+        return new FilterResult(destinationBuffer, totalBytesRead, filteredBatchesMetadata);
     }
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
@@ -371,31 +388,24 @@ public class MemoryRecords extends AbstractRecords {
     public static class FilterResult {
         public final ByteBuffer output;
         public final int messagesRead;
-        public final int bytesRead;
+        public final int totalBytesRead;
         public final int messagesRetained;
         public final int bytesRetained;
         public final long maxOffset;
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
-        // Note that `bytesRead` should contain only bytes from batches that have been processed,
+        // Note that `totalBytesRead` in `FilteredBatchesMetadata` should contain only bytes from batches that have been processed,
         // i.e. bytes from `messagesRead` and any discarded batches.
-        public FilterResult(ByteBuffer output,
-                            int messagesRead,
-                            int bytesRead,
-                            int messagesRetained,
-                            int bytesRetained,
-                            long maxOffset,
-                            long maxTimestamp,
-                            long shallowOffsetOfMaxTimestamp) {
+        public FilterResult(ByteBuffer output, int totalBytesRead, FilteredBatchesMetadata filteredBatchesMetadata) {
             this.output = output;
-            this.messagesRead = messagesRead;
-            this.bytesRead = bytesRead;
-            this.messagesRetained = messagesRetained;
-            this.bytesRetained = bytesRetained;
-            this.maxOffset = maxOffset;
-            this.maxTimestamp = maxTimestamp;
-            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
+            this.messagesRead = filteredBatchesMetadata.messagesRead;
+            this.totalBytesRead = totalBytesRead;
+            this.messagesRetained = filteredBatchesMetadata.messagesRetained;
+            this.bytesRetained = filteredBatchesMetadata.bytesRetained;
+            this.maxOffset = filteredBatchesMetadata.maxOffset;
+            this.maxTimestamp = filteredBatchesMetadata.maxTimestamp;
+            this.shallowOffsetOfMaxTimestamp = filteredBatchesMetadata.shallowOffsetOfMaxTimestamp;
         }
     }
 
