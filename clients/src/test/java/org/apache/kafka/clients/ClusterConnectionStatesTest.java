@@ -226,4 +226,11 @@ public class ClusterConnectionStatesTest {
         assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()),
             connectionStates.pollDelayMs(nodeId1, time.milliseconds()));
     }
+
+    @Test
+    public void testIsDisconnectedWithNonExistentIds() {
+        boolean disconnected = connectionStates.isDisconnected("non_existent_id");
+
+        assertTrue(disconnected);
+    }
 }
