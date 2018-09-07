@@ -70,8 +70,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     // V2 adds the leader epoch to the partition data
     private static final Field PARTITIONS_V2 = PARTITIONS.withFields(
             PARTITION_ID,
-            COMMITTED_LEADER_EPOCH,
             COMMITTED_OFFSET,
+            COMMITTED_LEADER_EPOCH,
             COMMITTED_METADATA);
 
     private static final Field TOPICS_V2 = TOPICS.withFields(
@@ -141,7 +141,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     public TxnOffsetCommitRequest(short version, String transactionalId, String consumerGroupId, long producerId,
                                   short producerEpoch, Map<TopicPartition, CommittedOffset> offsets) {
-        super(version);
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.transactionalId = transactionalId;
         this.consumerGroupId = consumerGroupId;
         this.producerId = producerId;
@@ -150,7 +150,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.consumerGroupId = struct.get(GROUP_ID);
         this.producerId = struct.get(PRODUCER_ID);

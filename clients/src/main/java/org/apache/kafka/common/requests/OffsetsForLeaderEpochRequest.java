@@ -115,12 +115,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     public OffsetsForLeaderEpochRequest(Map<TopicPartition, PartitionData> epochsByPartition, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         this.epochsByPartition = epochsByPartition;
     }
 
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         epochsByPartition = new HashMap<>();
         for (Object topicAndEpochsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;

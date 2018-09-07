@@ -141,13 +141,13 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FETCH, version);
         this.groupId = groupId;
         this.partitions = partitions;
     }
 
     public OffsetFetchRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FETCH, version);
 
         Object[] topicArray = struct.get(TOPICS);
         if (topicArray != null) {

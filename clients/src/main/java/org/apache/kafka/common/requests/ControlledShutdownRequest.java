@@ -64,12 +64,12 @@ public class ControlledShutdownRequest extends AbstractRequest {
     private final int brokerId;
 
     private ControlledShutdownRequest(int brokerId, short version) {
-        super(version);
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
         this.brokerId = brokerId;
     }
 
     public ControlledShutdownRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
         brokerId = struct.getInt(BROKER_ID_KEY_NAME);
     }
 

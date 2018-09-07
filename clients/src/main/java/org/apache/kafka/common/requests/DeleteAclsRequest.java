@@ -96,14 +96,14 @@ public class DeleteAclsRequest extends AbstractRequest {
     private final List<AclBindingFilter> filters;
 
     DeleteAclsRequest(short version, List<AclBindingFilter> filters) {
-        super(version);
+        super(ApiKeys.DELETE_ACLS, version);
         this.filters = filters;
 
         validate(version, filters);
     }
 
     public DeleteAclsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DELETE_ACLS, version);
         this.filters = new ArrayList<>();
         for (Object filterStructObj : struct.getArray(FILTERS)) {
             Struct filterStruct = (Struct) filterStructObj;

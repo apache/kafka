@@ -364,7 +364,7 @@ public class FetchRequest extends AbstractRequest {
     private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
                          Map<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel,
                          List<TopicPartition> toForget, FetchMetadata metadata) {
-        super(version);
+        super(ApiKeys.FETCH, version);
         this.replicaId = replicaId;
         this.maxWait = maxWait;
         this.minBytes = minBytes;
@@ -376,7 +376,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public FetchRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.FETCH, version);
         replicaId = struct.get(REPLICA_ID);
         maxWait = struct.get(MAX_WAIT_TIME);
         minBytes = struct.get(MIN_BYTES);

@@ -137,13 +137,13 @@ public class MetadataRequest extends AbstractRequest {
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
     public MetadataRequest(List<String> topics, boolean allowAutoTopicCreation, short version) {
-        super(version);
+        super(ApiKeys.METADATA, version);
         this.topics = topics;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     public MetadataRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.METADATA, version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
             topics = new ArrayList<>();

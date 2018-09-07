@@ -768,7 +768,7 @@ public class RequestResponseTest {
         } else if (version == 1) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
-                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, Optional.empty()));
+                    new ListOffsetRequest.PartitionData(1000000L, Optional.empty()));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(offsetData)
@@ -776,7 +776,7 @@ public class RequestResponseTest {
         } else if (version == 2) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
-                    ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(1000000L, Optional.of(5)));
+                    new ListOffsetRequest.PartitionData(1000000L, Optional.of(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(offsetData)

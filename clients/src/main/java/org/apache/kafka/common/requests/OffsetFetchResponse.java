@@ -94,8 +94,8 @@ public class OffsetFetchResponse extends AbstractResponse {
     // V5 adds the leader epoch to the committed offset
     private static final Field PARTITIONS_V5 = PARTITIONS.withFields(
             PARTITION_ID,
-            COMMITTED_LEADER_EPOCH,
             COMMITTED_OFFSET,
+            COMMITTED_LEADER_EPOCH,
             COMMITTED_METADATA,
             ERROR_CODE);
 

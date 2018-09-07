@@ -118,8 +118,8 @@ public class OffsetCommitRequest extends AbstractRequest {
     // V6 adds the leader epoch to the partition data
     private static final Field PARTITIONS_V6 = PARTITIONS.withFields(
             PARTITION_ID,
-            COMMITTED_LEADER_EPOCH,
             COMMITTED_OFFSET,
+            COMMITTED_LEADER_EPOCH,
             COMMITTED_METADATA);
 
     private static final Field TOPICS_V6 = TOPICS.withFields(
@@ -237,7 +237,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     private OffsetCommitRequest(String groupId, int generationId, String memberId, long retentionTime,
                                 Map<TopicPartition, PartitionData> offsetData, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_COMMIT, version);
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;
@@ -246,7 +246,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     public OffsetCommitRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.OFFSET_COMMIT, versionId);
 
         groupId = struct.get(GROUP_ID);
 

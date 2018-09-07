@@ -204,8 +204,7 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def fetchOffsetFromLeader(topicPartition: TopicPartition, earliestOrLatest: Long): Long = {
-    val requestPartitionData = ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(earliestOrLatest,
-      Optional.empty())
+    val requestPartitionData = new ListOffsetRequest.PartitionData(earliestOrLatest, Optional.empty[Integer]())
     val requestPartitions = Map(topicPartition -> requestPartitionData)
     val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
       .setTargetTimes(requestPartitions.asJava)

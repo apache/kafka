@@ -104,7 +104,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
 
     public DeleteRecordsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DELETE_RECORDS, version);
         partitionOffsets = new HashMap<>();
         for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicStruct = (Struct) topicStructObj;
@@ -120,7 +120,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     }
 
     public DeleteRecordsRequest(int timeout, Map<TopicPartition, Long> partitionOffsets, short version) {
-        super(version);
+        super(ApiKeys.DELETE_RECORDS, version);
         this.timeout = timeout;
         this.partitionOffsets = partitionOffsets;
     }

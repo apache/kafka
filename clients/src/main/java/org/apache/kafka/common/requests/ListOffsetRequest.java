@@ -196,8 +196,8 @@ public class ListOffsetRequest extends AbstractRequest {
             this(timestamp, maxNumOffsets, Optional.empty());
         }
 
-        public static PartitionData withCurrentLeaderEpoch(long timestamp, Optional<Integer> currentLeaderEpoch) {
-            return new PartitionData(timestamp, 1, currentLeaderEpoch);
+        public PartitionData(long timestamp, Optional<Integer> currentLeaderEpoch) {
+            this(timestamp, 1, currentLeaderEpoch);
         }
 
         @Override
@@ -219,7 +219,7 @@ public class ListOffsetRequest extends AbstractRequest {
                               Map<TopicPartition, PartitionData> targetTimes,
                               IsolationLevel isolationLevel,
                               short version) {
-        super(version);
+        super(ApiKeys.LIST_OFFSETS, version);
         this.replicaId = replicaId;
         this.isolationLevel = isolationLevel;
         this.partitionTimestamps = targetTimes;
@@ -227,7 +227,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public ListOffsetRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.LIST_OFFSETS, version);
         Set<TopicPartition> duplicatePartitions = new HashSet<>();
         replicaId = struct.get(REPLICA_ID);
         isolationLevel = struct.hasField(ISOLATION_LEVEL) ?

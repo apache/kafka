@@ -215,8 +215,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.LIST_OFFSETS =>
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-            .setTargetTimes(Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
-              0L, Optional.of(15))).asJava)
+            .setTargetTimes(Map(tp -> new ListOffsetRequest.PartitionData(
+              0L, Optional.of[Integer](15))).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue,

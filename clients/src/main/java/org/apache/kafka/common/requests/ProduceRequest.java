@@ -196,7 +196,7 @@ public class ProduceRequest extends AbstractRequest {
     private boolean idempotent = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
-        super(version);
+        super(ApiKeys.PRODUCE, version);
         this.acks = acks;
         this.timeout = timeout;
 
@@ -216,7 +216,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public ProduceRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.PRODUCE, version);
         partitionRecords = new HashMap<>();
         for (Object topicDataObj : struct.getArray(TOPIC_DATA_KEY_NAME)) {
             Struct topicData = (Struct) topicDataObj;

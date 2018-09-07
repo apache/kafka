@@ -33,8 +33,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   def testListOffsetsErrorCodes(): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
-    val targetTimes = Map(partition -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
-      ListOffsetRequest.EARLIEST_TIMESTAMP, Optional.of(0))).asJava
+    val targetTimes = Map(partition -> new ListOffsetRequest.PartitionData(
+      ListOffsetRequest.EARLIEST_TIMESTAMP, Optional.of[Integer](0))).asJava
 
     val consumerRequest = ListOffsetRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)

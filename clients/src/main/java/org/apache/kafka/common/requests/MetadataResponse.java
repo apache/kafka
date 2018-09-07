@@ -38,6 +38,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
@@ -83,8 +84,6 @@ public class MetadataResponse extends AbstractResponse {
     // partition level fields
     private static final Field.Int32 LEADER = new Field.Int32("leader",
             "The id of the broker acting as leader for this partition.");
-    private static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch",
-            "The current leader epoch");
     private static final Field.Array REPLICAS = new Field.Array("replicas", INT32,
             "The set of all nodes that host this partition.");
     private static final Field.Array ISR = new Field.Array("isr", INT32,

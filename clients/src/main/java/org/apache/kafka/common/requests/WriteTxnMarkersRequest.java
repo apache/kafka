@@ -153,13 +153,13 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     private final List<TxnMarkerEntry> markers;
 
     private WriteTxnMarkersRequest(short version, List<TxnMarkerEntry> markers) {
-        super(version);
+        super(ApiKeys.WRITE_TXN_MARKERS, version);
 
         this.markers = markers;
     }
 
     public WriteTxnMarkersRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.WRITE_TXN_MARKERS, version);
         List<TxnMarkerEntry> markers = new ArrayList<>();
         Object[] markersArray = struct.getArray(TXN_MARKERS_KEY_NAME);
         for (Object markerObj : markersArray) {

@@ -91,7 +91,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public AlterReplicaLogDirsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         partitionDirs = new HashMap<>();
         for (Object logDirStructObj : struct.getArray(LOG_DIRS_KEY_NAME)) {
             Struct logDirStruct = (Struct) logDirStructObj;
@@ -108,7 +108,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public AlterReplicaLogDirsRequest(Map<TopicPartition, String> partitionDirs, short version) {
-        super(version);
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
         this.partitionDirs = partitionDirs;
     }
 

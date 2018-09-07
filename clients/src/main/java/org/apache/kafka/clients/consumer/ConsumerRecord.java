@@ -273,11 +273,15 @@ public class ConsumerRecord<K, V> {
 
     @Override
     public String toString() {
-        return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
+        return "ConsumerRecord(topic = " + topic
+               + ", partition = " + partition
+               + ", leaderEpoch = " + leaderEpoch.orElse(null)
+               + ", offset = " + offset
                + ", " + timestampType + " = " + timestamp
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers
-               + ", key = " + key + ", value = " + value + ")";
+               + ", key = " + key
+               + ", value = " + value + ")";
     }
 }

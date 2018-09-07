@@ -273,7 +273,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createListOffsetsRequest = {
     requests.ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(
-      Map(tp -> ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(0L, Optional.of(27))).asJava).
+      Map(tp -> new ListOffsetRequest.PartitionData(0L, Optional.of[Integer](27))).asJava).
       build()
   }
 

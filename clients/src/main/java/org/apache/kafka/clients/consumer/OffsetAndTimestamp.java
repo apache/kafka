@@ -25,7 +25,7 @@ import java.util.Optional;
 public final class OffsetAndTimestamp {
     private final long timestamp;
     private final long offset;
-    private final Integer leaderEpoch;
+    private final Optional<Integer> leaderEpoch;
 
     public OffsetAndTimestamp(long offset, long timestamp) {
         this(offset, timestamp, Optional.empty());
@@ -40,7 +40,7 @@ public final class OffsetAndTimestamp {
 
         this.offset = offset;
         this.timestamp = timestamp;
-        this.leaderEpoch = leaderEpoch.orElse(null);
+        this.leaderEpoch = leaderEpoch;
     }
 
     public long timestamp() {
@@ -58,13 +58,13 @@ public final class OffsetAndTimestamp {
      * @return The leader epoch or empty if it is not known
      */
     public Optional<Integer> leaderEpoch() {
-        return Optional.ofNullable(leaderEpoch);
+        return leaderEpoch;
     }
 
     @Override
     public String toString() {
         return "(timestamp=" + timestamp +
-                ", leaderEpoch=" + leaderEpoch +
+                ", leaderEpoch=" + leaderEpoch.orElse(null) +
                 ", offset=" + offset + ")";
     }
 

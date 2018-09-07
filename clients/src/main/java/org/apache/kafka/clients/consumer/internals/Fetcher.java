@@ -688,7 +688,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 Node node = info.leader();
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
                         timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
-                ListOffsetRequest.PartitionData partitionData = ListOffsetRequest.PartitionData.withCurrentLeaderEpoch(
+                ListOffsetRequest.PartitionData partitionData = new ListOffsetRequest.PartitionData(
                         entry.getValue(), Optional.empty());
                 topicData.put(entry.getKey(), partitionData);
             }
@@ -704,10 +704,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @param requireTimestamp  True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<ListOffsetResult> sendListOffsetRequest(
-            final Node node,
-            final Map<TopicPartition, ListOffsetRequest.PartitionData> timestampsToSearch,
-            boolean requireTimestamp) {
+    private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
+                                                                  final Map<TopicPartition, ListOffsetRequest.PartitionData> timestampsToSearch,
+                                                                  boolean requireTimestamp) {
         ListOffsetRequest.Builder builder = ListOffsetRequest.Builder
                 .forConsumer(requireTimestamp, isolationLevel)
                 .setTargetTimes(timestampsToSearch);
@@ -763,7 +762,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     log.debug("Handling v0 ListOffsetResponse response for {}. Fetched offset {}",
                             topicPartition, offset);
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
-                        OffsetData offsetData = new OffsetData(offset, null, null);
+                        OffsetData offsetData = new OffsetData(offset, null, Optional.empty());
                         fetchedOffsets.put(topicPartition, offsetData);
                     }
                 } else {
