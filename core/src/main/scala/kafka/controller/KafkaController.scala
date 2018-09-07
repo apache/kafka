@@ -1171,18 +1171,19 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def triggerControllerMove(): Unit = {
-    if (!isActive)
+    activeControllerId = zkClient.getControllerId.getOrElse(-1)
+    if (!isActive) {
       warn("Controller has already moved when trying to trigger controller movement")
-    else {
-      try {
-        val expectedControllerEpochZkVersion = controllerContext.epochZkVersion
-        activeControllerId = -1
-        onControllerResignation()
-        zkClient.deleteController(expectedControllerEpochZkVersion)
-      } catch {
-        case _: ControllerMovedException =>
-          warn("Controller has already moved when trying to trigger controller movement")
-      }
+      return
+    }
+    try {
+      val expectedControllerEpochZkVersion = controllerContext.epochZkVersion
+      activeControllerId = -1
+      onControllerResignation()
+      zkClient.deleteController(expectedControllerEpochZkVersion)
+    } catch {
+      case _: ControllerMovedException =>
+        warn("Controller has already moved when trying to trigger controller movement")
     }
   }
 

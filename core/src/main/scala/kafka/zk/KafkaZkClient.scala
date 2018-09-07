@@ -114,8 +114,9 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
         s"The ephemeral node at ${ControllerZNode.path} went away while checking whether the controller election succeeds. " +
           s"Aborting controller startup procedure"))
       if (controllerId == curControllerId) {
-        val (epoch, stat)  = getControllerEpoch.getOrElse(throw new ControllerMovedException(
-          "Controller moved to another broker. Aborting controller startup procedure"))
+        val (epoch, stat)  = getControllerEpoch.getOrElse(
+          throw new IllegalStateException(s"${ControllerEpochZNode.path} existed before but goes away while trying to read it"))
+
         // If the epoch is the same as newControllerEpoch, it is safe to infer that the returned epoch zkVersion
         // is associated with the current broker during controller election because we already knew that the zk
         // transaction succeeds based on the controller znode verification. Other rounds of controller
@@ -149,7 +150,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   private def maybeCreateControllerEpochZNode(): (Int, Int) = {
     createControllerEpochRaw(KafkaController.InitialControllerEpoch).resultCode match {
       case Code.OK =>
-        info(s"Successfully create ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch}")
+        info(s"Successfully created ${ControllerEpochZNode.path} with initial epoch ${KafkaController.InitialControllerEpoch}")
         (KafkaController.InitialControllerEpoch, KafkaController.InitialControllerEpochZkVersion)
       case Code.NODEEXISTS =>
         val (epoch, stat) = getControllerEpoch.getOrElse(throw new IllegalStateException(s"${ControllerEpochZNode.path} existed before but goes away while trying to read it"))
