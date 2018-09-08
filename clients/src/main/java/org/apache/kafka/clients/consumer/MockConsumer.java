@@ -435,9 +435,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public synchronized void scheduleNopPollTask() {
-        schedulePollTask(() -> {
-            // noop
-        });
+        schedulePollTask(() -> { });
     }
 
     public synchronized Set<TopicPartition> paused() {
