@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.Serializable;
 
 /**
@@ -30,7 +32,7 @@ public final class TopicPartition implements Serializable {
 
     public TopicPartition(String topic, int partition) {
         this.partition = partition;
-        this.topic = topic;
+        this.topic = Utils.notNull(topic);
     }
 
     public int partition() {
@@ -48,7 +50,7 @@ public final class TopicPartition implements Serializable {
         final int prime = 31;
         int result = 1;
         result = prime * result + partition;
-        result = prime * result + ((topic == null) ? 0 : topic.hashCode());
+        result = prime * result + topic.hashCode();
         this.hash = result;
         return result;
     }
@@ -62,12 +64,7 @@ public final class TopicPartition implements Serializable {
         if (getClass() != obj.getClass())
             return false;
         TopicPartition other = (TopicPartition) obj;
-        if (partition != other.partition)
-            return false;
-        if (topic == null)
-            return other.topic == null;
-        else
-            return topic.equals(other.topic);
+        return partition == other.partition && topic.equals(other.topic);
     }
 
     @Override
