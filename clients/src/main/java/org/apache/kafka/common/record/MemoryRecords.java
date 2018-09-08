@@ -231,7 +231,7 @@ public class MemoryRecords extends AbstractRecords {
                 filterResult.updateRetainedBatchMetadata(batch, 0, true);
             }
 
-            // If we had to allocate a new buffer to fit the filtered outputBuffer (see KAFKA-5316), return early to
+            // If we had to allocate a new buffer to fit the filtered buffer (see KAFKA-5316), return early to
             // avoid the need for additional allocations.
             ByteBuffer outputBuffer = bufferOutputStream.buffer();
             if (outputBuffer != destinationBuffer) {
