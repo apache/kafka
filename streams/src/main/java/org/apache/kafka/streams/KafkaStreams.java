@@ -38,7 +38,9 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1033,6 +1035,11 @@ public class KafkaStreams {
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
+    }
+
+    public <K, V, S extends StateStore> S store(final Materialized<K, V, S> materializedStore) {
+        validateIsRunning();
+        return new MaterializedInternal<>(materializedStore).storeSupplier().get();
     }
 
     /**
