@@ -308,6 +308,55 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testEmptyBatchRetention() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            ByteBuffer buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+            long producerId = 23L;
+            short producerEpoch = 5;
+            long baseOffset = 3L;
+            int baseSequence = 10;
+            int partitionLeaderEpoch = 293;
+            long timestamp = System.currentTimeMillis();
+
+            DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, producerId, producerEpoch,
+                    baseSequence, baseOffset, baseOffset, partitionLeaderEpoch, TimestampType.CREATE_TIME,
+                    timestamp, false, false);
+            buffer.flip();
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            MemoryRecords records = MemoryRecords.readableRecords(buffer);
+            MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+                    new MemoryRecords.RecordFilter() {
+                        @Override
+                        protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                            // retain all batches
+                            return BatchRetention.RETAIN_EMPTY;
+                        }
+
+                        @Override
+                        protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                            return false;
+                        }
+                    }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+
+            // Verify filter result
+            assertEquals(0, filterResult.messagesRead);
+            assertEquals(records.sizeInBytes(), filterResult.bytesRead);
+            assertEquals(baseOffset, filterResult.maxOffset);
+            assertEquals(0, filterResult.messagesRetained);
+            assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained);
+            assertEquals(timestamp, filterResult.maxTimestamp);
+            assertEquals(baseOffset, filterResult.shallowOffsetOfMaxTimestamp);
+            assertTrue(filterResult.outputBuffer.position() > 0);
+
+            // Verify filtered records
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+            assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filteredRecords.sizeInBytes());
+        }
+    }
+
+    @Test
     public void testEmptyBatchDeletion() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             for (final BatchRetention deleteRetention : Arrays.asList(BatchRetention.DELETE, BatchRetention.DELETE_EMPTY)) {
@@ -317,25 +366,32 @@ public class MemoryRecordsTest {
                 long baseOffset = 3L;
                 int baseSequence = 10;
                 int partitionLeaderEpoch = 293;
+                long timestamp = System.currentTimeMillis();
 
                 DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, producerId, producerEpoch,
                         baseSequence, baseOffset, baseOffset, partitionLeaderEpoch, TimestampType.CREATE_TIME,
-                        System.currentTimeMillis(), false, false);
+                        timestamp, false, false);
                 buffer.flip();
 
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
-                MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
-                    @Override
-                    protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                        return deleteRetention;
-                    }
+                MemoryRecords records = MemoryRecords.readableRecords(buffer);
+                MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+                        new MemoryRecords.RecordFilter() {
+                            @Override
+                            protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                                return deleteRetention;
+                            }
 
-                    @Override
-                    protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
-                        return false;
-                    }
-                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                            @Override
+                            protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                                return false;
+                            }
+                        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
+                // Verify filter result
+                assertEquals(0, filterResult.outputBuffer.position());
+
+                // Verify filtered records
                 filtered.flip();
                 MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
                 assertEquals(0, filteredRecords.sizeInBytes());
@@ -604,15 +660,15 @@ public class MemoryRecordsTest {
 
             MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer)
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
-                              BufferSupplier.NO_CACHING);
+                            BufferSupplier.NO_CACHING);
 
             buffer.position(buffer.position() + result.bytesRead);
-            result.output.flip();
+            result.outputBuffer.flip();
 
-            if (output != result.output)
+            if (output != result.outputBuffer)
                 assertEquals(0, output.position());
 
-            MemoryRecords filtered = MemoryRecords.readableRecords(result.output);
+            MemoryRecords filtered = MemoryRecords.readableRecords(result.outputBuffer);
             records.addAll(TestUtils.toList(filtered.records()));
         }
 
@@ -636,9 +692,9 @@ public class MemoryRecordsTest {
                 break;
             case RecordBatch.MAGIC_VALUE_V1:
                 assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=1, attributes=0, compression=NONE, " +
-                        "crc=97210616, CreateTime=1000000, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, " +
-                        "Record(magic=1, attributes=0, compression=NONE, crc=3535988507, CreateTime=1000001, key=4 bytes, " +
-                        "value=6 bytes)))]",
+                                "crc=97210616, CreateTime=1000000, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, " +
+                                "Record(magic=1, attributes=0, compression=NONE, crc=3535988507, CreateTime=1000001, key=4 bytes, " +
+                                "value=6 bytes)))]",
                         memoryRecords.toString());
                 break;
             case RecordBatch.MAGIC_VALUE_V2:
