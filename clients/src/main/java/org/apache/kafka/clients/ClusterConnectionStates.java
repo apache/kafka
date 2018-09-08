@@ -249,7 +249,7 @@ final class ClusterConnectionStates {
      */
     public boolean isDisconnected(String id) {
         NodeConnectionState state = nodeState.get(id);
-        return state == null || state.state.isDisconnected();
+        return state != null && state.state.isDisconnected();
     }
 
     /**
