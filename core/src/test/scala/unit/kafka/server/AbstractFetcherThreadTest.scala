@@ -172,8 +172,9 @@ class AbstractFetcherThreadTest {
     val leaderState = MockFetcherThread.PartitionState(leaderLog, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
-    // initial truncation and verify that the log start offset is updated
+    // initial truncation and verify that the log end offset is updated
     fetcher.doWork()
+    assertEquals(3L, replicaState.logEndOffset)
     assertFalse(fetcher.partitionStates.stateValue(partition).isTruncatingLog)
 
     // To hit this case, we have to change the leader log without going through the truncation phase
@@ -190,8 +191,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     val fetcher = new MockFetcherThread
 
-    // This test is a little contrived because
-
+    // The follower begins from an offset which is behind the leader's log start offset
     val replicaLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)))
 
@@ -331,6 +331,7 @@ class AbstractFetcherThreadTest {
         lastOffset = batch.lastOffset
       }
 
+      state.logStartOffset = partitionData.logStartOffset
       state.highWatermark = partitionData.highWatermark
 
       Some(LogAppendInfo(firstOffset = Some(fetchOffset),
@@ -348,7 +349,7 @@ class AbstractFetcherThreadTest {
         lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }
 
-   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+    override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
      val state = replicaPartitionState(topicPartition)
      state.log = state.log.takeWhile { batch =>
        batch.lastOffset < truncationState.offset
