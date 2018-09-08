@@ -72,8 +72,8 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         return assignment;
     }
 
-    private List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
-                                                     Map<String, Subscription> subscriptions) {
+    public List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
+                                                    Map<String, Subscription> subscriptions) {
         SortedSet<String> topics = new TreeSet<>();
         for (Subscription subscription : subscriptions.values())
             topics.addAll(subscription.topics());
