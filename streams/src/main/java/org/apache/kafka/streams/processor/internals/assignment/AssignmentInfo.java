@@ -49,7 +49,9 @@ public class AssignmentInfo {
     private final int latestSupportedVersion;
     private int errCode;
     private List<TaskId> activeTasks;
+    private List<TaskMetadata> activeTaskMetadata;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
+    private Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
     // used for decoding; don't apply version checks
@@ -58,6 +60,13 @@ public class AssignmentInfo {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.errCode = 0;
+    }
+
+    public AssignmentInfo(final int usedVersion,
+                          final List<TaskMetadata> activeTaskMetadata,
+                          final Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata,
+                          final Map<HostInfo, Set<TopicPartition>> hostState) {
+        this(usedVersion, LATEST_SUPPORTED_VERSION, null, null, activeTaskMetadata, standbyTaskMetadata, hostState, 0);
     }
 
     public AssignmentInfo(final List<TaskId> activeTasks,
@@ -79,7 +88,7 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> hostState,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, null, null, hostState, errCode);
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
@@ -91,14 +100,57 @@ public class AssignmentInfo {
                    final int latestSupportedVersion,
                    final List<TaskId> activeTasks,
                    final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                   final List<TaskMetadata> activeTaskMetadata,
+                   final Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata,
                    final Map<HostInfo, Set<TopicPartition>> hostState,
                    final int errCode) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
-        this.activeTasks = activeTasks;
-        this.standbyTasks = standbyTasks;
+        if (version < 4) {
+            this.activeTasks = activeTasks == null ? castActiveTaskToTaskId(activeTaskMetadata) : activeTasks;
+            this.standbyTasks = standbyTasks == null ? castStandbyToTaskId(standbyTaskMetadata) : standbyTasks;
+        } else {
+            this.activeTaskMetadata = activeTaskMetadata == null ? castActiveTaskToTaskMetadata(activeTasks) : activeTaskMetadata;
+            this.standbyTaskMetadata = standbyTaskMetadata == null ? castStandbyToTaskMetadata(standbyTasks) : standbyTaskMetadata;
+        }
         this.partitionsByHost = hostState;
         this.errCode = errCode;
+    }
+
+    private Map<TaskMetadata, Set<TopicPartition>> castStandbyToTaskMetadata(
+            final Map<TaskId, Set<TopicPartition>> standbyTasksMap) {
+        final Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata = new HashMap<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> metadata : standbyTasksMap.entrySet()) {
+            standbyTaskMetadata.put(new TaskMetadata(metadata.getKey(), 0, 0), 
+                                    metadata.getValue());
+        }
+        return standbyTaskMetadata;
+    }
+
+    private Map<TaskId, Set<TopicPartition>> castStandbyToTaskId(
+            final Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata) {
+        final Map<TaskId, Set<TopicPartition>> standbyTaskMap = new HashMap<>();
+        for (final Map.Entry<TaskMetadata, Set<TopicPartition>> metadata : standbyTaskMetadata.entrySet()) {
+            standbyTaskMap.put(metadata.getKey().taskId, 
+                               metadata.getValue());
+        }
+        return standbyTaskMap;
+    }
+
+    private List<TaskMetadata> castActiveTaskToTaskMetadata(final List<TaskId> activeTaskList) {
+        final List<TaskMetadata> result = new ArrayList<>();
+        for (final TaskId taskId : activeTaskList) {
+            result.add(new TaskMetadata(taskId, 0, 0));
+        }
+        return result;
+    }
+
+    private List<TaskId> castActiveTaskToTaskId(final List<TaskMetadata> activeTaskList) {
+        final List<TaskId> result = new ArrayList<>();
+        for (final TaskMetadata taskId : activeTaskList) {
+            result.add(taskId.taskId);
+        }
+        return result;
     }
 
     public int version() {
@@ -117,8 +169,16 @@ public class AssignmentInfo {
         return activeTasks;
     }
 
+    public List<TaskMetadata> activeTaskMetadata() {
+        return activeTaskMetadata;
+    }
+
     public Map<TaskId, Set<TopicPartition>> standbyTasks() {
         return standbyTasks;
+    }
+
+    public Map<TaskMetadata, Set<TopicPartition>> standbyTaskMetadata() {
+        return standbyTaskMetadata;
     }
 
     public Map<HostInfo, Set<TopicPartition>> partitionsByHost() {
@@ -172,26 +232,33 @@ public class AssignmentInfo {
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, final boolean isVersionFourOrAbove) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
-        for (final TaskId id : activeTasks) {
-            if (isVersionFourOrAbove && !(id instanceof TaskMetadata)) {
-                new TaskMetadata(id, 0, 0).writeTo(out);
-            } else {
+
+        if (isVersionFourOrAbove) {
+            for (final TaskMetadata metadata : activeTaskMetadata) {
+                metadata.writeTo(out);
+            } 
+        } else {
+            for (final TaskId id : activeTasks) {
                 id.writeTo(out);
             }
         }
 
         // encode standby tasks
         out.writeInt(standbyTasks.size());
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
-            final TaskId id = entry.getKey();
-            if (isVersionFourOrAbove && !(id instanceof TaskMetadata)) {
-                new TaskMetadata(id, 0, 0).writeTo(out);
-            } else {
-                id.writeTo(out);
-            }
+        if (isVersionFourOrAbove) {
+            for (final Map.Entry<TaskMetadata, Set<TopicPartition>> entry : standbyTaskMetadata.entrySet()) {
+                entry.getKey().writeTo(out);
 
-            final Set<TopicPartition> partitions = entry.getValue();
-            writeTopicPartitions(out, partitions);
+                final Set<TopicPartition> partitions = entry.getValue();
+                writeTopicPartitions(out, partitions);
+            }
+        } else {
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
+                entry.getKey().writeTo(out);
+
+                final Set<TopicPartition> partitions = entry.getValue();
+                writeTopicPartitions(out, partitions);
+            }
         }
     }
 
@@ -293,10 +360,11 @@ public class AssignmentInfo {
                                           final DataInputStream in,
                                           final int usedVersion) throws IOException {
         final int count = in.readInt();
-        assignmentInfo.activeTasks = new ArrayList<>(count);
+        assignmentInfo.activeTasks = usedVersion >= 4 ? null : new ArrayList<TaskId>(count);
+        assignmentInfo.activeTaskMetadata = usedVersion >= 4 ? new ArrayList<TaskMetadata>(count) : null;
         for (int i = 0; i < count; i++) {
-            if (usedVersion == 4) {
-                assignmentInfo.activeTasks.add(TaskMetadata.readFrom(in));
+            if (usedVersion >= 4) {
+                assignmentInfo.activeTaskMetadata.add(TaskMetadata.readFrom(in));
             } else {
                 assignmentInfo.activeTasks.add(TaskId.readFrom(in));
             }
@@ -307,15 +375,17 @@ public class AssignmentInfo {
                                            final DataInputStream in,
                                            final int usedVersion) throws IOException {
         final int count = in.readInt();
-        assignmentInfo.standbyTasks = new HashMap<>(count);
+        assignmentInfo.standbyTasks = usedVersion >= 4 ? null : new HashMap<>(count);
+        assignmentInfo.standbyTaskMetadata = usedVersion >= 4 ? new HashMap<>(count) : null;
         for (int i = 0; i < count; i++) {
-            final TaskId id;
-            if (usedVersion == 4) {
-                id = TaskMetadata.readFrom(in);
+            if (usedVersion >= 4) {
+                final TaskMetadata metadata = TaskMetadata.readFrom(in);
+                assignmentInfo.standbyTaskMetadata.put(metadata, readTopicPartitions(in));
             } else {
-                id = TaskId.readFrom(in);
+                final TaskId id = TaskId.readFrom(in);
+                assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
             }
-            assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
+            
         }
     }
 

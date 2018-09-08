@@ -23,14 +23,15 @@ import java.nio.ByteBuffer;
 
 import org.apache.kafka.streams.processor.TaskId;
 
-public class TaskMetadata extends TaskId {
+public class TaskMetadata {
+    public final TaskId taskId;
     public final int numberOfPartitions;
     public final int numberOfStateStores;
     
     public TaskMetadata(final TaskId taskId,
-                              final int numberOfPartitions, 
-                              final int numberOfStateStores) { 
-        super(taskId.topicGroupId, taskId.partition);
+                        final int numberOfPartitions, 
+                        final int numberOfStateStores) { 
+        this.taskId = taskId;
         this.numberOfPartitions = numberOfPartitions;
         this.numberOfStateStores = numberOfStateStores;
     }
@@ -43,10 +44,9 @@ public class TaskMetadata extends TaskId {
         return numberOfStateStores;
     }
 
-    @Override
     public void writeTo(final ByteBuffer buffer) {
-        buffer.putInt(topicGroupId);
-        buffer.putInt(partition);
+        buffer.putInt(taskId.topicGroupId);
+        buffer.putInt(taskId.partition);
         buffer.putInt(numberOfPartitions);
         buffer.putInt(numberOfStateStores);
     }
@@ -57,10 +57,9 @@ public class TaskMetadata extends TaskId {
                                       buffer.getInt());
     }
 
-    @Override
     public void writeTo(final DataOutputStream stream) throws IOException {
-        stream.writeInt(topicGroupId);
-        stream.writeInt(partition);
+        stream.writeInt(taskId.topicGroupId);
+        stream.writeInt(taskId.partition);
         stream.writeInt(numberOfPartitions);
         stream.writeInt(numberOfStateStores);
     }

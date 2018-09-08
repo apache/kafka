@@ -16,19 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TaskMetadata;
 
 import java.util.HashSet;
 import java.util.Set;
 
 public class ClientState {
-    private final Set<TaskId> activeTasks;
-    private final Set<TaskId> standbyTasks;
-    private final Set<TaskId> assignedTasks;
-    private final Set<TaskId> prevActiveTasks;
-    private final Set<TaskId> prevStandbyTasks;
-    private final Set<TaskId> prevAssignedTasks;
+    private final Set<TaskMetadata> activeTasks;
+    private final Set<TaskMetadata> standbyTasks;
+    private final Set<TaskMetadata> assignedTasks;
+    private final Set<TaskMetadata> prevActiveTasks;
+    private final Set<TaskMetadata> prevStandbyTasks;
+    private final Set<TaskMetadata> prevAssignedTasks;
 
     private int capacity;
     private int numberOfActiveStateStores;
@@ -41,18 +40,18 @@ public class ClientState {
     }
 
     ClientState(final int capacity) {
-        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
+        this(new HashSet<TaskMetadata>(), new HashSet<TaskMetadata>(), new HashSet<TaskMetadata>(), new HashSet<TaskMetadata>(), new HashSet<TaskMetadata>(), new HashSet<TaskMetadata>(), capacity);
         this.numberOfActiveStateStores = 0;
         this.numberOfStandbyStateStores = 0;
         this.numberOfActivePartitions = 0;
     }
 
-    private ClientState(final Set<TaskId> activeTasks,
-                        final Set<TaskId> standbyTasks,
-                        final Set<TaskId> assignedTasks,
-                        final Set<TaskId> prevActiveTasks,
-                        final Set<TaskId> prevStandbyTasks,
-                        final Set<TaskId> prevAssignedTasks,
+    private ClientState(final Set<TaskMetadata> activeTasks,
+                        final Set<TaskMetadata> standbyTasks,
+                        final Set<TaskMetadata> assignedTasks,
+                        final Set<TaskMetadata> prevActiveTasks,
+                        final Set<TaskMetadata> prevStandbyTasks,
+                        final Set<TaskMetadata> prevAssignedTasks,
                         final int capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
@@ -74,38 +73,33 @@ public class ClientState {
             capacity);
     }
 
-    public void assign(final TaskId taskId, final boolean active) {
+    public void assign(final TaskMetadata taskId, final boolean active) {
         if (active) {
             activeTasks.add(taskId);
-            if (taskId instanceof TaskMetadata) {
-                final TaskMetadata metadata = (TaskMetadata) taskId;
-                numberOfActiveStateStores += metadata.numberOfStateStores();
-                numberOfActivePartitions += metadata.numberOfPartitions();
-            }
+            numberOfActiveStateStores += taskId.numberOfStateStores();
+            numberOfActivePartitions += taskId.numberOfPartitions();
+
         } else {
             standbyTasks.add(taskId);
-            if (taskId instanceof TaskMetadata) {
-                final TaskMetadata metadata  = (TaskMetadata) taskId;
-                numberOfStandbyStateStores += metadata.numberOfStateStores();
-            }
+            numberOfStandbyStateStores += taskId.numberOfStateStores();
         }
 
         assignedTasks.add(taskId);
     }
 
-    public Set<TaskId> activeTasks() {
+    public Set<TaskMetadata> activeTasks() {
         return activeTasks;
     }
 
-    public Set<TaskId> standbyTasks() {
+    public Set<TaskMetadata> standbyTasks() {
         return standbyTasks;
     }
 
-    public Set<TaskId> prevActiveTasks() {
+    public Set<TaskMetadata> prevActiveTasks() {
         return prevActiveTasks;
     }
 
-    public Set<TaskId> prevStandbyTasks() {
+    public Set<TaskMetadata> prevStandbyTasks() {
         return prevStandbyTasks;
     }
 
@@ -121,12 +115,12 @@ public class ClientState {
         return activeTasks.size();
     }
 
-    public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
+    public void addPreviousActiveTasks(final Set<TaskMetadata> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
     }
 
-    public void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
+    public void addPreviousStandbyTasks(final Set<TaskMetadata> standbyTasks) {
         prevStandbyTasks.addAll(standbyTasks);
         prevAssignedTasks.addAll(standbyTasks);
     }
@@ -194,26 +188,26 @@ public class ClientState {
         return leastLoaded(thisLoad, otherLoad, other);
     }
 
-    Set<TaskId> previousStandbyTasks() {
-        final Set<TaskId> standby = new HashSet<>(prevAssignedTasks);
+    Set<TaskMetadata> previousStandbyTasks() {
+        final Set<TaskMetadata> standby = new HashSet<>(prevAssignedTasks);
         standby.removeAll(prevActiveTasks);
         return standby;
     }
 
-    Set<TaskId> previousActiveTasks() {
+    Set<TaskMetadata> previousActiveTasks() {
         return prevActiveTasks;
     }
 
-    boolean hasAssignedTask(final TaskId taskId) {
+    boolean hasAssignedTask(final TaskMetadata taskId) {
         return assignedTasks.contains(taskId);
     }
 
     // Visible for testing
-    Set<TaskId> assignedTasks() {
+    Set<TaskMetadata> assignedTasks() {
         return assignedTasks;
     }
 
-    Set<TaskId> previousAssignedTasks() {
+    Set<TaskMetadata> previousAssignedTasks() {
         return prevAssignedTasks;
     }
 

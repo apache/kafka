@@ -41,7 +41,7 @@ import java.util.Set;
 
 public abstract class AbstractTask implements Task {
 
-    final TaskId id;
+    final TaskMetadata id;
     final String applicationId;
     final ProcessorTopology topology;
     final ProcessorStateManager stateMgr;
@@ -99,7 +99,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public TaskId id() {
+    public TaskMetadata id() {
         return id;
     }
 
@@ -215,7 +215,7 @@ public abstract class AbstractTask implements Task {
         }
 
         try {
-            if (!stateDirectory.lock(id)) {
+            if (!stateDirectory.lock(id.taskId)) {
                 throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
             }
         } catch (final IOException e) {
@@ -253,7 +253,7 @@ public abstract class AbstractTask implements Task {
             exception = e;
         } finally {
             try {
-                stateDirectory.unlock(id);
+                stateDirectory.unlock(id.taskId);
             } catch (final IOException e) {
                 if (exception == null) {
                     exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);

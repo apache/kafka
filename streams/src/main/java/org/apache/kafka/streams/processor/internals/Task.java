@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Set;
@@ -57,7 +56,7 @@ public interface Task {
 
     ProcessorContext context();
 
-    TaskId id();
+    TaskMetadata id();
 
     Set<TopicPartition> partitions();
 
