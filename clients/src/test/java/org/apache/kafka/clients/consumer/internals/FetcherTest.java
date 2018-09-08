@@ -2113,8 +2113,8 @@ public class FetcherTest {
                 return record.key() != null;
             }
         }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
-        result.outputBuffer.flip();
-        MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer);
+        result.outputBuffer().flip();
+        MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);

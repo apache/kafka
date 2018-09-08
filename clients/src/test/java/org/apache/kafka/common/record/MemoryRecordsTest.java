@@ -279,13 +279,13 @@ public class MemoryRecordsTest {
                         }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
                 // Verify filter result
-                assertEquals(numRecords, filterResult.messagesRead);
-                assertEquals(records.sizeInBytes(), filterResult.bytesRead);
-                assertEquals(baseOffset + 1, filterResult.maxOffset);
-                assertEquals(0, filterResult.messagesRetained);
-                assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained);
-                assertEquals(12, filterResult.maxTimestamp);
-                assertEquals(baseOffset + 1, filterResult.shallowOffsetOfMaxTimestamp);
+                assertEquals(numRecords, filterResult.messagesRead());
+                assertEquals(records.sizeInBytes(), filterResult.bytesRead());
+                assertEquals(baseOffset + 1, filterResult.maxOffset());
+                assertEquals(0, filterResult.messagesRetained());
+                assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
+                assertEquals(12, filterResult.maxTimestamp());
+                assertEquals(baseOffset + 1, filterResult.shallowOffsetOfMaxTimestamp());
 
                 // Verify filtered records
                 filtered.flip();
@@ -340,14 +340,14 @@ public class MemoryRecordsTest {
                     }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
             // Verify filter result
-            assertEquals(0, filterResult.messagesRead);
-            assertEquals(records.sizeInBytes(), filterResult.bytesRead);
-            assertEquals(baseOffset, filterResult.maxOffset);
-            assertEquals(0, filterResult.messagesRetained);
-            assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained);
-            assertEquals(timestamp, filterResult.maxTimestamp);
-            assertEquals(baseOffset, filterResult.shallowOffsetOfMaxTimestamp);
-            assertTrue(filterResult.outputBuffer.position() > 0);
+            assertEquals(0, filterResult.messagesRead());
+            assertEquals(records.sizeInBytes(), filterResult.bytesRead());
+            assertEquals(baseOffset, filterResult.maxOffset());
+            assertEquals(0, filterResult.messagesRetained());
+            assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
+            assertEquals(timestamp, filterResult.maxTimestamp());
+            assertEquals(baseOffset, filterResult.shallowOffsetOfMaxTimestamp());
+            assertTrue(filterResult.outputBuffer().position() > 0);
 
             // Verify filtered records
             filtered.flip();
@@ -389,7 +389,7 @@ public class MemoryRecordsTest {
                         }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
                 // Verify filter result
-                assertEquals(0, filterResult.outputBuffer.position());
+                assertEquals(0, filterResult.outputBuffer().position());
 
                 // Verify filtered records
                 filtered.flip();
@@ -662,13 +662,13 @@ public class MemoryRecordsTest {
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
                             BufferSupplier.NO_CACHING);
 
-            buffer.position(buffer.position() + result.bytesRead);
-            result.outputBuffer.flip();
+            buffer.position(buffer.position() + result.bytesRead());
+            result.outputBuffer().flip();
 
-            if (output != result.outputBuffer)
+            if (output != result.outputBuffer())
                 assertEquals(0, output.position());
 
-            MemoryRecords filtered = MemoryRecords.readableRecords(result.outputBuffer);
+            MemoryRecords filtered = MemoryRecords.readableRecords(result.outputBuffer());
             records.addAll(TestUtils.toList(filtered.records()));
         }
 
@@ -738,16 +738,16 @@ public class MemoryRecordsTest {
 
         filtered.flip();
 
-        assertEquals(7, result.messagesRead);
-        assertEquals(4, result.messagesRetained);
-        assertEquals(buffer.limit(), result.bytesRead);
-        assertEquals(filtered.limit(), result.bytesRetained);
+        assertEquals(7, result.messagesRead());
+        assertEquals(4, result.messagesRetained());
+        assertEquals(buffer.limit(), result.bytesRead());
+        assertEquals(filtered.limit(), result.bytesRetained());
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
-            assertEquals(20L, result.maxTimestamp);
+            assertEquals(20L, result.maxTimestamp());
             if (compression == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
-                assertEquals(4L, result.shallowOffsetOfMaxTimestamp);
+                assertEquals(4L, result.shallowOffsetOfMaxTimestamp());
             else
-                assertEquals(5L, result.shallowOffsetOfMaxTimestamp);
+                assertEquals(5L, result.shallowOffsetOfMaxTimestamp());
         }
 
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);

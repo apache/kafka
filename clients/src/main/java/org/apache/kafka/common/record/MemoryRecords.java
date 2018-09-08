@@ -356,22 +356,22 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static class FilterResult {
-        public ByteBuffer outputBuffer = null;
-        public int messagesRead = 0;
-        public int bytesRead = 0;
-        public int messagesRetained = 0;
-        public int bytesRetained = 0;
-        public long maxOffset = -1L;
-        public long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        public long shallowOffsetOfMaxTimestamp = -1L;
+        private ByteBuffer outputBuffer = null;
+        private int messagesRead = 0;
+        private int bytesRead = 0;
+        private int messagesRetained = 0;
+        private int bytesRetained = 0;
+        private long maxOffset = -1L;
+        private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        private long shallowOffsetOfMaxTimestamp = -1L;
 
-        public void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
+        private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
             int bytesRetained = headerOnly ? DefaultRecordBatch.RECORD_BATCH_OVERHEAD : retainedBatch.sizeInBytes();
             updateRetainedBatchMetadata(retainedBatch.maxTimestamp(), retainedBatch.lastOffset(),
                     retainedBatch.lastOffset(), numMessagesInBatch, bytesRetained);
         }
 
-        public void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
+        private void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
                                                 int messagesRetained, int bytesRetained) {
             validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
             if (maxTimestamp > this.maxTimestamp) {
@@ -385,7 +385,7 @@ public class MemoryRecords extends AbstractRecords {
 
         // Note that `bytesRead` should contain only bytes from batches that have been processed, i.e. bytes from
         // `messagesRead` and any discarded batches.
-        public void finalizeResult(ByteBuffer outputBuffer, int bytesRead, int messagesRead) {
+        private void finalizeResult(ByteBuffer outputBuffer, int bytesRead, int messagesRead) {
             this.bytesRead = bytesRead;
             this.messagesRead = messagesRead;
             this.outputBuffer = outputBuffer;
@@ -396,6 +396,38 @@ public class MemoryRecords extends AbstractRecords {
                 throw new IllegalArgumentException("shallowOffset undefined for maximum timestamp " + maxTimestamp);
             if (maxOffset < 0)
                 throw new IllegalArgumentException("maxOffset undefined");
+        }
+
+        public ByteBuffer outputBuffer() {
+            return outputBuffer;
+        }
+
+        public int messagesRead() {
+            return messagesRead;
+        }
+
+        public int bytesRead() {
+            return bytesRead;
+        }
+
+        public int messagesRetained() {
+            return messagesRetained;
+        }
+
+        public int bytesRetained() {
+            return bytesRetained;
+        }
+
+        public long maxOffset() {
+            return maxOffset;
+        }
+
+        public long maxTimestamp() {
+            return maxTimestamp;
+        }
+
+        public long shallowOffsetOfMaxTimestamp() {
+            return shallowOffsetOfMaxTimestamp;
         }
     }
 
