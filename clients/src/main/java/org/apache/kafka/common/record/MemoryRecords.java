@@ -160,15 +160,13 @@ public class MemoryRecords extends AbstractRecords {
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
                                          BufferSupplier decompressionBufferSupplier) {
-        FilterResult filterResult = new FilterResult();
+        FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
-        int totalBytesRead = 0;
-        int totalMessagesRead = 0;
 
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
-            totalBytesRead += batch.sizeInBytes();
+            filterResult.bytesRead += batch.sizeInBytes();
 
             if (batchRetention == BatchRetention.DELETE)
                 continue;
@@ -185,7 +183,7 @@ public class MemoryRecords extends AbstractRecords {
             try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
                 while (iterator.hasNext()) {
                     Record record = iterator.next();
-                    totalMessagesRead += 1;
+                    filterResult.messagesRead += 1;
 
                     if (filter.shouldRetainRecord(batch, record)) {
                         // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
@@ -237,12 +235,11 @@ public class MemoryRecords extends AbstractRecords {
             // avoid the need for additional allocations.
             ByteBuffer outputBuffer = bufferOutputStream.buffer();
             if (outputBuffer != destinationBuffer) {
-                filterResult.finalizeResult(outputBuffer, totalBytesRead, totalMessagesRead);
+                filterResult.outputBuffer = outputBuffer;
                 return filterResult;
             }
         }
 
-        filterResult.finalizeResult(destinationBuffer, totalBytesRead, totalMessagesRead);
         return filterResult;
     }
 
@@ -356,14 +353,20 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static class FilterResult {
-        private ByteBuffer outputBuffer = null;
+        private ByteBuffer outputBuffer;
         private int messagesRead = 0;
+        // Note that `bytesRead` should contain only bytes from batches that have been processed, i.e. bytes from
+        // `messagesRead` and any discarded batches.
         private int bytesRead = 0;
         private int messagesRetained = 0;
         private int bytesRetained = 0;
         private long maxOffset = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
+
+        private FilterResult(ByteBuffer outputBuffer) {
+            this.outputBuffer = outputBuffer;
+        }
 
         private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
             int bytesRetained = headerOnly ? DefaultRecordBatch.RECORD_BATCH_OVERHEAD : retainedBatch.sizeInBytes();
@@ -381,14 +384,6 @@ public class MemoryRecords extends AbstractRecords {
             this.maxOffset = Math.max(maxOffset, this.maxOffset);
             this.messagesRetained += messagesRetained;
             this.bytesRetained += bytesRetained;
-        }
-
-        // Note that `bytesRead` should contain only bytes from batches that have been processed, i.e. bytes from
-        // `messagesRead` and any discarded batches.
-        private void finalizeResult(ByteBuffer outputBuffer, int bytesRead, int messagesRead) {
-            this.bytesRead = bytesRead;
-            this.messagesRead = messagesRead;
-            this.outputBuffer = outputBuffer;
         }
 
         private void validateBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset) {
