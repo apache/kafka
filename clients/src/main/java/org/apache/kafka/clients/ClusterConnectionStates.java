@@ -42,7 +42,7 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true if we can currently initiate a new connection. This will be the case if we are not
+     * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
      * @param id the connection id to check
      * @param now the current time in ms
