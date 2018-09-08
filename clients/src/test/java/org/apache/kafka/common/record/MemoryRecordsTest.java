@@ -252,6 +252,7 @@ public class MemoryRecordsTest {
                 long baseOffset = 3L;
                 int baseSequence = 10;
                 int partitionLeaderEpoch = 293;
+                int numRecords = 2;
 
                 MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
                         baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
@@ -259,22 +260,34 @@ public class MemoryRecordsTest {
                 builder.append(11L, "2".getBytes(), "b".getBytes());
                 builder.append(12L, "3".getBytes(), "c".getBytes());
                 builder.close();
+                MemoryRecords records = builder.build();
 
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
-                builder.build().filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
-                    @Override
-                    protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                        // retain all batches
-                        return BatchRetention.RETAIN_EMPTY;
-                    }
+                MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+                        new MemoryRecords.RecordFilter() {
+                            @Override
+                            protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                                // retain all batches
+                                return BatchRetention.RETAIN_EMPTY;
+                            }
 
-                    @Override
-                    protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
-                        // delete the records
-                        return false;
-                    }
-                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                            @Override
+                            protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                                // delete the records
+                                return false;
+                            }
+                        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
+                // Verify filter result
+                assertEquals(numRecords, filterResult.messagesRead);
+                assertEquals(records.sizeInBytes(), filterResult.bytesRead);
+                assertEquals(baseOffset + 1, filterResult.maxOffset);
+                assertEquals(0, filterResult.messagesRetained);
+                assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained);
+                assertEquals(12, filterResult.maxTimestamp);
+                assertEquals(baseOffset + 1, filterResult.shallowOffsetOfMaxTimestamp);
+
+                // Verify filtered records
                 filtered.flip();
                 MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -593,7 +606,7 @@ public class MemoryRecordsTest {
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
                               BufferSupplier.NO_CACHING);
 
-            buffer.position(buffer.position() + result.totalBytesRead);
+            buffer.position(buffer.position() + result.bytesRead);
             result.output.flip();
 
             if (output != result.output)
@@ -671,7 +684,7 @@ public class MemoryRecordsTest {
 
         assertEquals(7, result.messagesRead);
         assertEquals(4, result.messagesRetained);
-        assertEquals(buffer.limit(), result.totalBytesRead);
+        assertEquals(buffer.limit(), result.bytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp);
