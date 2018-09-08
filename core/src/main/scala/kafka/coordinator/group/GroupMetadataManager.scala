@@ -529,9 +529,11 @@ class GroupMetadataManager(brokerId: Int,
               val sizeInBytes = fileRecords.sizeInBytes
               val bytesNeeded = Math.max(config.loadBufferSize, sizeInBytes)
 
+              // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
               if (buffer.capacity < bytesNeeded) {
                 if (config.loadBufferSize < bytesNeeded)
-                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than configured offsets.load.buffer.size")
+                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                    s"configured offsets.load.buffer.size (${config.loadBufferSize} bytes)")
 
                 buffer = ByteBuffer.allocate(bytesNeeded)
               } else {
