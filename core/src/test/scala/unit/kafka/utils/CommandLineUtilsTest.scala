@@ -52,4 +52,12 @@ class CommandLineUtilsTest {
     assertEquals("Value of second property should be 'second'",props.getProperty("second.property"),"second")
   }
 
+  @Test
+  def testParseArgsWithMultipleDelimiters() {
+    val argArray = Array("first.property=first","second.property=second=third")
+    val props = CommandLineUtils.parseKeyValueArgs(argArray, false)
+    assertEquals("Value of first property should be 'first'",props.getProperty("first.property"),"first")
+    assertEquals("Value of second property should be 'second'",props.getProperty("second.property"),"second=third")
+  }
+
 }
