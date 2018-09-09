@@ -411,10 +411,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (future.succeeded()) {
                 ListOffsetResult value = future.value();
                 result.fetchedOffsets.putAll(value.fetchedOffsets);
-                if (value.partitionsToRetry.isEmpty())
-                    return result;
 
                 remainingToSearch.keySet().removeAll(result.fetchedOffsets.keySet());
+                remainingToSearch.keySet().removeAll(value.partitionsWithUnknownOffset);
+                if (value.partitionsToRetry.isEmpty() && remainingToSearch.isEmpty())
+                    return result;
             } else if (!future.isRetriable()) {
                 throw future.exception();
             }
@@ -440,6 +441,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                                            long timestamp,
                                                            Timer timer) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> offsets = new HashMap<>();
@@ -632,6 +634,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         final RequestFuture<ListOffsetResult> listOffsetRequestsFuture = new RequestFuture<>();
         final Map<TopicPartition, OffsetData> fetchedTimestampOffsets = new HashMap<>();
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
+        final Set<TopicPartition> partitionsWithUnknownOffset = new HashSet<>();
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
@@ -643,9 +646,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     synchronized (listOffsetRequestsFuture) {
                         fetchedTimestampOffsets.putAll(partialResult.fetchedOffsets);
                         partitionsToRetry.addAll(partialResult.partitionsToRetry);
+                        partitionsWithUnknownOffset.addAll(partialResult.partitionsWithUnknownOffset);
 
                         if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone()) {
-                            ListOffsetResult result = new ListOffsetResult(fetchedTimestampOffsets, partitionsToRetry);
+                            ListOffsetResult result = new ListOffsetResult(
+                                fetchedTimestampOffsets, partitionsToRetry, partitionsWithUnknownOffset);
                             listOffsetRequestsFuture.complete(result);
                         }
                     }
@@ -740,6 +745,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                           RequestFuture<ListOffsetResult> future) {
         Map<TopicPartition, OffsetData> fetchedOffsets = new HashMap<>();
         Set<TopicPartition> partitionsToRetry = new HashSet<>();
+        Set<TopicPartition> partitionsWithUnknownOffset = new HashSet<>();
         Set<String> unauthorizedTopics = new HashSet<>();
 
         for (Map.Entry<TopicPartition, ListOffsetRequest.PartitionData> entry : timestampsToSearch.entrySet()) {
@@ -764,6 +770,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
                         OffsetData offsetData = new OffsetData(offset, null, Optional.empty());
                         fetchedOffsets.put(topicPartition, offsetData);
+                    } else {
+                        partitionsWithUnknownOffset.add(topicPartition);
                     }
                 } else {
                     // Handle v1 and later response
@@ -773,6 +781,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp,
                                 partitionData.leaderEpoch);
                         fetchedOffsets.put(topicPartition, offsetData);
+                    } else {
+                        partitionsWithUnknownOffset.add(topicPartition);
                     }
                 }
             } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
@@ -781,6 +791,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // offset corresponding to the requested timestamp and leave it out of the result.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
+                partitionsWithUnknownOffset.add(topicPartition);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
@@ -799,21 +810,28 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (!unauthorizedTopics.isEmpty())
             future.raise(new TopicAuthorizationException(unauthorizedTopics));
         else
-            future.complete(new ListOffsetResult(fetchedOffsets, partitionsToRetry));
+            future.complete(new ListOffsetResult(fetchedOffsets, partitionsToRetry, partitionsWithUnknownOffset));
     }
 
     private static class ListOffsetResult {
         private final Map<TopicPartition, OffsetData> fetchedOffsets;
         private final Set<TopicPartition> partitionsToRetry;
-
-        public ListOffsetResult(Map<TopicPartition, OffsetData> fetchedOffsets, Set<TopicPartition> partitionsNeedingRetry) {
-            this.fetchedOffsets = fetchedOffsets;
-            this.partitionsToRetry = partitionsNeedingRetry;
-        }
+        private final Set<TopicPartition> partitionsWithUnknownOffset;
 
         public ListOffsetResult() {
-            this.fetchedOffsets = new HashMap<>();
-            this.partitionsToRetry = new HashSet<>();
+            this(new HashMap<>(), new HashSet<>(), new HashSet<>());
+        }
+
+        public ListOffsetResult(Map<TopicPartition, OffsetData> fetchedOffsets, Set<TopicPartition> partitionsNeedingRetry) {
+            this(fetchedOffsets, partitionsNeedingRetry, new HashSet<>());
+        }
+
+        public ListOffsetResult(Map<TopicPartition, OffsetData> fetchedOffsets,
+                                Set<TopicPartition> partitionsNeedingRetry,
+                                Set<TopicPartition> partitionsWithUnknownOffset) {
+            this.fetchedOffsets = fetchedOffsets;
+            this.partitionsToRetry = partitionsNeedingRetry;
+            this.partitionsWithUnknownOffset = partitionsWithUnknownOffset;
         }
     }
 
