@@ -160,7 +160,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private JoinGroupRequest(short version, String groupId, int sessionTimeout,
             int rebalanceTimeout, String memberId, String protocolType,
             List<ProtocolMetadata> groupProtocols) {
-        super(version);
+        super(ApiKeys.JOIN_GROUP, version);
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
         this.rebalanceTimeout = rebalanceTimeout;
@@ -170,7 +170,7 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public JoinGroupRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.JOIN_GROUP, versionId);
 
         groupId = struct.get(GROUP_ID);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);

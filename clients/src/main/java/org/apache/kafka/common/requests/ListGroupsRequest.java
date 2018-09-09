@@ -59,11 +59,11 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public ListGroupsRequest(short version) {
-        super(version);
+        super(ApiKeys.LIST_GROUPS, version);
     }
 
     public ListGroupsRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.LIST_GROUPS, versionId);
     }
 
     @Override

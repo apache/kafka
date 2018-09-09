@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Optional
+
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LogAppendInfo, LogConfig}
@@ -61,7 +63,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 9
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 4
@@ -72,12 +75,14 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val offsetForLeaderEpochRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
     else 0
 
   // Visible for testing
   private[server] val listOffsetRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 2
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) 1
     else 0
@@ -199,22 +204,21 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def fetchOffsetFromLeader(topicPartition: TopicPartition, earliestOrLatest: Long): Long = {
-    val requestBuilder = if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
-        val partitions = Map(topicPartition -> (earliestOrLatest: java.lang.Long))
-        ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId).setTargetTimes(partitions.asJava)
-      } else {
-        val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId).setOffsetData(partitions.asJava)
-      }
+    val requestPartitionData = new ListOffsetRequest.PartitionData(earliestOrLatest, Optional.empty[Integer]())
+    val requestPartitions = Map(topicPartition -> requestPartitionData)
+    val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
+      .setTargetTimes(requestPartitions.asJava)
+
     val clientResponse = leaderEndpoint.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
-    val partitionData = response.responseData.get(topicPartition)
-    partitionData.error match {
+
+    val responsePartitionData = response.responseData.get(topicPartition)
+    responsePartitionData.error match {
       case Errors.NONE =>
         if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
-          partitionData.offset
+          responsePartitionData.offset
         else
-          partitionData.offsets.get(0)
+          responsePartitionData.offsets.get(0)
       case error => throw error.exception
     }
   }
@@ -229,7 +233,7 @@ class ReplicaFetcherThread(name: String,
         try {
           val logStartOffset = replicaMgr.getReplicaOrException(topicPartition).logStartOffset
           builder.add(topicPartition, new FetchRequest.PartitionData(
-            partitionFetchState.fetchOffset, logStartOffset, fetchSize))
+            partitionFetchState.fetchOffset, logStartOffset, fetchSize, Optional.empty()))
         } catch {
           case _: KafkaStorageException =>
             // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
@@ -289,7 +293,9 @@ class ReplicaFetcherThread(name: String,
         return resultWithoutEpoch
       }
 
-      val partitionsAsJava = partitionsWithEpoch.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
+      val partitionsAsJava = partitions.map { case (tp, epoch) => tp ->
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), epoch.asInstanceOf[Integer])
+      }.toMap.asJava
       val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitionsAsJava)
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)

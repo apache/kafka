@@ -62,11 +62,10 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.requests.FetchRequest.PartitionData;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -100,6 +99,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Collections.singleton;
@@ -205,6 +205,85 @@ public class FetcherTest {
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
             offset += 1;
+        }
+    }
+
+    @Test
+    public void testMissingLeaderEpochInRecords() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
+                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
+                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        builder.append(0L, "key".getBytes(), "1".getBytes());
+        builder.append(0L, "key".getBytes(), "2".getBytes());
+        MemoryRecords records = builder.build();
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tp0, records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertEquals(2, partitionRecords.get(tp0).size());
+
+        for (ConsumerRecord<byte[], byte[]> record : partitionRecords.get(tp0)) {
+            assertEquals(Optional.empty(), record.leaderEpoch());
+        }
+    }
+
+    @Test
+    public void testLeaderEpochInConsumerRecord() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        Integer partitionLeaderEpoch = 1;
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
+                partitionLeaderEpoch);
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.close();
+
+        partitionLeaderEpoch += 7;
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 2L, System.currentTimeMillis(), partitionLeaderEpoch);
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.close();
+
+        partitionLeaderEpoch += 5;
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 3L, System.currentTimeMillis(), partitionLeaderEpoch);
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.close();
+
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tp0, records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertEquals(6, partitionRecords.get(tp0).size());
+
+        for (ConsumerRecord<byte[], byte[]> record : partitionRecords.get(tp0)) {
+            int expectedLeaderEpoch = Integer.parseInt(Utils.utf8(record.value()));
+            assertEquals(Optional.of(expectedLeaderEpoch), record.leaderEpoch());
         }
     }
 
@@ -1403,6 +1482,7 @@ public class FetcherTest {
                     p.error(),
                     p.partition(),
                     null, //no leader
+                    Optional.empty(),
                     p.replicas(),
                     p.isr(),
                     p.offlineReplicas())
@@ -1843,9 +1923,11 @@ public class FetcherTest {
     public void testBatchedListOffsetsMetadataErrors() {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         partitionData.put(tp0, new ListOffsetResponse.PartitionData(Errors.NOT_LEADER_FOR_PARTITION,
-                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET,
+                Optional.empty()));
         partitionData.put(tp1, new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET,
+                Optional.empty()));
         client.prepareResponse(new ListOffsetResponse(0, partitionData));
 
         Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
@@ -2454,7 +2536,8 @@ public class FetcherTest {
 
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         partitionData.put(tp0, new ListOffsetResponse.PartitionData(Errors.NONE,
-                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET,
+                Optional.empty()));
 
         client.prepareResponseFrom(new ListOffsetResponse(0, partitionData), cluster.leaderFor(tp0));
 
@@ -2473,7 +2556,7 @@ public class FetcherTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 ListOffsetRequest req = (ListOffsetRequest) body;
-                return timestamp == req.partitionTimestamps().get(tp0);
+                return timestamp == req.partitionTimestamps().get(tp0).timestamp;
             }
         };
     }
@@ -2483,7 +2566,8 @@ public class FetcherTest {
     }
 
     private ListOffsetResponse listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
-        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp, offset);
+        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error, timestamp, offset,
+                Optional.empty());
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
         return new ListOffsetResponse(allPartitionData);
@@ -2526,6 +2610,7 @@ public class FetcherTest {
                         Errors.NONE,
                         partitionInfo.partition(),
                         partitionInfo.leader(),
+                        Optional.empty(),
                         Arrays.asList(partitionInfo.replicas()),
                         Arrays.asList(partitionInfo.inSyncReplicas()),
                         Arrays.asList(partitionInfo.offlineReplicas())));

@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
-import java.util.{Date, Properties}
+import java.util.{Date, Optional, Properties}
 
 import joptsimple.OptionParser
 import kafka.api._
@@ -389,7 +389,8 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition), 0L, fetchSize))
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+        0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
       forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)

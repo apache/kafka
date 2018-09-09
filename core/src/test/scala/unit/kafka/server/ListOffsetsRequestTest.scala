@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import java.lang.{Long => JLong}
+import java.util.Optional
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -33,20 +33,22 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   def testListOffsetsErrorCodes(): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
+    val targetTimes = Map(partition -> new ListOffsetRequest.PartitionData(
+      ListOffsetRequest.EARLIEST_TIMESTAMP, Optional.of[Integer](0))).asJava
 
     val consumerRequest = ListOffsetRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-      .setTargetTimes(Map(partition -> ListOffsetRequest.EARLIEST_TIMESTAMP.asInstanceOf[JLong]).asJava)
+      .setTargetTimes(targetTimes)
       .build()
 
     val replicaRequest = ListOffsetRequest.Builder
       .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, servers.head.config.brokerId)
-      .setTargetTimes(Map(partition -> ListOffsetRequest.EARLIEST_TIMESTAMP.asInstanceOf[JLong]).asJava)
+      .setTargetTimes(targetTimes)
       .build()
 
     val debugReplicaRequest = ListOffsetRequest.Builder
       .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, ListOffsetRequest.DEBUGGING_REPLICA_ID)
-      .setTargetTimes(Map(partition -> ListOffsetRequest.EARLIEST_TIMESTAMP.asInstanceOf[JLong]).asJava)
+      .setTargetTimes(targetTimes)
       .build()
 
     // Unknown topic

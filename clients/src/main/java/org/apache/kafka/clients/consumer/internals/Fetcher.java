@@ -82,6 +82,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -168,10 +169,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class OffsetData {
         final long offset;
         final Long timestamp; //  null if the broker does not support returning timestamps
+        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
 
-        OffsetData(long offset, Long timestamp) {
+        OffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.timestamp = timestamp;
+            this.leaderEpoch = leaderEpoch;
         }
     }
 
@@ -383,7 +386,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             // 'entry.getValue().timestamp' will not be null since we are guaranteed
             // to work with a v1 (or later) ListOffset request
             OffsetData offsetData = entry.getValue();
-            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp));
+            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
+                    offsetData.leaderEpoch));
         }
 
         return offsetsByTimes;
@@ -570,10 +574,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : partitionResetTimestamps.keySet())
             metadata.add(tp.topic());
 
-        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(partitionResetTimestamps);
-        for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
+        Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
+                groupListOffsetRequests(partitionResetTimestamps);
+        for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
-            final Map<TopicPartition, Long> resetTimestamps = entry.getValue();
+            final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
             subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
@@ -588,8 +593,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     for (Map.Entry<TopicPartition, OffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
                         TopicPartition partition = fetchedOffset.getKey();
                         OffsetData offsetData = fetchedOffset.getValue();
-                        Long requestedResetTimestamp = resetTimestamps.get(partition);
-                        resetOffsetIfNeeded(partition, requestedResetTimestamp, offsetData);
+                        ListOffsetRequest.PartitionData requestedReset = resetTimestamps.get(partition);
+                        resetOffsetIfNeeded(partition, requestedReset.timestamp, offsetData);
                     }
                 }
 
@@ -619,7 +624,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : timestampsToSearch.keySet())
             metadata.add(tp.topic());
 
-        Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(timestampsToSearch);
+        Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
+                groupListOffsetRequests(timestampsToSearch);
         if (timestampsToSearchByNode.isEmpty())
             return RequestFuture.failure(new StaleMetadataException());
 
@@ -628,7 +634,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
-        for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
+        for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             RequestFuture<ListOffsetResult> future =
                     sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
@@ -657,8 +663,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return listOffsetRequestsFuture;
     }
 
-    private Map<Node, Map<TopicPartition, Long>> groupListOffsetRequests(Map<TopicPartition, Long> timestampsToSearch) {
-        final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
+    private Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupListOffsetRequests(
+            Map<TopicPartition, Long> timestampsToSearch) {
+        final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             PartitionInfo info = metadata.fetch().partition(tp);
@@ -679,12 +686,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         info.leader(), tp);
             } else {
                 Node node = info.leader();
-                Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
-                if (topicData == null) {
-                    topicData = new HashMap<>();
-                    timestampsToSearchByNode.put(node, topicData);
-                }
-                topicData.put(entry.getKey(), entry.getValue());
+                Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
+                        timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
+                ListOffsetRequest.PartitionData partitionData = new ListOffsetRequest.PartitionData(
+                        entry.getValue(), Optional.empty());
+                topicData.put(entry.getKey(), partitionData);
             }
         }
         return timestampsToSearchByNode;
@@ -699,7 +705,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
-                                                                  final Map<TopicPartition, Long> timestampsToSearch,
+                                                                  final Map<TopicPartition, ListOffsetRequest.PartitionData> timestampsToSearch,
                                                                   boolean requireTimestamp) {
         ListOffsetRequest.Builder builder = ListOffsetRequest.Builder
                 .forConsumer(requireTimestamp, isolationLevel)
@@ -729,14 +735,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *               return a null timestamp (-1 is returned instead when necessary).
      */
     @SuppressWarnings("deprecation")
-    private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
+    private void handleListOffsetResponse(Map<TopicPartition, ListOffsetRequest.PartitionData> timestampsToSearch,
                                           ListOffsetResponse listOffsetResponse,
                                           RequestFuture<ListOffsetResult> future) {
         Map<TopicPartition, OffsetData> fetchedOffsets = new HashMap<>();
         Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Set<String> unauthorizedTopics = new HashSet<>();
 
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+        for (Map.Entry<TopicPartition, ListOffsetRequest.PartitionData> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
             Errors error = partitionData.error;
@@ -756,7 +762,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     log.debug("Handling v0 ListOffsetResponse response for {}. Fetched offset {}",
                             topicPartition, offset);
                     if (offset != ListOffsetResponse.UNKNOWN_OFFSET) {
-                        OffsetData offsetData = new OffsetData(offset, null);
+                        OffsetData offsetData = new OffsetData(offset, null, Optional.empty());
                         fetchedOffsets.put(topicPartition, offsetData);
                     }
                 } else {
@@ -764,7 +770,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     log.debug("Handling ListOffsetResponse response for {}. Fetched offset {}, timestamp {}",
                             topicPartition, partitionData.offset, partitionData.timestamp);
                     if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET) {
-                        OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp);
+                        OffsetData offsetData = new OffsetData(partitionData.offset, partitionData.timestamp,
+                                partitionData.leaderEpoch);
                         fetchedOffsets.put(topicPartition, offsetData);
                     }
                 }
@@ -857,7 +864,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 long position = this.subscriptions.position(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
-                    this.fetchSize));
+                    this.fetchSize, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
@@ -979,6 +986,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
+            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
             TimestampType timestampType = batch.timestampType();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
@@ -991,11 +999,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         timestamp, timestampType, record.checksumOrNull(),
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
-                                        key, value, headers);
+                                        key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
+    }
+
+    private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
     @Override

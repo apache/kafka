@@ -72,12 +72,12 @@ public class SaslAuthenticateRequest extends AbstractRequest {
     }
 
     public SaslAuthenticateRequest(ByteBuffer saslAuthBytes, short version) {
-        super(version);
+        super(ApiKeys.SASL_AUTHENTICATE, version);
         this.saslAuthBytes = saslAuthBytes;
     }
 
     public SaslAuthenticateRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.SASL_AUTHENTICATE, version);
         saslAuthBytes = struct.getBytes(SASL_AUTH_BYTES_KEY_NAME);
     }
 

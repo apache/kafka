@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
@@ -735,7 +735,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
+    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.partitionTimestamps.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Describe, Resource(Topic, topicPartition.topic, LITERAL))
     }
 
@@ -794,17 +794,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
       new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
-                                           ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                                           ListOffsetResponse.UNKNOWN_OFFSET)
+        ListOffsetResponse.UNKNOWN_TIMESTAMP,
+        ListOffsetResponse.UNKNOWN_OFFSET,
+        Optional.empty())
     })
 
-    val responseMap = authorizedRequestInfo.map { case (topicPartition, timestamp) =>
+    val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
       if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
         debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
         (topicPartition, new ListOffsetResponse.PartitionData(Errors.INVALID_REQUEST,
-                                                              ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                                                              ListOffsetResponse.UNKNOWN_OFFSET))
+          ListOffsetResponse.UNKNOWN_TIMESTAMP,
+          ListOffsetResponse.UNKNOWN_OFFSET,
+          Optional.empty()))
       } else {
         try {
           // ensure leader exists
@@ -820,21 +822,22 @@ class KafkaApis(val requestChannel: RequestChannel,
               case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
             }
 
-            if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+            if (partitionData.timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
               TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
             else {
               def allowed(timestampOffset: TimestampOffset): Boolean =
-                timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
+                partitionData.timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
 
-              fetchOffsetForTimestamp(topicPartition, timestamp)
+              fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
                 .filter(allowed).getOrElse(TimestampOffset.Unknown)
             }
           } else {
-            fetchOffsetForTimestamp(topicPartition, timestamp)
+            fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
               .getOrElse(TimestampOffset.Unknown)
           }
 
-          (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset))
+          (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset,
+            Optional.empty()))
         } catch {
           // NOTE: These exceptions are special cased since these error messages are typically transient or the client
           // would have received a clear exception and there is no value in logging the entire stack trace for the same
@@ -845,13 +848,15 @@ class KafkaApis(val requestChannel: RequestChannel,
             debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                 s"partition $topicPartition failed due to ${e.getMessage}")
             (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-                                                                  ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                                                                  ListOffsetResponse.UNKNOWN_OFFSET))
+              ListOffsetResponse.UNKNOWN_TIMESTAMP,
+              ListOffsetResponse.UNKNOWN_OFFSET,
+              Optional.empty()))
           case e: Throwable =>
             error("Error while responding to offset request", e)
             (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-                                                                  ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                                                                  ListOffsetResponse.UNKNOWN_OFFSET))
+              ListOffsetResponse.UNKNOWN_TIMESTAMP,
+              ListOffsetResponse.UNKNOWN_OFFSET,
+              Optional.empty()))
         }
       }
     }
@@ -1118,16 +1123,16 @@ class KafkaApis(val requestChannel: RequestChannel,
                   val payloadOpt = zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                   payloadOpt match {
                     case Some(payload) =>
-                      (topicPartition, new OffsetFetchResponse.PartitionData(
-                          payload.toLong, OffsetFetchResponse.NO_METADATA, Errors.NONE))
+                      (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong,
+                        Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.NONE))
                     case None =>
                       (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                   }
                 }
               } catch {
                 case e: Throwable =>
-                  (topicPartition, new OffsetFetchResponse.PartitionData(
-                      OffsetFetchResponse.INVALID_OFFSET, OffsetFetchResponse.NO_METADATA, Errors.forException(e)))
+                  (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                    Optional.empty(), OffsetFetchResponse.NO_METADATA, Errors.forException(e)))
               }
             }.toMap
 
