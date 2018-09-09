@@ -47,12 +47,12 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  *   RequestTimedOut
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
-    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
-            "Responses by topic for fetched offsets");
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
+            "Responses by topic for committed offsets");
 
     // topic level fields
-    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
-            "Responses by partition for fetched offsets");
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
+            "Responses by partition for committed offsets");
 
     private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,

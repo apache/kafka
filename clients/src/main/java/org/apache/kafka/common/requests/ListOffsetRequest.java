@@ -60,7 +60,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
     // topic level fields
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
-            "Partitions to list offset.");
+            "Partitions to list offsets.");
 
     // partition level fields
     private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",

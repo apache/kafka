@@ -46,7 +46,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
 
-    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "Topics to fetch in the order provided.");
     private static final Field.ComplexArray FORGOTTEN_TOPICS = new Field.ComplexArray("forgotten_topics_data",
             "Topics to remove from the fetch session.");
@@ -65,7 +65,7 @@ public class FetchRequest extends AbstractRequest {
     private static final Field.Int32 SESSION_EPOCH = new Field.Int32("session_epoch", "The fetch session epoch");
 
     // topic level fields
-    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partition_responses",
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
             "Partitions to fetch.");
 
     // partition level fields

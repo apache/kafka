@@ -128,10 +128,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             for (Object partitionAndEpochObj : topicAndEpochs.get(PARTITIONS)) {
                 Struct partitionAndEpoch = (Struct) partitionAndEpochObj;
                 int partitionId = partitionAndEpoch.get(PARTITION_ID);
-                int searchEpoch = partitionAndEpoch.get(LEADER_EPOCH);
+                int leaderEpoch = partitionAndEpoch.get(LEADER_EPOCH);
                 Optional<Integer> currentEpoch = RequestUtils.getLeaderEpoch(partitionAndEpoch, CURRENT_LEADER_EPOCH);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
-                epochsByPartition.put(tp, new PartitionData(currentEpoch, searchEpoch));
+                epochsByPartition.put(tp, new PartitionData(currentEpoch, leaderEpoch));
             }
         }
     }

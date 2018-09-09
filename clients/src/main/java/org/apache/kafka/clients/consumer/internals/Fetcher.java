@@ -169,7 +169,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class OffsetData {
         final long offset;
         final Long timestamp; //  null if the broker does not support returning timestamps
-        final Optional<Integer> leaderEpoch; // null if leader epoch is not known
+        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
 
         OffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
             this.offset = offset;
