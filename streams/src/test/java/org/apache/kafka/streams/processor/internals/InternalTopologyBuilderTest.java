@@ -53,6 +53,7 @@ import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -427,6 +428,57 @@ public class InternalTopologyBuilderTest {
         assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
         assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
         assertEquals(mkSet("source-5"), nodeNames(topology2.processors()));
+    }
+
+    @Test
+    public void shouldAllowIncrementalBuilds() {
+        Map<Integer, Set<String>> oldNodeGroups, newNodeGroups;
+
+        oldNodeGroups = builder.nodeGroups();
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSource(null, "source-3", null, null, null, Pattern.compile(""));
+        builder.addSource(null, "source-4", null, null, null, Pattern.compile(""));
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
+        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSink("sink-1", "sink-topic", null, null, null, "processor-1");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSink("sink-2", (k, v, ctx) -> "sink-topic", null, null, null, "processor-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addStateStore(new MockStoreBuilder("store-1", false), "processor-1", "processor-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addStateStore(new MockStoreBuilder("store-2", false));
+        builder.connectProcessorAndStateStores("processor-2", "store-2");
+        builder.connectProcessorAndStateStores("processor-3", "store-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addGlobalStore(new MockStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
     }
 
     @Test(expected = NullPointerException.class)
