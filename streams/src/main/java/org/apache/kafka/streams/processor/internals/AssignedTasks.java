@@ -70,7 +70,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     void addNewTask(final T task) {
-        created.put(task.id(), task);
+        created.put(task.id().taskId, task);
     }
 
     /**
@@ -180,7 +180,7 @@ abstract class AssignedTasks<T extends Task> {
             final T task = it.next();
             try {
                 task.suspend();
-                suspended.put(task.id(), task);
+                suspended.put(task.id().taskId, task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
                 log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
@@ -248,7 +248,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     private void addToRestoring(final T task) {
-        restoring.put(task.id(), task);
+        restoring.put(task.id().taskId, task);
         for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
         }
@@ -262,7 +262,7 @@ abstract class AssignedTasks<T extends Task> {
      */
     private void transitionToRunning(final T task) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
-        running.put(task.id(), task);
+        running.put(task.id().taskId, task);
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);

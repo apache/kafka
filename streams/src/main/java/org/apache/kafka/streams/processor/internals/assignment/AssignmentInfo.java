@@ -230,22 +230,22 @@ public class AssignmentInfo {
     }
 
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out, final boolean isVersionFourOrAbove) throws IOException {
-        // encode active tasks
-        out.writeInt(activeTasks.size());
-
+        // encode active tasks*
         if (isVersionFourOrAbove) {
+            out.writeInt(activeTaskMetadata.size());
             for (final TaskMetadata metadata : activeTaskMetadata) {
                 metadata.writeTo(out);
             } 
         } else {
+            out.writeInt(activeTasks.size());
             for (final TaskId id : activeTasks) {
                 id.writeTo(out);
             }
         }
 
         // encode standby tasks
-        out.writeInt(standbyTasks.size());
         if (isVersionFourOrAbove) {
+            out.writeInt(standbyTaskMetadata.size());
             for (final Map.Entry<TaskMetadata, Set<TopicPartition>> entry : standbyTaskMetadata.entrySet()) {
                 entry.getKey().writeTo(out);
 
@@ -253,6 +253,7 @@ public class AssignmentInfo {
                 writeTopicPartitions(out, partitions);
             }
         } else {
+            out.writeInt(standbyTasks.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
                 entry.getKey().writeTo(out);
 

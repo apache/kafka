@@ -41,6 +41,8 @@ public class SubscriptionInfo {
     private UUID processId;
     private Set<TaskId> prevTasks;
     private Set<TaskId> standbyTasks;
+    private Set<TaskMetadata> prevTaskMetadata;
+    private Set<TaskMetadata> standbyTaskMetadata;
     private String userEndPoint;
 
     // used for decoding; don't apply version checks
@@ -50,6 +52,15 @@ public class SubscriptionInfo {
         this.latestSupportedVersion = latestSupportedVersion;
     }
 
+    public SubscriptionInfo(final UUID processId,
+                            final Set<TaskMetadata> prevTasks,
+                            final Set<TaskMetadata> standbyTasks,
+                            final String userEndPoint,
+                            final int version,
+                            final int latestVersion) {
+        this(version, latestVersion, processId, null, null, prevTasks, standbyTasks, userEndPoint);
+    }
+ 
     public SubscriptionInfo(final UUID processId,
                             final Set<TaskId> prevTasks,
                             final Set<TaskId> standbyTasks,
@@ -62,7 +73,7 @@ public class SubscriptionInfo {
                             final Set<TaskId> prevTasks,
                             final Set<TaskId> standbyTasks,
                             final String userEndPoint) {
-        this(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        this(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, null, null, userEndPoint);
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
@@ -76,13 +87,44 @@ public class SubscriptionInfo {
                                final UUID processId,
                                final Set<TaskId> prevTasks,
                                final Set<TaskId> standbyTasks,
+                               final Set<TaskMetadata> prevTaskMetadata,
+                               final Set<TaskMetadata> standbyTaskMetadata,
                                final String userEndPoint) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.processId = processId;
-        this.prevTasks = prevTasks;
-        this.standbyTasks = standbyTasks;
+        if (version >= 4) {
+            this.prevTasks = null;
+            this.standbyTasks = null;
+            this.prevTaskMetadata = prevTaskMetadata == null ? 
+                convertTasksToMetadata(prevTasks) : prevTaskMetadata;
+            this.standbyTaskMetadata = standbyTaskMetadata == null ?
+                convertTasksToMetadata(standbyTasks) : standbyTaskMetadata;
+        } else {
+            this.prevTaskMetadata = null;
+            this.standbyTaskMetadata = null;
+            this.prevTasks = prevTasks == null ? 
+                convertTaskMetadataToId(prevTaskMetadata) : prevTasks;
+            this.standbyTasks = standbyTasks == null ?
+                convertTaskMetadataToId(standbyTaskMetadata) : standbyTasks;
+        }
         this.userEndPoint = userEndPoint;
+    }
+
+    public static Set<TaskMetadata> convertTasksToMetadata(final Set<TaskId> tasks) {
+        final Set<TaskMetadata> result = new HashSet<>(tasks.size());
+        for (final TaskId task : tasks) {
+            result.add(new TaskMetadata(task, 0, 0));
+        }
+        return result;
+    }
+
+    public static Set<TaskId> convertTaskMetadataToId(final Set<TaskMetadata> tasks) {
+        final Set<TaskId> result = new HashSet<>(tasks.size());
+        for (final TaskMetadata metadata : tasks) {
+            result.add(metadata.taskId);
+        }
+        return result;
     }
 
     public int version() {
@@ -101,8 +143,16 @@ public class SubscriptionInfo {
         return prevTasks;
     }
 
+    public Set<TaskMetadata> prevTaskMetadata() {
+        return prevTaskMetadata;
+    }
+
     public Set<TaskId> standbyTasks() {
         return standbyTasks;
+    }
+
+    public Set<TaskMetadata> standbyTaskMetadata() {
+        return standbyTaskMetadata;
     }
 
     public String userEndPoint() {
@@ -162,17 +212,21 @@ public class SubscriptionInfo {
 
     protected void encodeTasks(final ByteBuffer buf,
                                final Collection<TaskId> taskIds) {
-        encodeTasks(buf, taskIds, false);
+        encodeTasks(buf, taskIds, null, false);
     }
     
     protected void encodeTasks(final ByteBuffer buf,
                                final Collection<TaskId> taskIds,
+                               final Collection<TaskMetadata> taskMetadata,
                                final boolean versionGreaterThanFour) {
-        buf.putInt(taskIds.size());
-        for (final TaskId id : taskIds) {
-            if (versionGreaterThanFour && !(id instanceof TaskMetadata)) {
-                new TaskMetadata(id, 0, 0).writeTo(buf);
-            } else {
+        if (versionGreaterThanFour) {
+            buf.putInt(taskMetadata.size());
+            for (final TaskMetadata metadata : taskMetadata) {
+                metadata.writeTo(buf);
+            }
+        } else {
+            buf.putInt(taskIds.size());
+            for (final TaskId id : taskIds) {
                 id.writeTo(buf);
             }
         }
@@ -248,8 +302,8 @@ public class SubscriptionInfo {
         buf.putInt(4); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks, true);
-        encodeTasks(buf, standbyTasks, true);
+        encodeTasks(buf, prevTasks, prevTaskMetadata, true);
+        encodeTasks(buf, standbyTasks, standbyTaskMetadata, true);
         encodeUserEndPoint(buf, endPointBytes);
 
         return buf;
@@ -317,21 +371,23 @@ public class SubscriptionInfo {
     private static void decodeTasks(final SubscriptionInfo subscriptionInfo,
                                     final ByteBuffer data,
                                     final int usedVersion) {
-        subscriptionInfo.prevTasks = new HashSet<>();
+        subscriptionInfo.prevTasks = usedVersion >= 4 ? null : new HashSet<>();
+        subscriptionInfo.prevTaskMetadata = usedVersion >= 4 ? new HashSet<>() : null;
         final int numPrevTasks = data.getInt();
         for (int i = 0; i < numPrevTasks; i++) {
             if (usedVersion == 4) {
-                subscriptionInfo.prevTasks.add(TaskMetadata.readFrom(data));
+                subscriptionInfo.prevTaskMetadata.add(TaskMetadata.readFrom(data));
             } else {
                 subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
             }
         }
 
-        subscriptionInfo.standbyTasks = new HashSet<>();
+        subscriptionInfo.standbyTasks = usedVersion >= 4 ? null : new HashSet<>();
+        subscriptionInfo.standbyTaskMetadata = usedVersion >= 4 ? new HashSet<>() : null;
         final int numStandbyTasks = data.getInt();
         for (int i = 0; i < numStandbyTasks; i++) {
             if (usedVersion == 4) {
-                subscriptionInfo.standbyTasks.add(TaskMetadata.readFrom(data));
+                subscriptionInfo.standbyTaskMetadata.add(TaskMetadata.readFrom(data));
             } else {
                 subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
             }

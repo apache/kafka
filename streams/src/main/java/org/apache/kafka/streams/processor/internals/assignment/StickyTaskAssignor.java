@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,20 +119,20 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
     private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
         final ClientState client = findClient(taskId, clientsWithin, active);
-        taskPairs.addPairs(taskId, client.assignedTasks());
-        client.assign(taskId, active);
+        taskPairs.addPairs(taskId, SubscriptionInfo.convertTaskMetadataToId(client.assignedTasks()));
+        client.assign(new TaskMetadata(taskId, 0, 0), active);
     }
 
     private void assignTaskToClient(final Set<TaskId> assigned, final TaskId taskId, final ClientState client) {
-        taskPairs.addPairs(taskId, client.assignedTasks());
-        client.assign(taskId, true);
+        taskPairs.addPairs(taskId,  SubscriptionInfo.convertTaskMetadataToId(client.assignedTasks()));
+        client.assign(new TaskMetadata(taskId, 0, 0), true);
         assigned.add(taskId);
     }
 
     private Set<ID> findClientsWithoutAssignedTask(final TaskId taskId) {
         final Set<ID> clientIds = new HashSet<>();
         for (final Map.Entry<ID, ClientState> client : clients.entrySet()) {
-            if (!client.getValue().hasAssignedTask(taskId)) {
+            if (!client.getValue().hasAssignedTask(new TaskMetadata(taskId, 0, 0))) {
                 clientIds.add(client.getKey());
             }
         }
@@ -217,7 +218,9 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             if (active && (leastLoaded == null || client.hasMoreAvailableActiveTaskCapacityThan(leastLoaded))) {
                 if (!checkTaskPairs) {
                     leastLoaded = client;
-                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), active)) {
+                } else if (taskPairs.hasNewPair(taskId, 
+                                                SubscriptionInfo.convertTaskMetadataToId(client.assignedTasks()),
+                                                active)) {
                     leastLoaded = client;
                 }
             }
@@ -225,7 +228,9 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             if ((!active) && (leastLoaded == null || client.hasMoreAvailableStandbyTaskCapacityThan(leastLoaded))) {
                 if (!checkTaskPairs) {
                     leastLoaded = client;
-                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), active)) {
+                } else if (taskPairs.hasNewPair(taskId, 
+                           SubscriptionInfo.convertTaskMetadataToId(client.assignedTasks()),
+                           active)) {
                     leastLoaded = client;
                 }
             }
@@ -236,11 +241,11 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
     private void mapPreviousTaskAssignment(final Map<ID, ClientState> clients) {
         for (final Map.Entry<ID, ClientState> clientState : clients.entrySet()) {
-            for (final TaskId activeTask : clientState.getValue().previousActiveTasks()) {
+            for (final TaskId activeTask : SubscriptionInfo.convertTaskMetadataToId(clientState.getValue().previousActiveTasks())) {
                 previousActiveTaskAssignment.put(activeTask, clientState.getKey());
             }
 
-            for (final TaskId prevAssignedTask : clientState.getValue().previousStandbyTasks()) {
+            for (final TaskId prevAssignedTask : SubscriptionInfo.convertTaskMetadataToId(clientState.getValue().previousStandbyTasks())) {
                 if (!previousStandbyTaskAssignment.containsKey(prevAssignedTask)) {
                     previousStandbyTaskAssignment.put(prevAssignedTask, new HashSet<ID>());
                 }

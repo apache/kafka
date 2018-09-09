@@ -159,8 +159,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         void addConsumer(final String consumerMemberId,
                          final SubscriptionInfo info) {
             consumers.add(consumerMemberId);
-            state.addPreviousActiveTasks(info.prevTasks());
-            state.addPreviousStandbyTasks(info.standbyTasks());
+            state.addPreviousActiveTasks(SubscriptionInfo.convertTasksToMetadata(info.prevTasks()));
+            state.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(info.standbyTasks()));
             state.incrementCapacity();
         }
 
@@ -643,8 +643,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     final Set<TopicPartition> topicPartitions = new HashSet<>();
                     final ClientState state = entry.getValue().state;
 
-                    for (final TaskId id : state.activeTasks()) {
-                        topicPartitions.addAll(partitionsForTask.get(id));
+                    for (final TaskMetadata id : state.activeTasks()) {
+                        topicPartitions.addAll(partitionsForTask.get(id.taskId));
                     }
 
                     partitionsByHostState.put(hostInfo, topicPartitions);
@@ -674,8 +674,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
 
-            final List<List<TaskId>> interleavedActive = interleaveTasksByGroupId(state.activeTasks(), consumers.size());
-            final List<List<TaskId>> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks(), consumers.size());
+            final List<List<TaskId>> interleavedActive = interleaveTasksByGroupId(SubscriptionInfo.convertTaskMetadataToId(state.activeTasks()), consumers.size());
+            final List<List<TaskId>> interleavedStandby = interleaveTasksByGroupId(SubscriptionInfo.convertTaskMetadataToId(state.standbyTasks()), consumers.size());
 
             int consumerTaskIndex = 0;
 
@@ -733,7 +733,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     continue;
                 }
 
-                final List<TaskId> activeTasks = new ArrayList<>(clientMetadata.state.prevActiveTasks());
+                final List<TaskId> activeTasks = 
+                    new ArrayList<>(SubscriptionInfo.convertTaskMetadataToId(clientMetadata.state.prevActiveTasks()));
 
                 final List<TopicPartition> assignedPartitions = new ArrayList<>();
                 for (final TaskId taskId : activeTasks) {
@@ -741,8 +742,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
 
                 final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-                for (final TaskId taskId : clientMetadata.state.prevStandbyTasks()) {
-                    standbyTasks.put(taskId, partitionsForTask.get(taskId));
+                for (final TaskMetadata taskId : clientMetadata.state.prevStandbyTasks()) {
+                    standbyTasks.put(taskId.taskId, partitionsForTask.get(taskId));
                 }
 
                 assignment.put(consumerId, new Assignment(
