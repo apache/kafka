@@ -64,7 +64,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         Map<String, List<String>> consumersPerTopic = consumersPerTopic(subscriptions);
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
-            assignment.put(memberId, new ArrayList<TopicPartition>());
+            assignment.put(memberId, new ArrayList<>());
 
         for (Map.Entry<String, List<String>> topicEntry : consumersPerTopic.entrySet()) {
             String topic = topicEntry.getKey();

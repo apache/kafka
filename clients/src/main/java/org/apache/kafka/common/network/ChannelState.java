@@ -62,7 +62,8 @@ public class ChannelState {
         FAILED_SEND,
         AUTHENTICATION_FAILED,
         LOCAL_CLOSE
-    };
+    }
+
     // AUTHENTICATION_FAILED has a custom exception. For other states,
     // create a reusable `ChannelState` instance per-state.
     public static final ChannelState NOT_CONNECTED = new ChannelState(State.NOT_CONNECTED);

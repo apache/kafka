@@ -117,7 +117,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         Map<String, List<TopicPartition>> dirPartitions = new HashMap<>();
         for (Map.Entry<TopicPartition, String> entry: partitionDirs.entrySet()) {
             if (!dirPartitions.containsKey(entry.getValue()))
-                dirPartitions.put(entry.getValue(), new ArrayList<TopicPartition>());
+                dirPartitions.put(entry.getValue(), new ArrayList<>());
             dirPartitions.get(entry.getValue()).add(entry.getKey());
         }
 

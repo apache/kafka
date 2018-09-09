@@ -26,7 +26,7 @@ import java.util.Map;
 public class ScramExtensions extends SaslExtensions {
 
     public ScramExtensions() {
-        this(Collections.<String, String>emptyMap());
+        this(Collections.emptyMap());
     }
 
     public ScramExtensions(String extensions) {
