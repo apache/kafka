@@ -412,42 +412,57 @@ class LogCleanerTest extends JUnitSuite {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
-    val producerId = 1L
-    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+    val producer1 = appendTransactionalAsLeader(log, 1L, producerEpoch)
+    val producer2 = appendTransactionalAsLeader(log, 2L, producerEpoch)
 
-    appendProducer(Seq(2, 3)) // batch last offset is 1
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    // [{Producer1: 2, 3}]
+    producer1(Seq(2, 3)) // offsets 0, 1
     log.roll()
 
-    log.appendAsLeader(record(2, 2), leaderEpoch = 0)
-    log.appendAsLeader(record(3, 3), leaderEpoch = 0)
+    // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}]
+    producer2(Seq(2, 3)) // offsets 2, 3
+    log.appendAsLeader(commitMarker(2L, producerEpoch), leaderEpoch = 0, isFromClient = false) // offset 4
+    log.roll()
+
+    // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}], [{2}, {3}, {Producer1: Commit}]
+    //  {0, 1},              {2, 3},            {4},                   {5}, {6}, {7} ==> Offsets
+    log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 5
+    log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 6
+    log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0, isFromClient = false) // offset 7
     log.roll()
 
     // first time through the records are removed
+    // Expected State: [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}]
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 3), LogTest.keysInLog(log))
-    assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is retained
-    assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+    assertEquals(List(4, 5, 6), offsetsInLog(log))
+    assertEquals(List(1, 3, 4, 5, 6), lastOffsetsPerBatchInLog(log))
 
     // the empty batch remains if cleaned again because it still holds the last sequence
+    // Expected State: [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 3), LogTest.keysInLog(log))
-    assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is still retained
-    assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+    assertEquals(List(4, 5, 6), offsetsInLog(log))
+    assertEquals(List(1, 3, 4, 5, 6), lastOffsetsPerBatchInLog(log))
 
     // append a new record from the producer to allow cleaning of the empty batch
-    appendProducer(Seq(1))
+    // [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}] [{Producer2: 1}, {Producer2: Commit}]
+    //  {1},                     {3},                     {4},                 {5}, {6},  {8},            {9} ==> Offsets
+    producer2(Seq(1)) // offset 8
+    log.appendAsLeader(commitMarker(2L, producerEpoch), leaderEpoch = 0, isFromClient = false) // offset 9
     log.roll()
 
+    // Expected State: [{Producer1: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer2: 1}, {Producer2: Commit}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 3, 1), LogTest.keysInLog(log))
-    assertEquals(List(2, 3, 4, 5), offsetsInLog(log)) // commit marker is still retained
-    assertEquals(List(2, 3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch should be gone
+    assertEquals(List(4, 5, 6, 8, 9), offsetsInLog(log))
+    assertEquals(List(1, 4, 5, 6, 8, 9), lastOffsetsPerBatchInLog(log))
 
+    // Expected State: [{Producer1: EmptyBatch}, {2}, {3}, {Producer2: 1}, {Producer2: Commit}]
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 3, 1), LogTest.keysInLog(log))
-    assertEquals(List(3, 4, 5), offsetsInLog(log)) // commit marker is gone
-    assertEquals(List(3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch is gone
+    assertEquals(List(5, 6, 8, 9), offsetsInLog(log))
+    assertEquals(List(1, 5, 6, 8, 9), lastOffsetsPerBatchInLog(log))
   }
 
   @Test
