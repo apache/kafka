@@ -59,12 +59,6 @@ class KafkaTest {
   }
 
   @Test(expected = classOf[FatalExitError])
-  def testGetKafkaConfigFromArgsWrongSetValue(): Unit = {
-    val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "a=b=c")))
-  }
-
-  @Test(expected = classOf[FatalExitError])
   def testGetKafkaConfigFromArgsNonArgsAtTheEnd(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2")))
@@ -95,6 +89,15 @@ class KafkaTest {
     assertEquals("key_password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
     assertEquals("keystore_password", config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
     assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+  }
+
+  @Test
+  def testKafkaSslPasswordWithEqualSign(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore=password"));
+
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
+    assertEquals("key=password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
   }
 
   def prepareDefaultConfig(): String = {
