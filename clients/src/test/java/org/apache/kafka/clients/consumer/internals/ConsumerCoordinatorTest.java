@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -72,6 +73,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -88,6 +90,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -245,7 +248,8 @@ public class ConsumerCoordinatorTest {
 
         final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
         Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = singletonMap(
-                new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L, ""));
+                new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH, ""));
         consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
                 .compose(new RequestFutureAdapter<ClientResponse, Object>() {
                     @Override
@@ -1571,22 +1575,6 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testCommitSyncNegativeOffset() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(-1L)), time.timer(Long.MAX_VALUE));
-    }
-
-    @Test
-    public void testCommitAsyncNegativeOffset() {
-        int invokedBeforeTest = mockOffsetCommitCallback.invoked;
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(-1L)), mockOffsetCommitCallback);
-        coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
-        assertTrue(mockOffsetCommitCallback.exception instanceof IllegalArgumentException);
-    }
-
     @Test
     public void testCommitOffsetSyncWithoutFutureGetsCompleted() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1606,6 +1594,25 @@ public class ConsumerCoordinatorTest {
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(100L, subscriptions.position(t1p).longValue());
+    }
+
+    @Test
+    public void testFetchCommittedOffsets() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        long offset = 500L;
+        String metadata = "blahblah";
+        Optional<Integer> leaderEpoch = Optional.of(15);
+        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, leaderEpoch,
+                metadata, Errors.NONE);
+
+        client.prepareResponse(new OffsetFetchResponse(Errors.NONE, singletonMap(t1p, data)));
+        Map<TopicPartition, OffsetAndMetadata> fetchedOffsets = coordinator.fetchCommittedOffsets(singleton(t1p),
+                time.timer(Long.MAX_VALUE));
+
+        assertNotNull(fetchedOffsets);
+        assertEquals(new OffsetAndMetadata(offset, leaderEpoch, metadata), fetchedOffsets.get(t1p));
     }
 
     @Test
@@ -2074,7 +2081,8 @@ public class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
-        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, metadata, partitionLevelError);
+        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
+                Optional.empty(), metadata, partitionLevelError);
         return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
     }
 

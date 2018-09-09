@@ -20,7 +20,7 @@ package kafka.server
 import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
 import kafka.cluster.Replica
@@ -118,7 +118,7 @@ class KafkaApisTest {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, "")
+      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, 23, "")
       val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder("groupId",
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
@@ -144,7 +144,7 @@ class KafkaApisTest {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "")
+      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
       val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder("txnlId", "groupId",
         15L, 0.toShort, Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
@@ -377,8 +377,10 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
+
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(timestamp, Optional.empty[Integer]()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> timestamp).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
@@ -418,8 +420,10 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP,
+      Optional.empty[Integer]()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.EARLIEST_TIMESTAMP: JLong)).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
@@ -508,8 +512,10 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP,
+      Optional.empty[Integer]()))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.LATEST_TIMESTAMP: JLong)).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 

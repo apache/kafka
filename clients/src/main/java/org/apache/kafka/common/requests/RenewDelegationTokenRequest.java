@@ -44,14 +44,14 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
     public static final Schema TOKEN_RENEW_REQUEST_V1 = TOKEN_RENEW_REQUEST_V0;
 
     private RenewDelegationTokenRequest(short version, ByteBuffer hmac, long renewTimePeriod) {
-        super(version);
+        super(ApiKeys.RENEW_DELEGATION_TOKEN, version);
 
         this.hmac = hmac;
         this.renewTimePeriod = renewTimePeriod;
     }
 
     public RenewDelegationTokenRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.RENEW_DELEGATION_TOKEN, versionId);
 
         hmac = struct.getBytes(HMAC_KEY_NAME);
         renewTimePeriod = struct.getLong(RENEW_TIME_PERIOD_KEY_NAME);

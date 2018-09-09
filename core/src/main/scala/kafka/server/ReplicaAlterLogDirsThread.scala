@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
@@ -196,7 +197,8 @@ class ReplicaAlterLogDirsThread(name: String,
       val (topicPartition, partitionFetchState) = maxPartitionOpt.get
       try {
         val logStartOffset = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId).logStartOffset
-        requestMap.put(topicPartition, new FetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset, fetchSize))
+        requestMap.put(topicPartition, new FetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset,
+          fetchSize, Optional.empty()))
       } catch {
         case _: KafkaStorageException =>
           partitionsWithError += topicPartition
