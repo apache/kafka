@@ -177,7 +177,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             errorResponse.put(tp, new EpochEndOffset(
                 error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
-        return new OffsetsForLeaderEpochResponse(errorResponse);
+        return new OffsetsForLeaderEpochResponse(throttleTimeMs, errorResponse);
     }
 
     public static class PartitionData {

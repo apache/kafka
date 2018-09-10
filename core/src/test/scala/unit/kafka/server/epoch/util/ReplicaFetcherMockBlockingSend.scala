@@ -22,7 +22,7 @@ import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.{AbstractRequest, EpochEndOffset, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EpochEndOffset, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
@@ -62,7 +62,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         callback.foreach(_.apply())
         epochFetchCount += 1
         lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
-        new OffsetsForLeaderEpochResponse(currentOffsets)
+        new OffsetsForLeaderEpochResponse(AbstractResponse.DEFAULT_THROTTLE_TIME ,currentOffsets)
 
       case ApiKeys.FETCH =>
         fetchCount += 1
