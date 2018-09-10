@@ -443,7 +443,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                                            long timestamp,
                                                            Timer timer) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> offsets = new HashMap<>();
@@ -667,7 +666,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             });
         }
-
         return listOffsetRequestsFuture;
     }
 
