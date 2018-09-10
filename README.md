@@ -62,6 +62,10 @@ Generate coverage reports for the whole project:
 
     ./gradlew reportCoverage
 
+Generate coverage for a single module, i.e.: 
+
+    ./gradlew clients:reportCoverage
+
 ### Generating an API compatibility report between trunk and your local branch ###
 *Note that the branches need to be local.*
 
@@ -76,10 +80,6 @@ flag to false:
 *Note that the branches need to be local*
 
      ./gradlew checkApiCompatibility -PbaseBranch=1.1.0 -PnewBranch=1.1.1
-
-Generate coverage for a single module, i.e.: 
-
-    ./gradlew clients:reportCoverage
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
