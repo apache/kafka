@@ -26,39 +26,39 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamFlatTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+public class KStreamFlatTransform<Ki, Vi, Ko, Vo> implements ProcessorSupplier<Ki, Vi> {
 
-    private final TransformerSupplier<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformerSupplier;
+    private final TransformerSupplier<? super Ki, ? super Vi, ? extends Iterable<? extends KeyValue<? extends Ko, ? extends Vo>>> transformerSupplier;
 
-    public KStreamFlatTransform(TransformerSupplier<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformerSupplier) {
+    public KStreamFlatTransform(final TransformerSupplier<? super Ki, ? super Vi, ? extends Iterable<? extends KeyValue<? extends Ko, ? extends Vo>>> transformerSupplier) {
         this.transformerSupplier = transformerSupplier;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<Ki, Vi> get() {
         return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
-    public static class KStreamFlatTransformProcessor<K, V, K1, V1> extends AbstractProcessor<K, V> {
+    public static class KStreamFlatTransformProcessor<Ki, Vi, Ko, Vo> extends AbstractProcessor<Ki, Vi> {
 
-        private final Transformer<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformer;
+        private final Transformer<? super Ki, ? super Vi, ? extends Iterable<? extends KeyValue<? extends Ko, ? extends Vo>>> transformer;
 
-        public KStreamFlatTransformProcessor(Transformer<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformer) {
+        public KStreamFlatTransformProcessor(final Transformer<? super Ki, ? super Vi, ? extends Iterable<? extends KeyValue<? extends Ko, ? extends Vo>>> transformer) {
             this.transformer = transformer;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             transformer.init(context);
         }
 
         @Override
-        public void process(K key, V value) {
-            Iterable<? extends KeyValue<? extends K1, ? extends V1>> pairs = transformer.transform(key, value);
+        public void process(final Ki key, final Vi value) {
+            Iterable<? extends KeyValue<? extends Ko, ? extends Vo>> pairs = transformer.transform(key, value);
             Objects.requireNonNull(pairs, "result of transform can't be null");
 
-            for (KeyValue<? extends K1, ? extends V1> pair : pairs) {
+            for (KeyValue<? extends Ko, ? extends Vo> pair : pairs) {
                 context().forward(pair.key, pair.value);
             }
         }
@@ -68,5 +68,4 @@ public class KStreamFlatTransform<K, V, K1, V1> implements ProcessorSupplier<K, 
             transformer.close();
         }
     }
-
 }

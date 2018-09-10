@@ -25,7 +25,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,12 +45,14 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
 
     private KStreamFlatTransformProcessor<Number, Number, Integer, Integer> processor;
 
+    @Rule
+    public final ExpectedException exception = ExpectedException.none();
+
     @Before
     public void setUp() {
         inputKey = 1;
         inputValue = 10;
-        Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> tempTransformer = mock(Transformer.class);
-        transformer = tempTransformer;
+        transformer = mock(Transformer.class);
         context = strictMock(ProcessorContext.class);
         processor = new KStreamFlatTransformProcessor<Number, Number, Integer, Integer>(transformer);
     }
@@ -89,7 +93,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
         EasyMock.reset(transformer);
 
         EasyMock.expect(transformer.transform(inputKey, inputValue))
-                            .andReturn(Collections.<KeyValue<Integer, Integer>>emptyList());
+            .andReturn(Collections.<KeyValue<Integer, Integer>>emptyList());
         replayAll();
 
         processor.process(inputKey, inputValue);
@@ -107,14 +111,15 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
         verifyAll();
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowTransformInputRecordToNull() {
         processor.init(context);
         EasyMock.reset(transformer);
-
         EasyMock.expect(transformer.transform(inputKey, inputValue)).andReturn(null);
         replayAll();
 
+        exception.expect(NullPointerException.class);
+        exception.expectMessage("result of transform can't be null");
         processor.process(inputKey, inputValue);
 
         verifyAll();

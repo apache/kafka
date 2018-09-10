@@ -496,15 +496,6 @@ public interface KStream<K, V> {
      * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
-     * Although calling {@link ProcessorContext#forward(K, V) forward()} in {@link Transformer#transform}
-     * allows to emit multiple records for each input record, it is discouraged to do so since output records
-     * that are incompatible with the output stream would only be detected at runtime.
-     * To transform each record of the input stream to zero or more records in the output stream, it is recommended to
-     * use {@link #flatTransform(TransformerSupplier, String...)}.
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()} is safer because it throws a compile error
-     * if the types of the output records are not compatible with the output stream.
-     * Calling {@link ProcessorContext#forward(K, V)} in {@link Transformer#transform} may be disallowed in future
-     * releases.
      *
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -536,19 +527,16 @@ public interface KStream<K, V> {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
      *                 // punctuate each 1000ms; can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
      *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward() -- not recommended!, use flatTransform instead
      *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
      *             }
      *
      *             void close() {
      *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *             }
      *         }
      *     }
@@ -570,7 +558,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier,
                                        final String... stateStoreNames);
 
     /**

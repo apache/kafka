@@ -48,7 +48,9 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -74,6 +76,9 @@ public class KStreamImplTest {
 
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+
+    @Rule
+    public final ExpectedException exception = ExpectedException.none();
 
     @Before
     public void before() {
@@ -356,13 +361,17 @@ public class KStreamImplTest {
         testStream.to((TopicNameExtractor<String, String>) null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTransformSupplierOnTransform() {
+        exception.expect(NullPointerException.class);
+        exception.expectMessage("transformerSupplier can't be null");
         testStream.transform(null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
+        exception.expect(NullPointerException.class);
+        exception.expectMessage("transformerSupplier can't be null");
         testStream.flatTransform(null);
     }
 
