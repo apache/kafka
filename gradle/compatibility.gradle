@@ -32,6 +32,14 @@ import org.apache.tools.ant.DirectoryScanner
 def baseBranch = project.hasProperty('baseBranch') ? project.baseBranch : "trunk"
 def newBranch = project.hasProperty('newBranch') ? project.newBranch : "HEAD"
 def onlyIncompatible = project.hasProperty('onlyIncompatible') ? project.onlyIncompatible : true
+def failOnBinaryIncompatibility = project.hasProperty('failOnBinaryIncompatibility') ?
+        project.failOnBinaryIncompatibility : false
+def failOnSourceIncompatibility = project.hasProperty('failOnSourceIncompatibility') ?
+        project.failOnSourceIncompatibility : false
+def failOnModifications = project.hasProperty('failOnModifications') ?
+        project.failOnModifications : false
+def failOnSemanticIncompatibility = project.hasProperty('failOnSemanticIncompatibility') ?
+        project.failOnSemanticIncompatibility : false
 
 // Constants
 def packageIncludes = [
@@ -126,13 +134,13 @@ task apiCompatibilityReport(dependsOn: [buildBaseBranch, buildNewBranch]) {
     new File(reportFile).createNewFile()
 
     // Artifacts and Classpaths
-    def oldArtifacts = collectArtifactJars(baseWorkspace)
+    def baseArtifacts = collectArtifactJars(baseWorkspace)
     def newArtifacts = collectArtifactJars(newWorkspace)
 
     // Build check tool arguments
     String[] args = [
             "--ignore-missing-classes",
-            "--old", oldArtifacts.join(";"),
+            "--old", baseArtifacts.join(";"),
             "--new", newArtifacts.join(";"),
             "--include", packageIncludes.join(";"),
             "--exclude", packageExcludes.join(";"),
@@ -144,6 +152,19 @@ task apiCompatibilityReport(dependsOn: [buildBaseBranch, buildNewBranch]) {
     if(onlyIncompatible) {
       args = args + ["--only-incompatible"]
     }
+    if (failOnBinaryIncompatibility) {
+      args = args + ["--error-on-binary-incompatibility"]
+    }
+    if (failOnSourceIncompatibility) {
+      args = args + ["--error-on-source-incompatibility"]
+    }
+    if (failOnModifications) {
+      args = args + ["--error-on-modifications"]
+    }
+    if (failOnSemanticIncompatibility) {
+      args = args + ["--error-on-semantic-incompatibility"]
+    }
+
 
     // Run the check tool
     JApiCli cli = new JApiCli()
