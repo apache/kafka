@@ -45,7 +45,7 @@ def packageExcludes = [
   "org.apache.kafka.clients.producer.internals.*",
   "org.apache.kafka.clients.common.internals.*",
 ]
-def baseWorkspace = "$buildDir/tmp/compatibility/old"
+def baseWorkspace = "$buildDir/tmp/compatibility/base"
 def newWorkspace = "$buildDir/tmp/compatibility/new"
 def reportDir = "$buildDir/reports/compatibility"
 def reportFile = "$reportDir/compatibilityReport.html"
@@ -77,9 +77,12 @@ task setNoDirectoryExclude {
   DirectoryScanner.addDefaultExclude 'something has to be in here or everything gets excluded'
 }
 
-task checkoutCleanBaseBranch(dependsOn: setNoDirectoryExclude) {
+task cleanWorkspaces {
   delete baseWorkspace
+  delete newWorkspace
+}
 
+task checkoutCleanBaseBranch(dependsOn: [setNoDirectoryExclude, cleanWorkspaces]) {
   doLast {
     copy {
       from rootDir
@@ -90,9 +93,7 @@ task checkoutCleanBaseBranch(dependsOn: setNoDirectoryExclude) {
   }
 }
 
-task checkoutCleanNewBranch(dependsOn: setNoDirectoryExclude) {
-  delete newWorkspace
-
+task checkoutCleanNewBranch(dependsOn: [setNoDirectoryExclude, cleanWorkspaces]) {
   doLast {
     copy {
       from rootDir
