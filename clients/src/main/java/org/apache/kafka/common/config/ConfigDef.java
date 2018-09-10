@@ -942,7 +942,7 @@ public class ConfigDef {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
-                // Pass in the string null to avoid the findbugs warning
+                // Pass in the string null to avoid the spotbugs warning
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
