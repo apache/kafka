@@ -88,7 +88,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
@@ -415,9 +414,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (value.partitionsToRetry.isEmpty())
                     return result;
 
-                remainingToSearch = timestampsToSearch.entrySet().stream()
-                    .filter(entry -> value.partitionsToRetry.contains(entry.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
                 throw future.exception();
             }
@@ -577,8 +574,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : partitionResetTimestamps.keySet())
             metadata.add(tp.topic());
 
+        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps);
+                groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
+        if (!partitionsToRetry.isEmpty())
+            log.info("Skipping reset of partitions {} that need metadata update or re-connect to leader", partitionsToRetry);
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
@@ -627,21 +627,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : timestampsToSearch.keySet())
             metadata.add(tp.topic());
 
+        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
-                groupListOffsetRequests(timestampsToSearch);
+                groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
         if (timestampsToSearchByNode.isEmpty())
             return RequestFuture.failure(new StaleMetadataException());
 
         final RequestFuture<ListOffsetResult> listOffsetRequestsFuture = new RequestFuture<>();
         final Map<TopicPartition, OffsetData> fetchedTimestampOffsets = new HashMap<>();
-        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
-        final Set<TopicPartition> partitionsRequireMetadataUpdate = new HashSet<>(timestampsToSearch.keySet());
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
-            partitionsRequireMetadataUpdate.removeAll(entry.getValue().keySet());
             RequestFuture<ListOffsetResult> future =
-                    sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
+                sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
@@ -650,7 +648,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         partitionsToRetry.addAll(partialResult.partitionsToRetry);
 
                         if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone()) {
-                            partitionsToRetry.addAll(partitionsRequireMetadataUpdate);
                             ListOffsetResult result = new ListOffsetResult(fetchedTimestampOffsets, partitionsToRetry);
                             listOffsetRequestsFuture.complete(result);
                         }
@@ -669,8 +666,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return listOffsetRequestsFuture;
     }
 
+    /**
+     * Groups timestamps to search by node for topic partitions in `timestampsToSearch` that have
+     * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
+     * available are added to `partitionsToRetry`
+     * @param timestampsToSearch The mapping from partitions ot the target timestamps
+     * @param partitionsToRetry A set of topic partitions that will be extended with partitions
+     *                          that need metadata update or re-connect to the leader.
+     */
     private Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupListOffsetRequests(
-            Map<TopicPartition, Long> timestampsToSearch) {
+            Map<TopicPartition, Long> timestampsToSearch, Set<TopicPartition> partitionsToRetry) {
         final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
@@ -679,9 +684,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
+                partitionsToRetry.add(tp);
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
+                partitionsToRetry.add(tp);
             } else if (client.isUnavailable(info.leader())) {
                 client.maybeThrowAuthFailure(info.leader());
 
@@ -689,7 +696,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
                 log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                        info.leader(), tp);
+                          info.leader(), tp);
+                partitionsToRetry.add(tp);
             } else {
                 Node node = info.leader();
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
