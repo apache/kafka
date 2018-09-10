@@ -574,11 +574,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (TopicPartition tp : partitionResetTimestamps.keySet())
             metadata.add(tp.topic());
 
-        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
-        if (!partitionsToRetry.isEmpty())
-            log.info("Skipping reset of partitions {} that need metadata update or re-connect to leader", partitionsToRetry);
+                groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
