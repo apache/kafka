@@ -17,13 +17,13 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.ProducedInternal;
+import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
+import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
 public class StreamSinkNode<K, V> extends StreamsGraphNode {
 
@@ -31,8 +31,8 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
     private final ProducedInternal<K, V> producedInternal;
 
     public StreamSinkNode(final String nodeName,
-                   final TopicNameExtractor<K, V> topicNameExtractor,
-                   final ProducedInternal<K, V> producedInternal) {
+                          final TopicNameExtractor<K, V> topicNameExtractor,
+                          final ProducedInternal<K, V> producedInternal) {
 
         super(nodeName,
               false);
@@ -41,37 +41,28 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
         this.producedInternal = producedInternal;
     }
 
-    String topic() {
-        return topicNameExtractor instanceof StaticTopicNameExtractor ? ((StaticTopicNameExtractor) topicNameExtractor).topicName : null;
-    }
 
-    TopicNameExtractor<K, V> topicNameExtractor() {
-        return topicNameExtractor;
-    }
-
-    Serde<K> keySerde() {
-        return producedInternal.keySerde();
-    }
-
-    Serializer<K> keySerializer() {
-        return producedInternal.keySerde() != null ? producedInternal.keySerde().serializer() : null;
-    }
-
-    Serde<V> valueSerde() {
-        return producedInternal.valueSerde();
-    }
-
-    Serializer<V> valueSerializer() {
-        return producedInternal.valueSerde() != null ? producedInternal.valueSerde().serializer() : null;
-    }
-
-    StreamPartitioner<? super K, ? super V> streamPartitioner() {
-        return producedInternal.streamPartitioner();
+    @Override
+    public String toString() {
+        return "StreamSinkNode{" +
+               "topicNameExtractor=" + topicNameExtractor +
+               ", producedInternal=" + producedInternal +
+               "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        final Serializer<K> keySerializer = producedInternal.keySerde() == null ? null : producedInternal.keySerde().serializer();
+        final Serializer<V> valSerializer = producedInternal.valueSerde() == null ? null : producedInternal.valueSerde().serializer();
+        final StreamPartitioner<? super K, ? super V> partitioner = producedInternal.streamPartitioner();
+        final String[] parentNames = parentNodeNames();
+
+        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
+            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
+            topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, windowedPartitioner, parentNames);
+        } else {
+            topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, partitioner,  parentNames);
+        }
     }
 
 }

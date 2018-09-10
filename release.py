@@ -147,7 +147,7 @@ def sftp_mkdir(dir):
     try:
        cmd_str  = """
 cd %s
-mkdir %s
+-mkdir %s
 """ % (basedir, dirname)
        cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
     except subprocess.CalledProcessError:
@@ -479,23 +479,22 @@ sftp_cmds = ""
 for root, dirs, files in os.walk(artifacts_dir):
     assert root.startswith(artifacts_dir)
 
-    for file in files:
-        local_path = os.path.join(root, file)
-        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
-        sftp_cmds += "\nput %s %s" % (local_path, remote_path)
-
     for dir in dirs:
         sftp_mkdir(os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], dir))
 
-if sftp_cmds:
-    cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
+    for file in files:
+        local_path = os.path.join(root, file)
+        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
+        sftp_cmds = """
+put %s %s
+""" % (local_path, remote_path)
+        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk8_env)
-cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env)
 
 release_notification_props = { 'release_version': release_version,
@@ -581,7 +580,7 @@ https://repository.apache.org/content/groups/staging/
 http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
 
 * Tag to be voted upon (off %(dev_branch)s branch) is the %(release_version)s tag:
-https://git-wip-us.apache.org/repos/asf?p=kafka.git;a=tag;h=%(rc_githash)s
+https://github.com/apache/kafka/releases/tag/%(rc_tag)s
 
 * Documentation:
 http://kafka.apache.org/%(docs_version)s/documentation.html
@@ -591,7 +590,7 @@ http://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk8/<BUILD NUMBER>/
-System tests: https://jenkins.confluent.io/job/system-test-kafka-%(dev_branch)s/<BUILD_NUMBER>/
+System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 /**************************************
 

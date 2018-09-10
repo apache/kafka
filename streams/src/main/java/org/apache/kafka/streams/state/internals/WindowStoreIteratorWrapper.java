@@ -50,7 +50,7 @@ class WindowStoreIteratorWrapper<K, V> {
         final StateSerdes<?, V> serdes;
 
         WrappedWindowStoreIterator(
-            KeyValueIterator<Bytes, byte[]> bytesIterator, StateSerdes<?, V> serdes) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator, final StateSerdes<?, V> serdes) {
             this.bytesIterator = bytesIterator;
             this.serdes = serdes;
         }

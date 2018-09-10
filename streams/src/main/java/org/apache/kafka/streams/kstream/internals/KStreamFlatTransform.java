@@ -55,10 +55,10 @@ public class KStreamFlatTransform<Ki, Vi, Ko, Vo> implements ProcessorSupplier<K
 
         @Override
         public void process(final Ki key, final Vi value) {
-            Iterable<? extends KeyValue<? extends Ko, ? extends Vo>> pairs = transformer.transform(key, value);
+            final Iterable<? extends KeyValue<? extends Ko, ? extends Vo>> pairs = transformer.transform(key, value);
             Objects.requireNonNull(pairs, "result of transform can't be null");
 
-            for (KeyValue<? extends Ko, ? extends Vo> pair : pairs) {
+            for (final KeyValue<? extends Ko, ? extends Vo> pair : pairs) {
                 context().forward(pair.key, pair.value);
             }
         }

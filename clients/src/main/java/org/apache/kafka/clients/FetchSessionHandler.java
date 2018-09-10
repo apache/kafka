@@ -202,7 +202,7 @@ public class FetchSessionHandler {
                 next = null;
                 Map<TopicPartition, PartitionData> toSend =
                     Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
-                return new FetchRequestData(toSend, Collections.<TopicPartition>emptyList(), toSend, nextMetadata);
+                return new FetchRequestData(toSend, Collections.emptyList(), toSend, nextMetadata);
             }
 
             List<TopicPartition> added = new ArrayList<>();
@@ -234,9 +234,7 @@ public class FetchSessionHandler {
                 }
             }
             // Add any new partitions to the session.
-            for (Iterator<Entry<TopicPartition, PartitionData>> iter =
-                     next.entrySet().iterator(); iter.hasNext(); ) {
-                Entry<TopicPartition, PartitionData> entry = iter.next();
+            for (Entry<TopicPartition, PartitionData> entry : next.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData nextData = entry.getValue();
                 if (sessionPartitions.containsKey(topicPartition)) {

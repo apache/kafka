@@ -33,14 +33,14 @@ public class SingleGroupPartitionGrouperStub implements PartitionGrouper {
     private PartitionGrouper defaultPartitionGrouper = new DefaultPartitionGrouper();
 
     @Override
-    public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
-        Map<Integer, Set<String>> includedTopicGroups = new HashMap<>();
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
+        final Map<Integer, Set<String>> includedTopicGroups = new HashMap<>();
 
-        for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
             includedTopicGroups.put(entry.getKey(), entry.getValue());
             break; // arbitrarily use the first entry only
         }
-        Map<TaskId, Set<TopicPartition>> result = defaultPartitionGrouper.partitionGroups(includedTopicGroups, metadata);
+        final Map<TaskId, Set<TopicPartition>> result = defaultPartitionGrouper.partitionGroups(includedTopicGroups, metadata);
         return result;
     }
 }

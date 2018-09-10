@@ -46,7 +46,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val tp = new TopicPartition("test", 0)
     val logProps = new Properties()
     logProps.put(FlushMessagesProp, oldVal.toString)
-    adminZkClient.createTopic(tp.topic, 1, 1, logProps)
+    createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.servers.head.logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
@@ -233,7 +233,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def shouldParseReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -246,7 +246,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def shouldParseWildcardReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -261,7 +261,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def shouldParseReplicationQuotaReset(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -276,7 +276,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def shouldParseRegardlessOfWhitespaceAroundValues() {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     assertEquals(AllReplicas, parse(configHandler, "* "))
     assertEquals(Seq(), parse(configHandler, " "))
     assertEquals(Seq(6), parse(configHandler, "6:102"))

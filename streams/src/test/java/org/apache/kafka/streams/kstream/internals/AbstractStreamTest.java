@@ -19,13 +19,15 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -76,7 +78,7 @@ public class AbstractStreamTest {
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final String topicName = "topic";
 
-        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
+        final ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
         stream.randomFilter().process(supplier);
 
@@ -87,7 +89,7 @@ public class AbstractStreamTest {
 
         final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
@@ -101,9 +103,12 @@ public class AbstractStreamTest {
         }
 
         KStream<K, V> randomFilter() {
-            String name = builder.newProcessorName("RANDOM-FILTER-");
-            builder.internalTopologyBuilder.addProcessor(name, new ExtendedKStreamDummy(), this.name);
-            return new KStreamImpl<>(builder, name, sourceNodes, false, null);
+            final String name = builder.newProcessorName("RANDOM-FILTER-");
+            final ProcessorGraphNode processorNode = new ProcessorGraphNode(name,
+                                                                            new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
+                                                                            false);
+            builder.addGraphNode(this.streamsGraphNode, processorNode);
+            return new KStreamImpl<>(builder, name, sourceNodes, false, processorNode);
         }
     }
 
@@ -122,7 +127,7 @@ public class AbstractStreamTest {
 
         private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
             @Override
-            public void process(K key, V value) {
+            public void process(final K key, final V value) {
                 // flip a coin and filter
                 if (rand.nextBoolean())
                     context().forward(key, value);

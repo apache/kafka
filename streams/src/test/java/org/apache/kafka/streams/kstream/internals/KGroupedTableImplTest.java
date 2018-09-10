@@ -56,7 +56,7 @@ public class KGroupedTableImplTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
     private final String topic = "input";
 
     @Before
@@ -132,7 +132,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -157,7 +157,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -183,7 +183,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };

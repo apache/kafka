@@ -69,7 +69,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
 
     @Test
     public void shouldTransformInputRecordToMultipleOutputRecords() {
-        List<KeyValue<Integer, Integer>> outputRecords = Arrays.asList(
+        final List<KeyValue<Integer, Integer>> outputRecords = Arrays.asList(
                 KeyValue.pair(2, 20),
                 KeyValue.pair(3, 30),
                 KeyValue.pair(4, 40));
@@ -127,15 +127,15 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
 
     @Test
     public void shouldGetFlatTransformProcessor() {
-        TransformerSupplier<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformerSupplier =
+        final TransformerSupplier<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformerSupplier =
             mock(TransformerSupplier.class);
-        KStreamFlatTransform<Number, Number, Integer, Integer> processorSupplier =
+        final KStreamFlatTransform<Number, Number, Integer, Integer> processorSupplier =
             new KStreamFlatTransform<>(transformerSupplier);
 
         EasyMock.expect(transformerSupplier.get()).andReturn(transformer);
         replayAll();
 
-        Processor<Number, Number> processor = processorSupplier.get();
+        final Processor<Number, Number> processor = processorSupplier.get();
 
         verifyAll();
         assertTrue(processor instanceof KStreamFlatTransformProcessor);

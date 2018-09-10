@@ -94,7 +94,7 @@ public class KStreamTransformIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
+        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
                 Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
                                             Serdes.Integer(),
                                             Serdes.Integer());
@@ -121,15 +121,15 @@ public class KStreamTransformIntegrationTest {
                         private KeyValueStore<Integer, Integer> state;
 
                         @Override
-                        public void init(ProcessorContext context) {
+                        public void init(final ProcessorContext context) {
                             state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
                         }
 
                         @Override
-                        public List<KeyValue<Integer, Integer>> transform(Integer key, Integer value) {
-                            List<KeyValue<Integer, Integer>> result = new ArrayList<>();
+                        public List<KeyValue<Integer, Integer>> transform(final Integer key, final Integer value) {
+                            final List<KeyValue<Integer, Integer>> result = new ArrayList<>();
                             state.putIfAbsent(key, 0);
-                            Integer storedValue = state.get(key);
+                            final Integer storedValue = state.get(key);
                             int outputValue = storedValue.intValue();
                             for (int i = 0; i < 3; i++) {
                                 result.add(new KeyValue<Integer, Integer>(key + i, value + outputValue++));
@@ -194,16 +194,16 @@ public class KStreamTransformIntegrationTest {
                         private KeyValueStore<Integer, Integer> state;
 
                         @Override
-                        public void init(ProcessorContext context) {
+                        public void init(final ProcessorContext context) {
                             state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
                         }
 
                         @Override
-                        public KeyValue<Integer, Integer> transform(Integer key, Integer value) {
+                        public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
                             state.putIfAbsent(key, 0);
-                            Integer storedValue = state.get(key);
+                            final Integer storedValue = state.get(key);
                             int outputValue = storedValue.intValue();
-                            KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + outputValue++);
+                            final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + outputValue++);
                             state.put(key, outputValue);
                             return result;
                         }

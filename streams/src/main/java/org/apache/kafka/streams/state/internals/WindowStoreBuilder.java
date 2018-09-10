@@ -52,7 +52,7 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
                                         keySerde,
                                         valueSerde,
                                         storeSupplier.windowSize(),
-                                        storeSupplier.segments());
+                                        storeSupplier.segmentIntervalMs());
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {

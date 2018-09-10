@@ -17,7 +17,6 @@ import java.util
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.ShutdownableThread
 import kafka.server.KafkaConfig
@@ -36,8 +35,6 @@ import org.apache.kafka.common.internals.Topic
 abstract class BaseConsumerTest extends IntegrationTestHarness {
 
   val epsilon = 0.1
-  val producerCount = 1
-  val consumerCount = 2
   val serverCount = 3
 
   val topic = "topic"
@@ -74,19 +71,21 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   @Test
   def testSimpleConsumption() {
     val numRecords = 10000
-    sendRecords(numRecords)
+    val producer = createProducer()
+    sendRecords(producer, numRecords, tp)
 
-    assertEquals(0, this.consumers.head.assignment.size)
-    this.consumers.head.assign(List(tp).asJava)
-    assertEquals(1, this.consumers.head.assignment.size)
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.assign(List(tp).asJava)
+    assertEquals(1, consumer.assignment.size)
 
-    this.consumers.head.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, startingOffset = 0)
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
 
     // check async commit callbacks
     val commitCallback = new CountConsumerCommitCallback()
-    this.consumers.head.commitAsync(commitCallback)
-    awaitCommitCallback(this.consumers.head, commitCallback)
+    consumer.commitAsync(commitCallback)
+    awaitCommitCallback(consumer, commitCallback)
   }
 
   @Test
@@ -94,20 +93,19 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
-    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumers += consumer0
+    val consumer = createConsumer()
 
-    consumer0.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
-    consumer0.poll(2000)
+    consumer.poll(2000)
 
     assertEquals(1, listener.callsToAssigned)
 
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
+      parts = consumer.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 
@@ -115,7 +113,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val coordinator = parts.head.leader().id()
     this.servers(coordinator).shutdown()
 
-    consumer0.poll(5000)
+    consumer.poll(5000)
 
     // the failover should not cause a rebalance
     assertEquals(1, listener.callsToAssigned)
@@ -136,12 +134,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
       callsToRevoked += 1
     }
   }
-
-  protected def sendRecords(numRecords: Int): Seq[ProducerRecord[Array[Byte], Array[Byte]]] =
-    sendRecords(numRecords, tp)
-
-  protected def sendRecords(numRecords: Int, tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] =
-    sendRecords(this.producers.head, numRecords, tp)
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
                             tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
@@ -302,9 +294,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
    */
   def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
                                  partitions: Set[TopicPartition]): Boolean = {
-    val allNonEmptyAssignments = assignments forall (assignment => assignment.nonEmpty)
+    val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
+      val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
       return false
     }
 

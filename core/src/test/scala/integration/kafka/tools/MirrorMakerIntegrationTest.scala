@@ -24,14 +24,44 @@ import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.junit.Test
+import org.junit.Assert._
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
     TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+
+  @Test(expected = classOf[TimeoutException])
+  def testCommitOffsetsThrowTimeoutException(): Unit = {
+    val consumerProps = new Properties
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1")
+    val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
+    mirrorMakerConsumer.commit()
+  }
+
+  @Test
+  def testCommitOffsetsRemoveNonExistentTopics(): Unit = {
+    val consumerProps = new Properties
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "2000")
+    val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
+    val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
+    mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic1", 0), 0L)
+    mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
+    MirrorMaker.commitOffsets(mirrorMakerConsumer)
+    assertTrue("Offsets for non-existent topics should be removed", mirrorMakerConsumer.offsets.isEmpty)
+  }
 
   @Test
   def testCommaSeparatedRegex(): Unit = {

@@ -687,7 +687,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val endpoint = new EndPoint("localhost", 9092, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
     val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), ApiVersion.latestVersion, jmxPort = 9192)
-    zkClient.registerBrokerInZk(brokerInfo)
+    zkClient.registerBroker(brokerInfo)
   }
 
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {

@@ -99,7 +99,7 @@ public class GlobalKTableJoinsTest {
 
     private void verifyJoin(final Map<String, String> expected) {
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             // write some data to the global table

@@ -72,7 +72,8 @@ class Segments {
     }
 
     Segment getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
-        final long minLiveSegment = segmentId(context.streamTime() - retentionPeriod);
+        final long minLiveTimestamp = context.streamTime() - retentionPeriod;
+        final long minLiveSegment = segmentId(minLiveTimestamp);
 
         final Segment toReturn;
         if (segmentId >= minLiveSegment) {

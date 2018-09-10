@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
@@ -64,11 +64,18 @@ public class NioEchoServer extends Thread {
     private volatile WritableByteChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
-    private int numSent = 0;
+    private volatile int numSent = 0;
+    private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
+    }
+
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+                         int failedAuthenticationDelayMs, Time time) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -88,7 +95,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
     }
 
@@ -119,7 +126,7 @@ public class NioEchoServer extends Thread {
         waitForMetric("failed-authentication", failedAuthentications);
     }
 
-    private void waitForMetric(String name, final double expectedValue) throws InterruptedException {
+    public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
         final String totalName = name + "-total";
         final String rateName = name + "-rate";
         if (expectedValue == 0.0) {
@@ -155,6 +162,10 @@ public class NioEchoServer extends Thread {
                     }
                     newChannels.clear();
                 }
+                if (closeKafkaChannels) {
+                    for (KafkaChannel channel : selector.channels())
+                        selector.close(channel.id());
+                }
 
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
@@ -174,7 +185,6 @@ public class NioEchoServer extends Thread {
                     selector.unmute(send.destination());
                     numSent += 1;
                 }
-
             }
         } catch (IOException e) {
             // ignore
@@ -208,15 +218,28 @@ public class NioEchoServer extends Thread {
         return selector;
     }
 
-    public void closeConnections() throws IOException {
-        for (SocketChannel channel : socketChannels)
+    public void closeKafkaChannels() throws IOException {
+        closeKafkaChannels = true;
+        selector.wakeup();
+        try {
+            TestUtils.waitForCondition(() -> selector.channels().isEmpty(), "Channels not closed");
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            closeKafkaChannels = false;
+        }
+    }
+
+    public void closeSocketChannels() throws IOException {
+        for (SocketChannel channel : socketChannels) {
             channel.close();
+        }
         socketChannels.clear();
     }
 
     public void close() throws IOException, InterruptedException {
         this.serverSocketChannel.close();
-        closeConnections();
+        closeSocketChannels();
         acceptorThread.interrupt();
         acceptorThread.join();
         interrupt();

@@ -82,13 +82,13 @@ public class InitProducerIdRequest extends AbstractRequest {
     }
 
     public InitProducerIdRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.INIT_PRODUCER_ID, version);
         this.transactionalId = struct.get(NULLABLE_TRANSACTIONAL_ID);
         this.transactionTimeoutMs = struct.getInt(TRANSACTION_TIMEOUT_KEY_NAME);
     }
 
     private InitProducerIdRequest(short version, String transactionalId, int transactionTimeoutMs) {
-        super(version);
+        super(ApiKeys.INIT_PRODUCER_ID, version);
         this.transactionalId = transactionalId;
         this.transactionTimeoutMs = transactionTimeoutMs;
     }

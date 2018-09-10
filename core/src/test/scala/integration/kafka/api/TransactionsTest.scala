@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetA
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.ProducerFencedException
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -570,28 +569,28 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps
   }
 
-  private def createReadCommittedConsumer(group: String = "group", maxPollRecords: Int = 500,
+  private def createReadCommittedConsumer(group: String = "group",
+                                          maxPollRecords: Int = 500,
                                           props: Properties = new Properties) = {
-    props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+      groupId = group,
+      enableAutoCommit = false,
+      readCommitted = true,
+      maxPollRecords = maxPollRecords)
     transactionalConsumers += consumer
     consumer
   }
 
   private def createReadUncommittedConsumer(group: String) = {
-    val props = new Properties()
-    props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
-      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+      groupId = group,
+      enableAutoCommit = false)
     nonTransactionalConsumers += consumer
     consumer
   }
 
-  private def createTransactionalProducer(transactionalId: String, transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
+  private def createTransactionalProducer(transactionalId: String,
+                                          transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
       transactionTimeoutMs = transactionTimeoutMs)
     transactionalProducers += producer

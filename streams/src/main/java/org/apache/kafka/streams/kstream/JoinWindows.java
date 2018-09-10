@@ -18,7 +18,11 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
+
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
  * The window specifications used for joins.
@@ -64,17 +68,39 @@ import java.util.Map;
  */
 public final class JoinWindows extends Windows<Window> {
 
+    private final long maintainDurationMs;
+
     /** Maximum time difference for tuples that are before the join tuple. */
     public final long beforeMs;
     /** Maximum time difference for tuples that are after the join tuple. */
     public final long afterMs;
 
-    private JoinWindows(final long beforeMs, final long afterMs) {
+    private final Duration grace;
+
+    private JoinWindows(final long beforeMs, final long afterMs, final Duration grace, final long maintainDurationMs) {
         if (beforeMs + afterMs < 0) {
             throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
         }
         this.afterMs = afterMs;
         this.beforeMs = beforeMs;
+        this.grace = grace;
+        this.maintainDurationMs = maintainDurationMs;
+    }
+
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    private JoinWindows(final long beforeMs,
+                        final long afterMs,
+                        final Duration grace,
+                        final long maintainDurationMs,
+                        final int segments) {
+        super(segments);
+        if (beforeMs + afterMs < 0) {
+            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
+        }
+        this.afterMs = afterMs;
+        this.beforeMs = beforeMs;
+        this.grace = grace;
+        this.maintainDurationMs = maintainDurationMs;
     }
 
     /**
@@ -86,7 +112,8 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if {@code timeDifferenceMs} is negative
      */
     public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs);
+        // This is a static factory method, so we initialize grace and retention to the defaults.
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, null, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -99,8 +126,9 @@ public final class JoinWindows extends Windows<Window> {
      * @param timeDifferenceMs relative window start time in milliseconds
      * @throws IllegalArgumentException if the resulting window size is negative
      */
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(timeDifferenceMs, afterMs);
+        return new JoinWindows(timeDifferenceMs, afterMs, grace, maintainDurationMs, segments);
     }
 
     /**
@@ -113,8 +141,9 @@ public final class JoinWindows extends Windows<Window> {
      * @param timeDifferenceMs relative window end time in milliseconds
      * @throws IllegalArgumentException if the resulting window size is negative
      */
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(beforeMs, timeDifferenceMs);
+        return new JoinWindows(beforeMs, timeDifferenceMs, grace, maintainDurationMs, segments);
     }
 
     /**
@@ -134,17 +163,45 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     /**
+     * Reject late events that arrive more than {@code millisAfterWindowEnd}
+     * after the end of its window.
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
+     *
+     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @return this updated builder
+     */
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    public JoinWindows grace(final long millisAfterWindowEnd) {
+        if (millisAfterWindowEnd < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+        return new JoinWindows(beforeMs, afterMs, Duration.ofMillis(millisAfterWindowEnd), maintainDurationMs, segments);
+    }
+
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    @Override
+    public long gracePeriodMs() {
+        // NOTE: in the future, when we remove maintainMs,
+        // we should default the grace period to 24h to maintain the default behavior,
+        // or we can default to (24h - size) if you want to be super accurate.
+        return grace != null ? grace.toMillis() : maintainMs() - size();
+    }
+
+    /**
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
+     * @deprecated since 2.1. Use {@link JoinWindows#grace(long)} instead.
      */
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public JoinWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < size()) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
         }
-        super.until(durationMs);
-        return this;
+        return new JoinWindows(beforeMs, afterMs, grace, durationMs, segments);
     }
 
     /**
@@ -153,30 +210,43 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link JoinWindows#gracePeriodMs()} instead.
      */
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public long maintainMs() {
-        return Math.max(super.maintainMs(), size());
+        return Math.max(maintainDurationMs, size());
     }
 
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
     @Override
-    public final boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-        if (!(o instanceof JoinWindows)) {
-            return false;
-        }
-
-        final JoinWindows other = (JoinWindows) o;
-        return beforeMs == other.beforeMs && afterMs == other.afterMs;
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final JoinWindows that = (JoinWindows) o;
+        return beforeMs == that.beforeMs &&
+            afterMs == that.afterMs &&
+            maintainDurationMs == that.maintainDurationMs &&
+            segments == that.segments &&
+            Objects.equals(grace, that.grace);
     }
 
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        int result = (int) (beforeMs ^ (beforeMs >>> 32));
-        result = 31 * result + (int) (afterMs ^ (afterMs >>> 32));
-        return result;
+        return Objects.hash(beforeMs, afterMs, grace, maintainDurationMs, segments);
     }
 
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    @Override
+    public String toString() {
+        return "JoinWindows{" +
+            "beforeMs=" + beforeMs +
+            ", afterMs=" + afterMs +
+            ", grace=" + grace +
+            ", maintainDurationMs=" + maintainDurationMs +
+            ", segments=" + segments +
+            '}';
+    }
 }

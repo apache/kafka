@@ -53,7 +53,7 @@ public class KStreamTransform<Ki, Vi, Ko, Vo> implements ProcessorSupplier<Ki, V
 
         @Override
         public void process(final Ki key, final Vi value) {
-            KeyValue<? extends Ko, ? extends Vo> pair = transformer.transform(key, value);
+            final KeyValue<? extends Ko, ? extends Vo> pair = transformer.transform(key, value);
 
             if (pair != null)
                 context().forward(pair.key, pair.value);

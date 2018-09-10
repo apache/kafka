@@ -122,9 +122,9 @@ public class InternalTopicManagerTest {
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
-        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
-        ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
+        final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
+        final ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
 
         assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource)).values().get(resource).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), mockAdminClient.describeConfigs(Collections.singleton(resource2)).values().get(resource2).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
@@ -150,7 +150,7 @@ public class InternalTopicManagerTest {
             internalTopicConfig.setNumberOfPartitions(1);
             internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
             fail("Should have thrown StreamsException");
-        } catch (StreamsException expected) { /* pass */ }
+        } catch (final StreamsException expected) { /* pass */ }
     }
 
     @Test

@@ -581,6 +581,7 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close() {
         this.selector.close();
+        this.metadataUpdater.close();
     }
 
     /**
@@ -869,7 +870,7 @@ public class NetworkClient implements KafkaClient {
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.debug("Error connecting to node {}", node, e);
+            log.warn("Error connecting to node {}", node, e);
         }
     }
 
@@ -981,6 +982,11 @@ public class NetworkClient implements KafkaClient {
             this.metadata.requestUpdate();
         }
 
+        @Override
+        public void close() {
+            this.metadata.close();
+        }
+
         /**
          * Return true if there's at least one connection establishment is currently underway
          */
@@ -1054,7 +1060,7 @@ public class NetworkClient implements KafkaClient {
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
-                defaultRequestTimeoutMs, callback);
+                requestTimeoutMs, callback);
     }
 
     public boolean discoverBrokerVersions() {

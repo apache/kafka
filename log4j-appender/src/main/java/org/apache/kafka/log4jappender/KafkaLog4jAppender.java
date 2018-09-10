@@ -34,6 +34,8 @@ import java.util.concurrent.Future;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.MAX_BLOCK_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
@@ -63,9 +65,12 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String saslKerberosServiceName;
     private String clientJaasConfPath;
     private String kerb5ConfPath;
+    private Integer maxBlockMs;
 
-    private int retries;
-    private int requiredNumAcks = Integer.MAX_VALUE;
+    private int retries = Integer.MAX_VALUE;
+    private int requiredNumAcks = 1;
+    private int deliveryTimeoutMs = 120000;
+    private boolean ignoreExceptions = true;
     private boolean syncSend;
     private Producer<byte[], byte[]> producer;
     
@@ -97,6 +102,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.retries = retries;
     }
 
+    public int getDeliveryTimeoutMs() {
+        return deliveryTimeoutMs;
+    }
+
+    public void setDeliveryTimeoutMs(int deliveryTimeoutMs) {
+        this.deliveryTimeoutMs = deliveryTimeoutMs;
+    }
+
     public String getCompressionType() {
         return compressionType;
     }
@@ -111,6 +124,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
 
     public void setTopic(String topic) {
         this.topic = topic;
+    }
+
+    public boolean getIgnoreExceptions() {
+        return ignoreExceptions;
+    }
+
+    public void setIgnoreExceptions(boolean ignoreExceptions) {
+        this.ignoreExceptions = ignoreExceptions;
     }
 
     public boolean getSyncSend() {
@@ -193,6 +214,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         return kerb5ConfPath;
     }
 
+    public int getMaxBlockMs() {
+        return maxBlockMs;
+    }
+
+    public void setMaxBlockMs(int maxBlockMs) {
+        this.maxBlockMs = maxBlockMs;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -205,10 +234,11 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             throw new ConfigException("Topic must be specified by the Kafka log4j appender");
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
-        if (requiredNumAcks != Integer.MAX_VALUE)
-            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
-        if (retries > 0)
-            props.put(RETRIES_CONFIG, retries);
+
+        props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
+        props.put(RETRIES_CONFIG, retries);
+        props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+
         if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL_CONFIG, securityProtocol);
         }
@@ -231,6 +261,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
                 System.setProperty("java.security.krb5.conf", kerb5ConfPath);
             }
         }
+        if (maxBlockMs != null) {
+            props.put(MAX_BLOCK_MS_CONFIG, maxBlockMs);
+        }
 
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
@@ -248,12 +281,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
         Future<RecordMetadata> response = producer.send(
-            new ProducerRecord<byte[], byte[]>(topic, message.getBytes(StandardCharsets.UTF_8)));
+            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
         if (syncSend) {
             try {
                 response.get();
             } catch (InterruptedException | ExecutionException ex) {
-                throw new RuntimeException(ex);
+                if (!ignoreExceptions)
+                    throw new RuntimeException(ex);
+                LogLog.debug("Exception while getting response", ex);
             }
         }
     }

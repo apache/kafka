@@ -109,9 +109,7 @@ public class AccessControlEntryFilter {
             return false;
         if ((operation() != AclOperation.ANY) && (!operation().equals(other.operation())))
             return false;
-        if ((permissionType() != AclPermissionType.ANY) && (!permissionType().equals(other.permissionType())))
-            return false;
-        return true;
+        return (permissionType() == AclPermissionType.ANY) || (permissionType().equals(other.permissionType()));
     }
 
     /**

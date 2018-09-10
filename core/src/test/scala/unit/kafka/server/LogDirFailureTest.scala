@@ -24,7 +24,6 @@ import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
-
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -45,10 +44,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   val serverCount: Int = 2
   private val topic = "topic"
   private val partitionNum = 12
+  override val logDirCount = 3
 
-  this.logDirCount = 3
-  this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
-  this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
@@ -100,7 +97,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
-    val producer = producers.head
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
 
     val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
@@ -127,9 +125,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
-    val producer = producers.head
+
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
+
     val partition = new TopicPartition(topic, 0)
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 
@@ -175,7 +176,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
           case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
           case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
         }
-      case e: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${e.toString}")
     }
 
     // Wait for producer to update metadata for the partition

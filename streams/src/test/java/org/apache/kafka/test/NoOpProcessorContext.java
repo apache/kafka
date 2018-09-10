@@ -52,7 +52,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @Override public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return null;
     }
 
@@ -86,8 +86,8 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public Long streamTime() {
-        throw new RuntimeException("not implemented");
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
     }
 
     @Override

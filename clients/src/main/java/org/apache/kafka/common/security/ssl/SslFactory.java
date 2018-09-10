@@ -33,9 +33,11 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Principal;
@@ -320,7 +322,7 @@ public class SslFactory implements Reconfigurable {
          *   using the specified configs (e.g. if the password or keystore type is invalid)
          */
         KeyStore load() {
-            try (FileInputStream in = new FileInputStream(path)) {
+            try (InputStream in = Files.newInputStream(Paths.get(path))) {
                 KeyStore ks = KeyStore.getInstance(type);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
@@ -445,7 +447,7 @@ public class SslFactory implements Reconfigurable {
         private final Principal subjectPrincipal;
         private final Set<List<?>> subjectAltNames;
 
-        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException, IOException {
+        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException {
             Enumeration<String> aliases = keystore.aliases();
             List<CertificateEntries> entries = new ArrayList<>();
             while (aliases.hasMoreElements()) {
@@ -461,7 +463,7 @@ public class SslFactory implements Reconfigurable {
             this.subjectPrincipal = cert.getSubjectX500Principal();
             Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
             // use a set for comparison
-            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.<List<?>>emptySet();
+            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.emptySet();
         }
 
         @Override

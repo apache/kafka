@@ -98,7 +98,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
     private StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions,
                                Set<TopicPartition> partitions, short version) {
-        super(version);
+        super(ApiKeys.STOP_REPLICA, version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.deletePartitions = deletePartitions;
@@ -106,7 +106,7 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     public StopReplicaRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.STOP_REPLICA, version);
 
         partitions = new HashSet<>();
         for (Object partitionDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {

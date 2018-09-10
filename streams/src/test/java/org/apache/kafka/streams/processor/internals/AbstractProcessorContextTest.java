@@ -37,7 +37,7 @@ import org.junit.Test;
 
 import java.util.Properties;
 
-import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
+import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -62,7 +62,7 @@ public class AbstractProcessorContextTest {
         try {
             context.register(stateStore, null);
             fail("should throw illegal state exception when context already initialized");
-        } catch (IllegalStateException e) {
+        } catch (final IllegalStateException e) {
             // pass
         }
     }
@@ -182,7 +182,7 @@ public class AbstractProcessorContextTest {
     private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;
         static {
-            config = minimalStreamsConfig();
+            config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
             config.put("user.supplied.config", "user-suppplied-value");
@@ -198,7 +198,7 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
             return null;
         }
 
@@ -218,7 +218,7 @@ public class AbstractProcessorContextTest {
         public void commit() {}
 
         @Override
-        public Long streamTime() {
+        public long streamTime() {
             throw new RuntimeException("not implemented");
         }
     }

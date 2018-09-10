@@ -50,6 +50,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -119,7 +120,11 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.register(persistentStore, batchingRestoreCallback);
-            stateMgr.updateStandbyStates(persistentStorePartition, Collections.singletonList(consumerRecord));
+            stateMgr.updateStandbyStates(
+                persistentStorePartition,
+                singletonList(KeyValue.pair(consumerRecord.key(), consumerRecord.value())),
+                consumerRecord.offset()
+            );
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
         } finally {
@@ -137,7 +142,11 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.updateStandbyStates(persistentStorePartition, Collections.singletonList(consumerRecord));
+            stateMgr.updateStandbyStates(
+                persistentStorePartition,
+                singletonList(KeyValue.pair(consumerRecord.key(), consumerRecord.value())),
+                consumerRecord.offset()
+            );
             assertThat(persistentStore.keys.size(), is(1));
             assertTrue(persistentStore.keys.contains(intKey));
         } finally {
@@ -400,13 +409,11 @@ public class ProcessorStateManagerTest {
 
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
         final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
-        stateMgr.updateStandbyStates(persistentStorePartition,
-                                     Collections.singletonList(
-                                             new ConsumerRecord<>(persistentStorePartition.topic(),
-                                                                  persistentStorePartition.partition(),
-                                                                  888L,
-                                                                  bytes,
-                                                                  bytes)));
+        stateMgr.updateStandbyStates(
+            persistentStorePartition,
+            singletonList(KeyValue.pair(bytes, bytes)),
+            888L
+        );
 
         stateMgr.checkpoint(Collections.emptyMap());
 

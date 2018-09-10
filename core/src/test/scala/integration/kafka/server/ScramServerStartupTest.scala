@@ -17,6 +17,7 @@
   */
 
 package kafka.server
+
 import java.util.Collections
 
 import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
@@ -35,8 +36,6 @@ import scala.collection.JavaConverters._
  */
 class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
-  override val producerCount = 0
-  override val consumerCount = 0
   override val serverCount = 1
 
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -58,16 +57,9 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
   @Test
   def testAuthentications(): Unit = {
-    val successfulAuths = totalAuthentications("successful-authentication-total")
+    val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
     assertTrue("No successful authentications", successfulAuths > 0)
-    val failedAuths = totalAuthentications("failed-authentication-total")
+    val failedAuths = TestUtils.totalMetricValue(servers.head, "failed-authentication-total")
     assertEquals(0, failedAuths)
-  }
-
-  private def totalAuthentications(metricName: String): Int = {
-    val allMetrics = servers.head.metrics.metrics
-    val totalAuthCount = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
-      .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
-    totalAuthCount.toInt
   }
 }
