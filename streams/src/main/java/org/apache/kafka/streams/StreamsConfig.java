@@ -278,7 +278,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
-    private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "The maximum number of records to buffer per partition.";
+    private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
 
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
@@ -297,6 +297,11 @@ public class StreamsConfig extends AbstractConfig {
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
+
+    /** {@code max.task.idle.ms} */
+    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
+    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
+        " to avoid potential out-of-order record processing across multiple input streams.";
 
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -538,6 +543,11 @@ public class StreamsConfig extends AbstractConfig {
                     1,
                     Importance.MEDIUM,
                     NUM_STREAM_THREADS_DOC)
+            .define(MAX_TASK_IDLE_MS_CONFIG,
+                    Type.LONG,
+                    0L,
+                    Importance.MEDIUM,
+                    MAX_TASK_IDLE_MS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
