@@ -67,7 +67,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             TOPICS_V1);
 
     // V2 bumped for addition of current leader epoch to the request schema and the addition of the throttle
-    // in the response
+    // time in the response
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2 = new Schema(
             THROTTLE_TIME_MS,
             TOPICS_V1);
@@ -96,6 +96,10 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, leaderEpoch, endOffset));
             }
         }
+    }
+
+    public OffsetsForLeaderEpochResponse(Map<TopicPartition, EpochEndOffset> epochsByTopic) {
+        this(DEFAULT_THROTTLE_TIME, epochsByTopic);
     }
 
     public OffsetsForLeaderEpochResponse(int throttleTimeMs, Map<TopicPartition, EpochEndOffset> epochsByTopic) {

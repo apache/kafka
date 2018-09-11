@@ -62,7 +62,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         callback.foreach(_.apply())
         epochFetchCount += 1
         lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
-        new OffsetsForLeaderEpochResponse(AbstractResponse.DEFAULT_THROTTLE_TIME ,currentOffsets)
+        new OffsetsForLeaderEpochResponse(currentOffsets)
 
       case ApiKeys.FETCH =>
         fetchCount += 1
