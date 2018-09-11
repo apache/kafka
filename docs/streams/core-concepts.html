@@ -193,7 +193,7 @@
         For stateless operations, out-of-order data will not impact processing logic since only one record is considered at a time, without looking into the history of past processed records;
         for stateful operations such as aggregations and joins, however, out-of-order data could cause the processing logic to be incorrect. If users want to handle such out-of-order data, generally they need to allow their applications
         to wait for longer time while bookkeeping their states during the wait time, i.e. making trade-off decisions between latency, cost, and correctness.
-        In Kafka Streams specifically, users can configure their window operators for aggregations to achieve such trade-offs (details can be found in <a href="/{{version}}/documentation/streams/developer-guide"><b>Developer Guide</b></a>).
+        In Kafka Streams specifically, users can configure their window operators for windowed aggregations to achieve such trade-offs (details can be found in <a href="/{{version}}/documentation/streams/developer-guide"><b>Developer Guide</b></a>).
         As for Joins, users have to be aware that some of the out-of-order data cannot be handled by increasing on latency and cost in Streams yet:
     </p>
 
