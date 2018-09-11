@@ -56,7 +56,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     // V1 request is the same as v0. Per-partition leader epoch has been added to response
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V1 = OFFSET_FOR_LEADER_EPOCH_REQUEST_V0;
 
-    // V2 adds the current leader epoch to support fencing
+    // V2 adds the current leader epoch to support fencing and the addition of the throttle time in the response
     private static final Field PARTITIONS_V2 = PARTITIONS.withFields(
             PARTITION_ID,
             CURRENT_LEADER_EPOCH,
@@ -177,7 +177,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             errorResponse.put(tp, new EpochEndOffset(
                 error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
-        return new OffsetsForLeaderEpochResponse(errorResponse);
+        return new OffsetsForLeaderEpochResponse(throttleTimeMs, errorResponse);
     }
 
     public static class PartitionData {

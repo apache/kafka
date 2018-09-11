@@ -34,6 +34,7 @@ import java.util.Map;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
@@ -65,18 +66,23 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1 = new Schema(
             TOPICS_V1);
 
-    // V2 bumped for addition of current leader epoch to the request schema.
-    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1;
+    // V2 bumped for addition of current leader epoch to the request schema and the addition of the throttle
+    // time in the response
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2 = new Schema(
+            THROTTLE_TIME_MS,
+            TOPICS_V1);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1,
             OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2};
     }
 
-    private Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
+    private final int throttleTimeMs;
+    private final Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
 
     public OffsetsForLeaderEpochResponse(Struct struct) {
-        epochEndOffsetsByPartition = new HashMap<>();
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.epochEndOffsetsByPartition = new HashMap<>();
         for (Object topicAndEpocsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpocsObj;
             String topic = topicAndEpochs.get(TOPIC_NAME);
@@ -93,6 +99,11 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     }
 
     public OffsetsForLeaderEpochResponse(Map<TopicPartition, EpochEndOffset> epochsByTopic) {
+        this(DEFAULT_THROTTLE_TIME, epochsByTopic);
+    }
+
+    public OffsetsForLeaderEpochResponse(int throttleTimeMs, Map<TopicPartition, EpochEndOffset> epochsByTopic) {
+        this.throttleTimeMs = throttleTimeMs;
         this.epochEndOffsetsByPartition = epochsByTopic;
     }
 
@@ -108,6 +119,10 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return errorCounts;
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short versionId) {
         return new OffsetsForLeaderEpochResponse(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(versionId).read(buffer));
     }
@@ -115,9 +130,9 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct responseStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(version));
+        responseStruct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         Map<String, Map<Integer, EpochEndOffset>> endOffsetsByTopic = CollectionUtils.groupPartitionDataByTopic(epochEndOffsetsByPartition);
-
         List<Struct> topics = new ArrayList<>(endOffsetsByTopic.size());
         for (Map.Entry<String, Map<Integer, EpochEndOffset>> topicToPartitionEpochs : endOffsetsByTopic.entrySet()) {
             Struct topicStruct = responseStruct.instance(TOPICS);
