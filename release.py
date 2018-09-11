@@ -60,6 +60,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import re
 
 PROJECT_NAME = "kafka"
 CAPITALIZED_PROJECT_NAME = "kafka".upper()
@@ -260,19 +261,50 @@ def command_stage_docs():
 
     sys.exit(0)
 
+def validate_release_version_parts(version):
+    try:
+        version_parts = version.split('.')
+        if len(version_parts) != 3:
+            fail("Invalid release version, should have 3 version number components")
+        # Validate each part is a number
+        [int(x) for x in version_parts]
+    except ValueError:
+        fail("Invalid release version, should be a dotted version number")
+
+def get_release_version_parts(version):
+    validate_release_version_parts(version)
+    return version.split('.')
+
+def validate_release_num(version):
+    tags = cmd_output('git tag').split()
+    if version not in tags:
+        fail("The specified version is not a valid release version number")
+    validate_release_version_parts(version)
+
 def command_release_announcement_email():
-    release_version_num = raw_input('What is the current release version:')
-    previos_release_version_num = raw_input('What is the previous release version:')
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previos_release_version_num, release_version_num) , shell=True))
-    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | tr '\n' ',' | sed -e 's/,/, /g'" % (previos_release_version_num, release_version_num), shell=True)
+    tags = cmd_output('git tag').split()
+    release_tag_pattern = re.compile('^[0-9]+\.[0-9]+\.[0-9]+$')
+    release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
+    release_version_num = release_tags[-1]
+    if not user_ok("""Is the current release %s ? (y/n):""" %release_version_num):
+        release_version_num = raw_input('What is the current release version:')
+        validate_release_num(release_version_num)
+    previous_release_version_num = release_tags[-2]
+    if not user_ok("""Is the previous release %s ? (y/n):""" %previous_release_version_num):
+        previous_release_version_num = raw_input('What is the previous release version:')
+        validate_release_num(previous_release_version_num)
+    if release_version_num < previous_release_version_num :
+        fail("Current release version number can't be less than previous release version number")
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True))
+    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True)
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
-        'contributors': contributors,
+        'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
         'release_version': release_version_num
     }
 
     release_announcement_email = """
-        To: dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
+        To: announce@apache.org, dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
         Subject: [ANNOUNCE] Apache Kafka %(release_version)s
         
         The Apache Kafka community is pleased to announce the release for Apache Kafka %(release_version)s
@@ -348,6 +380,7 @@ def command_release_announcement_email():
     print("IMPORTANT: Note that there are still some substitutions that need to be made in the template:")
     print("  - Describe major changes in this release")
     print("  - Fill in your name in the signature")
+    print("  - You will need to use your apache email address to send out the email (otherwise, it won't be delivered to announce@apache.org)")
     print("  - Finally, validate all the links before shipping!")
     print("Note that all substitutions are annotated with <> around them.")
     sys.exit(0)
@@ -426,14 +459,7 @@ cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --q
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
 release_version = raw_input("Release version (without any RC info, e.g. 1.0.0): ")
-try:
-    release_version_parts = release_version.split('.')
-    if len(release_version_parts) != 3:
-        fail("Invalid release version, should have 3 version number components")
-    # Validate each part is a number
-    [int(x) for x in release_version_parts]
-except ValueError:
-    fail("Invalid release version, should be a dotted version number")
+release_version_parts = get_release_version_parts(release_version)
 
 rc = raw_input("Release candidate number: ")
 
