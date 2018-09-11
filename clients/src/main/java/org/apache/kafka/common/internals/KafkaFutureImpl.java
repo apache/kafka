@@ -208,7 +208,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
 
     @Override
     public synchronized boolean complete(T newValue) {
-        List<BiConsumer<? super T, ? super Throwable>> oldWaiters = null;
+        List<BiConsumer<? super T, ? super Throwable>> oldWaiters;
         synchronized (this) {
             if (done)
                 return false;
@@ -225,7 +225,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
 
     @Override
     public boolean completeExceptionally(Throwable newException) {
-        List<BiConsumer<? super T, ? super Throwable>> oldWaiters = null;
+        List<BiConsumer<? super T, ? super Throwable>> oldWaiters;
         synchronized (this) {
             if (done)
                 return false;
@@ -257,7 +257,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public T get() throws InterruptedException, ExecutionException {
-        SingleWaiter<T> waiter = new SingleWaiter<T>();
+        SingleWaiter<T> waiter = new SingleWaiter<>();
         addWaiter(waiter);
         return waiter.await();
     }
@@ -269,7 +269,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException,
             TimeoutException {
-        SingleWaiter<T> waiter = new SingleWaiter<T>();
+        SingleWaiter<T> waiter = new SingleWaiter<>();
         addWaiter(waiter);
         return waiter.await(timeout, unit);
     }
@@ -292,7 +292,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean isCancelled() {
-        return (exception != null) && (exception instanceof CancellationException);
+        return exception instanceof CancellationException;
     }
 
     /**

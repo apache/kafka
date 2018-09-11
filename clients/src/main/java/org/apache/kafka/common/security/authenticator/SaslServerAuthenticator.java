@@ -129,7 +129,7 @@ public class SaslServerAuthenticator implements Authenticator {
                                    KerberosShortNamer kerberosNameParser,
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
-                                   TransportLayer transportLayer) throws IOException {
+                                   TransportLayer transportLayer) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -164,12 +164,8 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
-                saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                    public SaslServer run() throws SaslException {
-                        return Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(),
-                                configs, callbackHandler);
-                    }
-                });
+                saslServer = Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+                    Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
             } catch (PrivilegedActionException e) {
                 throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
             }
@@ -212,11 +208,8 @@ public class SaslServerAuthenticator implements Authenticator {
         }
 
         try {
-            return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                public SaslServer run() throws SaslException {
-                    return Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler);
-                }
-            });
+            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+                    Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler));
         } catch (PrivilegedActionException e) {
             throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
         }
@@ -308,11 +301,11 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer.dispose();
     }
 
-    private void setSaslState(SaslState saslState) throws IOException {
+    private void setSaslState(SaslState saslState) {
         setSaslState(saslState, null);
     }
 
-    private void setSaslState(SaslState saslState, AuthenticationException exception) throws IOException {
+    private void setSaslState(SaslState saslState, AuthenticationException exception) {
         if (netOutBuffer != null && !netOutBuffer.completed()) {
             pendingSaslState = saslState;
             pendingException = exception;

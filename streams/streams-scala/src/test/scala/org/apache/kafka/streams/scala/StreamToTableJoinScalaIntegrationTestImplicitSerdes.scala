@@ -22,7 +22,9 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase
+import org.apache.kafka.test.IntegrationTest
 import org.junit._
+import org.junit.experimental.categories.Category
 
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
@@ -33,6 +35,7 @@ import org.junit._
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
  */
+@Category(Array(classOf[IntegrationTest]))
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJoinScalaIntegrationTestBase {
 
   @Test def testShouldCountClicksPerRegion(): Unit = {

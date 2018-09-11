@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util.Optional
+
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -33,7 +35,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val partition = new TopicPartition(topic, 0)
 
     val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion)
-      .add(partition, 0)
+      .add(partition, Optional.of(5), 0)
       .build()
 
     // Unknown topic

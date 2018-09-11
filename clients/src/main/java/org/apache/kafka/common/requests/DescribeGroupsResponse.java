@@ -196,11 +196,11 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
         public static GroupMetadata forError(Errors error) {
             return new DescribeGroupsResponse.GroupMetadata(
-                    error,
-                    DescribeGroupsResponse.UNKNOWN_STATE,
-                    DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-                    DescribeGroupsResponse.UNKNOWN_PROTOCOL,
-                    Collections.<DescribeGroupsResponse.GroupMember>emptyList());
+                error,
+                DescribeGroupsResponse.UNKNOWN_STATE,
+                DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
+                DescribeGroupsResponse.UNKNOWN_PROTOCOL,
+                Collections.emptyList());
         }
     }
 

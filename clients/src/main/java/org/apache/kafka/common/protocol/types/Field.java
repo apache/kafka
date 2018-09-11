@@ -92,4 +92,41 @@ public class Field {
             super(name, Type.NULLABLE_STRING, docString, false, null);
         }
     }
+
+    public static class Bool extends Field {
+        public Bool(String name, String docString) {
+            super(name, Type.BOOLEAN, docString, false, null);
+        }
+    }
+
+    public static class Array extends Field {
+        public Array(String name, Type elementType, String docString) {
+            super(name, new ArrayOf(elementType), docString, false, null);
+        }
+    }
+
+    public static class ComplexArray {
+        public final String name;
+        public final String docString;
+
+        public ComplexArray(String name, String docString) {
+            this.name = name;
+            this.docString = docString;
+        }
+
+        public Field withFields(Field... fields) {
+            Schema elementType = new Schema(fields);
+            return new Field(name, new ArrayOf(elementType), docString, false, null);
+        }
+
+        public Field nullableWithFields(Field... fields) {
+            Schema elementType = new Schema(fields);
+            return new Field(name, ArrayOf.nullable(elementType), docString, false, null);
+        }
+
+        public Field withFields(String docStringOverride, Field... fields) {
+            Schema elementType = new Schema(fields);
+            return new Field(name, new ArrayOf(elementType), docStringOverride, false, null);
+        }
+    }
 }

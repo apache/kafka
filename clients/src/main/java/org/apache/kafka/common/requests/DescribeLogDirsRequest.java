@@ -86,7 +86,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     }
 
     public DescribeLogDirsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_LOG_DIRS, version);
 
         if (struct.getArray(TOPICS_KEY_NAME) == null) {
             topicPartitions = null;
@@ -105,7 +105,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
 
     // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
     public DescribeLogDirsRequest(Set<TopicPartition> topicPartitions, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_LOG_DIRS, version);
         this.topicPartitions = topicPartitions;
     }
 

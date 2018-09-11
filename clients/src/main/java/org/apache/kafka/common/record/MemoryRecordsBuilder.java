@@ -41,7 +41,7 @@ public class MemoryRecordsBuilder {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
         @Override
-        public void write(int b) throws IOException {
+        public void write(int b) {
             throw new IllegalStateException("MemoryRecordsBuilder is closed for record appends");
         }
     });

@@ -80,14 +80,14 @@ public class HeartbeatRequest extends AbstractRequest {
     private final String memberId;
 
     private HeartbeatRequest(String groupId, int groupGenerationId, String memberId, short version) {
-        super(version);
+        super(ApiKeys.HEARTBEAT, version);
         this.groupId = groupId;
         this.groupGenerationId = groupGenerationId;
         this.memberId = memberId;
     }
 
     public HeartbeatRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.HEARTBEAT, version);
         groupId = struct.get(GROUP_ID);
         groupGenerationId = struct.get(GENERATION_ID);
         memberId = struct.get(MEMBER_ID);

@@ -180,7 +180,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   delayQueueSensor.add(metrics.metricName("queue-size",
     quotaType.toString,
     "Tracks the size of the delay queue"), new Total())
-  start() // Use start method to keep findbugs happy
+  start() // Use start method to keep spotbugs happy
   private def start() {
     throttledChannelReaper.start()
   }

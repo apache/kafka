@@ -134,6 +134,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -2643,12 +2644,14 @@ public class KafkaAdminClient extends AdminClient {
                             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
                                     response.responseData().entrySet()) {
                                 final TopicPartition topicPartition = entry.getKey();
-                                final Errors error = entry.getValue().error;
+                                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                                final Errors error = partitionData.error;
 
                                 if (error == Errors.NONE) {
-                                    final Long offset = entry.getValue().offset;
-                                    final String metadata = entry.getValue().metadata;
-                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
+                                    final Long offset = partitionData.offset;
+                                    final String metadata = partitionData.metadata;
+                                    final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
+                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
                                 } else {
                                     log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                                 }
