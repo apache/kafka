@@ -93,19 +93,19 @@ class KafkaTest {
 
   @Test
   def testKafkaSslPasswordsWithSymbols(): Unit = {
-    val password1 = "=!#-+!?*/\"\'^%$\\.,@:;"
+    val password = "=!#-+!?*/\"\'^%$=\\.,@:;="
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile,
-      "--override", "ssl.keystore.password=" + password1,
-      "--override", "ssl.key.password=key=password",
-      "--override", "ssl.truststore.password=truststore=")))
+      "--override", "ssl.keystore.password=" + password,
+      "--override", "ssl.key.password=" + password,
+      "--override", "ssl.truststore.password=" + password)))
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
 
-    assertEquals(password1, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
-    assertEquals("key=password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
-    assertEquals("truststore=", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
   }
 
   def prepareDefaultConfig(): String = {
