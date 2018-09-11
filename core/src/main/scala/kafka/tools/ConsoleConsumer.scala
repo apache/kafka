@@ -65,8 +65,12 @@ object ConsoleConsumer extends Logging {
   def run(conf: ConsumerConfig) {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
+
+    /*
+    Fix for KAFKA-6764. partition/offset is honoured only when group-id not passed.
+     */
     val consumerWrapper =
-      if (conf.partitionArg.isDefined)
+      if (!conf.groupIdPassed && conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
       else
         new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
@@ -194,7 +198,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Whitelist of topics to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist", "Regex Pattern, to whitelist all topics matching it, to include for consumption.")
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
@@ -355,7 +359,7 @@ object ConsoleConsumer extends Logging {
     val groupIdsProvided = Set(
       Option(options.valueOf(groupIdOpt)), // via --group
       Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
-      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
     if (groupIdsProvided.size > 1) {
