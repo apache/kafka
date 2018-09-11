@@ -326,12 +326,8 @@ object ConsumerGroupCommand extends Logging {
       }
 
       getLogEndOffsets(topicPartitions).map {
-        logEndOffsetResult =>
-          logEndOffsetResult._2 match {
-            case LogOffsetResult.LogOffset(logEndOffset) => getDescribePartitionResult(logEndOffsetResult._1, Some(logEndOffset))
-            case LogOffsetResult.Unknown => getDescribePartitionResult(logEndOffsetResult._1, None)
-            case LogOffsetResult.Ignore => null
-          }
+        case (topicPartition, LogOffsetResult.LogOffset(offset)) => getDescribePartitionResult(topicPartition, Some(offset))
+        case (topicPartition, _) => getDescribePartitionResult(topicPartition, None)
       }.toArray
     }
 
@@ -608,16 +604,20 @@ object ConsumerGroupCommand extends Logging {
     protected def getLogEndOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val offsets = getConsumer.endOffsets(topicPartitions.asJava)
       topicPartitions.map { topicPartition =>
-        val logEndOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(logEndOffset) => topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 
     protected def getLogStartOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val offsets = getConsumer.beginningOffsets(topicPartitions.asJava)
       topicPartitions.map { topicPartition =>
-        val logStartOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(logStartOffset) => topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 
