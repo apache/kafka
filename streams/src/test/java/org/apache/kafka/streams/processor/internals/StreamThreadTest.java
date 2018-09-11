@@ -364,7 +364,7 @@ public class StreamThreadTest {
 
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // processed zero records, early exit and iterations stays as 1
+        // processed zero records, early exit and iterations stays as 2
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(2));
 

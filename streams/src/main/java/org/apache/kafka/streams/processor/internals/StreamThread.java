@@ -826,6 +826,13 @@ public class StreamThread extends Thread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
+        final long pollLatency = advanceNowAndComputeLatency();
+
+        if (records != null && !records.isEmpty()) {
+            streamsMetrics.pollTimeSensor.record(pollLatency, now);
+            addRecordsToTasks(records);
+        }
+
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
         if (state == State.PARTITIONS_ASSIGNED) {
@@ -834,12 +841,7 @@ public class StreamThread extends Thread {
             }
         }
 
-        final long pollLatency = advanceNowAndComputeLatency();
-
-        if (records != null && !records.isEmpty()) {
-            streamsMetrics.pollTimeSensor.record(pollLatency, now);
-            addRecordsToTasks(records);
-        }
+        advanceNowAndComputeLatency();
 
         // TODO: we will process some tasks even if the state is not RUNNING, i.e. some other
         // tasks are still being restored.
