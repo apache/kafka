@@ -351,15 +351,20 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        // processed two records, bumping up iterations to 2
+        // processed one record, punctuated after the first record, and hence num.iterations is still 1
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 0, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        thread.runOnce();
+
+        assertThat(thread.currentNumIterations(), equalTo(1));
+
+        // processed one more record without punctuation, and bump num.iterations to 2
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // processed zero records, early exit and iterations stays as 2
+        // processed zero records, early exit and iterations stays as 1
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(2));
 
@@ -369,6 +374,7 @@ public class StreamThreadTest {
         thread.runOnce();
         assertThat(thread.currentNumIterations(), equalTo(1));
 
+        // processed two records, bumping up iterations to 2
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 5, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 6, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         thread.runOnce();
