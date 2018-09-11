@@ -21,7 +21,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.performance import ProducerPerformanceService
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.version import DEV_BRANCH, V_1_1_0
+from kafkatest.version import DEV_BRANCH, LATEST_1_1
 
 class QuotaConfig(object):
     CLIENT_ID = 'client-id'
@@ -134,7 +134,7 @@ class QuotaTest(Test):
                    old_broker_throttling_behavior=False, old_client_throttling_behavior=False):
         # Old (pre-2.0) throttling behavior for broker throttles before sending a response to the client.
         if old_broker_throttling_behavior:
-            self.kafka.set_version(V_1_1_0)
+            self.kafka.set_version(LATEST_1_1)
         self.kafka.start()
 
         self.quota_config = QuotaConfig(quota_type, override_quota, self.kafka)
@@ -143,7 +143,7 @@ class QuotaTest(Test):
 
         # Old (pre-2.0) throttling behavior for client does not throttle upon receiving a response with a non-zero throttle time.
         if old_client_throttling_behavior:
-            client_version = V_1_1_0
+            client_version = LATEST_1_1
         else:
             client_version = DEV_BRANCH
 
