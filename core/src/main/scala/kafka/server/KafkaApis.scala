@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.LITERAL
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1044,7 +1044,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authorize(request.session, Create, Resource.ClusterResource)) {
           unauthorizedForCreateTopics = nonExistingTopics.filter { topic =>
-            !authorize(request.session, Create, new Resource(Topic, topic))
+            !authorize(request.session, Create, new Resource(Topic, topic, PatternType.LITERAL))
           }
           authorizedTopics --= unauthorizedForCreateTopics
         }
@@ -1443,7 +1443,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           (validTopics, Map[String, TopicDetails]())
         } else {
           validTopics.partition { case (topic, _) =>
-            authorize(request.session, Create, new Resource(Topic, topic))
+            authorize(request.session, Create, new Resource(Topic, topic, PatternType.LITERAL))
           }
         }
 
