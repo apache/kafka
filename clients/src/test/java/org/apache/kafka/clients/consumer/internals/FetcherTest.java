@@ -108,6 +108,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1936,6 +1937,48 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
         testGetOffsetsForTimesWithError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, Errors.NONE, 10L, 100L, null, 100L);
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
+    }
+
+    @Test
+    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
+        final String anotherTopic = "another-topic";
+        final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
+
+        client.reset();
+
+        // Metadata initially has one topic
+        Cluster cluster = TestUtils.clusterWith(3, topicName, 2);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        // The first metadata refresh should contain one topic
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet(), false);
+        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, 1000L, 11L), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 1000L, 32L), cluster.leaderFor(tp1));
+
+        // Second metadata refresh should contain two topics
+        Map<String, Integer> partitionNumByTopic = new HashMap<>();
+        partitionNumByTopic.put(topicName, 2);
+        partitionNumByTopic.put(anotherTopic, 1);
+        Cluster updatedCluster = TestUtils.clusterWith(3, partitionNumByTopic);
+        client.prepareMetadataUpdate(updatedCluster, Collections.<String>emptySet(), false);
+        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, 1000L, 54L), cluster.leaderFor(t2p0));
+
+        Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(tp0, ListOffsetRequest.LATEST_TIMESTAMP);
+        timestampToSearch.put(tp1, ListOffsetRequest.LATEST_TIMESTAMP);
+        timestampToSearch.put(t2p0, ListOffsetRequest.LATEST_TIMESTAMP);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+            fetcher.offsetsByTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
+
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + tp0,
+                      offsetAndTimestampMap.get(tp0));
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + tp1,
+                      offsetAndTimestampMap.get(tp1));
+        assertNotNull("Expect Fetcher.offsetsByTimes() to return non-null result for " + t2p0,
+                      offsetAndTimestampMap.get(t2p0));
+        assertEquals(11L, offsetAndTimestampMap.get(tp0).offset());
+        assertEquals(32L, offsetAndTimestampMap.get(tp1).offset());
+        assertEquals(54L, offsetAndTimestampMap.get(t2p0).offset());
     }
 
     @Test(expected = TimeoutException.class)
