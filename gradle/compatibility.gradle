@@ -48,10 +48,7 @@ def packageIncludes = [
   "org.apache.kafka.connect.*",
 ]
 def packageExcludes = [
-  "org.apache.kafka.common.internals.*",
-  "org.apache.kafka.clients.consumer.internals.*",
-  "org.apache.kafka.clients.producer.internals.*",
-  "org.apache.kafka.clients.common.internals.*",
+  "org.apache.kafka.*.internals.*"
 ]
 def baseWorkspace = "$buildDir/tmp/compatibility/base"
 def newWorkspace = "$buildDir/tmp/compatibility/new"
@@ -62,8 +59,9 @@ def rootRepo = Grgit.open(dir: rootProject.rootDir)
 def repoExcludes = new ArrayList<String>(rootRepo.clean(ignore: false, directories: true, dryRun: true))
 
 static def collectArtifactJars(String workspace) {
-  String includesPattern = '**/build/libs/kafka-*.jar'
-  String excludesPattern = '**/build/libs/*-javadoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar'
+  String includesPattern = '**/build/libs/kafka-*.jar **/build/libs/connect-*.jar'
+  String excludesPattern = '**/build/libs/*-javadoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar ' +
+          '**/build/libs/*-system-tests-*.jar **/build/libs/*-examples*.jar'
   return new FileNameFinder().getFileNames(workspace, includesPattern, excludesPattern)
 }
 
