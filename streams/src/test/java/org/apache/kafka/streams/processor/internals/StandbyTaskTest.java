@@ -49,10 +49,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WindowKeySchema;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.MockStateStore;
-import org.apache.kafka.test.MockStoreBuilder;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -104,7 +104,7 @@ public class StandbyTaskTest {
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
-        mkList(new MockStoreBuilder(storeName1, false).build(), new MockStoreBuilder(storeName2, true).build()),
+        mkList(new MockKeyValueStoreBuilder(storeName1, false).build(), new MockKeyValueStoreBuilder(storeName2, true).build()),
         mkMap(
             mkEntry(storeName1, storeChangelogTopicName1),
             mkEntry(storeName2, storeChangelogTopicName2)
@@ -113,7 +113,7 @@ public class StandbyTaskTest {
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
     private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
-        singletonList(new MockStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build()),
+        singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build()),
         mkMap(
             mkEntry(globalStoreName, globalTopicPartition.topic())
         )
@@ -208,8 +208,8 @@ public class StandbyTaskTest {
         task.update(partition2, restoreStateConsumer.poll(Duration.ofMillis(100)).records(partition2));
 
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
-        final MockStateStore store1 = (MockStateStore) context.getStateMgr().getStore(storeName1);
-        final MockStateStore store2 = (MockStateStore) context.getStateMgr().getStore(storeName2);
+        final MockKeyValueStore store1 = (MockKeyValueStore) context.getStateMgr().getStore(storeName1);
+        final MockKeyValueStore store2 = (MockKeyValueStore) context.getStateMgr().getStore(storeName2);
 
         assertEquals(Collections.emptyList(), store1.keys);
         assertEquals(mkList(1, 2, 3), store2.keys);

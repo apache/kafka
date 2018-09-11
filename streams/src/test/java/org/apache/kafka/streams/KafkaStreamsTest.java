@@ -69,7 +69,7 @@ public class KafkaStreamsTest {
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
     // We need this to avoid the KafkaConsumer hanging on poll
-    // (this may occur if the test doesn't complete quick enough)
+    // (this may occur if the test doesn't complete quickly enough)
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final StreamsBuilder builder = new StreamsBuilder();

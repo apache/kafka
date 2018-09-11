@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MockStateStore implements KeyValueStore {
+public class MockKeyValueStore implements KeyValueStore {
     private final String name;
     private final boolean persistent;
 
@@ -36,8 +36,8 @@ public class MockStateStore implements KeyValueStore {
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
 
-    public MockStateStore(final String name,
-                          final boolean persistent) {
+    public MockKeyValueStore(final String name,
+                             final boolean persistent) {
         this.name = name;
         this.persistent = persistent;
     }

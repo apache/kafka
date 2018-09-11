@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStoreBuilder;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -62,7 +62,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreBuilder storeBuilder = new MockStoreBuilder("store", false);
+    private final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("store", false);
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -375,14 +375,14 @@ public class InternalTopologyBuilderTest {
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
-        builder.addStateStore(new MockStoreBuilder("store-1", false), "processor-1", "processor-2");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-1", false), "processor-1", "processor-2");
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
         builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
-        builder.addStateStore(new MockStoreBuilder("store-2", false), "processor-3", "processor-4");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-2", false), "processor-3", "processor-4");
 
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
-        builder.addStateStore(new MockStoreBuilder("store-3", false));
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -464,19 +464,19 @@ public class InternalTopologyBuilderTest {
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
-        builder.addStateStore(new MockStoreBuilder("store-1", false), "processor-1", "processor-2");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-1", false), "processor-1", "processor-2");
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
-        builder.addStateStore(new MockStoreBuilder("store-2", false));
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-2", false));
         builder.connectProcessorAndStateStores("processor-2", "store-2");
         builder.connectProcessorAndStateStores("processor-3", "store-2");
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
-        builder.addGlobalStore(new MockStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
+        builder.addGlobalStore(new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
     }
