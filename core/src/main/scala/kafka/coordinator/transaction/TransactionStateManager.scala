@@ -296,7 +296,8 @@ class TransactionStateManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        lazy val buffer = ByteBuffer.allocate(config.transactionLogLoadBufferSize)
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         var currOffset = log.logStartOffset
@@ -311,6 +312,19 @@ class TransactionStateManager(brokerId: Int,
             val memRecords = fetchDataInfo.records match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
+                val sizeInBytes = fileRecords.sizeInBytes
+                val bytesNeeded = Math.max(config.transactionLogLoadBufferSize, sizeInBytes)
+
+                // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
+                if (buffer.capacity < bytesNeeded) {
+                  if (config.transactionLogLoadBufferSize < bytesNeeded)
+                    warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                      s"configured transaction.state.log.load.buffer.size (${config.transactionLogLoadBufferSize} bytes)")
+
+                  buffer = ByteBuffer.allocate(bytesNeeded)
+                } else {
+                  buffer.clear()
+                }
                 buffer.clear()
                 fileRecords.readInto(buffer, 0)
                 MemoryRecords.readableRecords(buffer)

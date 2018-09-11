@@ -184,7 +184,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
         for (final TopicPartition topicPartition : records.keySet()) {
-            results.put(topicPartition, new ArrayList<ConsumerRecord<K, V>>());
+            results.put(topicPartition, new ArrayList<>());
         }
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
@@ -208,11 +208,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         Set<TopicPartition> currentAssigned = new HashSet<>(this.subscriptions.assignedPartitions());
         if (!currentAssigned.contains(tp))
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
-        List<ConsumerRecord<K, V>> recs = this.records.get(tp);
-        if (recs == null) {
-            recs = new ArrayList<>();
-            this.records.put(tp, recs);
-        }
+        List<ConsumerRecord<K, V>> recs = this.records.computeIfAbsent(tp, k -> new ArrayList<>());
         recs.add(record);
     }
 
@@ -439,12 +435,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public synchronized void scheduleNopPollTask() {
-        schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                // noop
-            }
-        });
+        schedulePollTask(() -> { });
     }
 
     public synchronized Set<TopicPartition> paused() {

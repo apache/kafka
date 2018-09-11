@@ -23,6 +23,7 @@ import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -132,6 +133,9 @@ class PartitionStateMachine(config: KafkaConfig,
         doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
       } catch {
+        case e: ControllerMovedException =>
+          error(s"Controller moved to another broker when moving some partitions to $targetState state", e)
+          throw e
         case e: Throwable => error(s"Error while moving some partitions to $targetState state", e)
       }
     }
@@ -250,8 +254,11 @@ class PartitionStateMachine(config: KafkaConfig,
       partition -> leaderIsrAndControllerEpoch
     }.toMap
     val createResponses = try {
-      zkClient.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs)
+      zkClient.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs, controllerContext.epochZkVersion)
     } catch {
+      case e: ControllerMovedException =>
+        error("Controller moved to another broker when trying to create the topic partition state znode", e)
+        throw e
       case e: Exception =>
         partitionsWithLiveReplicas.foreach { case (partition,_) => logFailedStateChange(partition, partitionState(partition), NewPartition, e) }
         Seq.empty
@@ -361,7 +368,7 @@ class PartitionStateMachine(config: KafkaConfig,
     val recipientsPerPartition = partitionsWithLeaders.map { case (partition, _, recipients) => partition -> recipients }.toMap
     val adjustedLeaderAndIsrs = partitionsWithLeaders.map { case (partition, leaderAndIsrOpt, _) => partition -> leaderAndIsrOpt.get }.toMap
     val UpdateLeaderAndIsrResult(successfulUpdates, updatesToRetry, failedUpdates) = zkClient.updateLeaderAndIsr(
-      adjustedLeaderAndIsrs, controllerContext.epoch)
+      adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
     successfulUpdates.foreach { case (partition, leaderAndIsr) =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)

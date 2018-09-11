@@ -77,7 +77,7 @@ public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements Auto
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         alive = false;
         gcListenerThread.interrupt();
     }

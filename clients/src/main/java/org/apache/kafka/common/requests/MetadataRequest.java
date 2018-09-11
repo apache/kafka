@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -31,13 +30,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class MetadataRequest extends AbstractRequest {
 
     private static final String TOPICS_KEY_NAME = "topics";
-    private static final String ALLOW_AUTO_TOPIC_CREATION_KEY_NAME = "allow_auto_topic_creation";
 
     private static final Schema METADATA_REQUEST_V0 = new Schema(
             new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics."));
@@ -52,12 +49,14 @@ public class MetadataRequest extends AbstractRequest {
     private static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
 
     /* The v4 metadata request has an additional field for allowing auto topic creation. The response is the same as v3. */
+    private static final Field.Bool ALLOW_AUTO_TOPIC_CREATION = new Field.Bool("allow_auto_topic_creation",
+            "If this and the broker config <code>auto.create.topics.enable</code> are true, topics that " +
+                    "don't exist will be created by the broker. Otherwise, no topics will be created by the broker.");
+
     private static final Schema METADATA_REQUEST_V4 = new Schema(
             new Field(TOPICS_KEY_NAME, ArrayOf.nullable(STRING), "An array of topics to fetch metadata for. " +
                     "If the topics array is null fetch metadata for all topics."),
-            new Field(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME, BOOLEAN, "If this and the broker config " +
-                    "'auto.create.topics.enable' are true, topics that don't exist will be created by the broker. " +
-                    "Otherwise, no topics will be created by the broker."));
+            ALLOW_AUTO_TOPIC_CREATION);
 
     /* The v5 metadata request is the same as v4. An additional field for offline_replicas has been added to the v5 metadata response */
     private static final Schema METADATA_REQUEST_V5 = METADATA_REQUEST_V4;
@@ -67,9 +66,14 @@ public class MetadataRequest extends AbstractRequest {
      */
     private static final Schema METADATA_REQUEST_V6 = METADATA_REQUEST_V5;
 
+    /**
+     * Bumped for the addition of the current leader epoch in the metadata response.
+     */
+    private static final Schema METADATA_REQUEST_V7 = METADATA_REQUEST_V6;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3,
-            METADATA_REQUEST_V4, METADATA_REQUEST_V5, METADATA_REQUEST_V6};
+            METADATA_REQUEST_V4, METADATA_REQUEST_V5, METADATA_REQUEST_V6, METADATA_REQUEST_V7};
     }
 
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
@@ -133,13 +137,13 @@ public class MetadataRequest extends AbstractRequest {
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
     public MetadataRequest(List<String> topics, boolean allowAutoTopicCreation, short version) {
-        super(version);
+        super(ApiKeys.METADATA, version);
         this.topics = topics;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     public MetadataRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.METADATA, version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
             topics = new ArrayList<>();
@@ -149,10 +153,8 @@ public class MetadataRequest extends AbstractRequest {
         } else {
             topics = null;
         }
-        if (struct.hasField(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME))
-            allowAutoTopicCreation = struct.getBoolean(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME);
-        else
-            allowAutoTopicCreation = true;
+
+        allowAutoTopicCreation = struct.getOrElse(ALLOW_AUTO_TOPIC_CREATION, true);
     }
 
     @Override
@@ -171,12 +173,13 @@ public class MetadataRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
-                return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
+                return new MetadataResponse(Collections.emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             case 3:
             case 4:
             case 5:
             case 6:
-                return new MetadataResponse(throttleTimeMs, Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
+            case 7:
+                return new MetadataResponse(throttleTimeMs, Collections.emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.METADATA.latestVersion()));
@@ -206,8 +209,7 @@ public class MetadataRequest extends AbstractRequest {
             struct.set(TOPICS_KEY_NAME, null);
         else
             struct.set(TOPICS_KEY_NAME, topics.toArray());
-        if (struct.hasField(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME))
-            struct.set(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME, allowAutoTopicCreation);
+        struct.setIfExists(ALLOW_AUTO_TOPIC_CREATION, allowAutoTopicCreation);
         return struct;
     }
 }

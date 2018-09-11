@@ -43,6 +43,8 @@
 
 <h5><a id="upgrade_210_notable" href="#upgrade_210_notable">Notable changes in 2.1.0</a></h5>
 <ul>
+    <li>Jetty has been upgraded to 9.4.12, which excludes TLS_RSA_* ciphers by default because they do not support forward
+        secrecy, see https://github.com/eclipse/jetty.project/issues/2807 for more information.</li>
     <li>Unclean leader election is automatically enabled by the controller when <code>unclean.leader.election.enable</code> config is dynamically updated by using per-topic config override.</li>
 </ul>
 

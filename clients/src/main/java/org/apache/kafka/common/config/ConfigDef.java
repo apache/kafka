@@ -22,10 +22,8 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -187,7 +185,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -264,7 +262,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -337,7 +335,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, Recommender recommender) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -607,13 +605,7 @@ public class ConfigDef {
                 List<Object> originalRecommendedValues = value.recommendedValues();
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
-                    Iterator<Object> it = recommendedValues.iterator();
-                    while (it.hasNext()) {
-                        Object o = it.next();
-                        if (!originalRecommendedValueSet.contains(o)) {
-                            it.remove();
-                        }
-                    }
+                    recommendedValues.removeIf(o -> !originalRecommendedValueSet.contains(o));
                 }
                 value.recommendedValues(recommendedValues);
                 value.visible(key.recommender.visible(name, parsed));
@@ -950,7 +942,7 @@ public class ConfigDef {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
-                // Pass in the string null to avoid the findbugs warning
+                // Pass in the string null to avoid the spotbugs warning
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
@@ -1271,32 +1263,30 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            @Override
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                int cmp = k1.group == null
-                        ? (k2.group == null ? 0 : -1)
-                        : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
-                if (cmp == 0) {
-                    cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
-                    if (cmp == 0) {
-                        // first take anything with no default value
-                        if (!k1.hasDefault() && k2.hasDefault()) {
-                            cmp = -1;
-                        } else if (!k2.hasDefault() && k1.hasDefault()) {
-                            cmp = 1;
-                        } else {
-                            cmp = k1.importance.compareTo(k2.importance);
-                            if (cmp == 0) {
-                                return k1.name.compareTo(k2.name);
-                            }
-                        }
-                    }
-                }
-                return cmp;
-            }
-        });
+        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
+    }
+
+    private int compare(ConfigKey k1, ConfigKey k2, Map<String, Integer> groupOrd) {
+        int cmp = k1.group == null
+            ? (k2.group == null ? 0 : -1)
+            : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
+        if (cmp == 0) {
+            cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
+            if (cmp == 0) {
+                // first take anything with no default value
+                if (!k1.hasDefault() && k2.hasDefault())
+                    cmp = -1;
+                else if (!k2.hasDefault() && k1.hasDefault())
+                    cmp = 1;
+                else {
+                    cmp = k1.importance.compareTo(k2.importance);
+                    if (cmp == 0)
+                        return k1.name.compareTo(k2.name);
+                }
+            }
+        }
+        return cmp;
     }
 
     public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
@@ -1324,12 +1314,7 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new ConfigDef.Validator() {
-            @Override
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-        };
+        return (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value);
     }
 
     /**

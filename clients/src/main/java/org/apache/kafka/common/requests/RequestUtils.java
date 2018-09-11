@@ -20,11 +20,15 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceType;
+
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.HOST;
 import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
@@ -101,4 +105,16 @@ final class RequestUtils {
         struct.set(OPERATION, filter.operation().code());
         struct.set(PERMISSION_TYPE, filter.permissionType().code());
     }
+
+    static void setLeaderEpochIfExists(Struct struct, Field.Int32 leaderEpochField, Optional<Integer> leaderEpoch) {
+        struct.setIfExists(leaderEpochField, leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH));
+    }
+
+    static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
+        int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+                Optional.empty() : Optional.of(leaderEpoch);
+        return leaderEpochOpt;
+    }
+
 }

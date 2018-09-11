@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Replica
@@ -43,7 +43,9 @@ class ReplicaManagerQuotasTest {
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
-  val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 0, 100), topicPartition2 -> new PartitionData(0, 0, 100))
+  val fetchInfo = Seq(
+    topicPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
+    topicPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
   var replicaManager: ReplicaManager = _
 
   @Test
@@ -164,9 +166,9 @@ class ReplicaManagerQuotasTest {
       EasyMock.replay(replicaManager)
 
       val tp = new TopicPartition("t1", 0)
-      val fetchParititonStatus = new FetchPartitionStatus(new LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-        relativePositionInSegment = 250), new PartitionData(50, 0, 1))
-      val fetchMetadata = new FetchMetadata(fetchMinBytes = 1, fetchMaxBytes = 1000, hardMaxBytesLimit = true, fetchOnlyLeader = true,
+      val fetchParititonStatus = FetchPartitionStatus(new LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
+         relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()))
+      val fetchMetadata = FetchMetadata(fetchMinBytes = 1, fetchMaxBytes = 1000, hardMaxBytesLimit = true, fetchOnlyLeader = true,
         fetchOnlyCommitted = false, isFromFollower = true, replicaId = 1, fetchPartitionStatus = List((tp, fetchParititonStatus)))
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
         quota = null, isolationLevel = IsolationLevel.READ_UNCOMMITTED, responseCallback = null) {

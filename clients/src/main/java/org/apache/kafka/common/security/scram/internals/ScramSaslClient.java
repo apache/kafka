@@ -59,7 +59,7 @@ public class ScramSaslClient implements SaslClient {
         RECEIVE_SERVER_FINAL_MESSAGE,
         COMPLETE,
         FAILED
-    };
+    }
 
     private final ScramMechanism mechanism;
     private final CallbackHandler callbackHandler;
@@ -157,14 +157,14 @@ public class ScramSaslClient implements SaslClient {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
@@ -178,7 +178,7 @@ public class ScramSaslClient implements SaslClient {
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
     }
 
     private void setState(State state) {

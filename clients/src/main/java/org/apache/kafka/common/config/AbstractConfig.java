@@ -316,7 +316,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
-        return getConfiguredInstances(key, t, Collections.<String, Object>emptyMap());
+        return getConfiguredInstances(key, t, Collections.emptyMap());
     }
 
     /**
@@ -343,7 +343,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(List<String> classNames, Class<T> t, Map<String, Object> configOverrides) {
-        List<T> objects = new ArrayList<T>();
+        List<T> objects = new ArrayList<>();
         if (classNames == null)
             return objects;
         Map<String, Object> configPairs = originals();

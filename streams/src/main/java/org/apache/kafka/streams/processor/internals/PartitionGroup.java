@@ -66,7 +66,7 @@ public class PartitionGroup {
         this.partitionQueues = partitionQueues;
         totalBuffered = 0;
         allBuffered = false;
-        streamTime = RecordQueue.NOT_KNOWN;
+        streamTime = RecordQueue.UNKNOWN;
     }
 
     /**
