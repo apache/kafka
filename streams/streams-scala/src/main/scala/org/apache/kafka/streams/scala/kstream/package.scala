@@ -14,26 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.scala
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.StateStore
 
-public class ProducedInternal<K, V> extends Produced<K, V> {
-    public ProducedInternal(final Produced<K, V> produced) {
-        super(produced);
-    }
-
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public StreamPartitioner<? super K, ? super V> streamPartitioner() {
-        return partitioner;
-    }
+package object kstream {
+  type Materialized[K, V, S <: StateStore] = org.apache.kafka.streams.kstream.Materialized[K, V, S]
+  type Serialized[K, V] = org.apache.kafka.streams.kstream.Serialized[K, V]
+  type Consumed[K, V] = org.apache.kafka.streams.kstream.Consumed[K, V]
+  type Produced[K, V] = org.apache.kafka.streams.kstream.Produced[K, V]
+  type Joined[K, V, VO] = org.apache.kafka.streams.kstream.Joined[K, V, VO]
 }

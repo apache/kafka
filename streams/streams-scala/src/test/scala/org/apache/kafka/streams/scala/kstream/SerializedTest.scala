@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2018 Joan Goyeau.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,26 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.kstream.internals.SerializedInternal
+import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.Serdes
+import org.junit.runner.RunWith
+import org.scalatest.junit.JUnitRunner
+import org.scalatest.{FlatSpec, Matchers}
 
-public class ProducedInternal<K, V> extends Produced<K, V> {
-    public ProducedInternal(final Produced<K, V> produced) {
-        super(produced);
-    }
+@RunWith(classOf[JUnitRunner])
+class SerializedTest extends FlatSpec with Matchers {
 
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
+  "Create a Serialized" should "create a Serialized with Serdes" in {
+    val serialized: Serialized[String, Long] = Serialized.`with`[String, Long]
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public StreamPartitioner<? super K, ? super V> streamPartitioner() {
-        return partitioner;
-    }
+    val internalSerialized = new SerializedInternal(serialized)
+    internalSerialized.keySerde shouldBe Serdes.String
+    internalSerialized.valueSerde shouldBe Serdes.Long
+  }
 }
