@@ -1576,8 +1576,8 @@ public class FetcherTest {
         KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg));
         KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax));
         // Throttle times are ApiVersions=400, Fetch=(100, 200, 300)
-        assertEquals(250, avgMetric.value(), EPSILON);
-        assertEquals(400, maxMetric.value(), EPSILON);
+        assertEquals(250, (Double) avgMetric.metricValue(), EPSILON);
+        assertEquals(400, (Double) maxMetric.metricValue(), EPSILON);
         client.close();
     }
 
@@ -1599,14 +1599,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 0);
-        assertEquals(100, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(100, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
-        assertEquals(100, partitionLag.value(), EPSILON);
+        assertEquals(100, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1614,8 +1614,8 @@ public class FetcherTest {
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, 0);
-        assertEquals(197, recordsFetchLagMax.value(), EPSILON);
-        assertEquals(197, partitionLag.value(), EPSILON);
+        assertEquals(197, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        assertEquals(197, (Double) partitionLag.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1637,14 +1637,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLeadMin = allMetrics.get(minLeadMetric);
 
         // recordsFetchLeadMin should be initialized to MAX_VALUE
-        assertEquals(Double.MAX_VALUE, recordsFetchLeadMin.value(), EPSILON);
+        assertEquals(Double.MAX_VALUE, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, -1L, 0L, 0);
-        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
+        assertEquals(0L, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
 
         KafkaMetric partitionLead = allMetrics.get(partitionLeadMetric);
-        assertEquals(0L, partitionLead.value(), EPSILON);
+        assertEquals(0L, (Double) partitionLead.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1653,8 +1653,8 @@ public class FetcherTest {
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         }
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, -1L, 0L, 0);
-        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
-        assertEquals(3L, partitionLead.value(), EPSILON);
+        assertEquals(0L, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
+        assertEquals(3L, (Double) partitionLead.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1681,14 +1681,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 50L, 0);
-        assertEquals(50, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(50, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
-        assertEquals(50, partitionLag.value(), EPSILON);
+        assertEquals(50, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1696,8 +1696,8 @@ public class FetcherTest {
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, 150L, 0);
-        assertEquals(147, recordsFetchLagMax.value(), EPSILON);
-        assertEquals(147, partitionLag.value(), EPSILON);
+        assertEquals(147, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        assertEquals(147, (Double) partitionLag.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1748,8 +1748,8 @@ public class FetcherTest {
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric fetchSizeAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchSizeAvg));
         KafkaMetric recordsCountAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg));
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(6, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(6, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1774,8 +1774,8 @@ public class FetcherTest {
         }
 
         fetchRecords(tp0, records, Errors.NONE, 100L, 0);
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(2, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(2, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1810,8 +1810,8 @@ public class FetcherTest {
         for (Record record : records.records())
             expectedBytes += record.sizeInBytes();
 
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(3, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(3, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1851,8 +1851,8 @@ public class FetcherTest {
         for (Record record : records.records())
             expectedBytes += record.sizeInBytes();
 
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(3, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(3, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test

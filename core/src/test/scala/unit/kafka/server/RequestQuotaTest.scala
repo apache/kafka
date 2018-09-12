@@ -195,7 +195,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   private def metricValue(metric: KafkaMetric, sensor: Sensor): Double = {
     sensor.synchronized {
-      if (metric == null) -1.0 else metric.value
+      if (metric == null) -1.0 else metric.metricValue.asInstanceOf[Double]
     }
   }
 
