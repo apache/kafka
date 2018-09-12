@@ -37,6 +37,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -103,6 +104,10 @@ public class MetricsTest {
 
     @Test
     public void testSimpleStats() throws Exception {
+        verifyStats(m -> (double) m.metricValue());
+    }
+
+    private void verifyStats(Function<KafkaMetric, Double> metricValueFunc) {
         ConstantMeasurable measurable = new ConstantMeasurable();
 
         metrics.addMetric(metrics.metricName("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation."), measurable);
@@ -132,24 +137,24 @@ public class MetricsTest {
         // prior to any time passing
         double elapsedSecs = (config.timeWindowMs() * (config.samples() - 1)) / 1000.0;
         assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs), count / elapsedSecs,
-                     (Double) metrics.metrics().get(metrics.metricName("test.occurences", "grp1")).metricValue(), EPS);
+                     metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.occurences", "grp1"))), EPS);
 
         // pretend 2 seconds passed...
         long sleepTimeMs = 2;
         time.sleep(sleepTimeMs * 1000);
         elapsedSecs += sleepTimeMs;
 
-        assertEquals("s2 reflects the constant value", 5.0, (Double) metrics.metrics().get(metrics.metricName("s2.total", "grp1")).metricValue(), EPS);
-        assertEquals("Avg(0...9) = 4.5", 4.5, (Double) metrics.metrics().get(metrics.metricName("test.avg", "grp1")).metricValue(), EPS);
-        assertEquals("Max(0...9) = 9", count - 1, (Double) metrics.metrics().get(metrics.metricName("test.max", "grp1")).metricValue(), EPS);
-        assertEquals("Min(0...9) = 0", 0.0, (Double) metrics.metrics().get(metrics.metricName("test.min", "grp1")).metricValue(), EPS);
+        assertEquals("s2 reflects the constant value", 5.0, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("s2.total", "grp1"))), EPS);
+        assertEquals("Avg(0...9) = 4.5", 4.5, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.avg", "grp1"))), EPS);
+        assertEquals("Max(0...9) = 9", count - 1,  metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.max", "grp1"))), EPS);
+        assertEquals("Min(0...9) = 0", 0.0, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.min", "grp1"))), EPS);
         assertEquals("Rate(0...9) = 1.40625",
-                     sum / elapsedSecs, (Double) metrics.metrics().get(metrics.metricName("test.rate", "grp1")).metricValue(), EPS);
+                     sum / elapsedSecs, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.rate", "grp1"))), EPS);
         assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs),
                      count / elapsedSecs,
-                     (Double) metrics.metrics().get(metrics.metricName("test.occurences", "grp1")).metricValue(), EPS);
+                     metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.occurences", "grp1"))), EPS);
         assertEquals("Count(0...9) = 10",
-                     (double) count, (Double) metrics.metrics().get(metrics.metricName("test.count", "grp1")).metricValue(), EPS);
+                     (double) count, metricValueFunc.apply(metrics.metrics().get(metrics.metricName("test.count", "grp1"))), EPS);
     }
 
     @Test
@@ -836,52 +841,6 @@ public class MetricsTest {
      */
     @Test
     public void testDeprecatedMetricValueMethod() {
-        ConstantMeasurable measurable = new ConstantMeasurable();
-
-        metrics.addMetric(metrics.metricName("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation."), measurable);
-        Sensor s = metrics.sensor("test.sensor");
-        s.add(metrics.metricName("test.avg", "grp1"), new Avg());
-        s.add(metrics.metricName("test.max", "grp1"), new Max());
-        s.add(metrics.metricName("test.min", "grp1"), new Min());
-        s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
-                metrics.metricName("test.total", "grp1")));
-        s.add(new Meter(TimeUnit.SECONDS, new Count(), metrics.metricName("test.occurrences", "grp1"),
-                metrics.metricName("test.occurences.total", "grp1")));
-        s.add(metrics.metricName("test.count", "grp1"), new Count());
-        s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
-                             new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
-                             new Percentile(metrics.metricName("test.perc99_9", "grp1"), 99.9)));
-
-        Sensor s2 = metrics.sensor("test.sensor2");
-        s2.add(metrics.metricName("s2.total", "grp1"), new Total());
-        s2.record(5.0);
-
-        int sum = 0;
-        int count = 10;
-        for (int i = 0; i < count; i++) {
-            s.record(i);
-            sum += i;
-        }
-        // prior to any time passing
-        double elapsedSecs = (config.timeWindowMs() * (config.samples() - 1)) / 1000.0;
-        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs), count / elapsedSecs,
-                     metrics.metrics().get(metrics.metricName("test.occurrences", "grp1")).value(), EPS);
-
-        // pretend 2 seconds passed...
-        long sleepTimeMs = 2;
-        time.sleep(sleepTimeMs * 1000);
-        elapsedSecs += sleepTimeMs;
-
-        assertEquals("s2 reflects the constant value", 5.0, metrics.metrics().get(metrics.metricName("s2.total", "grp1")).value(), EPS);
-        assertEquals("Avg(0...9) = 4.5", 4.5, metrics.metrics().get(metrics.metricName("test.avg", "grp1")).value(), EPS);
-        assertEquals("Max(0...9) = 9", count - 1,  metrics.metrics().get(metrics.metricName("test.max", "grp1")).value(), EPS);
-        assertEquals("Min(0...9) = 0", 0.0, metrics.metrics().get(metrics.metricName("test.min", "grp1")).value(), EPS);
-        assertEquals("Rate(0...9) = 1.40625",
-                     sum / elapsedSecs, metrics.metrics().get(metrics.metricName("test.rate", "grp1")).value(), EPS);
-        assertEquals(String.format("Occurrences(0...%d) = %f", count, count / elapsedSecs),
-                     count / elapsedSecs,
-                     metrics.metrics().get(metrics.metricName("test.occurrences", "grp1")).value(), EPS);
-        assertEquals("Count(0...9) = 10",
-                     (double) count, metrics.metrics().get(metrics.metricName("test.count", "grp1")).value(), EPS);
+        verifyStats(KafkaMetric::value);
     }
 }
