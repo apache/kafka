@@ -129,7 +129,7 @@ public class SchemaProjector {
             throw new SchemaProjectorException("Schema type mismatch. source type: " + source.type() + " and target type: " + target.type());
         } else if (!Objects.equals(source.name(), target.name())) {
             throw new SchemaProjectorException("Schema name mismatch. source name: " + source.name() + " and target name: " + target.name());
-        } else if (!Objects.equals(source.parameters(), target.parameters())) {
+        } else if (!Objects.equals(source.parameters(), target.parameters()) && !source.parameters().containsKey("io.confluent.connect.avro.Enum")) {
             throw new SchemaProjectorException("Schema parameters not equal. source parameters: " + source.parameters() + " and target parameters: " + target.parameters());
         }
     }
