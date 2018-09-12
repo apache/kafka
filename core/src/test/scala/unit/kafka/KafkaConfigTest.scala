@@ -56,12 +56,10 @@ class KafkaTest {
     val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
     assertEquals(2, config4.brokerId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
-  }
 
-  @Test(expected = classOf[FatalExitError])
-  def testGetKafkaConfigFromArgsWrongSetValue(): Unit = {
-    val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "a=b=c")))
+    // We should be able to handle arguments with a "=" character in the value
+    val config5 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=123=abc")))
+    assertEquals("123=abc", config5.sslKeystorePassword.value)
   }
 
   @Test(expected = classOf[FatalExitError])
