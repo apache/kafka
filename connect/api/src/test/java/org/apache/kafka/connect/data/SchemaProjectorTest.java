@@ -468,6 +468,21 @@ public class SchemaProjectorTest {
         } catch (SchemaProjectorException e) {
             // expected
         }
+
+        Map<String, String> sourceEnumParamters = new HashMap<String, String>();
+        sourceEnumParamters.put("io.confluent.connect.avro.Enum", "FooEnum");
+        sourceEnumParamters.put("io.confluent.connect.avro.Enum.FooSymbol", "FooSymbol");
+        Schema sourceWithEnumParameters = SchemaBuilder.string().parameters(sourceEnumParamters);
+
+        Map<String, String> targetEnumParamters = new HashMap<String, String>();
+        targetEnumParamters.put("io.confluent.connect.avro.Enum", "FooEnum");
+        targetEnumParamters.put("io.confluent.connect.avro.Enum.FooSymbol", "FooSymbol");
+        targetEnumParamters.put("io.confluent.connect.avro.Enum.BarSymbol", "BarSymbol");
+        Schema targetWithEnumParameters = SchemaBuilder.string().parameters(targetEnumParamters);
+
+        Object projected = SchemaProjector.project(sourceWithEnumParameters, "FooSymbol", targetWithEnumParameters);
+
+        assertEquals("FooSymbol", projected);
     }
 
     @Test
