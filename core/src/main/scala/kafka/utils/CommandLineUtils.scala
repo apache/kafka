@@ -64,15 +64,11 @@ object CommandLineUtils extends Logging {
 
     val props = new Properties
     for (a <- splits) {
-      if (a.length == 1 || (a.length == 2 && a(1).length() == 0)) {
+      if (a.length == 1 || (a.length == 2 && a(1).isEmpty())) {
         if (acceptMissingValue) props.put(a(0), "")
         else throw new IllegalArgumentException(s"Missing value for key ${a(0)}")
       }
-      else if (a.length == 2) props.put(a(0), a(1))
-      else {
-        System.err.println("Invalid command line properties: " + args.mkString(" "))
-        Exit.exit(1)
-      }
+      else props.put(a(0), a(1))
     }
     props
   }
