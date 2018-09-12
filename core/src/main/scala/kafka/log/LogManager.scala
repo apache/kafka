@@ -863,13 +863,15 @@ class LogManager(logDirs: Seq[File],
 
   /**
    * Delete any eligible logs. Return the number of segments deleted.
-   * Only consider logs that are not compacted.
+   * Only consider logs whose cleanup policy is not 'compact,delete', as logs with
+   * that policy are handled by the LogCleanerManager and deleting them here could
+   * multiple threads to attempt to delete the same segment (see KIP-71).
    */
   def cleanupLogs() {
     debug("Beginning log cleanup...")
     var total = 0
     val startMs = time.milliseconds
-    for(log <- allLogs; if !log.config.compact) {
+    for(log <- allLogs; if !(log.config.compact && log.config.delete)) {
       debug("Garbage collecting '" + log.name + "'")
       total += log.deleteOldSegments()
     }

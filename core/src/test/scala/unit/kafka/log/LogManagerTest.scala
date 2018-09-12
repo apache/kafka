@@ -190,7 +190,7 @@ class LogManagerTest {
   }
 
   /**
-    * Ensures that LogManager only runs on logs with cleanup.policy=delete
+    * Ensures that LogManager doesn't run on logs with cleanup.policy=compact,delete
     * LogCleaner.CleanerThread handles all logs where compaction is enabled.
     */
   @Test
@@ -212,6 +212,31 @@ class LogManagerTest {
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
+  }
+
+  /**
+    * Ensures that LogManager does run on logs with cleanup.policy=compact
+    * This is needed to delete segments that precede the log start offset
+    */
+  @Test
+  def testDoesCleanLogsWithCompactPolicy() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val segmentSize = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes()).sizeInBytes()
+    logProps.put(LogConfig.SegmentBytesProp, segmentSize * 5: java.lang.Integer)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    log.logStartOffset = segmentSize
+    for (_ <- 0 until 15) {
+      val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+    }
+
+    val numSegments = log.numberOfSegments
+    assertEquals("There should be 3 segments.", 3, log.numberOfSegments)
+
+    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+
+    assertEquals("There  should be two segments now", numSegments, log.numberOfSegments)
   }
 
   /**
