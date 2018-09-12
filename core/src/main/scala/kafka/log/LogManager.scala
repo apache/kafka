@@ -830,6 +830,7 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
+      removedLog.close()
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
