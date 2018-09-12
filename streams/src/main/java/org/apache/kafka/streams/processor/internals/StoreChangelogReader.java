@@ -60,13 +60,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public void register(final StateRestorer restorer) {
+        if (!stateRestorers.containsKey(restorer.partition())) {
+            stateRestorers.put(restorer.partition(), restorer);
+            log.trace("Added restorer for changelog {}", restorer.partition());
+        }
         stateRestorers.put(restorer.partition(), restorer);
         needsInitializing.put(restorer.partition(), restorer);
     }
 
-    public Collection<TopicPartition> restore() {
+    public Collection<TopicPartition> restore(final Collection<StreamTask> restoringTasks) {
         if (!needsInitializing.isEmpty()) {
-            initialize();
+            initialize(restoringTasks);
         }
 
         if (needsRestoring.isEmpty()) {
@@ -87,7 +91,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return completed();
     }
 
-    private void initialize() {
+    private void initialize(final Collection<StreamTask> restoringTasks) {
         if (!consumer.subscription().isEmpty()) {
             throw new IllegalStateException("Restore consumer should not be subscribed to any topics (" + consumer.subscription() + ")");
         }
@@ -139,11 +143,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // set up restorer for those initializable
         if (!initializable.isEmpty()) {
-            startRestoration(initializable);
+            startRestoration(initializable, restoringTasks);
         }
     }
 
-    private void startRestoration(final Map<TopicPartition, StateRestorer> initialized) {
+    private void startRestoration(final Map<TopicPartition, StateRestorer> initialized,
+                                  final Collection<StreamTask> restoringTasks) {
         log.debug("{} Start restoring state stores from changelog topics {}", logPrefix, initialized.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
@@ -152,24 +157,48 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final List<StateRestorer> needsPositionUpdate = new ArrayList<>();
         for (final StateRestorer restorer : initialized.values()) {
+            final TopicPartition restoringPartition = restorer.partition();
             if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
-                consumer.seek(restorer.partition(), restorer.checkpoint());
-                logRestoreOffsets(restorer.partition(),
-                        restorer.checkpoint(),
-                        endOffsets.get(restorer.partition()));
-                restorer.setStartingOffset(consumer.position(restorer.partition()));
+                consumer.seek(restoringPartition, restorer.checkpoint());
+                logRestoreOffsets(
+                    restoringPartition,
+                    restorer.checkpoint(),
+                    endOffsets.get(restoringPartition));
+                restorer.setStartingOffset(consumer.position(restoringPartition));
             } else {
-                consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
+                consumer.seekToBeginning(Collections.singletonList(restoringPartition));
                 needsPositionUpdate.add(restorer);
             }
         }
 
         for (final StateRestorer restorer : needsPositionUpdate) {
-            final long position = consumer.position(restorer.partition());
-            logRestoreOffsets(restorer.partition(),
-                    position,
-                    endOffsets.get(restorer.partition()));
-            restorer.setStartingOffset(position);
+            final TopicPartition restoringPartition = restorer.partition();
+
+            for (final StreamTask task : restoringTasks) {
+                if (task.changelogPartitions().contains(restoringPartition) || task.partitions().contains(restoringPartition)) {
+                    if (task.eosEnabled) {
+                        log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
+                            "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), restorer.partition());
+
+                        needsInitializing.remove(restoringPartition);
+                        initialized.put(restoringPartition, restorer);
+                        restorer.setCheckpointOffset(consumer.position(restoringPartition));
+
+                        task.reinitializeStateStoresForPartitions(Collections.singleton(restoringPartition));
+                    } else {
+                        log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), restorer.partition());
+
+                        final long position = consumer.position(restoringPartition);
+                        logRestoreOffsets(
+                            restoringPartition,
+                            position,
+                            endOffsets.get(restoringPartition));
+                        restorer.setStartingOffset(position);
+                    }
+                }
+            }
+
+
         }
 
         needsRestoring.putAll(initialized);
@@ -220,7 +249,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                    final TopicPartition topicPartition) {
+                                  final TopicPartition topicPartition) {
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);

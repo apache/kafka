@@ -298,7 +298,7 @@ class AssignedTasks<T extends AbstractTask> {
         return suspended.values();
     }
 
-    Collection<T> restoringTasks() {
+    public Collection<T> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
     }
 

@@ -532,7 +532,7 @@ public class StreamThread extends Thread {
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
-        final Collection<TopicPartition> restored = storeChangelogReader.restore();
+        final Collection<TopicPartition> restored = storeChangelogReader.restore(active.restoringTasks());
         final Set<TopicPartition> resumed = active.updateRestored(restored);
 
         if (!resumed.isEmpty()) {

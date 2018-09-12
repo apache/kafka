@@ -143,6 +143,9 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     public void initialized() {}
 
     @Override
+    public void uninitialize() {}
+
+    @Override
     public File stateDir() {
         if (stateDir == null) {
             throw new UnsupportedOperationException("State directory not specified");

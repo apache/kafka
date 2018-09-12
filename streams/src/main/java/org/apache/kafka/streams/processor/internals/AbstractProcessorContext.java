@@ -193,4 +193,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     public void initialized() {
         initialized = true;
     }
+
+    @Override
+    public void uninitialize() {
+        initialized = false;
+    }
+
 }

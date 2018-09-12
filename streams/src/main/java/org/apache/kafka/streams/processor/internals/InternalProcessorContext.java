@@ -53,4 +53,9 @@ public interface InternalProcessorContext extends ProcessorContext {
      * Mark this contex as being initialized
      */
     void initialized();
+
+    /**
+     * Mark this context as being uninitialized
+     */
+    void uninitialize();
 }
