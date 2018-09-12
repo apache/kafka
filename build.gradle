@@ -123,6 +123,7 @@ ext {
 }
 
 apply from: file('wrapper.gradle')
+//apply plugin: 'me.champeau.gradle.japicmp'
 apply from: "$rootDir/gradle/compatibility.gradle"
 
 if (file('.git').exists()) {

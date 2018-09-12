@@ -17,6 +17,9 @@ buildscript {
   repositories {
     mavenCentral()
     jcenter()
+    maven {
+      url "https://plugins.gradle.org/m2/"
+    }
   }
   dependencies {
     classpath "org.ajoberstar:grgit:1.9.3"
@@ -25,151 +28,327 @@ buildscript {
 }
 
 import japicmp.cli.JApiCli
+import japicmp.versioning.Version
+import japicmp.versioning.SemanticVersion
 import org.ajoberstar.grgit.Grgit
 import org.apache.tools.ant.DirectoryScanner
+import org.gradle.api.artifacts.ResolveException
 
-// Parameters
-def baseBranch = project.hasProperty('baseBranch') ? project.baseBranch : "trunk"
-def newBranch = project.hasProperty('newBranch') ? project.newBranch : "HEAD"
-def onlyIncompatible = project.hasProperty('onlyIncompatible') ? project.onlyIncompatible : true
-def failOnBinaryIncompatibility = project.hasProperty('failOnBinaryIncompatibility') ?
-        project.failOnBinaryIncompatibility : false
-def failOnSourceIncompatibility = project.hasProperty('failOnSourceIncompatibility') ?
-        project.failOnSourceIncompatibility : false
-def failOnModifications = project.hasProperty('failOnModifications') ?
-        project.failOnModifications : false
-def failOnSemanticIncompatibility = project.hasProperty('failOnSemanticIncompatibility') ?
-        project.failOnSemanticIncompatibility : false
-
-// Constants
-def packageIncludes = [
-  "org.apache.kafka.common.*",
-  "org.apache.kafka.clients.*",
-  "org.apache.kafka.connect.*",
-]
-def packageExcludes = [
-  "org.apache.kafka.*.internals.*"
-]
-def baseWorkspace = "$buildDir/tmp/compatibility/base"
-def newWorkspace = "$buildDir/tmp/compatibility/new"
-def reportDir = "$buildDir/reports/compatibility"
-def reportFile = "$reportDir/compatibilityReport.html"
 def rootRepo = Grgit.open(dir: rootProject.rootDir)
+def source = project.hasProperty('source') ? project.source : lastRelease
+def target = project.hasProperty('target') ? project.target : rootRepo.branch.current.name
+def useRootAsSource = rootRepo.branch.current.name == source
+def useRootAsTarget = rootRepo.branch.current.name == target
+def sourceArtifactsPath = "$buildDir/tmp/compatibility/source.artifacts"
+def targetArtifactsPath = "$buildDir/tmp/compatibility/target.artifacts"
+def sourceWorkspace = useRootAsSource ? rootProject.rootDir.path : "$buildDir/tmp/compatibility/source"
+def targetWorkspace = useRootAsTarget ? rootProject.rootDir.path : "$buildDir/tmp/compatibility/target"
 
+// We won't copy stuff that is excluded by git itself
 def repoExcludes = new ArrayList<String>(rootRepo.clean(ignore: false, directories: true, dryRun: true))
 
-static def collectArtifactJars(String workspace) {
+static def collectArtifactJars(String workspace, String extraExcludes = "") {
   String includesPattern = '**/build/libs/kafka-*.jar **/build/libs/connect-*.jar'
   String excludesPattern = '**/build/libs/*-javadoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar ' +
-          '**/build/libs/*-system-tests-*.jar **/build/libs/*-examples*.jar'
+          "**/build/libs/*-system-tests-*.jar **/build/libs/*-examples*.jar **/build/tmp/compatibility/* $extraExcludes"
   return new FileNameFinder().getFileNames(workspace, includesPattern, excludesPattern)
 }
 
-static def checkoutBranch(String workspace, String branch) {
-  // Clean up and checkout the needed branch
-  def repo = Grgit.open(dir: workspace)
-  // Add and commit changes to support comparing un-committed work
-  repo.add(patterns: ['*'], update: true)
-  repo.commit(message: 'compatibility-check commit', all: true)
-  // Switch to the correct ref and make sure the branch is clean
-  repo.checkout(branch: 'compatibility-check', startPoint: branch, createBranch: true, orphan: true)
-  repo.clean(ignore: false, directories: true)
+/**
+ * Checks if the given parameter is a version number and at least 2.0.0
+ * @param reference can be an arbitrary git reference or a version number
+ * @return true in case the parameter can be interpreted as a version, false otherwise
+ */
+static def isDownloadableVersion(String reference) {
+  def semver = Version.getSemanticVersion(reference)
+  return semver.present && semver.get().major >= 2 && !reference.endsWith('-SNAPSHOT')
+}
+
+/**
+ * Resolves the given list of archive names with a given version and saves their path to the given file.
+ * Paths are separated by new lines.
+ * @param archiveNames
+ * @param reference
+ * @param outFile
+ */
+def resolveToFile(List archiveNames, String reference, File outFile) {
+  def ba = resolveDependencies(reference, archiveNames)
+  if (outFile.exists()) {
+    outFile.delete()
+  }
+  outFile.createNewFile()
+  outFile.write(ba.join("\n"))
+}
+
+def resolveDependencies(String version, List archiveNames) {
+  Configuration config = project.getConfigurations().create("download")
+  try {
+    config.setTransitive(false)
+    archiveNames.each {
+      println("org.apache.kafka:$it:$version")
+      project.getDependencies().add(config.getName(), "org.apache.kafka:$it:$version")
+    }
+    return config.getFiles().collect { it.path }
+  } finally {
+    project.configurations.remove(config)
+  }
+}
+
+/**
+ * Copies the root workspace to the folder denoted by the 'workspace' parameter, hard resets it to HEAD and
+ * checks out the reference denoted by the corresponding parameter.
+ * @param workspace is the location for checkout
+ * @param reference is the branch or tag to checkout
+ * @param repoExcludes a list of file names to exclude from copying
+ */
+def checkoutBranch(String workspace, String reference, List<String> repoExcludes) {
+  logger.info("Checking out '$reference' reference into $workspace")
+  if (file(workspace).list().length == 0) {
+    copy {
+      from rootDir
+      into workspace
+      excludes = repoExcludes
+    }
+  }
+  Grgit repo = null
+  try {
+    repo = Grgit.open(dir: workspace)
+    repo.reset(mode: 'HARD', commit: 'HEAD')
+    repo.checkout(branch: reference)
+    logger.info("Switched to $reference")
+  } finally {
+    repo?.close()
+  }
 }
 
 task setNoDirectoryExclude {
-  // Hack to remove Ant default excludes for copy. (Reset after)
+  // Hack to remove Ant default excludes for copy. (Reset after, see the end of the file)
   // See https://issues.gradle.org/browse/GRADLE-1883
   DirectoryScanner.defaultExcludes.each { DirectoryScanner.removeDefaultExclude it } // Reset at the bottom
   DirectoryScanner.addDefaultExclude 'something has to be in here or everything gets excluded'
 }
 
-task cleanWorkspaces {
-  delete baseWorkspace
-  delete newWorkspace
-  delete reportDir
-}
-
-task checkoutCleanBaseBranch(dependsOn: [setNoDirectoryExclude, cleanWorkspaces]) {
+/**
+ * Copies and checks out the 'source' reference. It won't do anything if it's the development
+ * branch on which the user is working on.
+ */
+task checkoutSourceBranch(dependsOn: setNoDirectoryExclude) {
+  inputs.property('source', source)
+  outputs.dir(sourceWorkspace)
   doLast {
-    copy {
-      from rootDir
-      into baseWorkspace
-      excludes = repoExcludes
+    if (source != rootRepo.branch.current.name) {
+      checkoutBranch(sourceWorkspace, source, repoExcludes)
     }
-    checkoutBranch(baseWorkspace, baseBranch)
   }
 }
 
-task checkoutCleanNewBranch(dependsOn: [setNoDirectoryExclude, cleanWorkspaces]) {
+/**
+ * Copies and checks out the 'target' reference. It won't do anything if it's the development
+ * branch on which the user is working on.
+ */
+task checkoutTargetBranch(dependsOn: setNoDirectoryExclude) {
+  inputs.property('target', target)
+  outputs.dir(targetWorkspace)
   doLast {
-    copy {
-      from rootDir
-      into newWorkspace
-      excludes = repoExcludes
+    if (target != rootRepo.branch.current.name) {
+      checkoutBranch(targetWorkspace, target, repoExcludes)
     }
-    checkoutBranch(newWorkspace, newBranch)
   }
 }
 
-task buildBaseBranch(type: GradleBuild, dependsOn: checkoutCleanBaseBranch) {
-  dir = baseWorkspace
-  tasks = ['clean','jar']
+/**
+ * Builds the project at the 'source' reference and produces the artifacts jars as it's output.
+ * If it needs to build, it'll run the 'jar' task.
+ */
+task buildSourceBranch(type: GradleBuild, dependsOn: checkoutSourceBranch) {
+  inputs.property('source', source)
+  outputs.file(sourceArtifactsPath)
+
+  dir = sourceWorkspace
+  startParameter.projectProperties = gradle.startParameter.projectProperties
+
+  tasks = ['jar']
+  doLast {
+    // When collecting the jars we need to exclude the 'source' and 'target' workspaces if we use the root
+    // git repo as the one of the branches to compare. Those directories may exist (but a 'clean' would get
+    // rid of them)
+    def sourceArtifacts = collectArtifactJars(sourceWorkspace, useRootAsSource ? "**/source/ **/target/" : "")
+    file(sourceArtifactsPath).write(sourceArtifacts.join("\n"))
+  }
 }
 
-task buildNewBranch(type: GradleBuild, dependsOn: checkoutCleanNewBranch) {
-  dir = newWorkspace
-  tasks = ['clean','jar']
+/**
+ * Builds the project at the 'target' reference and produces the artifacts jars as it's output.
+ * If it needs to build, it'll run the 'jar' task.
+ */
+task buildTargetBranch(type: GradleBuild, dependsOn: checkoutTargetBranch) {
+  inputs.property('target', target)
+  outputs.file(targetArtifactsPath)
+
+  dir = targetWorkspace
+  startParameter.projectProperties = gradle.startParameter.projectProperties
+
+  tasks = ['jar']
+  doLast {
+    def targetArtifacts = collectArtifactJars(targetWorkspace, useRootAsTarget ? "**/source/ **/target/" : "")
+    file(targetArtifactsPath).write(targetArtifacts.join(System.lineSeparator()))
+  }
 }
 
-task apiCompatibilityReport(dependsOn: [buildBaseBranch, buildNewBranch]) {
+/**
+ * Collects the archive names of the project and then tries to download them. In case
+ * the provided source and target references are not actual versions that can't be
+ * downloaded from the repositories, then adds a GradleBuild dependency task which
+ * will try to check out the repository and build the version.
+ */
+task collectArtifacts {
+  inputs.property('source', source)
+  inputs.property('target', target)
+  outputs.file(sourceArtifactsPath)
+  outputs.file(targetArtifactsPath)
+
+  afterEvaluate {
+    // Compute that which one can be downloaded and which one needs to be built
+    def buildTasks = []
+    if (!isDownloadableVersion(source)) {
+      buildTasks.add(buildSourceBranch)
+    }
+    if (!isDownloadableVersion(target)) {
+      buildTasks.add(buildTargetBranch)
+    }
+    dependsOn = buildTasks
+    logger.info("Added dependencies: $buildTasks")
+  }
+
+  doLast {
+    // Collect the archive names, so we can resolve them by group:artifact:version,
+    // like org.apache.kafka:kafka-clients:2.0.0
+    // Also exclude some projects that either meta (connect), test or example
+    def archiveNames = allprojects
+            .findAll{ it != rootProject \
+                      && it.name != 'connect' \
+                      && it.name != 'jmh-benchmarks' \
+                      && !it.name.contains('system-tests') \
+                      && !it.name.contains('examples') }
+            .collect{ it.archivesBaseName }
+    // Resolve only if we don't build
+    if (!dependsOn.contains(buildSourceBranch)) {
+      resolveToFile(archiveNames, source, file(sourceArtifactsPath))
+    }
+    if (!dependsOn.contains(buildTargetBranch)) {
+      resolveToFile(archiveNames, target, file(targetArtifactsPath))
+    }
+  }
+}
+
+def getArguments(Project project, List<String> sourceArtifacts, List<String> targetArtifacts, String reportFile) {
+  def packageIncludes = [
+          "org.apache.kafka.clients.admin.*",
+          "org.apache.kafka.clients.consumer.*",
+          "org.apache.kafka.clients.producer.*",
+          "org.apache.kafka.common.*",
+          "org.apache.kafka.common.acl.*",
+          "org.apache.kafka.common.annotation.*",
+          "org.apache.kafka.common.errors.*",
+          "org.apache.kafka.common.header.*",
+          "org.apache.kafka.common.resource.*",
+          "org.apache.kafka.common.serialization.*",
+          "org.apache.kafka.common.config.*",
+          "org.apache.kafka.common.config.provider.*",
+          "org.apache.kafka.common.security.auth.*",
+          "org.apache.kafka.common.security.plain.*",
+          "org.apache.kafka.common.security.scram.*",
+          "org.apache.kafka.common.security.token.delegation.*",
+          "org.apache.kafka.common.security.oauthbearer.*",
+          "org.apache.kafka.server.policy.*",
+          "org.apache.kafka.server.quota.*"
+  ]
+  def packageExcludes = [
+          "org.apache.kafka.*.internals.*"
+  ]
+
+  // Build check tool arguments
+  String[] args = [
+          "--ignore-missing-classes",
+          "--old", sourceArtifacts.join(";"),
+          "--new", targetArtifacts.join(";"),
+          "--include", packageIncludes.join(";"),
+          "--exclude", packageExcludes.join(";"),
+          "--only-modified",
+          "-a", "protected",
+          "--html-file", reportFile
+  ]
+
+  // Reading up parameters that are passed in
+  def onlyIncompatible = project.hasProperty('onlyIncompatible') ? project.onlyIncompatible : true
+  def failOnBinaryIncompatibility = project.hasProperty('failOnBinaryIncompatibility') ?
+          project.failOnBinaryIncompatibility : false
+  def failOnSourceIncompatibility = project.hasProperty('failOnSourceIncompatibility') ?
+          project.failOnSourceIncompatibility : false
+  def failOnSemanticIncompatibility = project.hasProperty('failOnSemanticIncompatibility') ?
+          project.failOnSemanticIncompatibility : false
+
+  if(onlyIncompatible) {
+    args = args + ["--only-incompatible"]
+  }
+  if (failOnBinaryIncompatibility) {
+    args = args + ["--error-on-binary-incompatibility"]
+  }
+  if (failOnSourceIncompatibility) {
+    args = args + ["--error-on-source-incompatibility"]
+  }
+  // There is an --error-on-semantic-incompatibility flag in japicmp but it doesn't seem to work,
+  // hence the workaround.
+  if (failOnSemanticIncompatibility) {
+    def targetVersion = Version.getSemanticVersion(version).get()
+    def lastReleaseVersion = Version.getSemanticVersion(lastRelease).get()
+    def changeType = lastReleaseVersion.computeChangeType(targetVersion).get()
+    if (changeType == SemanticVersion.ChangeType.MINOR || changeType == SemanticVersion.ChangeType.PATCH) {
+      args = args + ["--error-on-binary-incompatibility"]
+    }
+  }
+
+  return args
+}
+
+/**
+ * Implements the API compatibility report generation. As an input it takes the collected artifacts
+ * and produces a report as an output.
+ *
+ * This task is inserted into the build pipeline before the 'build' task and after 'assemble'. So 'build'
+ * would depend on this task.
+ */
+task apiCompatibilityReport(dependsOn: collectArtifacts) {
   group 'API Compatibility Report'
   description 'Generates an API compatibility report with the japicmp library. ' +
           'It checks both binary and source compatibility.'
+
+  // This task must run after the 'assemble' step as a dependency of the 'check' lifecycle task
+  mustRunAfter = [assemble]
+  check.dependsOn(apiCompatibilityReport)
+
+  def reportFile = "$buildDir/reports/compatibility/compatibilityReport.html"
+
+  inputs.property('source', source)
+  inputs.property('target', target)
+  outputs.file(reportFile)
+
+  if (source == target) {
+    throw new GradleException("You must specify two different branches")
+  }
+
   doLast {
-    // See Hack comment above
-    DirectoryScanner.resetDefaultExcludes()
-    // Setup the report file
-    new File(reportDir).mkdirs()
-    new File(reportFile).createNewFile()
+    def sourceArtifacts = file(sourceArtifactsPath).readLines()
+    def targetArtifacts = file(targetArtifactsPath).readLines()
 
-    // Artifacts and Classpaths
-    def baseArtifacts = collectArtifactJars(baseWorkspace)
-    def newArtifacts = collectArtifactJars(newWorkspace)
-
-    // Build check tool arguments
-    String[] args = [
-            "--ignore-missing-classes",
-            "--old", baseArtifacts.join(";"),
-            "--new", newArtifacts.join(";"),
-            "--include", packageIncludes.join(";"),
-            "--exclude", packageExcludes.join(";"),
-            "--only-modified",
-            "-a", "protected",
-            "--html-file", reportFile
-    ]
-
-    if(onlyIncompatible) {
-      args = args + ["--only-incompatible"]
-    }
-    if (failOnBinaryIncompatibility) {
-      args = args + ["--error-on-binary-incompatibility"]
-    }
-    if (failOnSourceIncompatibility) {
-      args = args + ["--error-on-source-incompatibility"]
-    }
-    if (failOnModifications) {
-      args = args + ["--error-on-modifications"]
-    }
-    if (failOnSemanticIncompatibility) {
-      args = args + ["--error-on-semantic-incompatibility"]
-    }
-
+    def args = getArguments(project, sourceArtifacts, targetArtifacts, reportFile)
 
     // Run the check tool
     JApiCli cli = new JApiCli()
     cli.run(args)
-
     println("API Compatibility report available in ${new File(reportFile).toURI()}")
+
+    // See Hack comment above
+    DirectoryScanner.resetDefaultExcludes()
   }
 }
-

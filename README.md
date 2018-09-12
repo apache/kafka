@@ -69,17 +69,31 @@ Generate coverage for a single module, i.e.:
 ### Generating an API compatibility report between trunk and your local branch ###
 *Note that the branches need to be local.*
 
-    ./gradlew checkApiCompatibility
+    ./gradlew apiCompatibilityReport
 
 By default it just lists the incompatible changes. If you want a more complete report, you can set the `onlyIncompatible`
 flag to false:
 
-    ./gradlew checkApiCompatibility -PonlyIncompatible=false
+    ./gradlew apiCompatibilityReport -PonlyIncompatible=false
 
-### Generating an API compatibility report between branches or commits  ###
-*Note that the branches need to be local*
+There are some other options too. If you need to control the build result on binary or source incompatible changes, 
+then you can do it so with the following flags. The below example would result in failing only in case of source
+incompatibility.
 
-     ./gradlew checkApiCompatibility -PbaseBranch=1.1.0 -PnewBranch=1.1.1
+    ./gradlew apiCompatibilityReport -PfailOnBinaryIncompatibility=false -PfailOnSourceIncompatibility=true
+
+It is often a requirement to control the build outcome based on version differences. Usually it is allowed to do
+binary incompatible changes in major releases but this kind of compatibility should be kept in minor and patch 
+(maintenance) releases. This is called [semantic versioning](https://semver.org/spec/v2.0.0.html).
+This can be controlled the following way:
+
+    ./gradlew apiCompatibilityReport -PfailOnSemanticIncompatibility=true
+
+### Generating an API compatibility report between branches  ###
+*Note that the branches need to be local.*
+
+     ./gradlew apiCompatibilityReport -Psource=1.1.0 -Ptarget=1.1.1
+     ./gradlew apiCompatibilityReport -Psource=2.0.0 -Ptarget=my-patch-branch
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
