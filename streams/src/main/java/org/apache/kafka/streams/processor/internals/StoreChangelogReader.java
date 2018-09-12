@@ -64,7 +64,6 @@ public class StoreChangelogReader implements ChangelogReader {
             stateRestorers.put(restorer.partition(), restorer);
             log.trace("Added restorer for changelog {}", restorer.partition());
         }
-        stateRestorers.put(restorer.partition(), restorer);
         needsInitializing.put(restorer.partition(), restorer);
     }
 
