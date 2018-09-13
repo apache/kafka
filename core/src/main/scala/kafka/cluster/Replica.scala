@@ -195,13 +195,13 @@ class Replica(val brokerId: Int,
   override def toString: String = {
     val replicaString = new StringBuilder
     replicaString.append("Replica(replicaId=" + brokerId)
-    replicaString.append(", topic=" + topicPartition.topic)
-    replicaString.append(", partition=" + topicPartition.partition)
-    replicaString.append(", isLocal=" + isLocal)
-    replicaString.append(", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs)
+    replicaString.append(s", topic=${topicPartition.topic}")
+    replicaString.append(s", partition=${topicPartition.partition}")
+    replicaString.append(s", isLocal=$isLocal")
+    replicaString.append(s", lastCaughtUpTimeMs=$lastCaughtUpTimeMs")
     if (isLocal) {
-      replicaString.append(", highWatermark=" + highWatermark)
-      replicaString.append(", lastStableOffset=" + lastStableOffset)
+      replicaString.append(s", highWatermark=$highWatermark")
+      replicaString.append(s", lastStableOffset=$lastStableOffset")
     }
     replicaString.append(")")
     replicaString.toString
