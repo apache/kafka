@@ -181,7 +181,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+    if (isAuthorizedClusterAction(request)) {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
       sendResponseExemptThrottle(request, response)
     } else {
@@ -196,7 +196,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
 
-    if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+    if (isAuthorizedClusterAction(request)) {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
       // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
       // since this broker is no longer a replica for that offsets topic partition.
@@ -223,7 +223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
-    if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+    if (isAuthorizedClusterAction(request)) {
       val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
       if (deletedPartitions.nonEmpty)
         groupCoordinator.handleDeletedPartitions(deletedPartitions)
@@ -2038,12 +2038,27 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
-    val requestInfo = offsetForLeaderEpoch.epochsByTopicPartition()
-    authorizeClusterAction(request)
+    val requestInfo = offsetForLeaderEpoch.epochsByTopicPartition.asScala
 
-    val lastOffsetForLeaderEpoch = replicaManager.lastOffsetForLeaderEpoch(requestInfo.asScala).asJava
+    // The OffsetsForLeaderEpoch API was initially only used for inter-broker communication and required
+    // cluster permission. With KIP-320, the consumer now also uses this API to check for log truncation
+    // following a leader change, so we also allow topic describe permission.
+    val (authorizedPartitions, unauthorizedPartitions) = if (isAuthorizedClusterAction(request)) {
+      (requestInfo, Map.empty[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData])
+    } else {
+      requestInfo.partition {
+        case (tp, _) => authorize(request.session, Describe, Resource(Topic, tp.topic, LITERAL))
+      }
+    }
+
+    val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedPartitions)
+    val endOffsetsForUnauthorizedPartitions = unauthorizedPartitions.mapValues(_ =>
+      new EpochEndOffset(Errors.TOPIC_AUTHORIZATION_FAILED, EpochEndOffset.UNDEFINED_EPOCH,
+        EpochEndOffset.UNDEFINED_EPOCH_OFFSET))
+
+    val endOffsetsForAllPartitions = endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new OffsetsForLeaderEpochResponse(requestThrottleMs, lastOffsetForLeaderEpoch))
+      new OffsetsForLeaderEpochResponse(requestThrottleMs, endOffsetsForAllPartitions.asJava))
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
@@ -2247,8 +2262,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
-    if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
+    if (!isAuthorizedClusterAction(request))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+  }
+
+  private def isAuthorizedClusterAction(request: RequestChannel.Request): Boolean = {
+    authorize(request.session, ClusterAction, Resource.ClusterResource)
   }
 
   def authorizeClusterAlter(request: RequestChannel.Request): Unit = {
@@ -2283,7 +2302,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
-    error("Error when handling request %s".format(request.body[AbstractRequest]), e)
+    error("Error when handling request: " +
+      s"clientId=${request.header.clientId}, " +
+      s"correlationId=${request.header.correlationId}, " +
+      s"api=${request.header.apiKey}, " +
+      s"body=${request.body[AbstractRequest]}", e)
     if (mayThrottle)
       sendErrorResponseMaybeThrottle(request, e)
     else
@@ -2361,4 +2384,5 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def sendResponse(response: RequestChannel.Response): Unit = {
     requestChannel.sendResponse(response)
   }
+
 }
