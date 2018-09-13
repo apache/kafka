@@ -149,7 +149,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         // explicitly disable logging for global stores
         materialized.withLoggingDisabled();
         final StoreBuilder storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
-        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String sourceName = newProcessorName(KTableImpl.SOURCE_NAME);
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
 

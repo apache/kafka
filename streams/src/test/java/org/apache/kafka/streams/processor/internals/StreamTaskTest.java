@@ -50,7 +50,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.MockStateStore;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -109,7 +109,7 @@ public class StreamTaskTest {
     private final MockProcessorNode<Integer, Integer> processorSystemTime = new MockProcessorNode<>(10L, PunctuationType.WALL_CLOCK_TIME);
 
     private final String storeName = "store";
-    private final StateStore stateStore = new MockStateStore(storeName, false);
+    private final StateStore stateStore = new MockKeyValueStore(storeName, false);
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 0);
     private final Long offset = 543L;
 
