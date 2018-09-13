@@ -1,3 +1,46 @@
+LinkedIn Branch of Apache Kafka
+=================
+
+This is the version of Kafka running at LinkedIn.
+
+Kafka was born at LinkedIn. We run thousands of brokers to deliver trillions of
+messages per day.  We run a slightly modified version of Apache Kafka trunk.
+This branch contains the LinkedIn Kafka release.
+
+This branch is made up of:
+
+* Apache Kafka trunk (upstream) up to some branch point, see *-li* branch name for base version, you'll be able to get the exact commit from git 
+* Cherry-picked commits from upstream after branch point
+* Patches that are on their way upstream but we have deployed internally in the meantime
+* Patches that are of no interest to upstream
+
+We are making this branch available for people interested. We will be
+documenting the changes in the near future with some more detailed explanations
+in the [LinkedIn Engineering Blog](https://engineering.linkedin.com/blog).
+
+If you are interested in learning more, we invite you to our [Streaming
+Meetup](https://www.meetup.com/Stream-Processing-Meetup-LinkedIn/) where we
+discuss streaming technologies like [Kafka](http://kafka.apache.org) and
+[Samza](http://samza.apache.org).
+
+You are encouraged to check out other Kafka projects from LinkedIn:
+
+* [Cruise Control](https://github.com/linkedin/cruise-control)
+* [Li-Apache-Kafka-Clients](https://github.com/linkedin/li-apache-kafka-clients)
+* [Burrow](https://github.com/linkedin/Burrow)
+* [Kafka Monitor](https://github.com/linkedin/kafka-monitor)
+
+### Contributing ###
+
+At this moment we are not accepting external contributions directly. Please
+contribute to [Apache Kafka](http://kafka.apache.org).
+
+For security issues with this branch please review 
+[LinkedIn Security
+Guidelines](https://www.linkedin.com/help/linkedin/answer/62924/security-vulnerabilities?lang=en).
+General Kafka issues should be communicated via the Kafka community.
+
+
 Apache Kafka
 =================
 See our [web site](https://kafka.apache.org) for details on the project.
