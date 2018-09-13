@@ -34,8 +34,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long]
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde shouldBe Serdes.String
-    internalConsumed.valueSerde shouldBe Serdes.Long
+    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 
   "Create a Consumed with timestampExtractor and resetPolicy" should "create a Consumed with Serdes, timestampExtractor and resetPolicy" in {
@@ -45,8 +45,8 @@ class ConsumedTest extends FlatSpec with Matchers {
       Consumed.`with`[String, Long](timestampExtractor, resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde shouldBe Serdes.String
-    internalConsumed.valueSerde shouldBe Serdes.Long
+    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalConsumed.timestampExtractor shouldBe timestampExtractor
     internalConsumed.offsetResetPolicy shouldBe resetPolicy
   }
@@ -56,8 +56,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long](timestampExtractor)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde shouldBe Serdes.String
-    internalConsumed.valueSerde shouldBe Serdes.Long
+    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalConsumed.timestampExtractor shouldBe timestampExtractor
   }
 
@@ -66,8 +66,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long](resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde shouldBe Serdes.String
-    internalConsumed.valueSerde shouldBe Serdes.Long
+    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalConsumed.offsetResetPolicy shouldBe resetPolicy
   }
 }
