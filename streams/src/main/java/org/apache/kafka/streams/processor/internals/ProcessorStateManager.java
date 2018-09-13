@@ -184,23 +184,21 @@ public class ProcessorStateManager implements StateManager {
         stores.put(store.name(), store);
     }
 
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
+    void reinitializeStateStoresForPartitions(final TopicPartition topicPartition,
+                                              final InternalProcessorContext processorContext) {
         final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
         final Set<String> storeToBeReinitialized = new HashSet<>();
         final Map<String, StateStore> storesCopy = new HashMap<>(stores);
 
-        for (final TopicPartition topicPartition : partitions) {
-            checkpointedOffsets.remove(topicPartition);
-            storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
-        }
+        checkpointedOffsets.remove(topicPartition);
+        storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
 
         if (!eosEnabled) {
             try {
                 checkpoint.write(checkpointedOffsets);
             } catch (final IOException fatalException) {
                 log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stores, fatalException);
-                throw new StreamsException("Failed to reinitialize global store.", fatalException);
+                throw new StreamsException("Failed to reinitialize stores.", fatalException);
             }
         }
 
@@ -214,10 +212,6 @@ public class ProcessorStateManager implements StateManager {
                 processorContext.uninitialize();
                 stores.remove(entry.getKey());
 
-                // TODO remove this eventually
-                // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
-                // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
-                // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
                 try {
                     Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
                 } catch (final IOException fatalException) {

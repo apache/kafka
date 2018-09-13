@@ -226,7 +226,7 @@ public abstract class AbstractTask {
         }
     }
 
-    void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions) {
+    void reinitializeStateStoresForPartitions(final TopicPartition partitions) {
         stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
     }
 
