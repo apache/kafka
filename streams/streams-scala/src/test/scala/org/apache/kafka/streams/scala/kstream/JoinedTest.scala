@@ -30,8 +30,8 @@ class JoinedTest extends FlatSpec with Matchers {
   "Create a Joined" should "create a Joined with Serdes" in {
     val joined: Joined[String, Long, Int] = Joined.`with`[String, Long, Int]
 
-    joined.keySerde shouldBe Serdes.String
-    joined.valueSerde shouldBe Serdes.Long
-    joined.otherValueSerde shouldBe Serdes.Integer
+    joined.keySerde.getClass shouldBe Serdes.String.getClass
+    joined.valueSerde.getClass shouldBe Serdes.Long.getClass
+    joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
   }
 }

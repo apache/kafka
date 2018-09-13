@@ -32,7 +32,7 @@ class SerializedTest extends FlatSpec with Matchers {
     val serialized: Serialized[String, Long] = Serialized.`with`[String, Long]
 
     val internalSerialized = new SerializedInternal(serialized)
-    internalSerialized.keySerde shouldBe Serdes.String
-    internalSerialized.valueSerde shouldBe Serdes.Long
+    internalSerialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalSerialized.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 }

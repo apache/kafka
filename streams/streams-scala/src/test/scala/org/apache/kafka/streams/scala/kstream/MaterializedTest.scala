@@ -34,8 +34,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.`with`[String, Long, ByteArrayKeyValueStore]
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde shouldBe Serdes.String
-    internalMaterialized.valueSerde shouldBe Serdes.Long
+    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 
   "Create a Materialize with a store name" should "create a Materialized with Serdes and a store name" in {
@@ -44,8 +44,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long, ByteArrayKeyValueStore](storeName)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde shouldBe Serdes.String
-    internalMaterialized.valueSerde shouldBe Serdes.Long
+    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalMaterialized.storeName shouldBe storeName
   }
 
@@ -55,8 +55,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde shouldBe Serdes.String
-    internalMaterialized.valueSerde shouldBe Serdes.Long
+    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 
@@ -66,8 +66,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde shouldBe Serdes.String
-    internalMaterialized.valueSerde shouldBe Serdes.Long
+    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 
@@ -77,8 +77,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde shouldBe Serdes.String
-    internalMaterialized.valueSerde shouldBe Serdes.Long
+    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 }
