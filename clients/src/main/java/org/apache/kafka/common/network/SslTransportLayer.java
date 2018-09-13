@@ -76,7 +76,7 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
@@ -372,7 +372,7 @@ public class SslTransportLayer implements TransportLayer {
         }
     }
 
-    private SSLHandshakeException renegotiationException() throws IOException {
+    private SSLHandshakeException renegotiationException() {
         return new SSLHandshakeException("Renegotiation is not supported");
     }
 
@@ -715,7 +715,7 @@ public class SslTransportLayer implements TransportLayer {
      * SSLSession's peerPrincipal for the remote host.
      * @return Principal
      */
-    public Principal peerPrincipal() throws IOException {
+    public Principal peerPrincipal() {
         try {
             return sslEngine.getSession().getPeerPrincipal();
         } catch (SSLPeerUnverifiedException se) {

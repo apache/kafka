@@ -24,14 +24,13 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -40,9 +39,6 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
@@ -54,13 +50,8 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 
 /**
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
@@ -93,11 +84,9 @@ public class KStreamAggregationDedupIntegrationTest {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" +
-            testNo;
+        final String applicationId = "kgrouped-stream-test-" + testNo;
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
@@ -111,12 +100,7 @@ public class KStreamAggregationDedupIntegrationTest {
                 mapper,
                 Serialized.with(Serdes.String(), Serdes.String()));
 
-        reducer = new Reducer<String>() {
-            @Override
-            public String apply(final String value1, final String value2) {
-                return value1 + ":" + value2;
-            }
-        };
+        reducer = (value1, value2) -> value1 + ":" + value2;
     }
 
     @After
@@ -132,7 +116,7 @@ public class KStreamAggregationDedupIntegrationTest {
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
-                .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
+                .reduce(reducer, Materialized.as("reduce-by-key"))
                 .toStream()
                 .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
@@ -140,34 +124,15 @@ public class KStreamAggregationDedupIntegrationTest {
 
         produceMessages(System.currentTimeMillis());
 
-        final List<KeyValue<String, String>> results = receiveMessages(
-            new StringDeserializer(),
-            new StringDeserializer(),
-            5);
-
-        Collections.sort(results, new Comparator<KeyValue<String, String>>() {
-            @Override
-            public int compare(final KeyValue<String, String> o1, final KeyValue<String, String> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-            }
-        });
-
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("A", "A:A"),
-            KeyValue.pair("B", "B:B"),
-            KeyValue.pair("C", "C:C"),
-            KeyValue.pair("D", "D:D"),
-            KeyValue.pair("E", "E:E"))));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <K extends Comparable, V extends Comparable> int compare(final KeyValue<K, V> o1,
-                                                                            final KeyValue<K, V> o2) {
-        final int keyComparison = o1.key.compareTo(o2.key);
-        if (keyComparison == 0) {
-            return o1.value.compareTo(o2.value);
-        }
-        return keyComparison;
+        validateReceivedMessages(
+                new StringDeserializer(),
+                new StringDeserializer(),
+                Arrays.asList(
+                        KeyValue.pair("A", "A:A"),
+                        KeyValue.pair("B", "B:B"),
+                        KeyValue.pair("C", "C:C"),
+                        KeyValue.pair("D", "D:D"),
+                        KeyValue.pair("E", "E:E")));
     }
 
     @Test
@@ -180,50 +145,31 @@ public class KStreamAggregationDedupIntegrationTest {
 
         groupedStream
             .windowedBy(TimeWindows.of(500L))
-            .reduce(reducer, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduce-time-windows"))
-            .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
-                @Override
-                public String apply(final Windowed<String> windowedKey, final String value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            })
+            .reduce(reducer, Materialized.as("reduce-time-windows"))
+            .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 
-        final List<KeyValue<String, String>> windowedOutput = receiveMessages(
-            new StringDeserializer(),
-            new StringDeserializer(),
-            10);
-
-        final Comparator<KeyValue<String, String>>
-            comparator =
-            new Comparator<KeyValue<String, String>>() {
-                @Override
-                public int compare(final KeyValue<String, String> o1,
-                                   final KeyValue<String, String> o2) {
-                    return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-                }
-            };
-
-        Collections.sort(windowedOutput, comparator);
         final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
         final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
-        assertThat(windowedOutput, is(
-            Arrays.asList(
-                new KeyValue<>("A@" + firstBatchWindow, "A"),
-                new KeyValue<>("A@" + secondBatchWindow, "A:A"),
-                new KeyValue<>("B@" + firstBatchWindow, "B"),
-                new KeyValue<>("B@" + secondBatchWindow, "B:B"),
-                new KeyValue<>("C@" + firstBatchWindow, "C"),
-                new KeyValue<>("C@" + secondBatchWindow, "C:C"),
-                new KeyValue<>("D@" + firstBatchWindow, "D"),
-                new KeyValue<>("D@" + secondBatchWindow, "D:D"),
-                new KeyValue<>("E@" + firstBatchWindow, "E"),
-                new KeyValue<>("E@" + secondBatchWindow, "E:E")
-            )
-        ));
+        validateReceivedMessages(
+                new StringDeserializer(),
+                new StringDeserializer(),
+                Arrays.asList(
+                        new KeyValue<>("A@" + firstBatchWindow, "A"),
+                        new KeyValue<>("A@" + secondBatchWindow, "A:A"),
+                        new KeyValue<>("B@" + firstBatchWindow, "B"),
+                        new KeyValue<>("B@" + secondBatchWindow, "B:B"),
+                        new KeyValue<>("C@" + firstBatchWindow, "C"),
+                        new KeyValue<>("C@" + secondBatchWindow, "C:C"),
+                        new KeyValue<>("D@" + firstBatchWindow, "D"),
+                        new KeyValue<>("D@" + secondBatchWindow, "D:D"),
+                        new KeyValue<>("E@" + firstBatchWindow, "E"),
+                        new KeyValue<>("E@" + secondBatchWindow, "E:E")
+                )
+        );
     }
 
     @Test
@@ -234,36 +180,25 @@ public class KStreamAggregationDedupIntegrationTest {
 
         stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
             .windowedBy(TimeWindows.of(500L))
-            .count(Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("count-windows"))
-            .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
-                @Override
-                public String apply(final Windowed<Integer> windowedKey, final Long value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            }).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+            .count(Materialized.as("count-windows"))
+            .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         startStreams();
 
-        final List<KeyValue<String, Long>> results = receiveMessages(
-            new StringDeserializer(),
-            new LongDeserializer(),
-            5);
-        Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
-            @Override
-            public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-            }
-        });
-
         final long window = timestamp / 500 * 500;
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("1@" + window, 2L),
-            KeyValue.pair("2@" + window, 2L),
-            KeyValue.pair("3@" + window, 2L),
-            KeyValue.pair("4@" + window, 2L),
-            KeyValue.pair("5@" + window, 2L)
-        )));
 
+        validateReceivedMessages(
+                new StringDeserializer(),
+                new LongDeserializer(),
+                Arrays.asList(
+                        KeyValue.pair("1@" + window, 2L),
+                        KeyValue.pair("2@" + window, 2L),
+                        KeyValue.pair("3@" + window, 2L),
+                        KeyValue.pair("4@" + window, 2L),
+                        KeyValue.pair("5@" + window, 2L)
+                )
+        );
     }
 
 
@@ -298,11 +233,9 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
 
-    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K>
-                                                            keyDeserializer,
-                                                        final Deserializer<V>
-                                                            valueDeserializer,
-                                                        final int numMessages)
+    private <K, V> void validateReceivedMessages(final Deserializer<K> keyDeserializer,
+                                                 final Deserializer<V> valueDeserializer,
+                                                 final List<KeyValue<K, V>> expectedRecords)
         throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties
@@ -314,11 +247,11 @@ public class KStreamAggregationDedupIntegrationTest {
             keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             valueDeserializer.getClass().getName());
-        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
-            outputTopic,
-            numMessages,
-            60 * 1000);
 
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+            consumerProperties,
+            outputTopic,
+            expectedRecords);
     }
 
 }

@@ -55,7 +55,7 @@ public class SaslServerAuthenticatorTest {
         final Capture<ByteBuffer> size = EasyMock.newCapture();
         EasyMock.expect(transportLayer.read(EasyMock.capture(size))).andAnswer(new IAnswer<Integer>() {
             @Override
-            public Integer answer() throws Throwable {
+            public Integer answer() {
                 size.getValue().putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
                 return 4;
             }
@@ -79,7 +79,7 @@ public class SaslServerAuthenticatorTest {
         final Capture<ByteBuffer> size = EasyMock.newCapture();
         EasyMock.expect(transportLayer.read(EasyMock.capture(size))).andAnswer(new IAnswer<Integer>() {
             @Override
-            public Integer answer() throws Throwable {
+            public Integer answer() {
                 size.getValue().putInt(headerStruct.sizeOf());
                 return 4;
             }
@@ -88,7 +88,7 @@ public class SaslServerAuthenticatorTest {
         final Capture<ByteBuffer> payload = EasyMock.newCapture();
         EasyMock.expect(transportLayer.read(EasyMock.capture(payload))).andAnswer(new IAnswer<Integer>() {
             @Override
-            public Integer answer() throws Throwable {
+            public Integer answer() {
                 // serialize only the request header. the authenticator should not parse beyond this
                 headerStruct.writeTo(payload.getValue());
                 return headerStruct.sizeOf();
@@ -111,7 +111,7 @@ public class SaslServerAuthenticatorTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
                 new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null));
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());
-        Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.<String, AuthenticateCallbackHandler>singletonMap(
+        Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);

@@ -123,13 +123,13 @@ public class AlterConfigsRequest extends AbstractRequest {
     private final boolean validateOnly;
 
     public AlterConfigsRequest(short version, Map<ConfigResource, Config> configs, boolean validateOnly) {
-        super(version);
+        super(ApiKeys.ALTER_CONFIGS, version);
         this.configs = Objects.requireNonNull(configs, "configs");
         this.validateOnly = validateOnly;
     }
 
     public AlterConfigsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ALTER_CONFIGS, version);
         validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
         Object[] resourcesArray = struct.getArray(RESOURCES_KEY_NAME);
         configs = new HashMap<>(resourcesArray.length);

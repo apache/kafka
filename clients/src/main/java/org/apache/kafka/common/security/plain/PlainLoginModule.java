@@ -22,7 +22,6 @@ import java.util.Map;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
 
 public class PlainLoginModule implements LoginModule {
@@ -45,22 +44,22 @@ public class PlainLoginModule implements LoginModule {
     }
 
     @Override
-    public boolean login() throws LoginException {
+    public boolean login() {
         return true;
     }
 
     @Override
-    public boolean logout() throws LoginException {
+    public boolean logout() {
         return true;
     }
 
     @Override
-    public boolean commit() throws LoginException {
+    public boolean commit() {
         return true;
     }
 
     @Override
-    public boolean abort() throws LoginException {
+    public boolean abort() {
         return false;
     }
 }

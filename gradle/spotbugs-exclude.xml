@@ -15,12 +15,12 @@
    limitations under the License.
 -->
 
-<!-- Findbugs filtering.
+<!-- Spotbugs filtering.
 
-Findbugs is a static code analysis tool run as part of the "check" phase of the build.
-This file dictates which categories of bugs and individual false positives that we supress.
+Spotbugs is a static code analysis tool run as part of the "check" phase of the build.
+This file dictates which categories of bugs and individual false positives that we suppress.
 
-For a detailed description of findbugs bug categories, see http://findbugs.sourceforge.net/bugDescriptions.html
+For a detailed description of spotbugs bug categories, see https://spotbugs.readthedocs.io/en/latest/bugDescriptions.html
 -->
 <FindBugsFilter>
     <Match>
@@ -44,8 +44,8 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Findbugs tends to work a little bit better with Java than with Scala.  We suppress
-             some categories of bug reports when using Scala, since findbugs generates huge
+        <!-- Spotbugs tends to work a little bit better with Java than with Scala.  We suppress
+             some categories of bug reports when using Scala, since spotbugs generates huge
              numbers of false positives in some of these categories when examining Scala code.
 
             NP_LOAD_OF_KNOWN_NULL_VALUE: The variable referenced at this point is known to be null

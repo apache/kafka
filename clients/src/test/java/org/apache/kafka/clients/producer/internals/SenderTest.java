@@ -294,8 +294,8 @@ public class SenderTest {
         KafkaMetric avgMetric = allMetrics.get(this.senderMetricsRegistry.produceThrottleTimeAvg);
         KafkaMetric maxMetric = allMetrics.get(this.senderMetricsRegistry.produceThrottleTimeMax);
         // Throttle times are ApiVersions=400, Produce=(100, 200, 300)
-        assertEquals(250, avgMetric.value(), EPS);
-        assertEquals(400, maxMetric.value(), EPS);
+        assertEquals(250, (Double) avgMetric.metricValue(), EPS);
+        assertEquals(400, (Double) maxMetric.metricValue(), EPS);
         client.close();
     }
 
@@ -1771,7 +1771,7 @@ public class SenderTest {
         assertEquals("Expected requests to be aborted after pid change", 0, client.inFlightRequestCount());
 
         KafkaMetric recordErrors = m.metrics().get(senderMetrics.recordErrorRate);
-        assertTrue("Expected non-zero value for record send errors", recordErrors.value() > 0);
+        assertTrue("Expected non-zero value for record send errors", (Double) recordErrors.metricValue() > 0);
 
         assertTrue(responseFuture.isDone());
         assertEquals(0, (long) transactionManager.sequenceNumber(tp0));
@@ -1914,7 +1914,7 @@ public class SenderTest {
             assertEquals("The last ack'd sequence number should be 1", 1, txnManager.lastAckedSequence(tp));
             assertEquals("Offset of the first message should be 1", 1L, f2.get().offset());
             assertTrue("There should be no batch in the accumulator", accumulator.batches().get(tp).isEmpty());
-            assertTrue("There should be a split", m.metrics().get(senderMetrics.batchSplitRate).value() > 0);
+            assertTrue("There should be a split", (Double) (m.metrics().get(senderMetrics.batchSplitRate).metricValue()) > 0);
         }
     }
 

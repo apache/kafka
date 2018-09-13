@@ -21,9 +21,20 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, _}
+import org.apache.kafka.streams.kstream.{
+  KeyValueMapper,
+  Reducer,
+  Transformer,
+  TransformerSupplier,
+  ValueJoiner,
+  ValueMapper,
+  KGroupedStream => KGroupedStreamJ,
+  KStream => KStreamJ,
+  KTable => KTableJ
+}
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.junit.Assert._
@@ -153,10 +164,10 @@ class TopologyTest extends JUnitSuite {
       val builder: StreamsBuilderJ = new StreamsBuilderJ()
 
       val userClicksStream: KStreamJ[String, JLong] =
-        builder.stream[String, JLong](userClicksTopic, Consumed.`with`(Serdes.String, Serdes.JavaLong))
+        builder.stream[String, JLong](userClicksTopic, Consumed.`with`[String, JLong])
 
       val userRegionsTable: KTableJ[String, String] =
-        builder.table[String, String](userRegionsTopic, Consumed.`with`(Serdes.String, Serdes.String))
+        builder.table[String, String](userRegionsTopic, Consumed.`with`[String, String])
 
       // Join the stream against the table.
       val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
@@ -166,7 +177,7 @@ class TopologyTest extends JUnitSuite {
             def apply(clicks: JLong, region: String): (String, JLong) =
               (if (region == null) "UNKNOWN" else region, clicks)
           },
-          Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String)
+          Joined.`with`[String, JLong, String]
         )
 
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
@@ -180,7 +191,7 @@ class TopologyTest extends JUnitSuite {
 
       // Compute the total per region by summing the individual click counts per region.
       val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-        .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
+        .groupByKey(Serialized.`with`[String, JLong])
         .reduce {
           new Reducer[JLong] {
             def apply(v1: JLong, v2: JLong) = v1 + v2

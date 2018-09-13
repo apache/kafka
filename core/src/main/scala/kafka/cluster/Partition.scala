@@ -16,7 +16,6 @@
  */
 package kafka.cluster
 
-
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.yammer.metrics.core.Gauge
@@ -73,7 +72,7 @@ class Partition(val topic: String,
    * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
-  private var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
+  private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
   private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId || replicaId == Request.FutureLocalReplicaId
@@ -591,26 +590,25 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Unit = {
+  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
+    // The read lock is needed to handle race condition if request handler thread tries to
+    // remove future replica after receiving AlterReplicaLogDirsRequest.
     inReadLock(leaderIsrUpdateLock) {
       if (isFuture) {
-        // The read lock is needed to handle race condition if request handler thread tries to
-        // remove future replica after receiving AlterReplicaLogDirsRequest.
-        inReadLock(leaderIsrUpdateLock) {
-          getReplica(Request.FutureLocalReplicaId) match {
-            case Some(replica) => replica.log.get.appendAsFollower(records)
-            case None => // Future replica is removed by a non-ReplicaAlterLogDirsThread before this method is called
-          }
+        // Note the replica may be undefined if it is removed by a non-ReplicaAlterLogDirsThread before
+        // this method is called
+        getReplica(Request.FutureLocalReplicaId).map { replica =>
+          replica.log.get.appendAsFollower(records)
         }
       } else {
         // The read lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
         // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
-        getReplicaOrException().log.get.appendAsFollower(records)
+        Some(getReplicaOrException().log.get.appendAsFollower(records))
       }
     }
   }
 
-  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean) {
+  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
     try {
       doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
     } catch {
