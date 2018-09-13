@@ -40,33 +40,33 @@ class CommandLineUtilsTest {
     val argArray = Array("my.empty.property=", "my.empty.property1")
     val props = CommandLineUtils.parseKeyValueArgs(argArray)
 
-    assertEquals("Value of a key with missing value should be an empty string",props.getProperty("my.empty.property"),"")
-    assertEquals("Value of a key with missing value with no delimiter should be an empty string",props.getProperty("my.empty.property1"),"")
+    assertEquals("Value of a key with missing value should be an empty string", props.getProperty("my.empty.property"), "")
+    assertEquals("Value of a key with missing value with no delimiter should be an empty string", props.getProperty("my.empty.property1"), "")
   }
 
   @Test
   def testParseSingleArg() {
     val argArray = Array("my.property=value")
     val props = CommandLineUtils.parseKeyValueArgs(argArray)
-    assertEquals("Value of a single property should be 'value' ",props.getProperty("my.property"),"value")
+    assertEquals("Value of a single property should be 'value' ", props.getProperty("my.property"), "value")
   }
 
   @Test
   def testParseArgs() {
     val argArray = Array("first.property=first","second.property=second")
     val props = CommandLineUtils.parseKeyValueArgs(argArray, false)
-    assertEquals("Value of first property should be 'first'",props.getProperty("first.property"),"first")
-    assertEquals("Value of second property should be 'second'",props.getProperty("second.property"),"second")
+    assertEquals("Value of first property should be 'first'", props.getProperty("first.property"), "first")
+    assertEquals("Value of second property should be 'second'", props.getProperty("second.property"), "second")
   }
 
   @Test
   def testParseArgsWithMultipleDelimiters() {
-    val argArray = Array("first.property==first","second.property=second=", "third.property=thi=rd")
+    val argArray = Array("first.property==first", "second.property=second=", "third.property=thi=rd")
     val props = CommandLineUtils.parseKeyValueArgs(argArray, false)
 
-    assertEquals("Value of first property should be '=first'",props.getProperty("first.property"),"=first")
-    assertEquals("Value of second property should be 'second='",props.getProperty("second.property"),"second=")
-    assertEquals("Value of second property should be 'thi=rd'",props.getProperty("third.property"),"thi=rd")
+    assertEquals("Value of first property should be '=first'", props.getProperty("first.property"), "=first")
+    assertEquals("Value of second property should be 'second='", props.getProperty("second.property"), "second=")
+    assertEquals("Value of second property should be 'thi=rd'", props.getProperty("third.property"), "thi=rd")
   }
 
 }
