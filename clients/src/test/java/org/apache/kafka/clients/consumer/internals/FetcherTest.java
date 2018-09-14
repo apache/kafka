@@ -108,6 +108,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -2586,8 +2588,7 @@ public class FetcherTest {
         };
 
         subscriptions.assignFromUser(topicPartitions);
-        for (TopicPartition tp : topicPartitions)
-            subscriptions.seek(tp, 0L);
+        topicPartitions.forEach(tp -> subscriptions.seek(tp, 0L));
 
         AtomicInteger fetchesRemaining = new AtomicInteger(1000);
         executorService = Executors.newSingleThreadExecutor();
@@ -2611,6 +2612,8 @@ public class FetcherTest {
             }
             return fetchesRemaining.get();
         });
+        Map<TopicPartition, Long> nextFetchOffsets = topicPartitions.stream()
+                .collect(Collectors.toMap(Function.identity(), t -> 0L));
         while (fetchesRemaining.get() > 0 && !future.isDone()) {
             if (fetcher.sendFetches() == 1) {
                 synchronized (consumerClient) {
@@ -2621,8 +2624,15 @@ public class FetcherTest {
                 Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
-                    for (List<ConsumerRecord<byte[], byte[]>> records : fetchedRecords.values())
+                    fetchedRecords.entrySet().forEach(entry -> {
+                        TopicPartition tp = entry.getKey();
+                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
                         assertEquals(2, records.size());
+                        long nextOffset = nextFetchOffsets.get(tp);
+                        assertEquals(nextOffset, records.get(0).offset());
+                        assertEquals(nextOffset + 1, records.get(1).offset());
+                        nextFetchOffsets.put(tp, nextOffset + 2);
+                    });
                 }
             }
         }
