@@ -72,8 +72,8 @@ class StreamsBrokerDownResilience(Test):
         consumer.start()
 
         wait_until(lambda: consumer.total_consumed() > 0,
-                   timeout_sec=60,
-                   err_msg="At %s streams did not process messages in 60 seconds " % test_state)
+                   timeout_sec=120,
+                   err_msg="At %s streams did not process messages in 120 seconds " % test_state)
 
     def setUp(self):
         self.zk.start()
