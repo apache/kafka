@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -58,6 +58,7 @@ object CommandLineUtils extends Logging {
 
   /**
    * Parse key-value pairs in the form key=value
+   * value may contain equals sign
    */
   def parseKeyValueArgs(args: Iterable[String], acceptMissingValue: Boolean = true): Properties = {
     val splits = args.map(_.split("=", 2)).filterNot(_.length == 0)
