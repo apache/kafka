@@ -80,6 +80,8 @@ object ApiVersion {
     KAFKA_2_1_IV1
   )
 
+  val allVersionsStr = allVersions.map(_.toString).toArray
+
   // Map keys are the union of the short and full versions
   private val versionMap: Map[String, ApiVersion] =
     allVersions.map(v => v.version -> v).toMap ++ allVersions.groupBy(_.shortVersion).map { case (k, v) => k -> v.last }
