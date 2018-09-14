@@ -226,6 +226,10 @@ public abstract class AbstractTask {
         }
     }
 
+    void reinitializeStateStoresForPartitions(final TopicPartition partitions) {
+        stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
+    }
+
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
