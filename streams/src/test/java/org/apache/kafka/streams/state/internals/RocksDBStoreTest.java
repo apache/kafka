@@ -39,7 +39,6 @@ import org.rocksdb.Options;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +46,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -106,8 +106,8 @@ public class RocksDBStoreTest {
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
 
-        final byte[] restoredKey = "restoredKey".getBytes(StandardCharsets.UTF_8);
-        final byte[] restoredValue = "restoredValue".getBytes(StandardCharsets.UTF_8);
+        final byte[] restoredKey = "restoredKey".getBytes(UTF_8);
+        final byte[] restoredValue = "restoredValue".getBytes(UTF_8);
         restoreBytes.add(KeyValue.pair(restoredKey, restoredValue));
 
         context.restore("test", restoreBytes);
@@ -248,7 +248,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldHandleDeletesOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), null));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
 
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
@@ -266,13 +266,13 @@ public class RocksDBStoreTest {
     @Test
     public void shouldHandleDeletesAndPutbackOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), "a".getBytes(StandardCharsets.UTF_8)));
-        entries.add(new KeyValue<>("2".getBytes(StandardCharsets.UTF_8), "b".getBytes(StandardCharsets.UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
         // this will be deleted
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), null));
-        entries.add(new KeyValue<>("3".getBytes(StandardCharsets.UTF_8), "c".getBytes(StandardCharsets.UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         // this will restore key "1" as WriteBatch applies updates in order
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), "restored".getBytes(StandardCharsets.UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "restored".getBytes(UTF_8)));
 
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
@@ -329,9 +329,9 @@ public class RocksDBStoreTest {
 
         entries.clear();
 
-        entries.add(new KeyValue<>("2".getBytes(StandardCharsets.UTF_8), "b".getBytes(StandardCharsets.UTF_8)));
-        entries.add(new KeyValue<>("3".getBytes(StandardCharsets.UTF_8), "c".getBytes(StandardCharsets.UTF_8)));
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), null));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
 
         context.restore(rocksDBStore.name(), entries);
 
@@ -425,9 +425,9 @@ public class RocksDBStoreTest {
 
     private List<KeyValue<byte[], byte[]>> getKeyValueEntries() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes(StandardCharsets.UTF_8), "a".getBytes(StandardCharsets.UTF_8)));
-        entries.add(new KeyValue<>("2".getBytes(StandardCharsets.UTF_8), "b".getBytes(StandardCharsets.UTF_8)));
-        entries.add(new KeyValue<>("3".getBytes(StandardCharsets.UTF_8), "c".getBytes(StandardCharsets.UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         return entries;
     }
 }
