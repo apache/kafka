@@ -780,11 +780,18 @@ public class StreamThread extends Thread {
                     enforceRebalance();
                 }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
-                log.warn("Detected task {} that got migrated to another thread. " +
-                        "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                        "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
-                    ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
-
+                final Task task = ignoreAndRejoinGroup.migratedTask();
+                if (task != null) {
+                    log.warn("Detected task {} that got migrated to another thread. " +
+                                 "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                                 "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
+                             task.id(), task.toString(">"));
+                } else {
+                    log.warn("Detected task that got migrated to another thread. " +
+                                 "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                                 "Will try to rejoin the consumer group. Partitions that got migrated: {}",
+                             ignoreAndRejoinGroup.migratedPartitions());
+                }
                 enforceRebalance();
             }
         }
@@ -979,9 +986,13 @@ public class StreamThread extends Thread {
         for (final TopicPartition partition : records.partitions()) {
             final StreamTask task = taskManager.activeTask(partition);
 
-            if (task.isClosed()) {
+            if (task == null) {
+                log.info("Stream task for {} is missing, probably because it got unexpectedly migrated to another thread already. " +
+                             "Notifying the thread to trigger a new rebalance immediately.", partition);
+                throw new TaskMigratedException(partition);
+            } else if (task.isClosed()) {
                 log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                             "Notifying the thread to trigger a new rebalance immediately.", task.id());
                 throw new TaskMigratedException(task);
             }
 

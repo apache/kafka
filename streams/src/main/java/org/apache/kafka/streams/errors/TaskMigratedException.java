@@ -20,6 +20,11 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.internals.Task;
 
+import java.util.HashSet;
+import java.util.Set;
+
+import static java.util.Collections.singleton;
+
 /**
  * Indicates that a task got migrated to another thread.
  * Thus, the task raising this exception can be cleaned up and closed as "zombie".
@@ -29,12 +34,21 @@ public class TaskMigratedException extends StreamsException {
     private final static long serialVersionUID = 1L;
 
     private final Task task;
+    private final Set<TopicPartition> partitions;
 
     // this is for unit test only
     public TaskMigratedException() {
         super("A task has been migrated unexpectedly", null);
 
         this.task = null;
+        this.partitions = null;
+    }
+
+
+    public TaskMigratedException(final TopicPartition partition) {
+        super("A task has been migrated unexpectedly", null);
+        this.task = null;
+        this.partitions = singleton(partition);
     }
 
     public TaskMigratedException(final Task task,
@@ -48,12 +62,14 @@ public class TaskMigratedException extends StreamsException {
             null);
 
         this.task = task;
+        this.partitions = singleton(topicPartition);
     }
 
     public TaskMigratedException(final Task task) {
         super(String.format("Task %s is unexpectedly closed during processing", task.id()), null);
 
         this.task = task;
+        this.partitions = task.partitions();
     }
 
     public TaskMigratedException(final Task task,
@@ -61,10 +77,14 @@ public class TaskMigratedException extends StreamsException {
         super(String.format("Client request for task %s has been fenced due to a rebalance", task.id()), throwable);
 
         this.task = task;
+        this.partitions = task.partitions();
     }
 
     public Task migratedTask() {
         return task;
     }
 
+    public Set<TopicPartition> migratedPartitions() {
+        return new HashSet<>(partitions);
+    }
 }
