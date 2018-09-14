@@ -151,10 +151,10 @@ class AbstractFetcherThreadTest {
     assertEquals(leaderState.highWatermark, replicaState.highWatermark)
   }
 
-  @Test(expected = classOf[FatalExitError])
-  def testFollowerFetchOutOfRangeHighUncleanLeaderElectionDisallowed(): Unit = {
+  @Test
+  def testFollowerFetchOutOfRangeHigh(): Unit = {
     val partition = new TopicPartition("topic", 0)
-    val fetcher = new MockFetcherThread(isUncleanLeaderElectionAllowed = false)
+    val fetcher = new MockFetcherThread()
 
     val replicaLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
@@ -185,6 +185,10 @@ class AbstractFetcherThreadTest {
     leaderState.highWatermark = 0L
 
     fetcher.doWork()
+
+    assertEquals(0L, replicaState.logEndOffset)
+    assertEquals(0L, replicaState.logStartOffset)
+    assertEquals(0L, replicaState.highWatermark)
   }
 
   @Test
@@ -275,9 +279,7 @@ class AbstractFetcherThreadTest {
     }
   }
 
-  class MockFetcherThread(val replicaId: Int = 0,
-                          val leaderId: Int = 1,
-                          isUncleanLeaderElectionAllowed: Boolean = true)
+  class MockFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1)
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt())) {
@@ -378,10 +380,6 @@ class AbstractFetcherThreadTest {
       }
       val fetchRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 1, fetchData.asJava)
       ResultWithPartitions(Some(fetchRequest), Set.empty)
-    }
-
-    override def isUncleanLeaderElectionAllowed(topicPartition: TopicPartition): Boolean = {
-      isUncleanLeaderElectionAllowed
     }
 
     override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
