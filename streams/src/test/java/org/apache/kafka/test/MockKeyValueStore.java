@@ -21,10 +21,13 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
+import java.util.List;
 
-public class MockStateStore implements StateStore {
+public class MockKeyValueStore implements KeyValueStore {
     private final String name;
     private final boolean persistent;
 
@@ -33,8 +36,8 @@ public class MockStateStore implements StateStore {
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
 
-    public MockStateStore(final String name,
-                          final boolean persistent) {
+    public MockKeyValueStore(final String name,
+                             final boolean persistent) {
         this.name = name;
         this.persistent = persistent;
     }
@@ -81,4 +84,44 @@ public class MockStateStore implements StateStore {
             keys.add(deserializer.deserialize("", key));
         }
     };
+
+    @Override
+    public void put(final Object key, final Object value) {
+
+    }
+
+    @Override
+    public Object putIfAbsent(final Object key, final Object value) {
+        return null;
+    }
+
+    @Override
+    public Object delete(final Object key) {
+        return null;
+    }
+
+    @Override
+    public void putAll(final List entries) {
+
+    }
+
+    @Override
+    public Object get(final Object key) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator range(final Object from, final Object to) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator all() {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
+    }
 }
