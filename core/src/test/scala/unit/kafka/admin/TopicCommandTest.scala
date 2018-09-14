@@ -24,8 +24,9 @@ import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
-import org.apache.kafka.common.errors.{InvalidConfigurationException, TopicExistsException}
+import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.config.ConfigException
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -245,11 +246,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     try {
       val createOpts = new TopicCommandOptions(
         Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
-          "--config", "message.message.version=boom"))
+          "--config", "message.format.version=boom"))
       TopicCommand.createTopic(zkClient, createOpts)
       fail("Expected exception on invalid topic-level config.")
     } catch {
-      case _: InvalidConfigurationException => // topic creation should fail due to the invalid config
+      case _: ConfigException => // topic creation should fail due to the invalid config value
     }
   }
 

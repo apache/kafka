@@ -118,7 +118,7 @@ object Defaults {
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
   val MessageDownConversionEnable = true
-  val validApiVersions = ApiVersion.allVersionsStr
+  val validApiVersions = ApiVersion.allVersionsArray
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
