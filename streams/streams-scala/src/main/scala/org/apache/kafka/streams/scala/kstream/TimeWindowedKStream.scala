@@ -27,8 +27,8 @@ import org.apache.kafka.streams.scala.FunctionConversions._
 /**
  * Wraps the Java class TimeWindowedKStream and delegates method calls to the underlying Java object.
  *
- * @param [K] Type of keys
- * @param [V] Type of values
+ * @tparam K    Type of keys
+ * @tparam V    Type of values
  * @param inner The underlying Java abstraction for TimeWindowedKStream
  *
  * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream`

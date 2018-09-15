@@ -1053,7 +1053,7 @@ public class RequestResponseTest {
         epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1, 1));
         epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 1, 2));
 
-        return new OffsetsForLeaderEpochResponse(epochs);
+        return new OffsetsForLeaderEpochResponse(0, epochs);
     }
 
     private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest() {

@@ -21,37 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
-    private final Logger log;
-    private final TaskAction<StreamTask> maybeCommitAction;
-    private int committed = 0;
-
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
-
-        this.log = logContext.logger(getClass());
-
-        maybeCommitAction = new TaskAction<StreamTask>() {
-            @Override
-            public String name() {
-                return "maybeCommit";
-            }
-
-            @Override
-            public void apply(final StreamTask task) {
-                if (task.commitNeeded()) {
-                    committed++;
-                    task.commit();
-                    log.debug("Committed active task {} per user request in", task.id());
-                }
-            }
-        };
     }
 
     @Override
@@ -63,9 +40,41 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    int maybeCommit() {
-        committed = 0;
-        applyToRunningTasks(maybeCommitAction);
+    int maybeCommitPerUserRequested() {
+        int committed = 0;
+        RuntimeException firstException = null;
+
+        for (final Iterator<StreamTask> it = running().iterator(); it.hasNext(); ) {
+            final StreamTask task = it.next();
+            try {
+                if (task.commitRequested() && task.commitNeeded()) {
+                    task.commit();
+                    committed++;
+                    log.debug("Committed active task {} per user request in", task.id());
+                }
+            } catch (final TaskMigratedException e) {
+                log.info("Failed to commit {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
+                final RuntimeException fatalException = closeZombieTask(task);
+                if (fatalException != null) {
+                    throw fatalException;
+                }
+                it.remove();
+                throw e;
+            } catch (final RuntimeException t) {
+                log.error("Failed to commit StreamTask {} due to the following error:",
+                        task.id(),
+                        t);
+                if (firstException == null) {
+                    firstException = t;
+                }
+            }
+        }
+
+        if (firstException != null) {
+            throw firstException;
+        }
+
         return committed;
     }
 
@@ -85,15 +94,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process() {
+    int process(final long now) {
         int processed = 0;
 
         final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
         while (it.hasNext()) {
             final StreamTask task = it.next().getValue();
-
             try {
-                if (task.isProcessable() && task.process()) {
+                if (task.isProcessable(now) && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
