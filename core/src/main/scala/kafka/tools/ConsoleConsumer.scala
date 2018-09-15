@@ -198,7 +198,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Regex Pattern, to whitelist all topics matching it, to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
