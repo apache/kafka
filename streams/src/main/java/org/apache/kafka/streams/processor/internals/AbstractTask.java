@@ -107,7 +107,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
@@ -226,6 +226,9 @@ public abstract class AbstractTask implements Task {
         }
     }
 
+    void reinitializeStateStoresForPartitions(final TopicPartition partitions) {
+        stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
+    }
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
