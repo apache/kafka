@@ -26,17 +26,15 @@ class CommandLineUtilsTest {
   @Test(expected = classOf[java.lang.IllegalArgumentException])
   def testParseEmptyArg() {
     val argArray = Array("my.empty.property=")
-    val acceptMissingValue = false;
 
-    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue)
+    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false)
   }
 
   @Test(expected = classOf[java.lang.IllegalArgumentException])
   def testParseEmptyArgWithNoDelimiter() {
     val argArray = Array("my.empty.property")
-    val acceptMissingValue = false;
 
-    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue)
+    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false)
   }
 
   @Test
