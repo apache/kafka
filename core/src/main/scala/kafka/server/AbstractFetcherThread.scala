@@ -38,9 +38,9 @@ import java.util.concurrent.atomic.AtomicLong
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
+import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse, ListOffsetRequest}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse}
 
 import scala.math._
 
@@ -76,8 +76,6 @@ abstract class AbstractFetcherThread(name: String,
   protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit
 
   protected def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]]
-
-  protected def isUncleanLeaderElectionAllowed(topicPartition: TopicPartition): Boolean
 
   protected def latestEpoch(topicPartition: TopicPartition): Option[Int]
 
@@ -289,7 +287,6 @@ abstract class AbstractFetcherThread(name: String,
                     info(s"Current offset ${currentPartitionFetchState.fetchOffset} for partition $topicPartition is " +
                       s"out of range, which typically implies a leader change. Reset fetch offset to $newOffset")
                   } catch {
-                    case e: FatalExitError => throw e
                     case e: Throwable =>
                       error(s"Error getting offset for partition $topicPartition", e)
                       partitionsWithError += topicPartition
@@ -458,16 +455,6 @@ abstract class AbstractFetcherThread(name: String,
      */
     val leaderEndOffset = fetchLatestOffsetFromLeader(topicPartition)
     if (leaderEndOffset < replicaEndOffset) {
-      // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
-      // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
-      // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
-      if (!isUncleanLeaderElectionAllowed(topicPartition)) {
-        // Log a fatal error and shutdown the broker to ensure that data loss does not occur unexpectedly.
-        fatal(s"Exiting because log truncation is not allowed for partition $topicPartition, current leader's " +
-          s"latest offset $leaderEndOffset is less than replica's latest offset $replicaEndOffset}")
-        throw new FatalExitError
-      }
-
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
       truncate(topicPartition, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, leaderEndOffset))
