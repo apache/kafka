@@ -180,7 +180,6 @@ public class StoreChangelogReader implements ChangelogReader {
                             "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), restorer.partition());
 
                         needsInitializing.remove(restoringPartition);
-                        initialized.put(restoringPartition, restorer);
                         restorer.setCheckpointOffset(consumer.position(restoringPartition));
 
                         task.reinitializeStateStoresForPartitions(restoringPartition);
@@ -196,8 +195,6 @@ public class StoreChangelogReader implements ChangelogReader {
                     }
                 }
             }
-
-
         }
 
         needsRestoring.putAll(initialized);
