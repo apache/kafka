@@ -84,24 +84,23 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.InOrder;
 
-import static org.easymock.EasyMock.anyBoolean;
-import static org.easymock.EasyMock.anyInt;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.geq;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.mockito.AdditionalMatchers.geq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.spy;
 
 public class SenderTest {
 
@@ -140,7 +139,8 @@ public class SenderTest {
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
-        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
@@ -2037,33 +2037,27 @@ public class SenderTest {
 
     @Test
     public void testResetNextBatchExpiry() throws Exception {
-        MockClient delegateClient = new MockClient(time);
-        client = mock(MockClient.class);
-        expect(client.ready(anyObject(), anyLong())).andDelegateTo(delegateClient).anyTimes();
-        expect(
-            client.newClientRequest(
-                anyString(), anyObject(), anyLong(), anyBoolean(), anyInt(), anyObject()))
-            .andDelegateTo(delegateClient).anyTimes();
-        client.send(anyObject(), anyLong());
-        expectLastCall().andDelegateTo(delegateClient).anyTimes();
-        expect(client.poll(eq(0L), anyLong())).andDelegateTo(delegateClient).times(1);
-        expect(client.poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong()))
-            .andDelegateTo(delegateClient)
-            .times(1);
-        expect(client.poll(geq(1L), anyLong())).andDelegateTo(delegateClient).times(1);
-        replay(client);
+        client = spy(new MockClient(time));
 
         setupWithTransactionState(null);
 
-        accumulator.append(
-            tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT);
+        accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null,
+                MAX_BLOCK_TIMEOUT);
 
         sender.run(time.milliseconds());
         sender.run(time.milliseconds());
         time.setCurrentTimeMs(time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
         sender.run(time.milliseconds());
 
-        verify(client);
+        InOrder inOrder = inOrder(client);
+        inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
+        inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
+                any());
+        inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
+        inOrder.verify(client).poll(eq(0L), anyLong());
+        inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
+        inOrder.verify(client).poll(geq(1L), anyLong());
+
     }
 
     private class MatchingBufferPool extends BufferPool {

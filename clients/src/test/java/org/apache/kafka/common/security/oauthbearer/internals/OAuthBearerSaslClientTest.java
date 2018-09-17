@@ -22,7 +22,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
-import org.easymock.EasyMockSupport;
 import org.junit.Test;
 
 import javax.security.auth.callback.Callback;
@@ -39,7 +38,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-public class OAuthBearerSaslClientTest extends EasyMockSupport {
+public class OAuthBearerSaslClientTest {
 
     private static final Map<String, String> TEST_PROPERTIES = new LinkedHashMap<String, String>() {
         {
