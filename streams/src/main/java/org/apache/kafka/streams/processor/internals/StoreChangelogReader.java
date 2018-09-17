@@ -181,11 +181,14 @@ public class StoreChangelogReader implements ChangelogReader {
             if (task.eosEnabled) {
                 log.info("No checkpoint found for task {} state store {} changelog {} with EOS turned on. " +
                     "Reinitializing the task and restore its state from the beginning.", task.id, restorer.storeName(), restoringPartition);
-                needsInitializing.remove(restoringPartition);
 
-                initialized.put(restoringPartition, restorer);
+                // we move the partitions here, because they will be added back within
+                // `task.reinitializeStateStoresForPartitions()` that calls `register()` internally again
+                needsInitializing.remove(restoringPartition);
                 restorer.setCheckpointOffset(consumer.position(restoringPartition));
+
                 task.reinitializeStateStoresForPartitions(restoringPartition);
+                stateRestorers.get(restoringPartition).restoreStarted();
             } else {
                 log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), restoringPartition);
 
@@ -194,9 +197,8 @@ public class StoreChangelogReader implements ChangelogReader {
                                   position,
                                   endOffsets.get(restoringPartition));
                 restorer.setStartingOffset(position);
+                restorer.restoreStarted();
             }
-
-            restorer.restoreStarted();
         }
 
         needsRestoring.putAll(initialized);

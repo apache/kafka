@@ -122,7 +122,7 @@ class AssignedTasks implements RestoringTasks {
             try {
                 if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    // cast is save, because StandbyTasks always returns `true` in `initializeStateStores()` above
+                    // cast is safe, because StandbyTasks always returns `true` in `initializeStateStores()` above
                     addToRestoring((StreamTask) entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue(), readyPartitions);
