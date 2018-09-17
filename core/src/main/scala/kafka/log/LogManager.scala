@@ -888,20 +888,21 @@ class LogManager(logDirs: Seq[File],
 
     try {
       deletableLogs.foreach {
-        case (_, log) =>
+        case (topicPartition, log) =>
           debug("Garbage collecting '" + log.name + "'")
           total += log.deleteOldSegments()
+
+          val futureLog = futureLogs.get(topicPartition)
+          if (futureLog != null) {
+            // clean future logs
+            debug("Garbage collecting future log '" + futureLog.name + "'")
+            total += futureLog.deleteOldSegments()
+          }
       }
     } finally {
       if (cleaner != null) {
         cleaner.resumeCleaning(deletableLogs.map(_._1))
       }
-    }
-
-    // clean future logs.
-    for(log <- futureLogs.values; if !log.config.compact) {
-      debug("Garbage collecting future log '" + log.name + "'")
-      total += log.deleteOldSegments()
     }
 
     debug("Log cleanup completed. " + total + " files deleted in " +
