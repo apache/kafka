@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
+import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset
 
@@ -211,7 +211,6 @@ abstract class AbstractFetcherThread(name: String,
                     info(s"Current offset ${currentPartitionFetchState.fetchOffset} for partition $topicPartition is " +
                       s"out of range, which typically implies a leader change. Reset fetch offset to $newOffset")
                   } catch {
-                    case e: FatalExitError => throw e
                     case e: Throwable =>
                       error(s"Error getting offset for partition $topicPartition", e)
                       partitionsWithError += topicPartition

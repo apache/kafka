@@ -22,15 +22,12 @@ import java.util
 import AbstractFetcherThread.ResultWithPartitions
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}
-import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
-import kafka.zk.AdminZkClient
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -160,18 +157,6 @@ class ReplicaFetcherThread(name: String,
     val leaderEndOffset: Long = earliestOrLatestOffset(topicPartition, ListOffsetRequest.LATEST_TIMESTAMP)
 
     if (leaderEndOffset < replica.logEndOffset.messageOffset) {
-      // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
-      // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
-      // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
-      val adminZkClient = new AdminZkClient(replicaMgr.zkClient)
-      if (!LogConfig.fromProps(brokerConfig.originals, adminZkClient.fetchEntityConfig(
-        ConfigType.Topic, topicPartition.topic)).uncleanLeaderElectionEnable) {
-        // Log a fatal error and shutdown the broker to ensure that data loss does not occur unexpectedly.
-        fatal(s"Exiting because log truncation is not allowed for partition $topicPartition, current leader's " +
-          s"latest offset $leaderEndOffset is less than replica's latest offset ${replica.logEndOffset.messageOffset}")
-        throw new FatalExitError
-      }
-
       warn(s"Reset fetch offset for partition $topicPartition from ${replica.logEndOffset.messageOffset} to current " +
         s"leader's latest offset $leaderEndOffset")
       partition.truncateTo(leaderEndOffset, isFuture = false)
