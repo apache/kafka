@@ -84,7 +84,7 @@ object ApiVersion {
   private val versionMap: Map[String, ApiVersion] =
     allVersions.map(v => v.version -> v).toMap ++ allVersions.groupBy(_.shortVersion).map { case (k, v) => k -> v.last }
 
-  val allVersionsArray = versionMap.keys.seq.toArray
+  val allValidVersions = versionMap.keys.seq
 
   /**
    * Return an `ApiVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
