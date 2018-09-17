@@ -192,7 +192,7 @@ ProcessId
 &gt; taskkill /pid 6016 /f
 </pre>
 
-<p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
+<p>Leadership has switched to one of the followers and node 1 is no longer in the in-sync replica set:</p>
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic
