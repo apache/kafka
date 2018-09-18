@@ -176,7 +176,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def deletableLogs(): Iterable[(TopicPartition, Log)] = {
     inLock(lock) {
       val toClean = logs.filter { case (topicPartition, log) =>
-        !inProgress.contains(topicPartition) && isCompactAndDelete(log)
+        !inProgress.contains(topicPartition) && log.config.compact
       }
       toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
       toClean
