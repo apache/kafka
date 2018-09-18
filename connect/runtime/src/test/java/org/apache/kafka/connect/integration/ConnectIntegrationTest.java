@@ -71,8 +71,6 @@ public class ConnectIntegrationTest {
         log.info("Consuming records from test topic");
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MILLIS, "test-topic");
 
-        log.info("Connect endpoint: {}", connect.restUrl());
-
         Map<String, String> confs = new HashMap<>();
         confs.put("connector.class", "MonitorableSink");
         confs.put("task.max", "2");

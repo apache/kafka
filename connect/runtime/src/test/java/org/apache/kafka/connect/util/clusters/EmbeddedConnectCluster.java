@@ -17,24 +17,9 @@
 package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
-import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
-import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
-import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,11 +29,22 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_HOST_NAME_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
 
 public class EmbeddedConnectCluster extends ExternalResource {
 
@@ -64,7 +60,6 @@ public class EmbeddedConnectCluster extends ExternalResource {
     private final String clusterName;
 
     private Connect connect;
-    private URI advertisedUrl;
 
     public EmbeddedConnectCluster(Class<?> klass) {
         this(klass.getName());
@@ -100,7 +95,6 @@ public class EmbeddedConnectCluster extends ExternalResource {
     protected void before() throws IOException {
         kafkaCluster.before();
         startConnect();
-        log.info("Started Connect at {} with Kafka cluster at {}", restUrl(), kafka().bootstrapServers());
     }
 
     @Override
@@ -121,18 +115,18 @@ public class EmbeddedConnectCluster extends ExternalResource {
     public void startConnect() {
         log.info("Starting Connect cluster with one worker.");
 
-        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
-        workerProps.put(WorkerConfig.REST_HOST_NAME_CONFIG, REST_HOST_NAME);
+        workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
+        workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
 
-        putIfAbsent(workerProps, ConsumerConfig.GROUP_ID_CONFIG, "connect-integration-test-" + clusterName);
-        putIfAbsent(workerProps, DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + clusterName);
-        putIfAbsent(workerProps, DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        putIfAbsent(workerProps, DistributedConfig.CONFIG_TOPIC_CONFIG, "connect-config-topic-" + clusterName);
-        putIfAbsent(workerProps, DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        putIfAbsent(workerProps, DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + clusterName);
-        putIfAbsent(workerProps, DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        putIfAbsent(workerProps, DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
-        putIfAbsent(workerProps, DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
+        putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + clusterName);
+        putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + clusterName);
+        putIfAbsent(workerProps, OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, CONFIG_TOPIC_CONFIG, "connect-config-topic-" + clusterName);
+        putIfAbsent(workerProps, CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + clusterName);
+        putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
+        putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
 
         connect = new ConnectDistributed().startConnect(workerProps);
     }
@@ -163,10 +157,6 @@ public class EmbeddedConnectCluster extends ExternalResource {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
         }
-    }
-
-    public URI restUrl() {
-        return advertisedUrl;
     }
 
     public EmbeddedKafkaCluster kafka() {

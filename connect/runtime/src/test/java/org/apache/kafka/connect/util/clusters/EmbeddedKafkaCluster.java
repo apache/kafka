@@ -26,7 +26,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -56,6 +55,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -88,10 +94,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     @Override
     protected void after() {
         stop();
-    }
-
-    Time time() {
-        return time;
     }
 
     public void start() throws IOException {
@@ -242,6 +244,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
         long num = 1;
         long duration = maxDuration;
+        // poll in intervals of 250millis.
         if (duration > 250) {
             num = 1 + (maxDuration / 250);
             duration = 250;
@@ -274,12 +277,12 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         // and through to the task
         Map<String, Object> props = new HashMap<>();
 
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put(GROUP_ID_CONFIG, UUID.randomUUID().toString());
+        props.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         KafkaConsumer<byte[], byte[]> consumer;
         try {
