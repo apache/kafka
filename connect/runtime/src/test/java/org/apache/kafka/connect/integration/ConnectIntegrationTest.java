@@ -36,10 +36,14 @@ public class ConnectIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
-    private final EmbeddedConnectCluster connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
+    private static final int NUM_RECORDS_PRODUCED = 2000;
+    private static final int CONSUME_MAX_DURATION_MILLIS = 5000;
+
+    private EmbeddedConnectCluster connect;
 
     @Before
     public void setup() throws IOException {
+        connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
         connect.start();
     }
 
@@ -58,14 +62,14 @@ public class ConnectIntegrationTest {
         connect.kafka().createTopic("test-topic");
 
         // produce some strings into test topic
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < NUM_RECORDS_PRODUCED / 2; i++) {
             connect.kafka().produce("test-topic", "hello-" + i);
             connect.kafka().produce("test-topic", "world-" + i);
         }
 
         // consume all records from test topic or fail
         log.info("Consuming records from test topic");
-        connect.kafka().consumeNRecords(2000, 5000, "test-topic");
+        connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MILLIS, "test-topic");
 
         log.info("Connect endpoint: {}", connect.restUrl());
 
@@ -83,7 +87,8 @@ public class ConnectIntegrationTest {
             Thread.sleep(500);
         }
 
-        Assert.assertEquals(2000, MonitorableSinkConnector.COUNTER.get());
+        // all records must be consumed
+        Assert.assertEquals(NUM_RECORDS_PRODUCED, MonitorableSinkConnector.COUNTER.get());
 
         log.info("Connector read {} records from topic", MonitorableSinkConnector.COUNTER.get());
         connect.deleteConnector("simple-conn");

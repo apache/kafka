@@ -57,6 +57,10 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
+ * integration tests.
+ */
 public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
@@ -94,7 +98,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         zookeeper = new EmbeddedZookeeper();
 
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
-        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), 9999); // pick a random port
+        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), 0); // pick a random port
 
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.HostNameProp(), "localhost");
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
@@ -152,7 +156,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
+    private static void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
         }
@@ -235,7 +239,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topics the topics to subscribe and consume records from.
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
-    public ConsumerRecords<byte[], byte[]> consumeNRecords(int n, long maxDuration, String... topics) {
+    public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
         long num = 1;
         long duration = maxDuration;
         if (duration > 250) {

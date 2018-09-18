@@ -17,9 +17,12 @@
 package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
@@ -36,6 +39,7 @@ import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -50,10 +54,11 @@ public class EmbeddedConnectCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);
 
-    private static final int NUM_BROKERS = 1;
-    private static final Properties BROKER_CONFIG = new Properties();
+    private static final int DEFAULT_NUM_BROKERS = 1;
+    private static final Properties DEFAULT_BROKER_CONFIG = new Properties();
+    private static final String REST_HOST_NAME= "localhost";
 
-    private final EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+    private final EmbeddedKafkaCluster kafkaCluster;
 
     private final Map<String, String> workerProps;
     private final String clusterName;
@@ -71,8 +76,13 @@ public class EmbeddedConnectCluster extends ExternalResource {
     }
 
     public EmbeddedConnectCluster(String name, Map<String, String> workerProps) {
+        this(name, workerProps, DEFAULT_NUM_BROKERS, DEFAULT_BROKER_CONFIG);
+    }
+
+    public EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numBrokers, Properties brokerProps) {
         this.workerProps = workerProps;
         this.clusterName = name;
+        kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
     }
 
     public void start() throws IOException {
@@ -90,7 +100,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
     protected void before() throws IOException {
         kafkaCluster.before();
         startConnect();
-        log.info("Started connect at {} with kafka cluster at {}", restUrl(), kafka().bootstrapServers());
+        log.info("Started Connect at {} with Kafka cluster at {}", restUrl(), kafka().bootstrapServers());
     }
 
     @Override
@@ -109,62 +119,31 @@ public class EmbeddedConnectCluster extends ExternalResource {
     }
 
     public void startConnect() {
-        log.info("Starting standalone connect cluster..");
-        workerProps.put("bootstrap.servers", kafka().bootstrapServers());
-        workerProps.put("rest.host.name", "localhost");
+        log.info("Starting Connect cluster with one worker.");
 
-        putIfAbsent(workerProps, "group.id", "connect-integration-test-" + clusterName);
-        putIfAbsent(workerProps, "offset.storage.topic", "connect-offset-topic-" + clusterName);
-        putIfAbsent(workerProps, "offset.storage.replication.factor", "1");
-        putIfAbsent(workerProps, "config.storage.topic", "connect-config-topic-" + clusterName);
-        putIfAbsent(workerProps, "config.storage.replication.factor", "1");
-        putIfAbsent(workerProps, "status.storage.topic", "connect-storage-topic-" + clusterName);
-        putIfAbsent(workerProps, "status.storage.replication.factor", "1");
-        putIfAbsent(workerProps, "key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        putIfAbsent(workerProps, "value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        putIfAbsent(workerProps, "key.converter.schemas.enable", "false");
-        putIfAbsent(workerProps, "value.converter.schemas.enable", "false");
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
+        workerProps.put(WorkerConfig.REST_HOST_NAME_CONFIG, REST_HOST_NAME);
 
-        log.info("Scanning for plugins...");
-        Plugins plugins = new Plugins(workerProps);
-        plugins.compareAndSwapWithDelegatingLoader();
+        putIfAbsent(workerProps, ConsumerConfig.GROUP_ID_CONFIG, "connect-integration-test-" + clusterName);
+        putIfAbsent(workerProps, DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + clusterName);
+        putIfAbsent(workerProps, DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, DistributedConfig.CONFIG_TOPIC_CONFIG, "connect-config-topic-" + clusterName);
+        putIfAbsent(workerProps, DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + clusterName);
+        putIfAbsent(workerProps, DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
+        putIfAbsent(workerProps, DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
 
-        DistributedConfig config = new DistributedConfig(workerProps);
-
-        RestServer rest = new RestServer(config);
-        advertisedUrl = rest.advertisedUrl();
-        String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
-
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
-        offsetBackingStore.configure(config);
-
-        Worker worker = new Worker(workerId, kafkaCluster.time(), plugins, config, offsetBackingStore);
-
-        WorkerConfigTransformer configTransformer = worker.configTransformer();
-        Converter internalValueConverter = worker.getInternalValueConverter();
-
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(kafkaCluster.time(), internalValueConverter);
-        statusBackingStore.configure(config);
-
-        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
-                internalValueConverter,
-                config,
-                configTransformer);
-
-        Herder herder = new DistributedHerder(config, kafkaCluster.time(), worker,
-                ConnectUtils.lookupKafkaClusterId(config), statusBackingStore, configBackingStore,
-                advertisedUrl.toString());
-        connect = new Connect(herder, rest);
-        connect.start();
+        connect = new ConnectDistributed().startConnect(workerProps);
     }
 
     public void startConnector(String connName, Map<String, String> connConfig) throws IOException {
-        String url = String.format("http://localhost:8083/connectors/%s/config", connName);
+        String url = String.format("http://%s:%s/connectors/%s/config", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName);
         ObjectMapper mapper = new ObjectMapper();
         try {
             String content = mapper.writeValueAsString(connConfig);
             int status = executePut(url, content);
-            if (status >= 400) {
+            if (status >= HttpServletResponse.SC_BAD_REQUEST) {
                 throw new IOException("Could not execute PUT request. status=" + status);
             }
         } catch (IOException e) {
@@ -174,13 +153,13 @@ public class EmbeddedConnectCluster extends ExternalResource {
     }
 
     public void deleteConnector(String connName) throws IOException {
-        int status = executeDelete(String.format("http://localhost:8083/connectors/%s", connName));
-        if (status >= 400) {
+        int status = executeDelete(String.format("http://%s:%s/connectors/%s", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName));
+        if (status >= HttpServletResponse.SC_BAD_REQUEST) {
             throw new IOException("Could not execute DELETE request. status=" + status);
         }
     }
 
-    private void putIfAbsent(Map<String, String> props, String propertyKey, String propertyValue) {
+    private static void putIfAbsent(Map<String, String> props, String propertyKey, String propertyValue) {
         if (!props.containsKey(propertyKey)) {
             props.put(propertyKey, propertyValue);
         }
@@ -200,9 +179,9 @@ public class EmbeddedConnectCluster extends ExternalResource {
         httpCon.setDoOutput(true);
         httpCon.setRequestProperty("Content-Type", "application/json");
         httpCon.setRequestMethod("PUT");
-        OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream());
-        out.write(body);
-        out.close();
+        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
+            out.write(body);
+        }
         try (InputStream is = httpCon.getInputStream()) {
             int c;
             StringBuilder response = new StringBuilder();

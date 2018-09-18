@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MonitorableSinkConnector extends TestSinkConnector {
@@ -45,7 +46,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     @Override
     public Class<? extends Task> taskClass() {
-        return SimpleTestSinkTask.class;
+        return MonitorableSinkTask.class;
     }
 
     @Override
@@ -69,11 +70,11 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         return new ConfigDef();
     }
 
-    public static class SimpleTestSinkTask extends SinkTask {
+    public static class MonitorableSinkTask extends SinkTask {
 
         @Override
         public String version() {
-            return null;
+            return "unknown";
         }
 
         @Override
