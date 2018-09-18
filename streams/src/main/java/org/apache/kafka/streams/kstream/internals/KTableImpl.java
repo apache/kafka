@@ -552,7 +552,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
-        return groupBy(selector, Serialized.with(null, null));
+        return this.groupBy(selector, Grouped.with(null, null));
     }
 
     @Override
@@ -584,6 +584,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             serializedInternal.valueSerde(),
             groupByMapNode
         );
+    }
+
+    @Override
+    public <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
+                                                  final Grouped<KR, VR> grouped) {
+        return null;
     }
 
     @SuppressWarnings("unchecked")

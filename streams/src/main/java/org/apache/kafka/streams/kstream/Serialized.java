@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serde;
  * @param <K> the key type
  * @param <V> the value type
  */
+@Deprecated
 public class Serialized<K, V> {
 
     protected final Serde<K> keySerde;
