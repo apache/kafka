@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -88,6 +89,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -101,6 +103,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -111,6 +120,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
 
 @SuppressWarnings("deprecation")
 public class FetcherTest {
@@ -149,38 +159,30 @@ public class FetcherTest {
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
     private Metrics fetcherMetrics = new Metrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
+    private ExecutorService executorService;
 
     @Before
     public void setup() throws Exception {
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         client.setNode(node);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
-        builder.append(0L, "key".getBytes(), "value-1".getBytes());
-        builder.append(0L, "key".getBytes(), "value-2".getBytes());
-        builder.append(0L, "key".getBytes(), "value-3".getBytes());
-        records = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
-        builder.append(0L, "key".getBytes(), "value-4".getBytes());
-        builder.append(0L, "key".getBytes(), "value-5".getBytes());
-        nextRecords = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        emptyRecords = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
-        builder.append(0L, "key".getBytes(), "value-0".getBytes());
-        partialRecords = builder.build();
+        records = buildRecords(1L, 3, 1);
+        nextRecords = buildRecords(4L, 2, 4);
+        emptyRecords = buildRecords(0L, 0, 0);
+        partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
     }
 
     @After
-    public void teardown() {
+    public void teardown() throws Exception {
         this.metrics.close();
         this.fetcherMetrics.close();
         this.fetcher.close();
         this.fetcherMetrics.close();
+        if (executorService != null) {
+            executorService.shutdownNow();
+            assertTrue(executorService.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     @Test
@@ -1576,8 +1578,8 @@ public class FetcherTest {
         KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg));
         KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax));
         // Throttle times are ApiVersions=400, Fetch=(100, 200, 300)
-        assertEquals(250, avgMetric.value(), EPSILON);
-        assertEquals(400, maxMetric.value(), EPSILON);
+        assertEquals(250, (Double) avgMetric.metricValue(), EPSILON);
+        assertEquals(400, (Double) maxMetric.metricValue(), EPSILON);
         client.close();
     }
 
@@ -1599,14 +1601,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 0);
-        assertEquals(100, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(100, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
-        assertEquals(100, partitionLag.value(), EPSILON);
+        assertEquals(100, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1614,8 +1616,8 @@ public class FetcherTest {
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, 0);
-        assertEquals(197, recordsFetchLagMax.value(), EPSILON);
-        assertEquals(197, partitionLag.value(), EPSILON);
+        assertEquals(197, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        assertEquals(197, (Double) partitionLag.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1637,14 +1639,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLeadMin = allMetrics.get(minLeadMetric);
 
         // recordsFetchLeadMin should be initialized to MAX_VALUE
-        assertEquals(Double.MAX_VALUE, recordsFetchLeadMin.value(), EPSILON);
+        assertEquals(Double.MAX_VALUE, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, -1L, 0L, 0);
-        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
+        assertEquals(0L, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
 
         KafkaMetric partitionLead = allMetrics.get(partitionLeadMetric);
-        assertEquals(0L, partitionLead.value(), EPSILON);
+        assertEquals(0L, (Double) partitionLead.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1653,8 +1655,8 @@ public class FetcherTest {
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         }
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, -1L, 0L, 0);
-        assertEquals(0L, recordsFetchLeadMin.value(), EPSILON);
-        assertEquals(3L, partitionLead.value(), EPSILON);
+        assertEquals(0L, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
+        assertEquals(3L, (Double) partitionLead.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1681,14 +1683,14 @@ public class FetcherTest {
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
         // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 50L, 0);
-        assertEquals(50, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(50, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         KafkaMetric partitionLag = allMetrics.get(partitionLagMetric);
-        assertEquals(50, partitionLag.value(), EPSILON);
+        assertEquals(50, (Double) partitionLag.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - offset of the last message after receiving a non-empty FetchResponse
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -1696,8 +1698,8 @@ public class FetcherTest {
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp0, builder.build(), Errors.NONE, 200L, 150L, 0);
-        assertEquals(147, recordsFetchLagMax.value(), EPSILON);
-        assertEquals(147, partitionLag.value(), EPSILON);
+        assertEquals(147, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        assertEquals(147, (Double) partitionLag.metricValue(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1748,8 +1750,8 @@ public class FetcherTest {
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric fetchSizeAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchSizeAvg));
         KafkaMetric recordsCountAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg));
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(6, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(6, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1774,8 +1776,8 @@ public class FetcherTest {
         }
 
         fetchRecords(tp0, records, Errors.NONE, 100L, 0);
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(2, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(2, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1810,8 +1812,8 @@ public class FetcherTest {
         for (Record record : records.records())
             expectedBytes += record.sizeInBytes();
 
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(3, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(3, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -1851,8 +1853,8 @@ public class FetcherTest {
         for (Record record : records.records())
             expectedBytes += record.sizeInBytes();
 
-        assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(3, recordsCountAverage.value(), EPSILON);
+        assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
+        assertEquals(3, (Double) recordsCountAverage.metricValue(), EPSILON);
     }
 
     @Test
@@ -2507,6 +2509,141 @@ public class FetcherTest {
         assertEquals(1L, subscriptions.position(tp1).longValue());
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
+    }
+
+    @Test
+    public void testFetcherConcurrency() throws Exception {
+        int numPartitions = 20;
+        Set<TopicPartition> topicPartitions = new HashSet<>();
+        for (int i = 0; i < numPartitions; i++)
+            topicPartitions.add(new TopicPartition(topicName, i));
+        cluster = TestUtils.singletonCluster(topicName, numPartitions);
+        metadata.update(cluster, Collections.emptySet(), time.milliseconds());
+        client.setNode(node);
+        fetchSize = 10000;
+
+        Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(
+                new LogContext(),
+                consumerClient,
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                2 * numPartitions,
+                true,
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                metadata,
+                subscriptions,
+                metrics,
+                metricsRegistry,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                IsolationLevel.READ_UNCOMMITTED) {
+            @Override
+            protected FetchSessionHandler sessionHandler(int id) {
+                final FetchSessionHandler handler = super.sessionHandler(id);
+                if (handler == null)
+                    return null;
+                else {
+                    return new FetchSessionHandler(new LogContext(), id) {
+                        @Override
+                        public Builder newBuilder() {
+                            verifySessionPartitions();
+                            return handler.newBuilder();
+                        }
+
+                        @Override
+                        public boolean handleResponse(FetchResponse response) {
+                            verifySessionPartitions();
+                            return handler.handleResponse(response);
+                        }
+
+                        @Override
+                        public void handleError(Throwable t) {
+                            verifySessionPartitions();
+                            handler.handleError(t);
+                        }
+
+                        // Verify that session partitions can be traversed safely.
+                        private void verifySessionPartitions() {
+                            try {
+                                Field field = FetchSessionHandler.class.getDeclaredField("sessionPartitions");
+                                field.setAccessible(true);
+                                LinkedHashMap<TopicPartition, FetchRequest.PartitionData> sessionPartitions =
+                                        (LinkedHashMap<TopicPartition, FetchRequest.PartitionData>) field.get(handler);
+                                for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : sessionPartitions.entrySet()) {
+                                    // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
+                                    // possibility of ConcurrentModificationException if appropriate synchronization is not used.
+                                    Thread.yield();
+                                }
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    };
+                }
+            }
+        };
+
+        subscriptions.assignFromUser(topicPartitions);
+        topicPartitions.forEach(tp -> subscriptions.seek(tp, 0L));
+
+        AtomicInteger fetchesRemaining = new AtomicInteger(1000);
+        executorService = Executors.newSingleThreadExecutor();
+        Future<?> future = executorService.submit(() -> {
+            while (fetchesRemaining.get() > 0) {
+                synchronized (consumerClient) {
+                    if (!client.requests().isEmpty()) {
+                        ClientRequest request = client.requests().peek();
+                        FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
+                        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
+                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData().entrySet()) {
+                            TopicPartition tp = entry.getKey();
+                            long offset = entry.getValue().fetchOffset;
+                            responseMap.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, offset + 2L, offset + 2,
+                                    0L, null, buildRecords(offset, 2, offset)));
+                        }
+                        client.respondToRequest(request, new FetchResponse<>(Errors.NONE, responseMap, 0, 123));
+                        consumerClient.poll(time.timer(0));
+                    }
+                }
+            }
+            return fetchesRemaining.get();
+        });
+        Map<TopicPartition, Long> nextFetchOffsets = topicPartitions.stream()
+                .collect(Collectors.toMap(Function.identity(), t -> 0L));
+        while (fetchesRemaining.get() > 0 && !future.isDone()) {
+            if (fetcher.sendFetches() == 1) {
+                synchronized (consumerClient) {
+                    consumerClient.poll(time.timer(0));
+                }
+            }
+            if (fetcher.hasCompletedFetches()) {
+                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+                if (!fetchedRecords.isEmpty()) {
+                    fetchesRemaining.decrementAndGet();
+                    fetchedRecords.entrySet().forEach(entry -> {
+                        TopicPartition tp = entry.getKey();
+                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
+                        assertEquals(2, records.size());
+                        long nextOffset = nextFetchOffsets.get(tp);
+                        assertEquals(nextOffset, records.get(0).offset());
+                        assertEquals(nextOffset + 1, records.get(1).offset());
+                        nextFetchOffsets.put(tp, nextOffset + 2);
+                    });
+                }
+            }
+        }
+        assertEquals(0, future.get());
+    }
+
+    private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+        for (int i = 0; i < count; i++)
+            builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
+        return builder.build();
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {

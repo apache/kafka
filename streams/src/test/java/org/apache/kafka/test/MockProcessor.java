@@ -40,6 +40,8 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     private final PunctuationType punctuationType;
     private final long scheduleInterval;
 
+    private boolean commitRequested = false;
+
     public MockProcessor(final PunctuationType punctuationType, final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.scheduleInterval = scheduleInterval;
@@ -76,6 +78,10 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         processed.add((key == null ? "null" : key) + ":" +
                 (value == null ? "null" : value));
 
+        if (commitRequested) {
+            context().commit();
+            commitRequested = false;
+        }
     }
 
     public void checkAndClearProcessResult(final String... expected) {
@@ -85,6 +91,10 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         }
 
         processed.clear();
+    }
+
+    public void requestCommit() {
+        commitRequested = true;
     }
 
     public void checkEmptyAndClearProcessResult() {

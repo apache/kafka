@@ -236,6 +236,6 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
     val metricName = broker.metrics.metricName("byte-rate", repType.toString)
-    broker.metrics.metrics.asScala(metricName).value
+    broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
   }
 }

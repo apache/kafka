@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2018 Joan Goyeau.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,26 +16,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
+import org.apache.kafka.streams.scala.Serdes
+import org.apache.kafka.streams.scala.Serdes._
+import org.junit.runner.RunWith
+import org.scalatest.junit.JUnitRunner
+import org.scalatest.{FlatSpec, Matchers}
 
-public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], StateStore> {
+@RunWith(classOf[JUnitRunner])
+class JoinedTest extends FlatSpec with Matchers {
 
-    private final boolean persistent;
+  "Create a Joined" should "create a Joined with Serdes" in {
+    val joined: Joined[String, Long, Int] = Joined.`with`[String, Long, Int]
 
-    public MockStoreBuilder(final String storeName, final boolean persistent) {
-        super(storeName, Serdes.Integer(), Serdes.ByteArray(), new MockTime());
-
-        this.persistent = persistent;
-    }
-
-    @Override
-    public StateStore build() {
-        return new MockStateStore(name, persistent);
-    }
+    joined.keySerde.getClass shouldBe Serdes.String.getClass
+    joined.valueSerde.getClass shouldBe Serdes.Long.getClass
+    joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
+  }
 }
-

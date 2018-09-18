@@ -172,6 +172,37 @@
         More details can be found in the <a href="/{{version}}/documentation#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
     </p>
 
+    <h3><a id="streams_out_of_ordering" href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
+
+    <p>
+        Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
+        handle <a href="tbd">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
+        result in out-of-order data arrivals with respect to their timestamps:
+    </p>
+
+    <ul>
+        <li> Within a topic-partition, a record's timestamp may not be monotonically increasing along with their offsets. Since Kafka Streams will always try to process records within a topic-partition to follow the offset order,
+            it can cause records with larger timestamps (but smaller offsets) to be processed earlier than records with smaller timestamps (but larger offsets) in the same topic-partition.
+        </li>
+        <li> Within a <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">stream task</a> that may be processing multiple topic-partitions, if users configure the application to not wait for all partitions to contain some buffered data and
+             pick from the partition with the smallest timestamp to process the next record, then later on when some records are fetched for other topic-partitions, their timestamps may be smaller than those processed records fetched from another topic-partition.
+        </li>
+    </ul>
+
+    <p>
+        For stateless operations, out-of-order data will not impact processing logic since only one record is considered at a time, without looking into the history of past processed records;
+        for stateful operations such as aggregations and joins, however, out-of-order data could cause the processing logic to be incorrect. If users want to handle such out-of-order data, generally they need to allow their applications
+        to wait for longer time while bookkeeping their states during the wait time, i.e. making trade-off decisions between latency, cost, and correctness.
+        In Kafka Streams specifically, users can configure their window operators for windowed aggregations to achieve such trade-offs (details can be found in <a href="/{{version}}/documentation/streams/developer-guide"><b>Developer Guide</b></a>).
+        As for Joins, users have to be aware that some of the out-of-order data cannot be handled by increasing on latency and cost in Streams yet:
+    </p>
+
+    <ul>
+        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulted stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins. </li>
+        <li> For Stream-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order), and hence it may produce unpredictable results. </li>
+        <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventually consistent. </li>
+    </ul>
+
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/tutorial" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__next">Next</a>

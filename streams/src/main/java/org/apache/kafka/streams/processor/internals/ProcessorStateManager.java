@@ -318,6 +318,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             return (BatchingStateRestoreCallback) callback;
         }
 
+        // TODO: avoid creating a new object for each update call?
         return new WrappedBatchingStateRestoreCallback(callback);
     }
 

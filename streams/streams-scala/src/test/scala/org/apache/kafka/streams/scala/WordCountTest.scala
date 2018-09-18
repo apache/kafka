@@ -29,7 +29,6 @@ import org.junit.rules.TemporaryFolder
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.kstream.Materialized
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
