@@ -29,7 +29,7 @@ import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
+import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, ValidPrefixString}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -870,7 +870,7 @@ object KafkaConfig {
       .define(NumRecoveryThreadsPerDataDirProp, INT, Defaults.NumRecoveryThreadsPerDataDir, atLeast(1), HIGH, NumRecoveryThreadsPerDataDirDoc)
       .define(AutoCreateTopicsEnableProp, BOOLEAN, Defaults.AutoCreateTopicsEnable, HIGH, AutoCreateTopicsEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), HIGH, MinInSyncReplicasDoc)
-      .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, in(ApiVersion.allValidVersions.toArray:_*), MEDIUM, LogMessageFormatVersionDoc)
+      .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, ValidPrefixString.in(ApiVersion.allValidVersions.toArray:_*), MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
@@ -898,7 +898,7 @@ object KafkaConfig {
       .define(LeaderImbalanceCheckIntervalSecondsProp, LONG, Defaults.LeaderImbalanceCheckIntervalSeconds, HIGH, LeaderImbalanceCheckIntervalSecondsDoc)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
-      .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
+      .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, ValidPrefixString.in(ApiVersion.allValidVersions.toArray:_*), MEDIUM, InterBrokerProtocolVersionDoc)
       .define(InterBrokerListenerNameProp, STRING, null, MEDIUM, InterBrokerListenerNameDoc)
 
       /** ********* Controlled shutdown configuration ***********/

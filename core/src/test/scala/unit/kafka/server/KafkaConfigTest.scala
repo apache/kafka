@@ -380,14 +380,21 @@ class KafkaConfigTest {
     val conf = KafkaConfig.fromProps(props)
     assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
 
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
-    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2")
+    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
 
+    // check that 0.8.2.0 is the same as 0.8.2.1
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.1")
+    // We need to set the message format version to make the configuration valid
+    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.1")
+    val conf3 = KafkaConfig.fromProps(props)
+    assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
+
     //check that latest is newer than 0.8.2
-    assertTrue(ApiVersion.latestVersion >= conf2.interBrokerProtocolVersion)
+    assertTrue(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {

@@ -938,6 +938,33 @@ public class ConfigDef {
         }
     }
 
+    public static class ValidPrefixString implements Validator {
+        final List<String> validPrefixStrings;
+
+        private ValidPrefixString(List<String> validPrefixStrings) {
+            this.validPrefixStrings = validPrefixStrings;
+        }
+
+        public static ValidPrefixString in(String... validStrings) {
+            return new ValidPrefixString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+
+            boolean valid = validPrefixStrings.stream().filter(s::startsWith).findAny().isPresent();
+            if (!valid) {
+                throw new ConfigException(name, o, "String must be one of: " + Utils.join(validPrefixStrings, ", "));
+            }
+
+        }
+
+        public String toString() {
+            return "[" + Utils.join(validPrefixStrings, ", ") + "]";
+        }
+    }
+
     public static class NonNullValidator implements Validator {
         @Override
         public void ensureValid(String name, Object value) {
