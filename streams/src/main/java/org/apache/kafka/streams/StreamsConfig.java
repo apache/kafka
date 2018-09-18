@@ -630,7 +630,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RECEIVE_BUFFER_CONFIG,
                     Type.INT,
                     32 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     Importance.LOW,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(RECONNECT_BACKOFF_MS_CONFIG,
@@ -671,7 +671,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(SEND_BUFFER_CONFIG,
                     Type.INT,
                     128 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     Importance.LOW,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
