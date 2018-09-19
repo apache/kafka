@@ -103,12 +103,12 @@ object TopicCommand extends Logging {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
         def validateReplicaAssigment: Unit = {
-          val assigmentPartition0 = assignment.getOrElse(0,
+          val assignmentPartition0 = assignment.getOrElse(0,
             throw new AdminOperationException(
-              s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
+              s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
                 s"Assignment: $assignment"))
           val allBrokers = adminZkClient.getBrokerMetadatas()
-          adminZkClient.validateReplicaAssignment(assignment, assigmentPartition0.size, allBrokers.map(_.id).toSet)
+          adminZkClient.validateReplicaAssignment(assignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
         }
         validateReplicaAssigment
         adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignment, configs, update = false)
