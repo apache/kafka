@@ -284,6 +284,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
+    <Match>
+        <Package name="org.apache.kafka.streams.scala"/>
+        <Source name="FunctionsCompatConversions.scala"/>
+        <Bug pattern="EQ_UNUSUAL"/>
+    </Match>
+
 -    <Match>
         <Package name="org.apache.kafka.streams.scala"/>
         <Or>
