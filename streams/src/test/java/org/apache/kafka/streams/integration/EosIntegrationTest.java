@@ -497,9 +497,10 @@ public class EosIntegrationTest {
             TestUtils.waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
-                    && (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
-                        || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
+                    && (streams1.allMetadata().iterator().next().taskIds().size() == 2
+                        || streams2.allMetadata().iterator().next().taskIds().size() == 2),
                 MAX_WAIT_TIME_MS, "Should have rebalanced.");
+
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
                 uncommittedDataBeforeGC.size() + dataToTriggerFirstRebalance.size(),
@@ -512,13 +513,15 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
             doGC = false;
+
             TestUtils.waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
-                    && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
-                    && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
+                    && streams1.allMetadata().iterator().next().taskIds().size() == 1
+                    && streams2.allMetadata().iterator().next().taskIds().size() == 1,
                 MAX_WAIT_TIME_MS,
                 "Should have rebalanced.");
+
 
             writeInputData(dataAfterSecondRebalance);
 
