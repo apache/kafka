@@ -15,14 +15,16 @@
 
 import random
 import time
-from ducktape.mark import ignore
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
+from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
+from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
+    StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, DEV_BRANCH, DEV_VERSION, KafkaVersion
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
+    LATEST_2_0, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(DEV_BRANCH)]
@@ -50,6 +52,8 @@ class StreamsUpgradeTest(Test):
         self.leader = None
         self.leader_counter = {}
 
+    processed_msg = "processed [0-9]* records"
+
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
         for node in self.kafka.nodes:
@@ -57,7 +61,12 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    @ignore
+    def verify_process_records(self):
+        with self.processor1.node.account.monitor_log(self.processor1.STDOUT_FILE) as monitor:
+            monitor.wait_until(self.processed_msg,
+                               timeout_sec=60,
+                               err_msg="Never saw output '%s' on" % self.processed_msg + str(self.processor1.node))
+
     @cluster(num_nodes=6)
     @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
     def test_upgrade_downgrade_brokers(self, from_version, to_version):
@@ -69,6 +78,7 @@ class StreamsUpgradeTest(Test):
             return
 
         self.replication = 3
+        self.num_kafka_nodes = 3
         self.partitions = 1
         self.isr = 2
         self.topics = {
@@ -99,30 +109,43 @@ class StreamsUpgradeTest(Test):
         self.zk.start()
 
         # number of nodes needs to be >= 3 for the smoke test
-        self.kafka = KafkaService(self.test_context, num_nodes=3,
+        self.kafka = KafkaService(self.test_context, num_nodes=self.num_kafka_nodes,
                                   zk=self.zk, version=KafkaVersion(from_version), topics=self.topics)
         self.kafka.start()
 
         # allow some time for topics to be created
-        time.sleep(10)
+        wait_until(lambda: self.get_topics_count() >= (len(self.topics) * self.num_kafka_nodes),
+                   timeout_sec=60,
+                   err_msg="Broker did not create all topics in 60 seconds ")
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.driver.disable_auto_terminate()
+
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
         
         self.driver.start()
         self.processor1.start()
-        time.sleep(15)
 
-        self.perform_broker_upgrade(to_version)
+        self.verify_process_records()
 
-        time.sleep(15)
-        self.driver.wait()
+        connected_message = "Discovered group coordinator"
+        with self.processor1.node.account.monitor_log(self.processor1.LOG_FILE) as log_monitor:
+            with self.processor1.node.account.monitor_log(self.processor1.STDOUT_FILE) as stdout_monitor:
+
+                self.perform_broker_upgrade(to_version)
+
+                log_monitor.wait_until(connected_message,
+                                       timeout_sec=120,
+                                       err_msg=("Never saw output '%s' on " % connected_message) + str(self.processor1.node.account))
+
+                stdout_monitor.wait_until(self.processed_msg,
+                                          timeout_sec=60,
+                                          err_msg="Never saw output '%s' on" % self.processed_msg + str(self.processor1.node.account))
+
         self.driver.stop()
 
         self.processor1.stop()
 
-        node = self.driver.node
-        node.account.ssh("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
@@ -582,3 +605,11 @@ class StreamsUpgradeTest(Test):
             found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
                 raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+
+    def get_topics_count(self):
+        count = 0
+        for node in self.kafka.nodes:
+            topic_list = self.kafka.list_topics("placeholder", node)
+            for topic in topic_list:
+                count += 1
+        return count
