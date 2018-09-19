@@ -175,13 +175,15 @@ public class StreamsUpgradeTest {
             // version 2 fields
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
             final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
+            final Map<HostInfo, Set<TaskId>> tasksByHost;
 
             processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
             partitionsByHost = info.partitionsByHost();
+            tasksByHost = info.tasksByHost();
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setPartitionsByHostState(partitionsByHost);
+            taskManager.setTasksByHostState(tasksByHost, 4);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);
         }
