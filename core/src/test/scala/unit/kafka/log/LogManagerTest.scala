@@ -195,23 +195,7 @@ class LogManagerTest {
     */
   @Test
   def testDoesntCleanLogsWithCompactDeletePolicy() {
-    val logProps = new Properties()
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
-    var offset = 0L
-    for (_ <- 0 until 200) {
-      val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
-      val info = log.appendAsLeader(set, leaderEpoch = 0)
-      offset = info.lastOffset
-    }
-
-    val numSegments = log.numberOfSegments
-    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
-
-    time.sleep(maxLogAgeMs + 1)
-    assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
+    testDoesntCleanLogs(LogConfig.Compact + "," + LogConfig.Delete)
   }
 
   /**
@@ -220,8 +204,12 @@ class LogManagerTest {
     */
   @Test
   def testDoesntCleanLogsWithCompactPolicy() {
+    testDoesntCleanLogs(LogConfig.Compact)
+  }
+
+  private def testDoesntCleanLogs(policy: String) {
     val logProps = new Properties()
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    logProps.put(LogConfig.CleanupPolicyProp, policy)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {

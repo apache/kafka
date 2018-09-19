@@ -867,9 +867,7 @@ class LogManager(logDirs: Seq[File],
 
   /**
    * Delete any eligible logs. Return the number of segments deleted.
-   * Only consider logs whose cleanup policy is not 'compact,delete', as logs with
-   * that policy are handled by the LogCleanerManager and deleting them here could
-   * multiple threads to attempt to delete the same segment (see KIP-71).
+   * Only consider logs that are not compacted.
    */
   def cleanupLogs() {
     debug("Beginning log cleanup...")
