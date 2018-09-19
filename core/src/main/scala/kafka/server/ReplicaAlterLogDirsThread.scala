@@ -125,8 +125,6 @@ class ReplicaAlterLogDirsThread(name: String,
     logAppendInfo
   }
 
-  override protected def isUncleanLeaderElectionAllowed(topicPartition: TopicPartition): Boolean = true
-
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition): Long = {
     replicaMgr.getReplicaOrException(topicPartition).logStartOffset
   }

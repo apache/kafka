@@ -21,9 +21,8 @@ import java.util.Optional
 
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{LogAppendInfo, LogConfig}
+import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.zk.AdminZkClient
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -171,12 +170,6 @@ class ReplicaFetcherThread(name: String,
         "This generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
         "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +
         "equal or larger than your settings for max.message.bytes, both at a broker and topic level.")
-  }
-
-  override protected def isUncleanLeaderElectionAllowed(topicPartition: TopicPartition): Boolean = {
-    val adminZkClient = new AdminZkClient(replicaMgr.zkClient)
-    LogConfig.fromProps(brokerConfig.originals, adminZkClient.fetchEntityConfig(
-      ConfigType.Topic, topicPartition.topic)).uncleanLeaderElectionEnable
   }
 
   override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, PD)] = {

@@ -116,7 +116,7 @@ public enum Errors {
     NONE(0, null, message -> null),
     OFFSET_OUT_OF_RANGE(1, "The requested offset is not within the range of offsets maintained by the server.",
             OffsetOutOfRangeException::new),
-    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.",
+    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, has a null key for a compacted topic, or is otherwise corrupt.",
             CorruptRecordException::new),
     UNKNOWN_TOPIC_OR_PARTITION(3, "This server does not host this topic-partition.",
             UnknownTopicOrPartitionException::new),

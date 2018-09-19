@@ -91,6 +91,58 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
+    * log with retention in progress should not be picked up for compaction and vice versa when log cleanup policy
+    * is changed between "compact" and "delete"
+    */
+  @Test
+  def testLogsWithRetentionInprogressShouldNotPickedUpForCompactionAndViceVersa(): Unit = {
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
+    val cleanerManager: LogCleanerManager = createCleanerManager(log)
+
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(2L)
+
+    // simulate retention thread working on the log partition
+    val deletableLog = cleanerManager.pauseCleaningForNonCompactedPartitions()
+    assertEquals("should have 1 logs ready to be deleted", 1, deletableLog.size)
+
+    // change cleanup policy from delete to compact
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, log.config.segmentSize)
+    logProps.put(LogConfig.RetentionMsProp, log.config.retentionMs)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: Integer)
+    val config = LogConfig(logProps)
+    log.config = config
+
+    // log retention inprogress, the log is not available for compaction
+    val cleanable = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals("should have 0 logs ready to be compacted", 0, cleanable.size)
+
+    // log retention finished, and log can be picked up for compaction
+    cleanerManager.resumeCleaning(deletableLog.map(_._1))
+    val cleanable2 = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals("should have 1 logs ready to be compacted", 1, cleanable2.size)
+
+    // update cleanup policy to delete
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+    val config2 = LogConfig(logProps)
+    log.config = config2
+
+    // compaction in progress, should have 0 log eligible for log retention
+    val deletableLog2 = cleanerManager.pauseCleaningForNonCompactedPartitions()
+    assertEquals("should have 0 logs ready to be deleted", 0, deletableLog2.size)
+
+    // compaction done, should have 1 log eligible for log retention
+    cleanerManager.doneDeleting(Seq(cleanable2.get.topicPartition))
+    val deletableLog3 = cleanerManager.pauseCleaningForNonCompactedPartitions()
+    assertEquals("should have 1 logs ready to be deleted", 1, deletableLog3.size)
+  }
+
+  /**
     * Test computation of cleanable range with no minimum compaction lag settings active
     */
   @Test
@@ -250,17 +302,17 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val tp = new TopicPartition("log", 0)
 
-    intercept[IllegalStateException](cleanerManager.doneDeleting(tp))
+    intercept[IllegalStateException](cleanerManager.doneDeleting(Seq(tp)))
 
     cleanerManager.setCleaningState(tp, LogCleaningPaused)
-    intercept[IllegalStateException](cleanerManager.doneDeleting(tp))
+    intercept[IllegalStateException](cleanerManager.doneDeleting(Seq(tp)))
 
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
-    cleanerManager.doneDeleting(tp)
+    cleanerManager.doneDeleting(Seq(tp))
     assertTrue(cleanerManager.cleaningState(tp).isEmpty)
 
     cleanerManager.setCleaningState(tp, LogCleaningAborted)
-    cleanerManager.doneDeleting(tp)
+    cleanerManager.doneDeleting(Seq(tp))
     assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
 
   }
