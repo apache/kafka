@@ -301,8 +301,17 @@ class Partition(val topic: String,
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
-      val isNewLeader = leaderReplicaIdOpt.map(_ != localBrokerId).getOrElse(true)
 
+      // In the case of successive leader elections in a short time period, a follower may have
+      // entries in its log from a later epoch than any entry in the new leader's log. In order
+      // to ensure that these followers can truncate to the right offset, we must cache the new
+      // leader epoch and the start offset since it should be larger than any epoch that a follower
+      // would try to query.
+      leaderReplica.epochs.foreach { epochCache =>
+        epochCache.assign(leaderEpoch, leaderEpochStartOffset)
+      }
+
+      val isNewLeader = !leaderReplicaIdOpt.contains(localBrokerId)
       val curLeaderLogEndOffset = leaderReplica.logEndOffset.messageOffset
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.

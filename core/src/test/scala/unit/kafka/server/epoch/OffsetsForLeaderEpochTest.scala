@@ -47,7 +47,7 @@ class OffsetsForLeaderEpochTest {
 
     //Stubs
     val mockLog = createNiceMock(classOf[kafka.log.Log])
-    val mockCache = createNiceMock(classOf[kafka.server.epoch.LeaderEpochCache])
+    val mockCache = createNiceMock(classOf[kafka.server.epoch.LeaderEpochFileCache])
     val logManager = createNiceMock(classOf[kafka.log.LogManager])
     expect(mockCache.endOffsetFor(epochRequested)).andReturn(epochAndOffset)
     expect(mockLog.leaderEpochCache).andReturn(mockCache).anyTimes()

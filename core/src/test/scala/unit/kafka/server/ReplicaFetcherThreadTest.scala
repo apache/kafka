@@ -20,7 +20,7 @@ import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.log.LogManager
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.UnboundedQuota
-import kafka.server.epoch.LeaderEpochCache
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.ClientResponse
@@ -154,7 +154,7 @@ class ReplicaFetcherThreadTest {
 
     //Setup all dependencies
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -278,7 +278,7 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -339,7 +339,7 @@ class ReplicaFetcherThreadTest {
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -388,7 +388,7 @@ class ReplicaFetcherThreadTest {
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -442,7 +442,7 @@ class ReplicaFetcherThreadTest {
 
     // Setup all dependencies
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -513,7 +513,7 @@ class ReplicaFetcherThreadTest {
 
     // Setup all dependencies
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -574,7 +574,7 @@ class ReplicaFetcherThreadTest {
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -619,7 +619,7 @@ class ReplicaFetcherThreadTest {
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
     val quota = createNiceMock(classOf[kafka.server.ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createMock(classOf[kafka.log.LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -677,7 +677,7 @@ class ReplicaFetcherThreadTest {
 
     //Setup all stubs
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createNiceMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])
@@ -728,7 +728,7 @@ class ReplicaFetcherThreadTest {
 
     //Setup all stubs
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
     val logManager = createNiceMock(classOf[LogManager])
     val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
     val replica = createNiceMock(classOf[Replica])

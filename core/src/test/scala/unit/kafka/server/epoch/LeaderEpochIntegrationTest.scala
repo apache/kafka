@@ -16,7 +16,7 @@
   */
 package kafka.server.epoch
 
-import java.util.{Optional, Map => JMap}
+import java.util.Optional
 
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
@@ -138,7 +138,6 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
-
     //Setup: we are only interested in the single partition on broker 101
     brokers = Seq(100, 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
     def leo() = brokers(1).replicaManager.getReplica(tp).get.logEndOffset.messageOffset
@@ -150,10 +149,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch should be 0 and leo: 1
-    var offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
-    assertEquals(leo(), offset)
-
+    var epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
+    assertEquals(0, epochEndOffset.leaderEpoch)
+    assertEquals(1, epochEndOffset.endOffset)
+    assertEquals(1, leo())
 
     //2. When broker is bounced
     brokers(1).shutdown()
@@ -162,15 +161,22 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
-
     //Then epoch 0 should still be the start offset of epoch 1
-    offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
+    assertEquals(1, epochEndOffset.endOffset)
+    assertEquals(0, epochEndOffset.leaderEpoch)
 
-    //Then epoch 2 should be the leo (NB: The leader epoch goes up in factors of 2 - This is because we have to first change leader to -1 and then change it again to the live replica)
-    assertEquals(2, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
-    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
+    //No data written in epoch 1
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 1))(tp)
+    assertEquals(0, epochEndOffset.leaderEpoch)
+    assertEquals(1, epochEndOffset.endOffset)
 
+    //Then epoch 2 should be the leo (NB: The leader epoch goes up in factors of 2 -
+    //This is because we have to first change leader to -1 and then change it again to the live replica)
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 2))(tp)
+    assertEquals(2, epochEndOffset.leaderEpoch)
+    assertEquals(2, epochEndOffset.endOffset)
+    assertEquals(2, leo())
 
     //3. When broker is bounced again
     brokers(1).shutdown()
@@ -178,7 +184,6 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
-
 
     //Then Epoch 0 should still map to offset 1
     assertEquals(1, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset())
