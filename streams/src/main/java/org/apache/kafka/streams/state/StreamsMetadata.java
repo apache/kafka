@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collections;
 import java.util.Set;
@@ -38,19 +39,23 @@ public class StreamsMetadata {
      */
     public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(new HostInfo("unavailable", -1),
                                                                             Collections.<String>emptySet(),
-                                                                            Collections.<TopicPartition>emptySet());
+                                                                            Collections.<TopicPartition>emptySet(),
+                                                                            Collections.<TaskId>emptySet());
 
     private final HostInfo hostInfo;
     private final Set<String> stateStoreNames;
-    private final Set<TopicPartition> topicPartitions;
+    private final Set<TaskId> taskIds;
+    private final Set<TopicPartition> partitionsForHost;
 
     public StreamsMetadata(final HostInfo hostInfo,
                            final Set<String> stateStoreNames,
-                           final Set<TopicPartition> topicPartitions) {
+                           final Set<TopicPartition> partitionsForHost,
+                           final Set<TaskId> taskIds) {
 
         this.hostInfo = hostInfo;
         this.stateStoreNames = stateStoreNames;
-        this.topicPartitions = topicPartitions;
+        this.partitionsForHost = partitionsForHost;
+        this.taskIds = taskIds;
     }
 
     public HostInfo hostInfo() {
@@ -61,8 +66,12 @@ public class StreamsMetadata {
         return stateStoreNames;
     }
 
+    public Set<TaskId> taskIds() {
+        return taskIds;
+    }
+
     public Set<TopicPartition> topicPartitions() {
-        return topicPartitions;
+        return partitionsForHost;
     }
 
     public String host() {
@@ -81,15 +90,17 @@ public class StreamsMetadata {
 
         if (!hostInfo.equals(that.hostInfo)) return false;
         if (!stateStoreNames.equals(that.stateStoreNames)) return false;
-        return topicPartitions.equals(that.topicPartitions);
-
+        if (taskIds != null)
+            return taskIds.equals(that.taskIds);
+        else
+            return partitionsForHost.equals(that.partitionsForHost);
     }
 
     @Override
     public int hashCode() {
         int result = hostInfo.hashCode();
         result = 31 * result + stateStoreNames.hashCode();
-        result = 31 * result + topicPartitions.hashCode();
+        result = 31 * result + taskIds.hashCode();
         return result;
     }
 
@@ -98,7 +109,7 @@ public class StreamsMetadata {
         return "StreamsMetadata{" +
                 "hostInfo=" + hostInfo +
                 ", stateStoreNames=" + stateStoreNames +
-                ", topicPartitions=" + topicPartitions +
+                ", taskIds=" + taskIds +
                 '}';
     }
 }
