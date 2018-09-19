@@ -527,8 +527,8 @@ public class EosIntegrationTest {
                 @Override
                 public boolean conditionMet() {
                     return streams1.allMetadata().size() == 1 && streams2.allMetadata().size() == 1 &&
-                        (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
-                        || streams2.allMetadata().iterator().next().topicPartitions().size() == 2);
+                        (streams1.allMetadata().iterator().next().taskIds().size() == 2
+                        || streams2.allMetadata().iterator().next().taskIds().size() == 2);
                 }
             }, MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
@@ -547,8 +547,8 @@ public class EosIntegrationTest {
                 @Override
                 public boolean conditionMet() {
                     return streams1.allMetadata().size() == 1 && streams2.allMetadata().size() == 1
-                        && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
-                        && streams2.allMetadata().iterator().next().topicPartitions().size() == 1;
+                        && streams1.allMetadata().iterator().next().taskIds().size() == 1
+                        && streams2.allMetadata().iterator().next().taskIds().size() == 1;
                 }
             }, MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
