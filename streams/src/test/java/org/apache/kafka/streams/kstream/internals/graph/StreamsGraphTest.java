@@ -18,15 +18,121 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 
 public class StreamsGraphTest {
+
+    final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
     
+
+
+    // Test builds topology in succesive manner but only graph node not yet processed written to topology
+
+    @Test
+    public void shouldBeAbleToBuildTopologyIncrementally() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> stream = builder.stream("topic");
+        final KStream<String, String> streamII = builder.stream("other-topic");
+        final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
+
+
+        final KStream<String, String> joinedStream = stream.join(streamII, valueJoiner, JoinWindows.of(5000));
+
+        // build step one
+        assertEquals(expectedJoinedTopology, builder.build().describe().toString());
+
+        final KStream<String, String> filteredJoinStream = joinedStream.filter((k, v) -> v.equals("foo"));
+        // build step two
+        assertEquals(expectedJoinedFilteredTopology, builder.build().describe().toString());
+
+        filteredJoinStream.mapValues(v -> v + "some value").to("output-topic");
+        // build step three
+        assertEquals(expectedFullTopology, builder.build().describe().toString());
+
+    }
+
+    @Test
+    public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChange() {
+
+        final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE);
+        final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION);
+
+        assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
+        assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
+    }
+
+    // no need to optimize as user has already performed the repartitioning manually
+    @Test
+    public void shouldNotOptimizeWhenAThroughOperationIsDone() {
+
+        final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
+        final Topology noOptimziation = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
+
+        assertEquals(attemptedOptimize.describe().toString(), noOptimziation.describe().toString());
+        assertEquals(0, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(0, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
+
+    }
+
+    private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+
+        final KStream<String, String> inputStream = builder.stream("input");
+        final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
+
+        mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
+        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(5000)).count().toStream().to("windowed-output");
+
+        return builder.build(properties);
+
+    }
+
+    private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+
+        final KStream<String, String> inputStream = builder.stream("input");
+        final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
+
+        mappedKeyStream.groupByKey().count().toStream().to("output");
+        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(5000)).count().toStream().to("windowed-output");
+
+        return builder.build(properties);
+
+    }
+
+    private int getCountOfRepartitionTopicsFound(final String topologyString) {
+        final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
+        final List<String> repartitionTopicsFound = new ArrayList<>();
+        while (matcher.find()) {
+            repartitionTopicsFound.add(matcher.group());
+        }
+        return repartitionTopicsFound.size();
+    }
+
     private String expectedJoinedTopology = "Topologies:\n"
                                             + "   Sub-topology: 0\n"
                                             + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
@@ -103,32 +209,5 @@ public class StreamsGraphTest {
                                           + "      <-- KSTREAM-FILTER-0000000007\n"
                                           + "    Sink: KSTREAM-SINK-0000000009 (topic: output-topic)\n"
                                           + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
-
-    // Test builds topology in succesive manner but only graph node not yet processed written to topology
-
-    @Test
-    public void shouldBeAbleToBuildTopologyIncrementally() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> stream = builder.stream("topic");
-        final KStream<String, String> streamII = builder.stream("other-topic");
-        final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
-
-
-        final KStream<String, String> joinedStream = stream.join(streamII, valueJoiner, JoinWindows.of(5000));
-
-        // build step one
-        assertEquals(expectedJoinedTopology, builder.build().describe().toString());
-
-        final KStream<String, String> filteredJoinStream = joinedStream.filter((k, v) -> v.equals("foo"));
-        // build step two
-        assertEquals(expectedJoinedFilteredTopology, builder.build().describe().toString());
-
-        filteredJoinStream.mapValues(v -> v + "some value").to("output-topic");
-        // build step three
-        assertEquals(expectedFullTopology, builder.build().describe().toString());
-
-
-    }
 
 }

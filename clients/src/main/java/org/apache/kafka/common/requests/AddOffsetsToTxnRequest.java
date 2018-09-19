@@ -86,7 +86,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     private final String consumerGroupId;
 
     private AddOffsetsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
-        super(version);
+        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -94,7 +94,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     public AddOffsetsToTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);

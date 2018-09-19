@@ -40,6 +40,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     public SessionStore<Bytes, byte[]> get() {
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(
             name,
+            metricsScope(),
             retentionPeriod,
             segmentIntervalMs(),
             new SessionKeySchema());

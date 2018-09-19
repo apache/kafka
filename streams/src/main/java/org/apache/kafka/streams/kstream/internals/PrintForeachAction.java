@@ -51,6 +51,9 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
     public void apply(final K key, final V value) {
         final String data = String.format("[%s]: %s", label, mapper.apply(key, value));
         printWriter.println(data);
+        if (!closable) {
+            printWriter.flush();
+        }
     }
 
     public void close() {

@@ -139,7 +139,7 @@ public class ResourcePatternFilter {
         if (name == null)
             return "Resource name is NULL.";
         if (patternType == PatternType.MATCH)
-            return "Resource pattern type is ANY.";
+            return "Resource pattern type is MATCH.";
         if (patternType == PatternType.UNKNOWN)
             return "Resource pattern type is UNKNOWN.";
         return null;

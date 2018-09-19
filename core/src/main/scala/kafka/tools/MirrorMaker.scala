@@ -34,17 +34,18 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
+import scala.util.{Failure, Success, Try}
 import scala.util.control.ControlThrowable
 
 /**
  * The mirror maker has the following architecture:
- * - There are N mirror maker thread shares one ZookeeperConsumerConnector and each owns a Kafka stream.
+ * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
  * - All the mirror maker threads share one producer.
  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
  *
@@ -70,6 +71,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
+  private var lastSuccessfulCommitTime = -1L
+  private val time = Time.SYSTEM
 
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
@@ -268,24 +271,45 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
   }
 
-  def commitOffsets(consumerWrapper: ConsumerWrapper) {
+  def commitOffsets(consumerWrapper: ConsumerWrapper): Unit = {
     if (!exitingOnSendFailure) {
-      trace("Committing offsets.")
-      try {
-        consumerWrapper.commit()
-      } catch {
-        case e: WakeupException =>
-          // we only call wakeup() once to close the consumer,
-          // so if we catch it in commit we can safely retry
-          // and re-throw to break the loop
+      var retry = 0
+      var retryNeeded = true
+      while (retryNeeded) {
+        trace("Committing offsets.")
+        try {
           consumerWrapper.commit()
-          throw e
+          lastSuccessfulCommitTime = time.milliseconds
+          retryNeeded = false
+        } catch {
+          case e: WakeupException =>
+            // we only call wakeup() once to close the consumer,
+            // so if we catch it in commit we can safely retry
+            // and re-throw to break the loop
+            commitOffsets(consumerWrapper)
+            throw e
 
-        case _: CommitFailedException =>
-          warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
-            "another instance. If you see this regularly, it could indicate that you need to either increase " +
-            s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
-            s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+          case _: TimeoutException =>
+            Try(consumerWrapper.consumer.listTopics) match {
+              case Success(visibleTopics) =>
+                consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
+              case Failure(e) =>
+                warn("Failed to list all authorized topics after committing offsets timed out: ", e)
+            }
+
+            retry += 1
+            warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
+              s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
+              s"Last successful offset commit timestamp=$lastSuccessfulCommitTime, retry count=$retry")
+            Thread.sleep(100)
+
+          case _: CommitFailedException =>
+            retryNeeded = false
+            warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
+              "another instance. If you see this regularly, it could indicate that you need to either increase " +
+              s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
+              s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+        }
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
@@ -423,14 +447,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   // Visible for testing
-  private[tools] class ConsumerWrapper(consumer: Consumer[Array[Byte], Array[Byte]],
+  private[tools] class ConsumerWrapper(private[tools] val consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        whitelistOpt: Option[String]) {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
-    private val offsets = new HashMap[TopicPartition, Long]()
+    // Visible for testing
+    private[tools] val offsets = new HashMap[TopicPartition, Long]()
 
     def init() {
       debug("Initiating consumer")
@@ -474,7 +499,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def commit() {
-      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))}.asJava)
+      consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset)) }.asJava)
       offsets.clear()
     }
   }

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -25,6 +26,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
@@ -38,20 +40,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
     private final String name;
     private final Segments segments;
+    private final String metricScope;
     private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
     private Set<Segment> bulkLoadSegments;
+    private Sensor expiredRecordSensor;
 
     RocksDBSegmentedBytesStore(final String name,
+                               final String metricScope,
                                final long retention,
                                final long segmentInterval,
                                final KeySchema keySchema) {
         this.name = name;
+        this.metricScope = metricScope;
         this.keySchema = keySchema;
         this.segments = new Segments(name, retention, segmentInterval);
     }
@@ -79,26 +87,26 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                    keySchema.hasNextCondition(keyFrom, keyTo, from, to),
                                    binaryFrom, binaryTo);
     }
-    
+
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        
+
         final List<Segment> searchSpace = segments.allSegments();
-        
+
         return new SegmentIterator(searchSpace.iterator(),
                                    keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
                                    null, null);
     }
-    
+
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
-        
+
         return new SegmentIterator(searchSpace.iterator(),
                                    keySchema.hasNextCondition(null, null, timeFrom, timeTo),
                                    null, null);
     }
-    
+
     @Override
     public void remove(final Bytes key) {
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
@@ -110,9 +118,11 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void put(final Bytes key, final byte[] value) {
-        final long segmentId = segments.segmentId(keySchema.segmentTimestamp(key));
+        final long timestamp = keySchema.segmentTimestamp(key);
+        final long segmentId = segments.segmentId(timestamp);
         final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
         if (segment == null) {
+            expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
         } else {
             segment.put(key, value);
@@ -136,6 +146,23 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;
+
+        final StreamsMetricsImpl metrics = this.context.metrics();
+
+        final String taskName = context.taskId().toString();
+
+        expiredRecordSensor = metrics.storeLevelSensor(
+            taskName,
+            name(),
+            "expired-window-record-drop",
+            Sensor.RecordingLevel.INFO
+        );
+        addInvocationRateAndCount(
+            expiredRecordSensor,
+            "stream-" + metricScope + "-metrics",
+            metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
+            "expired-window-record-drop"
+        );
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
 
@@ -210,7 +237,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     if (record.value == null) {
-                        batch.remove(record.key);
+                        batch.delete(record.key);
                     } else {
                         batch.put(record.key, record.value);
                     }

@@ -239,7 +239,7 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
-        internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        internalTopologyBuilder.rewriteTopology(streamsConfig);
 
         processorTopology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
@@ -338,7 +338,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                producer,
+                () -> producer,
                 metrics.sensor("dummy"));
             task.initializeStateStores();
             task.initializeTopology();
@@ -678,6 +678,10 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
+    }
+
+    private Producer<byte[], byte[]> get() {
+        return producer;
     }
 
     static class MockTime implements Time {

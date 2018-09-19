@@ -398,7 +398,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 "The total number of occurrence of " + operation + " operations.",
                 tags
             ),
-            new Count()
+            new CumulativeCount()
         );
     }
 

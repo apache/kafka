@@ -18,12 +18,12 @@ package kafka.server
 
 import java.io.DataInputStream
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
@@ -58,7 +58,8 @@ class FetchRequestTest extends BaseRequestTest {
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes))
+      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+        Optional.empty()))
     }
     partitionMap
   }
@@ -201,11 +202,11 @@ class FetchRequestTest extends BaseRequestTest {
 
     val msgValueLen = 100 * 1000
     val batchSize = 4 * msgValueLen
-    val propsOverride = new Properties
-    propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      lingerMs = Int.MaxValue, keySerializer = new StringSerializer,
-      valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
+      lingerMs = Int.MaxValue,
+      batchSize = batchSize,
+      keySerializer = new StringSerializer,
+      valueSerializer = new ByteArraySerializer)
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>
@@ -262,7 +263,9 @@ class FetchRequestTest extends BaseRequestTest {
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
+      retries = 5,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer,
       lingerMs = 30 * 1000,
       deliveryTimeoutMs = 60 * 1000)
 

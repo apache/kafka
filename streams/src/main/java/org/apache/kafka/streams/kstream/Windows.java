@@ -17,15 +17,19 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
+
 /**
- * The window specification interface for fixed size windows that is used to define window boundaries and window
- * maintain duration.
- * <p>
- * If not explicitly specified, the default maintain duration is 1 day.
- * For time semantics, see {@link TimestampExtractor}.
+ * The window specification for fixed size windows that is used to define window boundaries and grace period.
+ *
+ * Grace period defines how long to wait on late events, where lateness is defined as (stream_time - record_timestamp).
+ *
+ * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
+ * since the equals and hashCode methods depend on mutable fields.
  *
  * @param <W> type of the window instance
  * @see TimeWindows
@@ -36,10 +40,15 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    private long maintainDurationMs = 24 * 60 * 60 * 1000L; // default: one day
+    private long maintainDurationMs = DEFAULT_RETENTION_MS;
     @Deprecated public int segments = 3;
 
     protected Windows() {}
+
+    @SuppressWarnings("deprecation") // remove this constructor when we remove segments.
+    Windows(final int segments) {
+        this.segments = segments;
+    }
 
     /**
      * Set the window maintain duration (retention time) in milliseconds.
@@ -48,8 +57,10 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
+     * @deprecated since 2.1. Use {@link Materialized#withRetention(long)}
+     *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
-    // This should always get overridden to provide the correct return type and thus to avoid a cast
+    @Deprecated
     public Windows<W> until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < 0) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be negative.");
@@ -63,7 +74,10 @@ public abstract class Windows<W extends Window> {
      * Return the window maintain duration (retention time) in milliseconds.
      *
      * @return the window maintain duration
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated
     public long maintainMs() {
         return maintainDurationMs;
     }
@@ -72,14 +86,16 @@ public abstract class Windows<W extends Window> {
      * Return the segment interval in milliseconds.
      *
      * @return the segment interval
+     * @deprecated since 2.1. Instead, directly configure the segment interval in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
-    @SuppressWarnings("deprecation") // The deprecation is on the public visibility of segments. We intend to make the field private later.
+    @Deprecated
     public long segmentInterval() {
         // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
         final long minimumSegmentInterval = 60_000L;
         // Scaled to the (possibly overridden) retention period
         return Math.max(maintainMs() / (segments - 1), minimumSegmentInterval);
     }
+
 
     /**
      * Set the number of segments to be used for rolling the window store.
@@ -114,4 +130,12 @@ public abstract class Windows<W extends Window> {
      * @return the size of the specified windows
      */
     public abstract long size();
+
+    /**
+     * Return the window grace period (the time to admit
+     * late-arriving events after the end of the window.)
+     *
+     * Lateness is defined as (stream_time - record_timestamp).
+     */
+    public abstract long gracePeriodMs();
 }

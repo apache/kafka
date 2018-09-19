@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.testutil;
 
 
 import org.apache.log4j.AppenderSkeleton;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggingEvent;
 
@@ -31,6 +32,10 @@ public class LogCaptureAppender extends AppenderSkeleton {
         final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
         Logger.getRootLogger().addAppender(logCaptureAppender);
         return logCaptureAppender;
+    }
+
+    public static void setClassLoggerToDebug(final Class<?> clazz) {
+        Logger.getLogger(clazz).setLevel(Level.DEBUG);
     }
 
     public static void unregister(final LogCaptureAppender logCaptureAppender) {

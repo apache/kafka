@@ -21,6 +21,8 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
+import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -73,6 +75,19 @@ public class UnlimitedWindowsTest {
         final long timestamp = w.startMs - 1;
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        verifyEquality(UnlimitedWindows.of(), UnlimitedWindows.of());
+
+        verifyEquality(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
+
+    }
+
+    @Test
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        verifyInEquality(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
     }
 
 }

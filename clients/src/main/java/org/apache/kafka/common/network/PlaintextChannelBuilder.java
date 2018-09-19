@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
@@ -76,7 +75,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public void authenticate() throws IOException {}
+        public void authenticate() {}
 
         @Override
         public KafkaPrincipal principal() {

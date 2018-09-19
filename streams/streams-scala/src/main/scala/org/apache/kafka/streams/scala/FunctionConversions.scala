@@ -34,6 +34,12 @@ import java.lang.{Iterable => JIterable}
  */
 object FunctionConversions {
 
+  implicit private[scala] class ForeachActionFromFunction[K, V](val p: (K, V) => Unit) extends AnyVal {
+    def asForeachAction: ForeachAction[K, V] = new ForeachAction[K, V] {
+      override def apply(key: K, value: V): Unit = p(key, value)
+    }
+  }
+
   implicit class PredicateFromFunction[K, V](val p: (K, V) => Boolean) extends AnyVal {
     def asPredicate: Predicate[K, V] = new Predicate[K, V] {
       override def test(key: K, value: V): Boolean = p(key, value)

@@ -97,7 +97,8 @@ import org.slf4j.LoggerFactory;
  * <p>
  * You can also add custom unsecured SASL extensions when using the default, builtin {@link AuthenticateCallbackHandler}
  * implementation through using the configurable option {@code unsecuredLoginExtension_<extensionname>}. Note that there
- * are validations for the key/values in order to conform to the OAuth standard, including the reserved key at
+ * are validations for the key/values in order to conform to the SASL/OAUTHBEARER standard
+ * (https://tools.ietf.org/html/rfc7628#section-3.1), including the reserved key at
  * {@link org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse#AUTH_KEY}.
  * The {@code OAuthBearerLoginModule} instance also asks its configured {@link AuthenticateCallbackHandler}
  * implementation to handle an instance of {@link SaslExtensionsCallback} and return an instance of {@link SaslExtensions}.
@@ -120,14 +121,14 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Here is a typical, basic JAAS configuration for a client leveraging unsecured
  * SASL/OAUTHBEARER authentication:
- * 
+ *
  * <pre>
  * KafkaClient {
  *      org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required
  *      unsecuredLoginStringClaim_sub="thePrincipalName";
  * };
  * </pre>
- * 
+ *
  * An implementation of the {@link Login} interface specific to the
  * {@code OAUTHBEARER} mechanism is automatically applied; it periodically
  * refreshes any token before it expires so that the client can continue to make
@@ -195,14 +196,14 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Here is a typical, basic JAAS configuration for a broker leveraging unsecured
  * SASL/OAUTHBEARER validation:
- * 
+ *
  * <pre>
  * KafkaServer {
  *      org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required
  *      unsecuredLoginStringClaim_sub="thePrincipalName";
  * };
  * </pre>
- * 
+ *
  * Production use cases will require writing an implementation of
  * {@link AuthenticateCallbackHandler} that can handle an instance of
  * {@link OAuthBearerValidatorCallback} and declaring it via the
@@ -228,7 +229,7 @@ import org.slf4j.LoggerFactory;
  * Better to mitigate this possibility by leaving the existing token (which
  * still has some lifetime left) in place until a new replacement token is
  * actually retrieved. This implementation supports this.
- * 
+ *
  * @see SaslConfigs#SASL_LOGIN_REFRESH_WINDOW_FACTOR_DOC
  * @see SaslConfigs#SASL_LOGIN_REFRESH_WINDOW_JITTER_DOC
  * @see SaslConfigs#SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DOC
@@ -349,7 +350,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     }
 
     @Override
-    public boolean commit() throws LoginException {
+    public boolean commit() {
         if (tokenRequiringCommit == null) {
             if (log.isDebugEnabled())
                 log.debug("Nothing here to commit");
@@ -370,7 +371,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     }
 
     @Override
-    public boolean abort() throws LoginException {
+    public boolean abort() {
         if (tokenRequiringCommit != null) {
             log.info("Login aborted");
             tokenRequiringCommit = null;

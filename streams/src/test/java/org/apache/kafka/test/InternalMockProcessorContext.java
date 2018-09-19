@@ -68,7 +68,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             null,
             new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
         );
@@ -99,12 +99,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             serdes.keySerde(),
             serdes.valueSerde(),
             new StreamsMetricsImpl(metrics, "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            () -> collector,
             null
         );
     }
@@ -118,7 +114,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             keySerde,
             valSerde,
             new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
         );
@@ -136,6 +132,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
+        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;

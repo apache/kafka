@@ -25,7 +25,7 @@ import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
@@ -44,8 +44,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   val serverCount: Int = 2
   private val topic = "topic"
   private val partitionNum = 12
+  override val logDirCount = 3
 
-  this.logDirCount = 3
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
@@ -54,16 +54,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     super.setUp()
     createTopic(topic, partitionNum, serverCount)
   }
-
-  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(brokerList,
-      retries = 0,
-      securityProtocol = this.securityProtocol,
-      trustStoreFile = this.trustStoreFile,
-      saslProperties = this.clientSaslProperties,
-      props = Some(producerConfig))
-  }
-
 
   @Test
   def testIOExceptionDuringLogRoll() {
@@ -107,7 +97,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
-    val producer = producers.head
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
 
     val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
@@ -134,9 +125,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
-    val producer = producers.head
+
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
+
     val partition = new TopicPartition(topic, 0)
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 

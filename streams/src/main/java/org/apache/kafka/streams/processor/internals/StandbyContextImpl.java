@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -59,6 +60,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
                                 final StreamPartitioner<? super K, ? super V> partitioner) {}
 
         @Override
+        public void init(final Producer<byte[], byte[]> producer) {}
+
+        @Override
         public void flush() {}
 
         @Override
@@ -70,7 +74,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         }
     };
 
-    private long streamTime = RecordQueue.NOT_KNOWN;
+    private long streamTime = RecordQueue.UNKNOWN;
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
