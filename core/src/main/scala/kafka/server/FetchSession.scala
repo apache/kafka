@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
@@ -107,7 +108,7 @@ class CachedPartition(val topic: String,
 
   def topicPartition = new TopicPartition(topic, partition)
 
-  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes)
+  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, Optional.empty())
 
   def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
     // Update our cached request parameters.

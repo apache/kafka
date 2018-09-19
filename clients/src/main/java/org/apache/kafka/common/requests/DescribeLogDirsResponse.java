@@ -137,7 +137,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
             logDirStruct.set(ERROR_CODE, logDirInfo.error.code());
             logDirStruct.set(LOG_DIR_KEY_NAME, logDirInfosEntry.getKey());
 
-            Map<String, Map<Integer, ReplicaInfo>> replicaInfosByTopic = CollectionUtils.groupDataByTopic(logDirInfo.replicaInfos);
+            Map<String, Map<Integer, ReplicaInfo>> replicaInfosByTopic = CollectionUtils.groupPartitionDataByTopic(logDirInfo.replicaInfos);
             List<Struct> topicStructArray = new ArrayList<>();
             for (Map.Entry<String, Map<Integer, ReplicaInfo>> replicaInfosByTopicEntry : replicaInfosByTopic.entrySet()) {
                 Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);

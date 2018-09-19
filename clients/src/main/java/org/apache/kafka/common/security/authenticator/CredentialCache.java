@@ -23,7 +23,7 @@ public class CredentialCache {
     private final ConcurrentHashMap<String, Cache<? extends Object>> cacheMap = new ConcurrentHashMap<>();
 
     public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
-        Cache<C> cache = new Cache<C>(credentialClass);
+        Cache<C> cache = new Cache<>(credentialClass);
         Cache<C> oldCache = (Cache<C>) cacheMap.putIfAbsent(mechanism, cache);
         return oldCache == null ? cache : oldCache;
     }

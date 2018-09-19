@@ -99,8 +99,8 @@ public class AppInfoParser {
     }
 
     public interface AppInfoMBean {
-        public String getVersion();
-        public String getCommitId();
+        String getVersion();
+        String getCommitId();
     }
 
     public static class AppInfo implements AppInfoMBean {

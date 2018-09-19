@@ -43,7 +43,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
 
   override def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
-      enableControlledShutdown = false, enableDeleteTopic = true,
+      enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     props.foreach(propertyOverrides)

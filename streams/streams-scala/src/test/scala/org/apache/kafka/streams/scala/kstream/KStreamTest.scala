@@ -16,11 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala
+package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.JoinWindows
-import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -75,7 +76,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
-  "foreach a KStream" should "side effect records" in {
+  "foreach a KStream" should "run foreach actions on records" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
 
@@ -85,8 +86,31 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val testDriver = createTestDriver(builder)
 
     testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    acc shouldBe "value1"
+
     testDriver.pipeRecord(sourceTopic, ("2", "value2"))
     acc shouldBe "value1value2"
+
+    testDriver.close()
+  }
+
+  "peek a KStream" should "run peek actions on records" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    var acc = ""
+    builder.stream[String, String](sourceTopic).peek((k, v) => acc += v).to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    acc shouldBe "value1"
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+
+    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    acc shouldBe "value1value2"
+    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value2"
 
     testDriver.close()
   }

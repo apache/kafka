@@ -1020,8 +1020,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
             }
             if (changed) {
+                List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
                 if (isLeader()) {
-                    configBackingStore.putTaskConfigs(connName, taskProps);
+                    configBackingStore.putTaskConfigs(connName, rawTaskProps);
                     cb.onCompletion(null, null);
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
@@ -1031,7 +1032,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         public void run() {
                             try {
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
-                                RestClient.httpRequest(reconfigUrl, "POST", taskProps, null, config);
+                                RestClient.httpRequest(reconfigUrl, "POST", rawTaskProps, null, config);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
                                 log.error("Request to leader to reconfigure connector tasks failed", e);

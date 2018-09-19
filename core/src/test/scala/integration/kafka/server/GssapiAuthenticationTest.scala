@@ -19,18 +19,24 @@
 package kafka.server
 
 import java.net.InetSocketAddress
+import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{Executors, TimeUnit}
 
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.security.{JaasContext, TestSecurityConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConverters._
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val serverCount = 1
@@ -43,10 +49,17 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private val executor = Executors.newFixedThreadPool(numThreads)
   private val clientConfig: Properties = new Properties
   private var serverAddr: InetSocketAddress = _
+  private val time = new MockTime(10)
+  val topic = "topic"
+  val part = 0
+  val tp = new TopicPartition(topic, part)
+  private val failedAuthenticationDelayMs = 2000
 
   @Before
   override def setUp() {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+    serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
+    serverConfig.put(KafkaConfig.FailedAuthenticationDelayMsProp, failedAuthenticationDelayMs.toString)
     super.setUp()
     serverAddr = new InetSocketAddress("localhost",
       servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
@@ -55,6 +68,9 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
     clientConfig.put(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, "5000")
+
+    // create the test topic with all the brokers as replicas
+    createTopic(topic, 2, serverCount)
   }
 
   @After
@@ -91,6 +107,31 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, invalidServiceConfig)
     clientConfig.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "invalid-service")
     verifyNonRetriableAuthenticationFailure()
+  }
+
+  /**
+   * Test that when client fails to verify authenticity of the server, the resulting failed authentication exception
+   * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
+   */
+  @Test
+  def testServerAuthenticationFailure(): Unit = {
+    // Setup client with a non-existent service principal, so that server authentication fails on the client
+    val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))
+    val configOverrides = new Properties()
+    configOverrides.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+    val consumer = createConsumer(configOverrides = configOverrides)
+    consumer.assign(List(tp).asJava)
+
+    val startMs = System.currentTimeMillis()
+    try {
+      consumer.poll(Duration.ofMillis(50))
+      fail()
+    } catch {
+      case _: SaslAuthenticationException =>
+    }
+    val endMs = System.currentTimeMillis()
+    require(endMs - startMs < failedAuthenticationDelayMs, "Failed authentication must not be delayed on the client")
+    consumer.close()
   }
 
   /**
@@ -148,6 +189,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private def createSelector(): Selector = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
       JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, true)
-    NetworkTestUtils.createSelector(channelBuilder)
+    NetworkTestUtils.createSelector(channelBuilder, time)
   }
 }

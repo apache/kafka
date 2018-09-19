@@ -16,7 +16,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
-import java.util.{ArrayList, Collections, Properties}
+import java.util.{ArrayList, Collections, Optional, Properties}
 import java.time.Duration
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
@@ -211,7 +211,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CREATE_TOPICS -> topicCreateAcl,
     ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
     ApiKeys.DELETE_RECORDS -> topicDeleteAcl,
-    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
+    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> topicDescribeAcl,
     ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
     ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl,
     ApiKeys.INIT_PRODUCER_ID -> (transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
@@ -260,25 +260,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
     requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
   }
 
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
     requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
     requests.ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(
-      Map(tp -> (0L: java.lang.Long)).asJava).
+      Map(tp -> new ListOffsetRequest.PartitionData(0L, Optional.of[Integer](27))).asJava).
       build()
   }
 
-  private def offsetsForLeaderEpochRequest = {
-    new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()).add(tp, 7).build()
+  private def offsetsForLeaderEpochRequest: OffsetsForLeaderEpochRequest = {
+    new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion)
+      .add(tp, Optional.of(27), 7).build()
   }
 
   private def createOffsetFetchRequest = {
@@ -316,7 +317,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createOffsetCommitRequest = {
     new requests.OffsetCommitRequest.Builder(
-      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, "metadata")).asJava).
+      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, 27, "metadata")).asJava).
       setMemberId("").setGenerationId(1).
       build()
   }
@@ -381,7 +382,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(transactionalId, 1, 1, group).build()
 
-
   @Test
   def testAuthorizationWithTopicExisting() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
@@ -399,7 +399,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.HEARTBEAT -> heartbeatRequest,
       ApiKeys.LEAVE_GROUP -> leaveGroupRequest,
       ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
       ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest,
       ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
@@ -414,7 +413,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DESCRIBE_LOG_DIRS -> describeLogDirsRequest,
       ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
       ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
-      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest
+      ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
+
+      // Check StopReplica last since some APIs depend on replica availability
+      ApiKeys.STOP_REPLICA -> stopReplicaRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -425,7 +427,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).foreach { acls =>
         val describeAcls = topicDescribeAcl(topicResource)
-        val isAuthorized =  describeAcls == acls
+        val isAuthorized = describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
         sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = isAuthorized)
         removeAllAcls()
@@ -459,7 +461,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
       ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
       ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
-      ApiKeys.DELETE_GROUPS -> deleteGroupsRequest
+      ApiKeys.DELETE_GROUPS -> deleteGroupsRequest,
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -503,11 +506,28 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
 
-    val readAcls = topicReadAcl.get(topicResource).get
+    val readAcls = topicReadAcl(topicResource)
     addAndVerifyAcls(readAcls, topicResource)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
 
-    val clusterAcls = clusterAcl.get(Resource.ClusterResource).get
+    val clusterAcls = clusterAcl(Resource.ClusterResource)
+    addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
+  }
+
+  @Test
+  def testOffsetsForLeaderEpochClusterPermission(): Unit = {
+    val key = ApiKeys.OFFSET_FOR_LEADER_EPOCH
+    val request = offsetsForLeaderEpochRequest
+
+    removeAllAcls()
+
+    val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+    // Although the OffsetsForLeaderEpoch API now accepts topic describe, we should continue
+    // allowing cluster action for backwards compatibility
+    val clusterAcls = clusterAcl(Resource.ClusterResource)
     addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
   }
@@ -1009,16 +1029,29 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[TopicAuthorizationException])
-  def testListOffsetsWithNoTopicAccess() {
+  def testMetadataWithNoTopicAccess() {
     val consumer = createConsumer()
     consumer.partitionsFor(topic)
+  }
+
+  @Test
+  def testMetadataWithTopicDescribe() {
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
+    val consumer = createConsumer()
+    consumer.partitionsFor(topic)
+  }
+
+  @Test(expected = classOf[TopicAuthorizationException])
+  def testListOffsetsWithNoTopicAccess() {
+    val consumer = createConsumer()
+    consumer.endOffsets(Set(tp).asJava)
   }
 
   @Test
   def testListOffsetsWithTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val consumer = createConsumer()
-    consumer.partitionsFor(topic)
+    consumer.endOffsets(Set(tp).asJava)
   }
 
   @Test
@@ -1433,7 +1466,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val resp = connectAndSend(request, apiKey)
     val response = requestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer], classOf[Short]).invoke(
       null, resp, request.version: java.lang.Short).asInstanceOf[AbstractResponse]
-    val error = requestKeyToError(apiKey).asInstanceOf[(AbstractResponse) => Errors](response)
+    val error = requestKeyToError(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == Topic) {

@@ -27,8 +27,8 @@ import org.apache.kafka.streams.scala.FunctionConversions._
 /**
  * Wraps the Java class KGroupedTable and delegates method calls to the underlying Java object.
  *
- * @param [K] Type of keys
- * @param [V] Type of values
+ * @tparam K Type of keys
+ * @tparam V Type of values
  * @param inner The underlying Java abstraction for KGroupedTable
  *
  * @see `org.apache.kafka.streams.kstream.KGroupedTable`

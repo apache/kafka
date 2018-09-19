@@ -94,13 +94,13 @@ public class FindCoordinatorRequest extends AbstractRequest {
     private final CoordinatorType coordinatorType;
 
     private FindCoordinatorRequest(CoordinatorType coordinatorType, String coordinatorKey, short version) {
-        super(version);
+        super(ApiKeys.FIND_COORDINATOR, version);
         this.coordinatorType = coordinatorType;
         this.coordinatorKey = coordinatorKey;
     }
 
     public FindCoordinatorRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.FIND_COORDINATOR, version);
 
         if (struct.hasField(COORDINATOR_TYPE_KEY_NAME))
             this.coordinatorType = CoordinatorType.forId(struct.getByte(COORDINATOR_TYPE_KEY_NAME));

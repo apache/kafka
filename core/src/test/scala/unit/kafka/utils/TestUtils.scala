@@ -36,7 +36,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
+import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer._
@@ -150,7 +150,7 @@ object TestUtils extends Logging {
   def createBrokerConfigs(numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
+    enableDeleteTopic: Boolean = true,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
     saslProperties: Option[Properties] = None,
@@ -202,7 +202,7 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int,
                          zkConnect: String,
                          enableControlledShutdown: Boolean = true,
-                         enableDeleteTopic: Boolean = false,
+                         enableDeleteTopic: Boolean = true,
                          port: Int = RandomPort,
                          interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
                          trustStoreFile: Option[File] = None,
@@ -635,7 +635,7 @@ object TestUtils extends Logging {
         .getOrElse(LeaderAndIsr(leader, List(leader)))
       topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
     }
-    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs)
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
   }
 
   /**
@@ -916,10 +916,7 @@ object TestUtils extends Logging {
 
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
-                      acks: Int = -1,
-                      compressionType: CompressionType = CompressionType.NONE): Unit = {
-    val props = new Properties()
-    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
+                      acks: Int = -1): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
       val futures = records.map(producer.send)
@@ -935,11 +932,10 @@ object TestUtils extends Logging {
   def generateAndProduceMessages(servers: Seq[KafkaServer],
                                  topic: String,
                                  numMessages: Int,
-                                 acks: Int = -1,
-                                 compressionType: CompressionType = CompressionType.NONE): Seq[String] = {
+                                 acks: Int = -1): Seq[String] = {
     val values = (0 until numMessages).map(x =>  s"test-$x")
     val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
-    produceMessages(servers, records, acks, compressionType)
+    produceMessages(servers, records, acks)
     values
   }
 

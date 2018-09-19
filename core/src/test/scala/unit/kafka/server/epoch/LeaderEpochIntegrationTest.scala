@@ -16,7 +16,7 @@
   */
 package kafka.server.epoch
 
-import java.util.{Map => JMap}
+import java.util.{Optional, Map => JMap}
 
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
@@ -31,7 +31,6 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.ApiKeys
-
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
@@ -128,7 +127,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
     assertTrue(offsetsForEpochs(t1p1).hasError)
-    assertEquals(UNKNOWN_TOPIC_OR_PARTITION, offsetsForEpochs(t1p1).error)
+    assertEquals(NOT_LEADER_FOR_PARTITION, offsetsForEpochs(t1p1).error)
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
@@ -266,13 +265,13 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
-      val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), toJavaFormat(partitions))
+      val partitionData = partitions.mapValues(
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
+      val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion,
+        partitionData.asJava)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
     }
 
-    def toJavaFormat(partitions: Map[TopicPartition, Int]): JMap[TopicPartition, Integer] = {
-      partitions.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
-    }
   }
 }

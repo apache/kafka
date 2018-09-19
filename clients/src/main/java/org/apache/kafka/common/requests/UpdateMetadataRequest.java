@@ -284,7 +284,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
     private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch,
                                   Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        super(version);
+        super(ApiKeys.UPDATE_METADATA, version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.partitionStates = partitionStates;
@@ -292,7 +292,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public UpdateMetadataRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.UPDATE_METADATA, versionId);
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
             Struct partitionStateData = (Struct) partitionStateDataObj;

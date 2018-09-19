@@ -196,7 +196,7 @@ public class ProduceRequest extends AbstractRequest {
     private boolean idempotent = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
-        super(version);
+        super(ApiKeys.PRODUCE, version);
         this.acks = acks;
         this.timeout = timeout;
 
@@ -216,7 +216,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public ProduceRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.PRODUCE, version);
         partitionRecords = new HashMap<>();
         for (Object topicDataObj : struct.getArray(TOPIC_DATA_KEY_NAME)) {
             Struct topicData = (Struct) topicDataObj;
@@ -268,7 +268,7 @@ public class ProduceRequest extends AbstractRequest {
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
         short version = version();
         Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
-        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
+        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupPartitionDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
         struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);

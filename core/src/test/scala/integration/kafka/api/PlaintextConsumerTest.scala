@@ -1493,7 +1493,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val fetchLag0 = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1))
     assertNotNull(fetchLag0)
     val expectedLag = numMessages - records.count
-    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
+    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.metricValue.asInstanceOf[Double], epsilon)
 
     // Remove topic from subscription
     consumer.subscribe(List(topic2).asJava, listener0)
@@ -1566,7 +1566,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(fetchLag)
 
     val expectedLag = numMessages - records.count
-    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
+    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.metricValue.asInstanceOf[Double], epsilon)
 
     consumer.assign(List(tp2).asJava)
     TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
@@ -1624,7 +1624,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     tags.put("partition", String.valueOf(tp.partition()))
     val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
 
-    assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
+    assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon)
   }
 
   @Test

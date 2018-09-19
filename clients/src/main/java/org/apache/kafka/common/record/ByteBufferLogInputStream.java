@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
@@ -39,7 +38,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         this.maxMessageSize = maxMessageSize;
     }
 
-    public MutableRecordBatch nextBatch() throws IOException {
+    public MutableRecordBatch nextBatch() {
         int remaining = buffer.remaining();
 
         Integer batchSize = nextBatchSize();

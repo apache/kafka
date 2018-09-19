@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import javax.security.auth.Subject;
-import javax.security.auth.login.LoginException;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-
-
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -38,6 +28,13 @@ import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBea
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
+import javax.security.auth.login.LoginException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 public class LoginManager {
 
@@ -55,7 +52,7 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
-                         LoginMetadata<?> loginMetadata) throws IOException, LoginException {
+                         LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
@@ -89,7 +86,7 @@ public class LoginManager {
      */
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism,
                                                    Class<? extends Login> defaultLoginClass,
-                                                   Map<String, ?> configs) throws IOException, LoginException {
+                                                   Map<String, ?> configs) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
         Class<? extends AuthenticateCallbackHandler> defaultLoginCallbackHandlerClass = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM

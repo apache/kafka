@@ -160,7 +160,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private JoinGroupRequest(short version, String groupId, int sessionTimeout,
             int rebalanceTimeout, String memberId, String protocolType,
             List<ProtocolMetadata> groupProtocols) {
-        super(version);
+        super(ApiKeys.JOIN_GROUP, version);
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
         this.rebalanceTimeout = rebalanceTimeout;
@@ -170,7 +170,7 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public JoinGroupRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.JOIN_GROUP, versionId);
 
         groupId = struct.get(GROUP_ID);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
@@ -201,22 +201,22 @@ public class JoinGroupRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new JoinGroupResponse(
-                        Errors.forException(e),
-                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-                        JoinGroupResponse.UNKNOWN_PROTOCOL,
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-                        Collections.<String, ByteBuffer>emptyMap());
+                    Errors.forException(e),
+                    JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                    JoinGroupResponse.UNKNOWN_PROTOCOL,
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
+                    Collections.emptyMap());
             case 2:
             case 3:
                 return new JoinGroupResponse(
-                        throttleTimeMs,
-                        Errors.forException(e),
-                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-                        JoinGroupResponse.UNKNOWN_PROTOCOL,
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-                        Collections.<String, ByteBuffer>emptyMap());
+                    throttleTimeMs,
+                    Errors.forException(e),
+                    JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                    JoinGroupResponse.UNKNOWN_PROTOCOL,
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
+                    Collections.emptyMap());
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

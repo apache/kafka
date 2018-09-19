@@ -18,6 +18,7 @@
 package kafka.cluster
 
 import kafka.log.Log
+import kafka.server.epoch.LeaderEpochCache
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -52,9 +53,9 @@ class Replica(val brokerId: Int,
 
   def isLocal: Boolean = log.isDefined
 
-  def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
+  def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
-  val epochs = log.map(_.leaderEpochCache)
+  val epochs: Option[LeaderEpochCache] = log.map(_.leaderEpochCache)
 
   info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
   log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))
@@ -193,15 +194,16 @@ class Replica(val brokerId: Int,
 
   override def toString: String = {
     val replicaString = new StringBuilder
-    replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + topicPartition.topic)
-    replicaString.append("; Partition: " + topicPartition.partition)
-    replicaString.append("; isLocal: " + isLocal)
-    replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
+    replicaString.append("Replica(replicaId=" + brokerId)
+    replicaString.append(s", topic=${topicPartition.topic}")
+    replicaString.append(s", partition=${topicPartition.partition}")
+    replicaString.append(s", isLocal=$isLocal")
+    replicaString.append(s", lastCaughtUpTimeMs=$lastCaughtUpTimeMs")
     if (isLocal) {
-      replicaString.append("; Highwatermark: " + highWatermark)
-      replicaString.append("; LastStableOffset: " + lastStableOffset)
+      replicaString.append(s", highWatermark=$highWatermark")
+      replicaString.append(s", lastStableOffset=$lastStableOffset")
     }
+    replicaString.append(")")
     replicaString.toString
   }
 }

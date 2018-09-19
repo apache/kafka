@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
@@ -141,8 +141,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with a FULL fetch request
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData2.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData2.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData2.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context2 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData2, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
@@ -215,8 +217,10 @@ class FetchSessionTest {
     var nextSessionId = prevSessionId
     do {
       val reqData8 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-      reqData8.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100))
-      reqData8.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100))
+      reqData8.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100,
+        Optional.empty()))
+      reqData8.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100,
+        Optional.empty()))
       val context8 = fetchManager.newContext(
         new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
       assertEquals(classOf[SessionlessFetchContext], context8.getClass)
@@ -240,8 +244,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -256,7 +262,8 @@ class FetchSessionTest {
 
     // Create an incremental fetch request that removes foo-0 and adds bar-0
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(15, 0, 0))
+    reqData2.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(15, 0, 0,
+      Optional.empty()))
     val removed2 = new util.ArrayList[TopicPartition]
     removed2.add(new TopicPartition("foo", 0))
     val context2 = fetchManager.newContext(
@@ -290,8 +297,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
