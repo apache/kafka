@@ -54,12 +54,12 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.PartitionOutOfRangeException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -984,7 +984,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         } while (partitionsCount == null);
 
         if (partition != null && partition >= partitionsCount) {
-            throw new PartitionOutOfRangeException(
+            throw new UnknownTopicOrPartitionException(
                     String.format("Invalid partition given with record: %d is not in the range [0...%d).", partition, partitionsCount));
         }
 
