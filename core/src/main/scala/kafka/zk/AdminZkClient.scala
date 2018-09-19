@@ -232,7 +232,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
   }
 
-  private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
+  def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
                                         expectedReplicationFactor: Int,
                                         availableBrokerIds: Set[Int]): Unit = {
 
