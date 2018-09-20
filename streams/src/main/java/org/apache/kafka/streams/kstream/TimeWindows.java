@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -99,14 +100,31 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param sizeMs The size of the window in milliseconds
      * @return a new window definition with default maintain duration of 1 day
-     * @throws IllegalArgumentException if the specified window size is zero or negative
+     * @throws IllegalArgumentException if the specified window size is zero or negative or too big
+     * @deprecated Use {@link #of(Duration)} instead
      */
+    @Deprecated
     public static TimeWindows of(final long sizeMs) throws IllegalArgumentException {
-        if (sizeMs <= 0) {
-            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
-        }
+        return of(Duration.ofMillis(sizeMs));
+    }
+
+    /**
+     * Return a window definition with the given window size, and with the advance interval being equal to the window
+     * size.
+     * The time interval represented by the N-th window is: {@code [N * size, N * size + size)}.
+     * <p>
+     * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
+     * Tumbling windows are a special case of hopping windows with {@code advance == size}.
+     *
+     * @param size The size of the window
+     * @return a new window definition with default maintain duration of 1 day
+     * @throws IllegalArgumentException if the specified window size is zero or negative or too big
+     */
+    public static TimeWindows of(final Duration size) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(size, "size");
+
         // This is a static factory method, so we initialize grace and retention to the defaults.
-        return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_RETENTION_MS);
+        return new TimeWindows(size.toMillis(), size.toMillis(), null, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -120,9 +138,32 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *                  {@code 0 < advanceMs &le; sizeMs}.
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
+     * @deprecated Use {@link #advanceBy(Duration)} instead
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
+    @Deprecated
     public TimeWindows advanceBy(final long advanceMs) {
+        return advanceBy(Duration.ofMillis(advanceMs));
+    }
+
+    /**
+     * Return a window definition with the original size, but advance ("hop") the window by the given interval, which
+     * specifies by how much a window moves forward relative to the previous one.
+     * The time interval represented by the N-th window is: {@code [N * advance, N * advance + size)}.
+     * <p>
+     * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
+     *
+     * @param advance The advance interval ("hop") of the window, with the requirement that
+     *                  {@code 0 < advance.toMillis() &le; sizeMs}.
+     * @return a new window definition with default maintain duration of 1 day
+     * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
+     */
+    @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
+    public TimeWindows advanceBy(final Duration advance) {
+        ApiUtils.validateMillisecondDuration(advance, "advance");
+
+        long advanceMs = advance.toMillis();
+
         if (advanceMs <= 0 || advanceMs > sizeMs) {
             throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d].", sizeMs));
         }
@@ -152,15 +193,15 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * Lateness is defined as (stream_time - record_timestamp).
      *
-     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
+     * @throws IllegalArgumentException if afterWindowEnd is negative or too big
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
-    public TimeWindows grace(final long millisAfterWindowEnd) {
-        if (millisAfterWindowEnd < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
-        return new TimeWindows(sizeMs, advanceMs, Duration.ofMillis(millisAfterWindowEnd), maintainDurationMs, segments);
+    public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+
+        return new TimeWindows(sizeMs, advanceMs, afterWindowEnd, maintainDurationMs, segments);
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

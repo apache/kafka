@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.state;
 
+import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.ApiUtils;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
@@ -186,13 +188,38 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @deprecated Use {@link #persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
+    @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
+        return persistentWindowStore(name, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize),
+            retainDuplicates);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              Note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period.
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+        final Duration retentionPeriod,
+        final Duration windowSize,
+        final boolean retainDuplicates) throws IllegalArgumentException {
+        Objects.requireNonNull(name, "name cannot be null");
+        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
+        ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
+
         // we're arbitrarily defaulting to segments no smaller than one minute.
-        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+        final long defaultSegmentInterval = Math.max(retentionPeriod.toMillis() / 2, 60_000L);
         return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
     }
 
@@ -207,29 +234,54 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @deprecated Use {@link #persistentWindowStore(String, Duration, Duration, boolean, long)}
      */
+    @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates,
                                                                  final long segmentInterval) {
+        return persistentWindowStore(name, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize),
+            retainDuplicates, segmentInterval);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              Note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period.
+     * @param segmentInterval       size of segments
+     * @param windowSize            size of the windows
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     */
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+        final Duration retentionPeriod,
+        final Duration windowSize,
+        final boolean retainDuplicates,
+        final long segmentInterval) {
         Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0L) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        if (windowSize < 0L) {
-            throw new IllegalArgumentException("windowSize cannot be negative");
-        }
+        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
+        ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
+
         if (segmentInterval < 1L) {
             throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
         }
-        if (windowSize > retentionPeriod) {
+
+        long retentionPeriodMs = retentionPeriod.toMillis();
+        long windowSizeMs = windowSize.toMillis();
+
+        if (windowSizeMs > retentionPeriodMs) {
             throw new IllegalArgumentException("The retention period of the window store "
-                                                   + name + " must be no smaller than its window size. Got size=["
-                                                   + windowSize + "], retention=[" + retentionPeriod + "]");
+                + name + " must be no smaller than its window size. Got size=["
+                + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriodMs, segmentInterval,
+            windowSizeMs, retainDuplicates);
     }
 
     /**

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
@@ -378,7 +379,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
-        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
+        return schedule(Duration.ofMillis(intervalMs), type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(Duration interval, PunctuationType type,
+        Punctuator callback) throws IllegalArgumentException {
+        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(interval.toMillis(), type, callback);
 
         punctuators.add(capturedPunctuator);
 

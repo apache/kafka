@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -53,12 +55,23 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
-        return bytesStore.fetch(key, from, to);
+        return fetch(key, Instant.ofEpochMilli(from), Duration.ofMillis(to - from));
+    }
+
+    @Override
+    public WindowStoreIterator<byte[]> fetch(Bytes key, Instant from, Duration duration) throws IllegalArgumentException {
+        return bytesStore.fetch(key, from, duration);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
-        return bytesStore.fetch(keyFrom, keyTo, from, to);
+        return fetch(keyFrom, keyTo, Instant.ofEpochMilli(from), Duration.ofMillis(to - from));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes from, Bytes to, Instant fromTime,
+        Duration duration) throws IllegalArgumentException {
+        return bytesStore.fetch(from, to, fromTime, duration);
     }
 
     @Override
@@ -68,9 +81,14 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return bytesStore.fetchAll(timeFrom, timeTo);
+        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
-    
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+        return bytesStore.fetchAll(from, duration);
+    }
+
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

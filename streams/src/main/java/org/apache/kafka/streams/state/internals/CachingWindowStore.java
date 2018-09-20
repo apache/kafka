@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -180,22 +182,31 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
+        return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override
+    public WindowStoreIterator<byte[]> fetch(Bytes key, Instant from, Duration duration) throws IllegalArgumentException {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
 
-        final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, timeFrom, timeTo);
+        final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, from, duration);
         if (cache == null) {
             return underlyingIterator;
         }
+
+        final long timeFrom = from.toEpochMilli();
+        final long timeTo = from.toEpochMilli() + duration.toMillis();
+
         final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
-                                                                             key,
-                                                                             timeFrom,
-                                                                             timeTo);
+            key,
+            timeFrom,
+            timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
             cacheIterator, hasNextCondition, cacheFunction
         );
@@ -204,12 +215,24 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom,
+        final long timeTo) {
+        return fetch(from, to, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes from, Bytes to, Instant fromTime,
+        Duration duration) throws IllegalArgumentException {
+
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetch(from, to, timeFrom, timeTo);
+        final long timeFrom = fromTime.toEpochMilli();
+        final long timeTo = fromTime.toEpochMilli() + duration.toMillis();
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
+            underlying.fetch(from, to, fromTime, duration);
         if (cache == null) {
             return underlyingIterator;
         }
@@ -218,10 +241,11 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from,
-                                                                             to,
-                                                                             timeFrom,
-                                                                             timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+            to,
+            timeFrom,
+            timeTo);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
             filteredCacheIterator,
@@ -231,7 +255,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             cacheFunction
         );
     }
-    
+
     private V fetchPrevious(final Bytes key, final long timestamp) {
         final byte[] value = underlying.fetch(key, timestamp);
         if (value != null) {
@@ -258,21 +282,29 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
         validateStoreOpen();
-        
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetchAll(timeFrom, timeTo);
+
+        final long timeFrom = from.toEpochMilli();
+        final long timeTo = from.toEpochMilli() + duration.toMillis();
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetchAll(from, duration);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
-        
+
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator,
-                                                                                                              hasNextCondition,
-                                                                                                              cacheFunction);
+            hasNextCondition,
+            cacheFunction);
         return new MergedSortedCacheWindowStoreKeyValueIterator(
-                filteredCacheIterator,
-                underlyingIterator,
-                bytesSerdes,
-                windowSize,
-                cacheFunction
+            filteredCacheIterator,
+            underlyingIterator,
+            bytesSerdes,
+            windowSize,
+            cacheFunction
         );
     }
 }

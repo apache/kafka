@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -92,9 +94,19 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    public WindowStoreIterator<V> fetch(K key, Instant from, Duration duration) throws IllegalArgumentException {
+        return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Duration duration) throws IllegalArgumentException {
+        return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
     }
 
     @Override
@@ -107,6 +119,11 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetchAll(timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+        return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 
     private void maybeUpdateSeqnumForDups() {

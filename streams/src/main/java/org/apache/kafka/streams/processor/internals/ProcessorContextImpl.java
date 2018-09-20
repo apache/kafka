@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -152,6 +153,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return task.schedule(interval, type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(Duration interval, PunctuationType type,
+        Punctuator callback) throws IllegalArgumentException {
+        return schedule(interval.toMillis(), type, callback);
     }
 
     void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {

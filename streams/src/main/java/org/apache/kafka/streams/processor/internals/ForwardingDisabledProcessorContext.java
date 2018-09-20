@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -88,7 +89,12 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
-        return delegate.schedule(intervalMs, type, callback);
+        return schedule(Duration.ofMillis(intervalMs), type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(Duration interval, PunctuationType type, Punctuator callback) throws IllegalArgumentException {
+        return delegate.schedule(interval, type, callback);
     }
 
     @Override
