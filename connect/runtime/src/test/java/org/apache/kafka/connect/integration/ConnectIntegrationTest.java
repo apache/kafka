@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -71,24 +71,29 @@ public class ConnectIntegrationTest {
         log.info("Consuming records from test topic");
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
-        Map<String, String> confs = new HashMap<>();
-        confs.put("connector.class", "MonitorableSink");
-        confs.put("task.max", "2");
-        confs.put("topics", "test-topic");
-        confs.put("key.converter", StringConverter.class.getName());
-        confs.put("value.converter", StringConverter.class.getName());
+        Map<String, String> props = new HashMap<>();
+        props.put("connector.class", "MonitorableSink");
+        props.put("task.max", "2");
+        props.put("topics", "test-topic");
+        props.put("key.converter", StringConverter.class.getName());
+        props.put("value.converter", StringConverter.class.getName());
+        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED));
 
-        connect.startConnector("simple-conn", confs);
+        connect.startConnector("simple-conn", props);
 
-        int attempts = 0;
-        while (attempts++ < 5 && MonitorableSinkConnector.COUNTER.get() < 2000) {
-            Thread.sleep(500);
+        MonitorableSinkConnector.MonitorableSinkTask task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
+        for (int i = 0; i < 10 && task == null; i++) {
+            log.debug("Sleeping for 200 before looking up task");
+            Thread.sleep(200);
+            task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
+        }
+        if (task == null) {
+            throw new ConnectException("Connector took too long to start");
         }
 
-        // all records must be consumed
-        Assert.assertEquals(NUM_RECORDS_PRODUCED, MonitorableSinkConnector.COUNTER.get());
+        task.awaitRecords(CONSUME_MAX_DURATION_MS);
 
-        log.info("Connector read {} records from topic", MonitorableSinkConnector.COUNTER.get());
+        log.info("Connector read {} records from topic", NUM_RECORDS_PRODUCED);
         connect.deleteConnector("simple-conn");
     }
 }

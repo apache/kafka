@@ -19,13 +19,13 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -83,6 +83,7 @@ public class DeadLetterQueueIntegrationTest {
         props.put("topics", "test-topic");
         props.put("key.converter", StringConverter.class.getName());
         props.put("value.converter", StringConverter.class.getName());
+        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(EXPECTED_CORRECT_RECORDS));
 
         props.put("errors.log.enable", "true");
         props.put("errors.log.include.messages", "false");
@@ -95,13 +96,16 @@ public class DeadLetterQueueIntegrationTest {
 
         connect.startConnector("simple-conn", props);
 
-        int attempts = 0;
-        while (attempts++ < 5 && MonitorableSinkConnector.COUNTER.get() < EXPECTED_CORRECT_RECORDS) {
-            log.info("Received only {} records. Waiting .. ", MonitorableSinkConnector.COUNTER.get());
-            Thread.sleep(500);
+        MonitorableSinkConnector.MonitorableSinkTask task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
+        for (int i = 0; i < 10 && task == null; i++) {
+            log.debug("Sleeping for 200 before looking up task");
+            Thread.sleep(200);
+            task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
         }
-
-        Assert.assertEquals(EXPECTED_CORRECT_RECORDS, MonitorableSinkConnector.COUNTER.get());
+        if (task == null) {
+            throw new ConnectException("Connector took too long to start");
+        }
+        task.awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");

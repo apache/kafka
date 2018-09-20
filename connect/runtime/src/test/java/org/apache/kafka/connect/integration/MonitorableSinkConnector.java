@@ -18,6 +18,7 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -29,18 +30,25 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class MonitorableSinkConnector extends TestSinkConnector {
 
+    public static final String EXPECTED_RECORDS = "expected_records";
     private static final Logger log = LoggerFactory.getLogger(MonitorableSinkConnector.class);
 
-    public static final AtomicInteger COUNTER = new AtomicInteger();
+    public static final Map<String, MonitorableSinkTask> TASKS = new ConcurrentHashMap<>();
+
+    private String connectorName;
+    private String expectedRecordsStr;
 
     @Override
     public void start(Map<String, String> props) {
-        log.info("Starting connector");
-        COUNTER.set(0);
+        connectorName = props.get("name");
+        expectedRecordsStr = props.get(EXPECTED_RECORDS);
+        log.info("Starting connector {}", props.get("name"));
     }
 
     @Override
@@ -53,7 +61,9 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         List<Map<String, String>> configs = new ArrayList<>();
         for (int i = 0; i < maxTasks; i++) {
             Map<String, String> config = new HashMap<>();
+            config.put("task.id", connectorName + "-" + i);
             config.put("required", "dummy-val");
+            config.put(EXPECTED_RECORDS, expectedRecordsStr);
             configs.add(config);
         }
         return configs;
@@ -61,7 +71,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     @Override
     public void stop() {
-        COUNTER.set(0);
+
     }
 
     @Override
@@ -71,6 +81,10 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static class MonitorableSinkTask extends SinkTask {
 
+        private String taskId;
+        private int expectedRecords;
+        private CountDownLatch latch;
+
         @Override
         public String version() {
             return "unknown";
@@ -79,20 +93,34 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             log.debug("Starting task {}", context);
+            taskId = props.get("task.id");
+            expectedRecords = Integer.parseInt(props.get(EXPECTED_RECORDS));
+            TASKS.put(taskId, this);
+            latch = new CountDownLatch(expectedRecords);
         }
 
         @Override
         public void put(Collection<SinkRecord> records) {
             for (SinkRecord rec : records) {
-                COUNTER.incrementAndGet();
+                latch.countDown();
                 log.debug("Obtained record: {} at {}", rec.value(), context);
             }
         }
 
         @Override
         public void stop() {
+            log.info("Removing {}", TASKS.remove(taskId));
         }
 
+        public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {
+            if (latch == null) {
+                throw new IllegalStateException("latch was not initialized");
+            } else {
+                if (!latch.await(consumeMaxDurationMs, TimeUnit.MILLISECONDS)) {
+                    throw new DataException("Insufficient records seen by task");
+                }
+            }
+        }
     }
 
 }
