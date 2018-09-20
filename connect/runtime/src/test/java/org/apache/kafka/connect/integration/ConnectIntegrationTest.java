@@ -37,7 +37,7 @@ public class ConnectIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
-    private static final int CONSUME_MAX_DURATION_MILLIS = 5000;
+    private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
 
@@ -69,7 +69,7 @@ public class ConnectIntegrationTest {
 
         // consume all records from test topic or fail
         log.info("Consuming records from test topic");
-        connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MILLIS, "test-topic");
+        connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
         Map<String, String> confs = new HashMap<>();
         confs.put("connector.class", "MonitorableSink");

@@ -45,7 +45,7 @@ public class DeadLetterQueueIntegrationTest {
     private static final int NUM_RECORDS_PRODUCED = 20;
     private static final int EXPECTED_CORRECT_RECORDS = 18;
     private static final int EXPECTED_INCORRECT_RECORDS = 2;
-    private static final int CONSUME_MAX_DURATION_MILLIS = 5000;
+    private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
 
@@ -73,7 +73,7 @@ public class DeadLetterQueueIntegrationTest {
 
         // consume all records from test topic
         log.info("Consuming records from test topic");
-        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MILLIS, "test-topic")) {
+        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
             log.debug("Consumed record ({}, {}) from topic {}", new String(recs.key()), new String(recs.value()), recs.topic());
         }
 
@@ -105,7 +105,7 @@ public class DeadLetterQueueIntegrationTest {
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
-        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MILLIS, DLQ_TOPIC)) {
+        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC)) {
             log.info("Consumed record (key={}, value={}) from dead letter queue topic {}", new String(recs.key()), new String(recs.value()), DLQ_TOPIC);
         }
 

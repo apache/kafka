@@ -52,7 +52,7 @@ public class EmbeddedConnectCluster extends ExternalResource {
 
     private static final int DEFAULT_NUM_BROKERS = 1;
     private static final Properties DEFAULT_BROKER_CONFIG = new Properties();
-    private static final String REST_HOST_NAME= "localhost";
+    private static final String REST_HOST_NAME = "localhost";
 
     private final EmbeddedKafkaCluster kafkaCluster;
 
