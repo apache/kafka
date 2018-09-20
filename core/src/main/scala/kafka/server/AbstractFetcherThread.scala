@@ -68,6 +68,8 @@ abstract class AbstractFetcherThread(name: String,
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
 
+  @volatile var idle = false
+
   /* callbacks to be defined in subclass */
 
   // process fetched data
@@ -651,6 +653,7 @@ abstract class AbstractFetcherThread(name: String,
         partitionStates.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition)
       }
+      idle = partitionStates.size() <= 0
     } finally partitionMapLock.unlock()
   }
 

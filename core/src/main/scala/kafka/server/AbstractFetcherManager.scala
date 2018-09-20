@@ -196,7 +196,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
       for ((key, fetcher) <- fetcherThreadMap) {
-        if (fetcher.partitionCount <= 0) {
+        if (fetcher.idle) {
           fetcher.shutdown()
           keysToBeRemoved += key
         }
