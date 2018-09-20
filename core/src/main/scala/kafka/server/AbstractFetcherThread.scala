@@ -69,6 +69,8 @@ abstract class AbstractFetcherThread(name: String,
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
 
+  @volatile var idle = false
+
   /* callbacks to be defined in subclass */
 
   // process fetched data
@@ -497,6 +499,7 @@ abstract class AbstractFetcherThread(name: String,
         partitionStates.updateAndMoveToEnd(tp, updatedState)
       }
 
+      maybeUpdateIdleFlag()
       partitionMapCond.signalAll()
       initialFetchStates.keySet
     } finally partitionMapLock.unlock()
@@ -525,6 +528,7 @@ abstract class AbstractFetcherThread(name: String,
         (topicPartition, maybeTruncationComplete)
       }
     partitionStates.set(newStates.asJava)
+    maybeUpdateIdleFlag()
   }
 
   /**
@@ -711,12 +715,14 @@ abstract class AbstractFetcherThread(name: String,
   def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
     partitionMapLock.lockInterruptibly()
     try {
-      topicPartitions.map { topicPartition =>
+      val topicPartitionStateMap = topicPartitions.map { topicPartition =>
         val state = partitionStates.stateValue(topicPartition)
         partitionStates.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition)
         topicPartition -> state
       }.filter(_._2 != null).toMap
+      maybeUpdateIdleFlag()
+      topicPartitionStateMap
     } finally partitionMapLock.unlock()
   }
 
@@ -746,6 +752,12 @@ abstract class AbstractFetcherThread(name: String,
         MemoryRecords.readableRecords(buffer)
     }
   }
+
+  // This method should only be called when holding the partitionMapLock
+  private def maybeUpdateIdleFlag(): Unit = {
+    idle = partitionStates.size() <= 0
+  }
+
 }
 
 object AbstractFetcherThread {
