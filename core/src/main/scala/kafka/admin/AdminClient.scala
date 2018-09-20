@@ -428,7 +428,8 @@ object AdminClient {
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
-    val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
+    val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP)
+    val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
     metadata.update(bootstrapCluster, Collections.emptySet(), 0)
 

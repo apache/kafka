@@ -124,7 +124,8 @@ public class ConnectionStressWorker implements TaskWorker {
                 WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.commonClientConf());
                 AdminClientConfig conf = new AdminClientConfig(props);
                 List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
+                        conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                        conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP));
                 ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
                 while (true) {
                     if (doneFuture.isDone()) {
