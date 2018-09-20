@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,7 @@ import org.slf4j.LoggerFactory;
  * clock skew (the default is 0)</li>
  * <ul>
  * For example:
- * 
+ *
  * <pre>
  * KafkaServer {
  *      org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required
@@ -91,7 +90,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
 
     /**
      * For testing
-     * 
+     *
      * @param time
      *            the mandatory time to set
      */
@@ -101,7 +100,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
 
     /**
      * Return true if this instance has been configured, otherwise false
-     * 
+     *
      * @return true if this instance has been configured, otherwise false
      */
     public boolean configured() {
@@ -124,7 +123,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
     }
 
     @Override
-    public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+    public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
         if (!configured())
             throw new IllegalStateException("Callback handler not configured");
         for (Callback callback : callbacks) {
@@ -195,8 +194,8 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
     private List<String> requiredScope() {
         String requiredSpaceDelimitedScope = option(REQUIRED_SCOPE_OPTION);
         List<String> requiredScope = requiredSpaceDelimitedScope == null || requiredSpaceDelimitedScope.trim().isEmpty()
-                ? Collections.<String>emptyList()
-                : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
+            ? Collections.emptyList()
+            : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
         return requiredScope;
     }
 

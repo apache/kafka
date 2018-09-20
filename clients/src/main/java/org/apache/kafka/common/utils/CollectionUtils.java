@@ -39,41 +39,36 @@ public final class CollectionUtils {
 
     /**
      * group data by topic
+     *
      * @param data Data to be partitioned
      * @param <T> Partition data type
      * @return partitioned data
      */
-    public static <T> Map<String, Map<Integer, T>> groupDataByTopic(Map<TopicPartition, ? extends T> data) {
+    public static <T> Map<String, Map<Integer, T>> groupPartitionDataByTopic(Map<TopicPartition, ? extends T> data) {
         Map<String, Map<Integer, T>> dataByTopic = new HashMap<>();
-        for (Map.Entry<TopicPartition, ? extends T> entry: data.entrySet()) {
+        for (Map.Entry<TopicPartition, ? extends T> entry : data.entrySet()) {
             String topic = entry.getKey().topic();
             int partition = entry.getKey().partition();
-            Map<Integer, T> topicData = dataByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new HashMap<>();
-                dataByTopic.put(topic, topicData);
-            }
+            Map<Integer, T> topicData = dataByTopic.computeIfAbsent(topic, t -> new HashMap<>());
             topicData.put(partition, entry.getValue());
         }
         return dataByTopic;
     }
 
     /**
-     * group partitions by topic
-     * @param partitions
+     * Group a list of partitions by the topic name.
+     *
+     * @param partitions The partitions to collect
      * @return partitions per topic
      */
-    public static Map<String, List<Integer>> groupDataByTopic(List<TopicPartition> partitions) {
+    public static Map<String, List<Integer>> groupPartitionsByTopic(List<TopicPartition> partitions) {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
-        for (TopicPartition tp: partitions) {
+        for (TopicPartition tp : partitions) {
             String topic = tp.topic();
-            List<Integer> topicData = partitionsByTopic.get(topic);
-            if (topicData == null) {
-                topicData = new ArrayList<>();
-                partitionsByTopic.put(topic, topicData);
-            }
+            List<Integer> topicData = partitionsByTopic.computeIfAbsent(topic, t -> new ArrayList<>());
             topicData.add(tp.partition());
         }
-        return  partitionsByTopic;
+        return partitionsByTopic;
     }
+
 }

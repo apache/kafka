@@ -61,7 +61,6 @@ public interface StoreBuilder<T extends StateStore> {
      */
     T build();
 
-
     /**
      * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}.
      * <p>

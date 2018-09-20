@@ -107,7 +107,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
     }
 
     CreatePartitionsRequest(Map<String, NewPartitions> newPartitions, int timeout, boolean validateOnly, short apiVersion) {
-        super(apiVersion);
+        super(ApiKeys.CREATE_PARTITIONS, apiVersion);
         this.newPartitions = newPartitions;
         this.duplicates = Collections.emptySet();
         this.timeout = timeout;
@@ -115,7 +115,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
     }
 
     public CreatePartitionsRequest(Struct struct, short apiVersion) {
-        super(apiVersion);
+        super(ApiKeys.CREATE_PARTITIONS, apiVersion);
         Object[] topicCountArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
         Map<String, NewPartitions> counts = new HashMap<>(topicCountArray.length);
         Set<String> dupes = new HashSet<>();

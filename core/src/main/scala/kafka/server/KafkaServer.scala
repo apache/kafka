@@ -576,7 +576,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown(), this)
 
-        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+        if (kafkaScheduler != null)
+          CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
         if (apis != null)
           CoreUtils.swallow(apis.close(), this)

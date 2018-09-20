@@ -128,21 +128,21 @@ public class OAuthBearerSaslServer implements SaslServer {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
         complete = false;
         tokenForNegotiatedProperty = null;
         extensions = null;
@@ -225,7 +225,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     public static class OAuthBearerSaslServerFactory implements SaslServerFactory {
         @Override
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props,
-                CallbackHandler callbackHandler) throws SaslException {
+                CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
             for (int i = 0; i < mechanismNamesCompatibleWithPolicy.length; i++) {
                 if (mechanismNamesCompatibleWithPolicy[i].equals(mechanism)) {

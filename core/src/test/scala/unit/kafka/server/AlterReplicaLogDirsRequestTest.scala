@@ -49,7 +49,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // The response should show error REPLICA_NOT_AVAILABLE for all partitions
     (0 until partitionNum).foreach { partition =>
       val tp = new TopicPartition(topic, partition)
-      assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaLogDirsResponse1.responses().get(tp))
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, alterReplicaLogDirsResponse1.responses().get(tp))
       assertTrue(servers.head.logManager.getLog(tp).isEmpty)
     }
 
@@ -85,7 +85,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     partitionDirs1.put(new TopicPartition(topic, 1), validDir1)
     val alterReplicaDirResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1.toMap)
     assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 0)))
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 1)))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 1)))
 
     createTopic(topic, 3, 1)
 

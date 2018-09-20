@@ -194,7 +194,7 @@ public class OAuthBearerSaslServerTest {
     }
 
     private byte[] clientInitialResponse(String authorizationId, boolean illegalToken)
-            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException, LoginException {
+            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException {
         return clientInitialResponse(authorizationId, false, Collections.emptyMap());
     }
 

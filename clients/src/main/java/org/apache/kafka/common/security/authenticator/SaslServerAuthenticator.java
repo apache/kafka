@@ -118,6 +118,7 @@ public class SaslServerAuthenticator implements Authenticator {
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
+    private Send authenticationFailureSend = null;
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
 
@@ -128,7 +129,7 @@ public class SaslServerAuthenticator implements Authenticator {
                                    KerberosShortNamer kerberosNameParser,
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
-                                   TransportLayer transportLayer) throws IOException {
+                                   TransportLayer transportLayer) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -163,12 +164,8 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
-                saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                    public SaslServer run() throws SaslException {
-                        return Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(),
-                                configs, callbackHandler);
-                    }
-                });
+                saslServer = Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+                    Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
             } catch (PrivilegedActionException e) {
                 throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
             }
@@ -211,11 +208,8 @@ public class SaslServerAuthenticator implements Authenticator {
         }
 
         try {
-            return Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
-                public SaslServer run() throws SaslException {
-                    return Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler);
-                }
-            });
+            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+                    Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler));
         } catch (PrivilegedActionException e) {
             throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
         }
@@ -295,6 +289,11 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     @Override
+    public void handleAuthenticationFailure() throws IOException {
+        sendAuthenticationFailureResponse();
+    }
+
+    @Override
     public void close() throws IOException {
         if (principalBuilder instanceof Closeable)
             Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
@@ -302,11 +301,11 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer.dispose();
     }
 
-    private void setSaslState(SaslState saslState) throws IOException {
+    private void setSaslState(SaslState saslState) {
         setSaslState(saslState, null);
     }
 
-    private void setSaslState(SaslState saslState, AuthenticationException exception) throws IOException {
+    private void setSaslState(SaslState saslState, AuthenticationException exception) {
         if (netOutBuffer != null && !netOutBuffer.completed()) {
             pendingSaslState = saslState;
             pendingException = exception;
@@ -362,7 +361,7 @@ public class SaslServerAuthenticator implements Authenticator {
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
                 IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
-                sendKafkaResponse(requestContext, requestAndSize.request.getErrorResponse(e));
+                buildResponseOnAuthenticateFailure(requestContext, requestAndSize.request.getErrorResponse(e));
                 throw e;
             }
             if (!apiKey.isVersionSupported(version)) {
@@ -378,7 +377,8 @@ public class SaslServerAuthenticator implements Authenticator {
                 ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
                 sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
             } catch (SaslAuthenticationException e) {
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
+                buildResponseOnAuthenticateFailure(requestContext,
+                        new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
                 throw e;
             } catch (SaslException e) {
                 KerberosError kerberosError = KerberosError.fromException(e);
@@ -464,7 +464,7 @@ public class SaslServerAuthenticator implements Authenticator {
             return clientMechanism;
         } else {
             LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
-            sendKafkaResponse(context, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
+            buildResponseOnAuthenticateFailure(context, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
     }
@@ -489,6 +489,24 @@ public class SaslServerAuthenticator implements Authenticator {
             sendKafkaResponse(context, apiVersionsResponse());
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }
+    }
+
+    /**
+     * Build a {@link Send} response on {@link #authenticate()} failure. The actual response is sent out when
+     * {@link #sendAuthenticationFailureResponse()} is called.
+     */
+    private void buildResponseOnAuthenticateFailure(RequestContext context, AbstractResponse response) {
+        authenticationFailureSend = context.buildResponse(response);
+    }
+
+    /**
+     * Send any authentication failure response that may have been previously built.
+     */
+    private void sendAuthenticationFailureResponse() throws IOException {
+        if (authenticationFailureSend == null)
+            return;
+        sendKafkaResponse(authenticationFailureSend);
+        authenticationFailureSend = null;
     }
 
     private void sendKafkaResponse(RequestContext context, AbstractResponse response) throws IOException {

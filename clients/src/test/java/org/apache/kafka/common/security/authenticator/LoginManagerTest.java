@@ -56,7 +56,7 @@ public class LoginManagerTest {
     public void testClientLoginManager() throws Exception {
         Map<String, ?> configs = Collections.singletonMap("sasl.jaas.config", dynamicPlainContext);
         JaasContext dynamicContext = JaasContext.loadClientContext(configs);
-        JaasContext staticContext = JaasContext.loadClientContext(Collections.<String, Object>emptyMap());
+        JaasContext staticContext = JaasContext.loadClientContext(Collections.emptyMap());
 
         LoginManager dynamicLogin = LoginManager.acquireLoginManager(dynamicContext, "PLAIN",
                 DefaultLogin.class, configs);

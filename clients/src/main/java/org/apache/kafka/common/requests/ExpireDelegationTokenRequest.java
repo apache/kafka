@@ -44,14 +44,14 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     private static final Schema TOKEN_EXPIRE_REQUEST_V1 = TOKEN_EXPIRE_REQUEST_V0;
 
     private ExpireDelegationTokenRequest(short version, ByteBuffer hmac, long renewTimePeriod) {
-        super(version);
+        super(ApiKeys.EXPIRE_DELEGATION_TOKEN, version);
 
         this.hmac = hmac;
         this.expiryTimePeriod = renewTimePeriod;
     }
 
     public ExpireDelegationTokenRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.EXPIRE_DELEGATION_TOKEN, versionId);
 
         hmac = struct.getBytes(HMAC_KEY_NAME);
         expiryTimePeriod = struct.getLong(EXPIRY_TIME_PERIOD_KEY_NAME);

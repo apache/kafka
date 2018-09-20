@@ -24,7 +24,7 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
 import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 
 import scala.collection.JavaConverters._
 
@@ -573,5 +573,5 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#peek`
    */
   def peek(action: (K, V) => Unit): KStream[K, V] =
-    inner.peek((k: K, v: V) => action(k, v))
+    inner.peek(action.asForeachAction)
 }

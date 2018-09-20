@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -32,16 +31,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class OffsetFetchRequest extends AbstractRequest {
-    private static final String TOPICS_KEY_NAME = "topics";
+    // top level fields
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
+            "Topics to fetch offsets. If the topic array is null fetch offsets for all topics.");
 
-    // topic level field names
-    private static final String PARTITIONS_KEY_NAME = "partitions";
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
+            "Partitions to fetch offsets.");
 
     /*
      * Wire formats of version 0 and 1 are the same, but with different functionality.
@@ -54,32 +57,41 @@ public class OffsetFetchRequest extends AbstractRequest {
      * a 'null' is passed instead of a list of specific topic partitions. It also returns a top level error code
      * for group or coordinator level errors.
      */
-    private static final Schema OFFSET_FETCH_REQUEST_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID);
 
-    private static final Schema OFFSET_FETCH_REQUEST_TOPIC_V0 = new Schema(
+    private static final Field TOPICS_V0 = TOPICS.withFields("Topics to fetch offsets.",
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_PARTITION_V0), "Partitions to fetch offsets."));
+            PARTITIONS_V0);
 
     private static final Schema OFFSET_FETCH_REQUEST_V0 = new Schema(
             GROUP_ID,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets."));
+            TOPICS_V0);
 
+    // V1 begins support for fetching offsets from the internal __consumer_offsets topic
     private static final Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
 
+    // V2 adds top-level error code to the response as well as allowing a null offset array to indicate fetch
+    // of all committed offsets for a group
+    private static final Field TOPICS_V2 = TOPICS.nullableWithFields(
+            TOPIC_NAME,
+            PARTITIONS_V0);
     private static final Schema OFFSET_FETCH_REQUEST_V2 = new Schema(
             GROUP_ID,
-            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(OFFSET_FETCH_REQUEST_TOPIC_V0), "Topics to fetch offsets. If the " +
-                    "topic array is null fetch offsets for all topics."));
+            TOPICS_V2);
 
-    /* v3 request is the same as v2. Throttle time has been added to v3 response */
+    // V3 request is the same as v2. Throttle time has been added to v3 response
     private static final Schema OFFSET_FETCH_REQUEST_V3 = OFFSET_FETCH_REQUEST_V2;
 
+    // V4 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema OFFSET_FETCH_REQUEST_V4 = OFFSET_FETCH_REQUEST_V3;
+
+    // V5 adds the leader epoch of the committed offset in the response
+    private static final Schema OFFSET_FETCH_REQUEST_V5 = OFFSET_FETCH_REQUEST_V4;
 
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2,
-            OFFSET_FETCH_REQUEST_V3, OFFSET_FETCH_REQUEST_V4};
+            OFFSET_FETCH_REQUEST_V3, OFFSET_FETCH_REQUEST_V4, OFFSET_FETCH_REQUEST_V5};
     }
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
@@ -128,23 +140,22 @@ public class OffsetFetchRequest extends AbstractRequest {
         return new OffsetFetchRequest.Builder(groupId, null).build((short) 2);
     }
 
-    // v0, v1, and v2 have the same fields.
     private OffsetFetchRequest(String groupId, List<TopicPartition> partitions, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FETCH, version);
         this.groupId = groupId;
         this.partitions = partitions;
     }
 
     public OffsetFetchRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.OFFSET_FETCH, version);
 
-        Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
+        Object[] topicArray = struct.get(TOPICS);
         if (topicArray != null) {
             partitions = new ArrayList<>();
-            for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
+            for (Object topicResponseObj : topicArray) {
                 Struct topicResponse = (Struct) topicResponseObj;
                 String topic = topicResponse.get(TOPIC_NAME);
-                for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+                for (Object partitionResponseObj : topicResponse.get(PARTITIONS)) {
                     Struct partitionResponse = (Struct) partitionResponseObj;
                     int partition = partitionResponse.get(PARTITION_ID);
                     partitions.add(new TopicPartition(topic, partition));
@@ -166,12 +177,14 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
         if (versionId < 2) {
-            for (TopicPartition partition : this.partitions) {
-                responsePartitions.put(partition, new OffsetFetchResponse.PartitionData(
-                        OffsetFetchResponse.INVALID_OFFSET,
-                        OffsetFetchResponse.NO_METADATA,
-                        error));
-            }
+            OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
+                    OffsetFetchResponse.INVALID_OFFSET,
+                    Optional.empty(),
+                    OffsetFetchResponse.NO_METADATA,
+                    error);
+
+            for (TopicPartition partition : this.partitions)
+                responsePartitions.put(partition, partitionError);
         }
 
         switch (versionId) {
@@ -181,6 +194,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 return new OffsetFetchResponse(error, responsePartitions);
             case 3:
             case 4:
+            case 5:
                 return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -214,25 +228,26 @@ public class OffsetFetchRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.OFFSET_FETCH.requestSchema(version()));
         struct.set(GROUP_ID, groupId);
         if (partitions != null) {
-            Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
+            Map<String, List<Integer>> topicsData = CollectionUtils.groupPartitionsByTopic(partitions);
 
             List<Struct> topicArray = new ArrayList<>();
             for (Map.Entry<String, List<Integer>> entries : topicsData.entrySet()) {
-                Struct topicData = struct.instance(TOPICS_KEY_NAME);
+                Struct topicData = struct.instance(TOPICS);
                 topicData.set(TOPIC_NAME, entries.getKey());
                 List<Struct> partitionArray = new ArrayList<>();
                 for (Integer partitionId : entries.getValue()) {
-                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                    Struct partitionData = topicData.instance(PARTITIONS);
                     partitionData.set(PARTITION_ID, partitionId);
                     partitionArray.add(partitionData);
                 }
-                topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+                topicData.set(PARTITIONS, partitionArray.toArray());
                 topicArray.add(topicData);
             }
-            struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+            struct.set(TOPICS, topicArray.toArray());
         } else
-            struct.set(TOPICS_KEY_NAME, null);
+            struct.set(TOPICS, null);
 
         return struct;
     }
+
 }

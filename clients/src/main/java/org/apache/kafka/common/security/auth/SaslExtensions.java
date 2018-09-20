@@ -24,6 +24,10 @@ import java.util.Map;
  * A simple immutable value object class holding customizable SASL extensions
  */
 public class SaslExtensions {
+    /**
+     * An "empty" instance indicating no SASL extensions
+     */
+    public static final SaslExtensions NO_SASL_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
     private final Map<String, String> extensionsMap;
 
     public SaslExtensions(Map<String, String> extensionsMap) {
