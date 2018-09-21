@@ -195,9 +195,11 @@ public class ConnectionStressWorker implements TaskWorker {
             }
         }
 
-        private boolean attemptMetadataFetch(Properties conf) throws Exception {
-            try (AdminClient client = AdminClient.create(conf)){
+        private boolean attemptMetadataFetch(Properties conf) {
+            try (AdminClient client = AdminClient.create(conf)) {
                 client.describeCluster().nodes().get();
+            } catch (RuntimeException e) {
+                return false;
             } catch (Exception e) {
                 return false;
             }

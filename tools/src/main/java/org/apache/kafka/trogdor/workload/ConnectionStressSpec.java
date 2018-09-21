@@ -18,7 +18,6 @@
 package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
@@ -52,7 +51,7 @@ public class ConnectionStressSpec extends TaskSpec {
     @JsonCreator
     public ConnectionStressSpec(@JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs,
-            @JsonProperty( "clientNode") List<String> clientNodes,
+            @JsonProperty("clientNode") List<String> clientNodes,
             @JsonProperty("bootstrapServers") String bootstrapServers,
             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
             @JsonProperty("targetConnectionsPerSec") int targetConnectionsPerSec,
