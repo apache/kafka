@@ -81,7 +81,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
         initialized = true;
     }
 
