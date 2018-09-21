@@ -19,7 +19,9 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -39,6 +41,8 @@ import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private final CompressionType compressionType;
     private final int bufferOffset;
@@ -52,6 +56,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testWriteEmptyRecordSet() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -207,6 +216,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testCompressionRateV0() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -262,6 +276,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testCompressionRateV1() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -293,6 +312,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void buildUsingLogAppendTime() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -322,6 +346,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void buildUsingCreateTime() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -353,6 +382,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testAppendedChecksumConsistency() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
             MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compressionType,
@@ -397,6 +431,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void writePastLimit() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.position(bufferOffset);
 
@@ -442,6 +481,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
                 compressionType, TimestampType.LOG_APPEND_TIME, 0L);
@@ -497,6 +541,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void convertToV1WithMixedV0AndV2Data() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
                 compressionType, TimestampType.NO_TIMESTAMP_TYPE, 0L);
@@ -571,6 +620,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnBuildWhenAborted() throws Exception {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -588,6 +642,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldResetBufferToInitialPositionOnAbort() throws Exception {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -601,6 +660,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() throws Exception {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -618,6 +682,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() throws Exception {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 0");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 

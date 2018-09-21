@@ -277,6 +277,7 @@ case object KAFKA_2_1_IV2 extends DefaultApiVersion {
   val subVersion = "IV2"
   val recordVersion = RecordVersion.V2
   val id: Int = 19
+}
 
 object ApiVersionValidator extends Validator {
 
