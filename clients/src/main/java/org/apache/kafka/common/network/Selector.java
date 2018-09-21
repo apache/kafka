@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -531,11 +532,31 @@ public class Selector implements Selectable, AutoCloseable {
                     try {
                         channel.prepare();
                     } catch (AuthenticationException e) {
-                        sensors.failedAuthentication.record();
+                        if (channel.successfulAuthentications() == 0)
+                            sensors.failedAuthentication.record();
+                        else
+                            sensors.failedReauthentication.record();
                         throw e;
                     }
-                    if (channel.ready())
-                        sensors.successfulAuthentication.record();
+                    if (channel.ready()) {
+                        long readyTimeMs = time.milliseconds();
+                        if (channel.successfulAuthentications() == 1)
+                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
+                        else {
+                            sensors.successfulReauthentication.record(1.0, readyTimeMs);
+                            if (channel.reauthenticationLatencyMs() == null)
+                                log.warn(
+                                        "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
+                            else
+                                sensors.reauthenticationLatency
+                                        .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                        }
+                        if (!channel.connectedClientSupportsReauthentication())
+                            sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
+                    }
+                    List<NetworkReceive> responsesReceivedDuringReauthentication = channel
+                            .getAndClearResponsesReceivedDuringReauthentication();
+                    responsesReceivedDuringReauthentication.forEach(receive -> addToStagedReceives(channel, receive));
                 }
 
                 attemptRead(key, channel);
@@ -551,7 +572,8 @@ public class Selector implements Selectable, AutoCloseable {
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                if (channel.ready() && key.isWritable()) {
+                if (channel.ready() && key.isWritable() && !channel.maybeBeginClientReauthentication(
+                    () -> channelStartTimeNanos != 0 ? channelStartTimeNanos : time.nanoseconds())) {
                     Send send;
                     try {
                         send = channel.write();
@@ -970,7 +992,11 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
         public final Sensor successfulAuthentication;
+        public final Sensor successfulReauthentication;
+        public final Sensor successfulAuthenticationNoReauth;
+        public final Sensor reauthenticationLatency;
         public final Sensor failedAuthentication;
+        public final Sensor failedReauthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -1007,9 +1033,34 @@ public class Selector implements Selectable, AutoCloseable {
             this.successfulAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
                     "successful-authentication", "connections with successful authentication"));
 
+            this.successfulReauthentication = sensor("successful-reauthentication:" + tagsSuffix);
+            this.successfulReauthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "successful-reauthentication", "successful re-authentication of connections"));
+
+            this.successfulAuthenticationNoReauth = sensor("successful-authentication-no-reauth:" + tagsSuffix);
+            MetricName successfulAuthenticationNoReauthMetricName = metrics.metricName(
+                    "successful-authentication-no-reauth-total", metricGrpName,
+                    "The total number of connections with successful authentication where the client does not support re-authentication",
+                    metricTags);
+            this.successfulAuthenticationNoReauth.add(successfulAuthenticationNoReauthMetricName, new Total());
+
             this.failedAuthentication = sensor("failed-authentication:" + tagsSuffix);
             this.failedAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
                     "failed-authentication", "connections with failed authentication"));
+
+            this.failedReauthentication = sensor("failed-reauthentication:" + tagsSuffix);
+            this.failedReauthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "failed-reauthentication", "failed re-authentication of connections"));
+
+            this.reauthenticationLatency = sensor("reauthentication-latency:" + tagsSuffix);
+            MetricName reauthenticationLatencyMaxMetricName = metrics.metricName("reauthentication-latency-max",
+                    metricGrpName, "The max latency observed due to re-authentication",
+                    metricTags);
+            this.reauthenticationLatency.add(reauthenticationLatencyMaxMetricName, new Max());
+            MetricName reauthenticationLatencyAvgMetricName = metrics.metricName("reauthentication-latency-avg",
+                    metricGrpName, "The average latency observed due to re-authentication",
+                    metricTags);
+            this.reauthenticationLatency.add(reauthenticationLatencyAvgMetricName, new Avg());
 
             this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix);
             bytesTransferred.add(createMeter(metrics, metricGrpName, metricTags, new Count(),

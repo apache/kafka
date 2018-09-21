@@ -167,6 +167,10 @@ public class RequestResponseTest {
         checkRequest(createSaslHandshakeRequest());
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException());
         checkResponse(createSaslHandshakeResponse(), 0);
+        checkRequest(createSaslAuthenticateRequest());
+        checkErrorResponse(createSaslAuthenticateRequest(), new UnknownServerException());
+        checkResponse(createSaslAuthenticateResponse(), 0);
+        checkResponse(createSaslAuthenticateResponse(), 1);
         checkRequest(createApiVersionRequest());
         checkErrorResponse(createApiVersionRequest(), new UnknownServerException());
         checkResponse(createApiVersionResponse(), 0);
@@ -345,9 +349,19 @@ public class RequestResponseTest {
     private void checkRequest(AbstractRequest req) throws Exception {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any request containing a HashMap
+        checkRequest(req, false);
+    }
+
+    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) throws Exception {
+        // Check that we can serialize, deserialize and serialize again
+        // Check for equality and hashCode only if indicated
         Struct struct = req.toStruct();
         AbstractRequest deserialized = (AbstractRequest) deserialize(req, struct, req.version());
-        deserialized.toStruct();
+        Struct struct2 = deserialized.toStruct();
+        if (checkEqualityAndHashCode) {
+            assertEquals(struct, struct2);
+            assertEquals(struct.hashCode(), struct2.hashCode());
+        }
     }
 
     private void checkResponse(AbstractResponse response, int version) throws Exception {
@@ -355,7 +369,7 @@ public class RequestResponseTest {
         // We don't check for equality or hashCode because it is likely to fail for any response containing a HashMap
         Struct struct = response.toStruct((short) version);
         AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
-        deserialized.toStruct((short) version);
+        Struct struct2 = deserialized.toStruct((short) version);
     }
 
     private AbstractRequestResponse deserialize(AbstractRequestResponse req, Struct struct, short version) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
@@ -973,6 +987,14 @@ public class RequestResponseTest {
 
     private SaslHandshakeResponse createSaslHandshakeResponse() {
         return new SaslHandshakeResponse(Errors.NONE, singletonList("GSSAPI"));
+    }
+
+    private SaslAuthenticateRequest createSaslAuthenticateRequest() {
+        return new SaslAuthenticateRequest(ByteBuffer.wrap(new byte[0]));
+    }
+
+    private SaslAuthenticateResponse createSaslAuthenticateResponse() {
+        return new SaslAuthenticateResponse(Errors.NONE, null, ByteBuffer.wrap(new byte[0]), Long.MAX_VALUE);
     }
 
     private ApiVersionsRequest createApiVersionRequest() {

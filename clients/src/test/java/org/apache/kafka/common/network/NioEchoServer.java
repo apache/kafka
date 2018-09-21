@@ -22,13 +22,13 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
@@ -40,9 +40,12 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
@@ -52,6 +55,39 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
  *
  */
 public class NioEchoServer extends Thread {
+    public enum MetricType {
+        TOTAL, RATE, AVG, MAX;
+
+        private final String metricNameSuffix;
+
+        private MetricType() {
+            metricNameSuffix = "-" + name().toLowerCase(Locale.ROOT);
+        }
+
+        public String metricNameSuffix() {
+            return metricNameSuffix;
+        }
+
+        public static Set<MetricType> setOf(MetricType metricType) {
+            return EnumSet.of(metricType);
+        }
+
+        public static Set<MetricType> setOf(MetricType e1, MetricType e2) {
+            return EnumSet.of(e1, e2);
+        }
+
+        public static Set<MetricType> setOf(MetricType e1, MetricType e2, MetricType e3) {
+            return EnumSet.of(e1, e2, e3);
+        }
+
+        public static Set<MetricType> setOf(MetricType e1, MetricType e2, MetricType e3, MetricType e4) {
+            return EnumSet.of(e1, e2, e3, e4);
+        }
+
+        public static Set<MetricType> setOf(MetricType first, MetricType... rest) {
+            return EnumSet.of(first, rest);
+        }
+    }
 
     private static final double EPS = 0.0001;
 
@@ -67,7 +103,8 @@ public class NioEchoServer extends Thread {
     private volatile int numSent = 0;
     private volatile boolean closeKafkaChannels;
     private final DelegationTokenCache tokenCache;
-
+    private final Time time;
+    
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
         this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
@@ -76,6 +113,13 @@ public class NioEchoServer extends Thread {
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
                          int failedAuthenticationDelayMs, Time time) throws Exception {
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time,
+                new DelegationTokenCache(ScramMechanism.mechanismNames()));
+    }
+
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+            int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -85,7 +129,7 @@ public class NioEchoServer extends Thread {
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.credentialCache = credentialCache;
-        this.tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
+        this.tokenCache = tokenCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             for (String mechanism : ScramMechanism.mechanismNames()) {
                 if (credentialCache.cache(mechanism, ScramCredential.class) == null)
@@ -93,10 +137,11 @@ public class NioEchoServer extends Thread {
             }
         }
         if (channelBuilder == null)
-            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache, time);
         this.metrics = new Metrics();
         this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
+        this.time = time;
     }
 
     public int port() {
@@ -111,7 +156,6 @@ public class NioEchoServer extends Thread {
         return tokenCache;
     }
 
-    @SuppressWarnings("deprecation")
     public double metricValue(String name) {
         for (Map.Entry<MetricName, KafkaMetric> entry : metrics.metrics().entrySet()) {
             if (entry.getKey().name().equals(name))
@@ -122,29 +166,66 @@ public class NioEchoServer extends Thread {
 
     public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications)
             throws InterruptedException {
-        waitForMetric("successful-authentication", successfulAuthentications);
-        waitForMetric("failed-authentication", failedAuthentications);
+        waitForMetrics("successful-authentication", successfulAuthentications,
+                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+        waitForMetrics("failed-authentication", failedAuthentications,
+                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+    }
+
+    public void verifyReauthenticationMetrics(int successfulReauthentications, final int failedReauthentications)
+            throws InterruptedException {
+        waitForMetrics("successful-reauthentication", successfulReauthentications,
+                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+        waitForMetrics("failed-reauthentication", failedReauthentications,
+                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+    }
+
+    public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications,
+            int successfulReauthentications, final int failedReauthentications, boolean includeReauthenticationLatency,
+            int successfulAuthenticationNoReauths)
+            throws InterruptedException {
+        verifyAuthenticationMetrics(successfulAuthentications, failedAuthentications);
+        if (includeReauthenticationLatency)
+            verifyReauthenticationMetricsIncludingLatency(successfulReauthentications, failedReauthentications);
+        else
+            verifyReauthenticationMetrics(successfulReauthentications, failedReauthentications);
+        verifyAuthenticationNoReauthMetric(successfulAuthenticationNoReauths);
+    }
+
+    public void verifyReauthenticationMetricsIncludingLatency(int successfulReauthentications,
+            final int failedReauthentications) throws InterruptedException {
+        verifyReauthenticationMetrics(successfulReauthentications, failedReauthentications);
+        // non-zero re-authentications implies some latency recorded
+        waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications), MetricType.setOf(MetricType.MAX, MetricType.AVG));
+    }
+
+    public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {
+        waitForMetrics("successful-authentication-no-reauth", successfulAuthenticationNoReauths, MetricType.setOf(MetricType.TOTAL));
     }
 
     public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
-        final String totalName = name + "-total";
-        final String rateName = name + "-rate";
-        if (expectedValue == 0.0) {
-            assertEquals(expectedValue, metricValue(totalName), EPS);
-            assertEquals(expectedValue, metricValue(rateName), EPS);
-        } else {
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return Math.abs(metricValue(totalName) - expectedValue) <= EPS;
-                }
-            }, "Metric not updated " + totalName);
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return metricValue(rateName) > 0.0;
-                }
-            }, "Metric not updated " + rateName);
+        waitForMetrics(name, expectedValue, MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+    }
+
+    public void waitForMetrics(String namePrefix, final double expectedValue, Set<MetricType> metricTypes)
+            throws InterruptedException {
+        long maxAggregateWaitMs = 15000;
+        long startMs = time.milliseconds();
+        for (MetricType metricType : metricTypes) {
+            long currentElapsedMs = time.milliseconds() - startMs;
+            long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
+            String metricName = namePrefix + metricType.metricNameSuffix();
+            if (expectedValue == 0.0)
+                assertEquals(metricType == MetricType.MAX ? Double.NEGATIVE_INFINITY : 0d, metricValue(metricName),
+                        EPS);
+            else if (metricType == MetricType.TOTAL)
+                TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
+                        thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
+                                + "> but was:<" + metricValue(metricName) + ">");
+            else
+                TestUtils.waitForCondition(() -> metricValue(metricName) > 0.0, thisMaxWaitMs,
+                    () -> "Metric not updated " + metricName + " expected:<a positive number> but was:<"
+                                + metricValue(metricName) + ">");
         }
     }
 
@@ -170,15 +251,17 @@ public class NioEchoServer extends Thread {
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
-                    String channelId = channel.id();
-                    selector.mute(channelId);
-                    NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
-                    if (outputChannel == null)
-                        selector.send(send);
-                    else {
-                        for (ByteBuffer buffer : send.buffers)
-                            outputChannel.write(buffer);
-                        selector.unmute(channelId);
+                    if (!maybeBeginServerReauthentication(channel, rcv, time)) {
+                        String channelId = channel.id();
+                        selector.mute(channelId);
+                        NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
+                        if (outputChannel == null)
+                            selector.send(send);
+                        else {
+                            for (ByteBuffer buffer : send.buffers)
+                                outputChannel.write(buffer);
+                            selector.unmute(channelId);
+                        }
                     }
                 }
                 for (Send send : selector.completedSends()) {
@@ -193,6 +276,17 @@ public class NioEchoServer extends Thread {
 
     public int numSent() {
         return numSent;
+    }
+
+    private static boolean maybeBeginServerReauthentication(KafkaChannel channel, NetworkReceive networkReceive, Time time) {
+        try {
+            if (TestUtils.apiKeyFrom(networkReceive) == ApiKeys.SASL_HANDSHAKE) {
+                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.nanoseconds());
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return false;
     }
 
     private String id(SocketChannel channel) {
