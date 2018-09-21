@@ -101,11 +101,11 @@
     </p>
 
     <p>
-        We've added a new config named <code>max.task.idle.ms</code> to allow users specify how to handle out-of-ordering data within a task that may be processing multiple
+        We've added a new config named <code>max.task.idle.ms</code> to allow users specify how to handle out-of-order data within a task that may be processing multiple
         topic-partitions (see <a href="/{{version}}/documentation/streams/core-concepts.html#streams_out_of_ordering">Out-of-Order Handling</a> section for more details).
         The default value is set to <code>0</code>, to favor minimized latency over synchronization between multiple input streams from topic-partitions.
-        If users would like to wait for longer time when some of the topic-partitions are not data available to process and hence cannot determine its corresponding stream time,
-        they should then override this config to a larger value.
+        If users would like to wait for longer time when some of the topic-partitions do not have data available to process and hence cannot determine its corresponding stream time,
+        they can override this config to a larger value.
     </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>

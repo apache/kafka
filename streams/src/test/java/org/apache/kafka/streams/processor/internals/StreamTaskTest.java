@@ -367,6 +367,16 @@ public class StreamTaskTest {
         assertTrue(task.isProcessable(time.milliseconds()) && task.process());
         assertEquals(0, task.numBuffered());
         assertEquals(0, consumer.paused().size());
+
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 100),
+            getConsumerRecord(partition2, 110)
+        ));
+
+        // pause immediately if we are enforced processing when there are at least some records already
+        assertEquals(2, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
     }
 
     @SuppressWarnings("unchecked")
