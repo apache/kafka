@@ -95,13 +95,15 @@ object GetOffsetShell {
     }
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
-    if (commandConfigOpt == "") {
-      val config = new Properties
-      config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-      config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
-    else {
-      Utils.loadProps(commandConfigOpt) 
-    }
+    val config = 
+      if (options.valueOf(commandConfigOpt) == "")
+        new Properties
+      else
+        Utils.loadProps(options.valueOf(commandConfigOpt)) 
+
+    config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
+
     val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val partitionInfos = listPartitionInfos(consumer, topic, partitionIdsRequested) match {
