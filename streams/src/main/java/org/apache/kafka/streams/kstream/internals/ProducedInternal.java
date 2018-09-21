@@ -20,9 +20,19 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-public class ProducedInternal<K, V> extends Produced<K, V> {
-    public ProducedInternal(final Produced<K, V> produced) {
-        super(produced);
+import java.util.Objects;
+
+public class ProducedInternal<K, V> implements Produced<K, V> {
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private final StreamPartitioner<? super K, ? super V> partitioner;
+
+    public ProducedInternal(final Serde<K> keySerde,
+                            final Serde<V> valueSerde,
+                            final StreamPartitioner<? super K, ? super V> partitioner) {
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.partitioner = partitioner;
     }
 
     public Serde<K> keySerde() {
@@ -35,5 +45,36 @@ public class ProducedInternal<K, V> extends Produced<K, V> {
 
     public StreamPartitioner<? super K, ? super V> streamPartitioner() {
         return partitioner;
+    }
+
+    @Override
+    public Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
+        return new ProducedInternal<>(keySerde, valueSerde, partitioner);
+    }
+
+    @Override
+    public Produced<K, V> withValueSerde(final Serde<V> valueSerde) {
+        return new ProducedInternal<>(keySerde, valueSerde, partitioner);
+    }
+
+    @Override
+    public Produced<K, V> withKeySerde(final Serde<K> keySerde) {
+        return new ProducedInternal<>(keySerde, valueSerde, partitioner);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final ProducedInternal<?, ?> that = (ProducedInternal<?, ?>) o;
+        return Objects.equals(keySerde, that.keySerde) &&
+            Objects.equals(valueSerde, that.valueSerde) &&
+            Objects.equals(partitioner, that.partitioner);
+    }
+
+    @Override
+    public int hashCode() {
+
+        return Objects.hash(keySerde, valueSerde, partitioner);
     }
 }
