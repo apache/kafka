@@ -66,38 +66,38 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  trait SerializerImpl {
+  trait SerializerImpl extends Serializer[Array[Byte]]{
     var serializer = new ByteArraySerializer()
 
-    def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
       headers.add("content-type", "application/octet-stream".getBytes)
       serializer.serialize(topic, data)
     }
 
-    def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
 
-    def close(): Unit = serializer.close()
+    override def close(): Unit = serializer.close()
 
-    def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
+    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
       fail("method should not be invoked")
       null
     }
   }
 
-  trait DeserializerImpl {
+  trait DeserializerImpl extends Deserializer[Array[Byte]]{
     var deserializer = new ByteArrayDeserializer()
 
-    def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
       val header = headers.lastHeader("content-type")
       assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
       deserializer.deserialize(topic, data)
     }
 
-    def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
 
-    def close(): Unit = deserializer.close()
+    override def close(): Unit = deserializer.close()
 
-    def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
       fail("method should not be invoked")
       null
     }
@@ -128,6 +128,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testHeadersExtendedSerializerDeserializer(): Unit = {
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
+
     val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] with DeserializerImpl
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
@@ -136,6 +137,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testHeadersSerializerDeserializer(): Unit = {
     val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
+
     val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
