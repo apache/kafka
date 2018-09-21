@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -43,20 +42,11 @@ public class KStreamMapTest {
     @Test
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
-
-        final KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =
-            new KeyValueMapper<Integer, String, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(final Integer key, final String value) {
-                    return KeyValue.pair(value, key);
-                }
-            };
-
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.map(mapper).process(supplier);
+        stream.map((key, value) -> KeyValue.pair(value, key)).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
@@ -75,16 +65,9 @@ public class KStreamMapTest {
 
     @Test
     public void testTypeVariance() {
-        final KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
-            @Override
-            public KeyValue<Number, String> apply(final Number key, final Object value) {
-                return KeyValue.pair(key, key + ":" + value);
-            }
-        };
-
         new StreamsBuilder()
             .<Integer, String>stream("numbers")
-            .map(stringify)
+            .map((key, value) -> KeyValue.pair(key, key + ":" + value))
             .to("strings");
     }
 }

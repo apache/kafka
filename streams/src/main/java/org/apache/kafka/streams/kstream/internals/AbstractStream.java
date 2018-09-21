@@ -131,4 +131,13 @@ public abstract class AbstractStream<K, V> {
             }
         };
     }
+
+    // for testing only
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valSerde;
+    }
 }

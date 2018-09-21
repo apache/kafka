@@ -129,6 +129,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
         // we preserve the key following the order of 1) materialized, 2) parent
         // we preserve the value following the order of 1) materialized, 2) parent
         return new KTableImpl<>(name,
@@ -203,6 +204,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // don't inherit parent value serde, since this operation may change the value type, more specifically:
         // we preserve the key following the order of 1) materialized, 2) parent, 3) null
         // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
@@ -298,6 +300,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
+        // don't inherit parent value serde, since this operation may change the value type, more specifically:
         // we preserve the key following the order of 1) materialized, 2) parent, 3) null
         // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
@@ -329,6 +332,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, toStreamNode);
 
+        // we can inherit parent key and value serde
         return new KStreamImpl<>(name, keySerde, valSerde, sourceNodes, false, toStreamNode, builder);
     }
 
@@ -469,9 +473,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableKTableJoinNode<K, Change<V>, Change<V1>, Change<R>> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
+        // we can inherit parent key serde if user do not provide specific overrides
         return new KTableImpl<K, Change<R>, R>(
             joinMergeName,
-            materializedInternal != null ? materializedInternal.keySerde() : null,
+            materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
             materializedInternal != null ? materializedInternal.valueSerde() : null,
             allSourceNodes,
             internalQueryableName,
@@ -484,7 +489,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
-        return this.groupBy(selector, Serialized.with(null, null));
+        return groupBy(selector, Serialized.with(null, null));
     }
 
     @Override
@@ -506,6 +511,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
 
+        // we cannot inherit parent key and value serdes since both of them may have changed;
+        // we can only inherit from what serialized specified here
         return new KGroupedTableImpl<>(
             builder,
             selectName,
