@@ -233,6 +233,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             partitionQueues.put(partition, queue);
         }
 
+        idleStartTime = RecordQueue.UNKNOWN;
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
         processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
@@ -355,10 +356,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            // after processing this record, if its partition queue's buffered size has been
-            // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
-                consumer.resume(singleton(partition));
+            // if we are not in the enforced processing state, then after processing
+            // this record, if its partition queue's buffered size has been decreased below
+            // the threshold, we can then resume the consumption on this partition;
+            // otherwise, we only resume the consumption on this partition after it
+            // has been drained.
+            if (idleStartTime != RecordQueue.UNKNOWN) {
+                if (recordInfo.queue().isEmpty()) {
+                    consumer.resume(singleton(partition));
+                }
+            } else {
+                if (recordInfo.queue().size() == maxBufferedSize) {
+                    consumer.resume(singleton(partition));
+                }
             }
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
