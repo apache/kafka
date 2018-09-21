@@ -18,11 +18,10 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.ProducedInternal;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-
-import java.util.Objects;
 
 /**
  * This class is used to provide the optional parameters when producing to new topics
@@ -30,25 +29,7 @@ import java.util.Objects;
  * @param <K> key type
  * @param <V> value type
  */
-public class Produced<K, V> {
-
-    protected Serde<K> keySerde;
-    protected Serde<V> valueSerde;
-    protected StreamPartitioner<? super K, ? super V> partitioner;
-
-    private Produced(final Serde<K> keySerde,
-                     final Serde<V> valueSerde,
-                     final StreamPartitioner<? super K, ? super V> partitioner) {
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.partitioner = partitioner;
-    }
-
-    protected Produced(final Produced<K, V> produced) {
-        this.keySerde = produced.keySerde;
-        this.valueSerde = produced.valueSerde;
-        this.partitioner = produced.partitioner;
-    }
+public interface Produced<K, V> {
 
     /**
      * Create a Produced instance with provided keySerde and valueSerde.
@@ -56,13 +37,13 @@ public class Produced<K, V> {
      * @param valueSerde    Serde to use for serializing the value
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new {@link Produced} instance configured with keySerde and valueSerde
+     * @return A new {@link Produced} instance configured with keySerde and valueSerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde) {
-        return new Produced<>(keySerde, valueSerde, null);
+    static <K, V> Produced<K, V> with(final Serde<K> keySerde,
+                                      final Serde<V> valueSerde) {
+        return new ProducedInternal<>(keySerde, valueSerde, null);
     }
 
     /**
@@ -75,14 +56,14 @@ public class Produced<K, V> {
      *                      will be used
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
+     * @return A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde,
-                                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        return new Produced<>(keySerde, valueSerde, partitioner);
+    static <K, V> Produced<K, V> with(final Serde<K> keySerde,
+                                      final Serde<V> valueSerde,
+                                      final StreamPartitioner<? super K, ? super V> partitioner) {
+        return new ProducedInternal<>(keySerde, valueSerde, partitioner);
     }
 
     /**
@@ -90,12 +71,12 @@ public class Produced<K, V> {
      * @param keySerde      Serde to use for serializing the key
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new {@link Produced} instance configured with keySerde
+     * @return A new {@link Produced} instance configured with keySerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> keySerde(final Serde<K> keySerde) {
-        return new Produced<>(keySerde, null, null);
+    static <K, V> Produced<K, V> keySerde(final Serde<K> keySerde) {
+        return new ProducedInternal<>(keySerde, null, null);
     }
 
     /**
@@ -103,12 +84,12 @@ public class Produced<K, V> {
      * @param valueSerde    Serde to use for serializing the key
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new {@link Produced} instance configured with valueSerde
+     * @return A new {@link Produced} instance configured with valueSerde
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> valueSerde(final Serde<V> valueSerde) {
-        return new Produced<>(null, valueSerde, null);
+    static <K, V> Produced<K, V> valueSerde(final Serde<V> valueSerde) {
+        return new ProducedInternal<>(null, valueSerde, null);
     }
 
     /**
@@ -118,12 +99,12 @@ public class Produced<K, V> {
      *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will be used
      * @param <K>           key type
      * @param <V>           value type
-     * @return  A new {@link Produced} instance configured with partitioner
+     * @return A new {@link Produced} instance configured with partitioner
      * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
-    public static <K, V> Produced<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
-        return new Produced<>(null, null, partitioner);
+    static <K, V> Produced<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
+        return new ProducedInternal<>(null, null, partitioner);
     }
 
     /**
@@ -133,47 +114,19 @@ public class Produced<K, V> {
      *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
      * @return this
      */
-    public Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
-        this.partitioner = partitioner;
-        return this;
-    }
+    Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**
      * Produce records using the provided valueSerde.
      * @param valueSerde    Serde to use for serializing the value
      * @return this
      */
-    public Produced<K, V> withValueSerde(final Serde<V> valueSerde) {
-        this.valueSerde = valueSerde;
-        return this;
-    }
+    Produced<K, V> withValueSerde(final Serde<V> valueSerde);
 
     /**
      * Produce records using the provided keySerde.
      * @param keySerde    Serde to use for serializing the key
      * @return this
      */
-    public Produced<K, V> withKeySerde(final Serde<K> keySerde) {
-        this.keySerde = keySerde;
-        return this;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        final Produced<?, ?> produced = (Produced<?, ?>) o;
-        return Objects.equals(keySerde, produced.keySerde) &&
-               Objects.equals(valueSerde, produced.valueSerde) &&
-               Objects.equals(partitioner, produced.partitioner);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(keySerde, valueSerde, partitioner);
-    }
+    Produced<K, V> withKeySerde(final Serde<K> keySerde);
 }

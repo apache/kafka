@@ -20,8 +20,8 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.ProducedInternal
 import org.apache.kafka.streams.processor.StreamPartitioner
-import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.Serdes
+import org.apache.kafka.streams.scala.Serdes._
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
@@ -32,7 +32,7 @@ class ProducedTest extends FlatSpec with Matchers {
   "Create a Produced" should "create a Produced with Serdes" in {
     val produced: Produced[String, Long] = Produced.`with`[String, Long]
 
-    val internalProduced = new ProducedInternal(produced)
+    val internalProduced = produced.asInstanceOf[ProducedInternal[String, Long]]
     internalProduced.keySerde.getClass shouldBe Serdes.String.getClass
     internalProduced.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
@@ -43,9 +43,9 @@ class ProducedTest extends FlatSpec with Matchers {
     }
     val produced: Produced[String, Long] = Produced.`with`(partitioner)
 
-    val internalConsumed = new ProducedInternal(produced)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
-    internalConsumed.streamPartitioner shouldBe partitioner
+    val internalProduced = produced.asInstanceOf[ProducedInternal[String, Long]]
+    internalProduced.keySerde.getClass shouldBe Serdes.String.getClass
+    internalProduced.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalProduced.streamPartitioner shouldBe partitioner
   }
 }
