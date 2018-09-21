@@ -127,16 +127,24 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testHeadersExtendedSerializerDeserializer(): Unit = {
-    val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
-    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] with DeserializerImpl
+    val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl {
+      override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = super.serialize(topic, headers, data)
+    }
+    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] with DeserializerImpl {
+      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = super.deserialize(topic, headers, data)
+    }
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
 
   @Test
   def testHeadersSerializerDeserializer(): Unit = {
-    val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
-    val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
+    val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl {
+      override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = super.serialize(topic, headers, data)
+    }
+    val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl {
+      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = super.deserialize(topic, headers, data)
+    }
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
