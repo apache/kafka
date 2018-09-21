@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -201,7 +202,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
@@ -382,12 +383,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
         punctuators.add(capturedPunctuator);
 
-        return new Cancellable() {
-            @Override
-            public void cancel() {
-                capturedPunctuator.cancel();
-            }
-        };
+        return capturedPunctuator::cancel;
     }
 
     /**
@@ -506,8 +502,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         // This interface is assumed by state stores that add change-logging.
         // Rather than risk a mysterious ClassCastException during unit tests, throw an explanatory exception.
 
-        throw new UnsupportedOperationException("MockProcessorContext does not provide record collection. " +
-            "For processor unit tests, use an in-memory state store with change-logging disabled. " +
-            "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration.");
+        throw new UnsupportedOperationException(
+            "MockProcessorContext does not provide record collection. " +
+                "For processor unit tests, use an in-memory state store with change-logging disabled. " +
+                "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration."
+        );
     }
 }
