@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.examples.temperature;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -88,7 +89,7 @@ public class TemperatureDemo {
             // to group and reduce them, a key is needed ("temp" has been chosen)
             .selectKey((key, value) -> "temp")
             .groupByKey()
-            .windowedBy(TimeWindows.of(TimeUnit.SECONDS.toMillis(TEMPERATURE_WINDOW_SIZE)))
+            .windowedBy(TimeWindows.of(Duration.ofSeconds(TEMPERATURE_WINDOW_SIZE)))
             .reduce((value1, value2) -> {
                 if (Integer.parseInt(value1) > Integer.parseInt(value2))
                     return value1;

@@ -158,7 +158,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public Cancellable schedule(Duration interval, PunctuationType type,
         Punctuator callback) throws IllegalArgumentException {
-        return schedule(interval.toMillis(), type, callback);
+        return schedule(interval, type, callback);
     }
 
     void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {

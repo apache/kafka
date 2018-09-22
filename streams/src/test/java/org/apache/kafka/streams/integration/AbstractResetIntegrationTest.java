@@ -66,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 
 import kafka.tools.StreamsResetter;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -526,7 +527,7 @@ public abstract class AbstractResetIntegrationTest {
 
         input.through(INTERMEDIATE_USER_TOPIC)
             .groupByKey()
-            .windowedBy(TimeWindows.of(35).advanceBy(10))
+            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
             .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
