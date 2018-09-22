@@ -39,7 +39,6 @@ import org.rocksdb.Options;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +46,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -55,8 +55,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class RocksDBStoreTest {
-    private Serializer<String> stringSerializer = new StringSerializer();
-    private Deserializer<String> stringDeserializer = new StringDeserializer();
+    private final Serializer<String> stringSerializer = new StringSerializer();
+    private final Deserializer<String> stringDeserializer = new StringDeserializer();
     private RocksDBStore rocksDBStore;
     private InternalMockProcessorContext context;
     private File dir;
@@ -94,7 +94,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() throws Exception {
+    public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init(context, rocksDBStore);
 
         final String message = "how can a 4 ounce bird carry a 2lb coconut";
@@ -106,8 +106,8 @@ public class RocksDBStoreTest {
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
 
-        final byte[] restoredKey = "restoredKey".getBytes("UTF-8");
-        final byte[] restoredValue = "restoredValue".getBytes("UTF-8");
+        final byte[] restoredKey = "restoredKey".getBytes(UTF_8);
+        final byte[] restoredValue = "restoredValue".getBytes(UTF_8);
         restoreBytes.add(KeyValue.pair(restoredKey, restoredValue));
 
         context.restore("test", restoreBytes);
@@ -191,7 +191,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() throws Exception {
+    public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         rocksDBStore.init(context, rocksDBStore);
@@ -208,7 +208,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldRestoreAll() throws Exception {
+    public void shouldRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         rocksDBStore.init(context, rocksDBStore);
@@ -246,9 +246,9 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldHandleDeletesOnRestoreAll() throws Exception {
+    public void shouldHandleDeletesOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), null));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
 
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
@@ -264,15 +264,15 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldHandleDeletesAndPutbackOnRestoreAll() throws Exception {
+    public void shouldHandleDeletesAndPutbackOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
         // this will be deleted
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), null));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         // this will restore key "1" as WriteBatch applies updates in order
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "restored".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "restored".getBytes(UTF_8)));
 
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
@@ -304,7 +304,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldRestoreThenDeleteOnRestoreAll() throws Exception {
+    public void shouldRestoreThenDeleteOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         rocksDBStore.init(context, rocksDBStore);
@@ -329,9 +329,9 @@ public class RocksDBStoreTest {
 
         entries.clear();
 
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), null));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), null));
 
         context.restore(rocksDBStore.name(), entries);
 
@@ -423,11 +423,11 @@ public class RocksDBStoreTest {
         }
     }
 
-    private List<KeyValue<byte[], byte[]>> getKeyValueEntries() throws UnsupportedEncodingException {
+    private List<KeyValue<byte[], byte[]>> getKeyValueEntries() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         return entries;
     }
 }
