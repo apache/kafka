@@ -28,8 +28,9 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.coordinator.CoordinatorUtils
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.ReplicaManager
+import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -40,7 +41,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
+import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -529,28 +530,15 @@ class GroupMetadataManager(brokerId: Int,
         val removedGroups = mutable.Set[String]()
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
-          val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None,
-            minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
-          val memRecords = fetchDataInfo.records match {
-            case records: MemoryRecords => records
-            case fileRecords: FileRecords =>
-              val sizeInBytes = fileRecords.sizeInBytes
-              val bytesNeeded = Math.max(config.loadBufferSize, sizeInBytes)
-
-              // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
-              if (buffer.capacity < bytesNeeded) {
-                if (config.loadBufferSize < bytesNeeded)
-                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
-                    s"configured offsets.load.buffer.size (${config.loadBufferSize} bytes)")
-
-                buffer = ByteBuffer.allocate(bytesNeeded)
-              } else {
-                buffer.clear()
-              }
-
-              fileRecords.readInto(buffer, 0)
-              MemoryRecords.readableRecords(buffer)
+          val (memRecords, readBuffer) = CoordinatorUtils.readRecords(log, currOffset, buffer,
+            config.loadBufferSize)
+          // Only warn the first time we expand over the configured buffer size
+          if (readBuffer != buffer && readBuffer.capacity > config.loadBufferSize) {
+            warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger " +
+              s"(${readBuffer.capacity} bytes) than configured ${KafkaConfig.OffsetsLoadBufferSizeProp} " +
+              s"(${config.loadBufferSize} bytes)")
           }
+          buffer = readBuffer
 
           memRecords.batches.asScala.foreach { batch =>
             val isTxnOffsetCommit = batch.isTransactional

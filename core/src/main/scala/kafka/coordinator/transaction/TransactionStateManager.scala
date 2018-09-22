@@ -22,18 +22,17 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import kafka.coordinator.CoordinatorUtils
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
-import kafka.server.Defaults
-import kafka.server.ReplicaManager
+import kafka.server.{Defaults, KafkaConfig, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.IsolationLevel
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -307,28 +306,16 @@ class TransactionStateManager(brokerId: Int,
             && !shuttingDown.get()
             && inReadLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
-            val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
-              minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
-            val memRecords = fetchDataInfo.records match {
-              case records: MemoryRecords => records
-              case fileRecords: FileRecords =>
-                val sizeInBytes = fileRecords.sizeInBytes
-                val bytesNeeded = Math.max(config.transactionLogLoadBufferSize, sizeInBytes)
 
-                // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
-                if (buffer.capacity < bytesNeeded) {
-                  if (config.transactionLogLoadBufferSize < bytesNeeded)
-                    warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
-                      s"configured transaction.state.log.load.buffer.size (${config.transactionLogLoadBufferSize} bytes)")
-
-                  buffer = ByteBuffer.allocate(bytesNeeded)
-                } else {
-                  buffer.clear()
-                }
-                buffer.clear()
-                fileRecords.readInto(buffer, 0)
-                MemoryRecords.readableRecords(buffer)
+            val (memRecords, readBuffer) = CoordinatorUtils.readRecords(log, currOffset, buffer,
+              config.transactionLogLoadBufferSize)
+            // Only warn the first time we expand over the configured buffer size
+            if (readBuffer != buffer && readBuffer.capacity > config.transactionLogLoadBufferSize) {
+              warn(s"Loaded transaction metadata from $topicPartition with buffer larger " +
+                s"(${readBuffer.capacity} bytes) than configured ${KafkaConfig.TransactionsLoadBufferSizeProp} " +
+                s"(${config.transactionLogLoadBufferSize} bytes)")
             }
+            buffer = readBuffer
 
             memRecords.batches.asScala.foreach { batch =>
               for (record <- batch.asScala) {
