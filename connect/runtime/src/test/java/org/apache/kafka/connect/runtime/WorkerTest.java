@@ -132,7 +132,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartAndStopConnector() throws Exception {
+    public void testStartAndStopConnector() {
         expectConverters();
         expectStartStorage();
 
@@ -201,7 +201,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartConnectorFailure() throws Exception {
+    public void testStartConnectorFailure() {
         expectConverters();
         expectStartStorage();
 
@@ -245,7 +245,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testAddConnectorByAlias() throws Exception {
+    public void testAddConnectorByAlias() {
         expectConverters();
         expectStartStorage();
 
@@ -309,7 +309,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testAddConnectorByShortAlias() throws Exception {
+    public void testAddConnectorByShortAlias() {
         expectConverters();
         expectStartStorage();
 
@@ -385,7 +385,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testReconfigureConnectorTasks() throws Exception {
+    public void testReconfigureConnectorTasks() {
         expectConverters();
         expectStartStorage();
 
@@ -567,7 +567,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartTaskFailure() throws Exception {
+    public void testStartTaskFailure() {
         expectConverters();
         expectStartStorage();
 

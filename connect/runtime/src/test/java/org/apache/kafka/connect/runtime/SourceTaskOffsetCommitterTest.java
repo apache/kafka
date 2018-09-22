@@ -82,7 +82,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
     }
 
     @Test
-    public void testSchedule() throws Exception {
+    public void testSchedule() {
         Capture<Runnable> taskWrapper = EasyMock.newCapture();
 
         EasyMock.expect(executor.scheduleWithFixedDelay(

@@ -1407,7 +1407,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void printMetrics() {
-        System.out.println("");
+        System.out.println();
         sinkMetricValue("sink-record-read-rate");
         sinkMetricValue("sink-record-read-total");
         sinkMetricValue("sink-record-send-rate");

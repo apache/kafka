@@ -836,7 +836,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testRequestProcessingOrder() throws Exception {
+    public void testRequestProcessingOrder() {
         final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
         final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, null, null);
         final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, null, null);
@@ -1423,7 +1423,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testInconsistentConfigs() throws Exception {
+    public void testInconsistentConfigs() {
         // FIXME: if we have inconsistent configs, we need to request forced reconfig + write of the connector's task configs
         // This requires inter-worker communication, so needs the REST API
     }
