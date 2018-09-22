@@ -153,7 +153,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNameParser);
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNameParser, null);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
