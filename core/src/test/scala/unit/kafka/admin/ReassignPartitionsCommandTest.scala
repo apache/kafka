@@ -527,6 +527,8 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   def testResumePartitionReassignmentThatWasCompleted() {
     val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
+    // create brokers
+    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     // put the partition in the reassigned path as well
@@ -536,8 +538,6 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
     reassignPartitionsCommand.reassignPartitions()
-    // create brokers
-    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
 
     // wait until reassignment completes
     TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),

@@ -53,7 +53,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createOrUpdateTopicPartitionAssignmentPathInZK(topic, replicaAssignment, topicConfig)
+    createOrUpdateTopicPartitionAssignmentPathInZK(topic, replicaAssignment, topicConfig, rackAwareMode)
   }
 
   /**
@@ -85,13 +85,15 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param topic
    * @param partitionReplicaAssignment
    * @param config
+   * @param rackAwareMode
    * @param update
-   */
+    */
   def createOrUpdateTopicPartitionAssignmentPathInZK(topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
+                                                     rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                                                      update: Boolean = false) {
-    validateCreateOrUpdateTopic(topic, partitionReplicaAssignment, config, update)
+    validateCreateOrUpdateTopic(topic, partitionReplicaAssignment, config, update, rackAwareMode)
 
     if (!update) {
       // write out the config if there is any, this isn't transactional with the partition assignments
@@ -112,7 +114,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   def validateCreateOrUpdateTopic(topic: String,
                                   partitionReplicaAssignment: Map[Int, Seq[Int]],
                                   config: Properties,
-                                  update: Boolean): Unit = {
+                                  update: Boolean,
+                                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
     // validate arguments
     Topic.validate(topic)
 
@@ -132,17 +135,28 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       }
     }
 
-    if (partitionReplicaAssignment.values.map(_.size).toSet.size != 1)
-      throw new InvalidReplicaAssignmentException("All partitions should have the same number of replicas")
-
-    partitionReplicaAssignment.values.foreach(reps =>
-      if (reps.size != reps.toSet.size)
-        throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
-    )
+    /*
+    Validate partition replica assignment during topic creation.
+    Skip validation for alter topic to avoid validation failures for add partitions.
+     */
+    if (!update) {
+      validatePartitionReplicaAssignment(topic, partitionReplicaAssignment, rackAwareMode)
+    }
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update)
       LogConfig.validate(config)
+  }
+
+  def validatePartitionReplicaAssignment(topic: String,
+                                         partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                         rackAwareMode: RackAwareMode): Unit = {
+    val assignmentPartition0 = partitionReplicaAssignment.getOrElse(0,
+      throw new AdminOperationException(
+        s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
+          s"Assignment: $partitionReplicaAssignment"))
+    val allBrokers = getBrokerMetadatas(rackAwareMode)
+    validateReplicaAssignment(partitionReplicaAssignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
   }
 
   private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
@@ -229,7 +243,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       createOrUpdateTopicPartitionAssignmentPathInZK(topic, proposedAssignment, update = true)
     }
     proposedAssignment
-
   }
 
   def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
@@ -244,9 +257,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException(
           s"Duplicate brokers not allowed in replica assignment: " +
             s"${replicas.mkString(", ")} for partition id $partitionId.")
-      if (!replicas.toSet.subsetOf(availableBrokerIds))
+      if ((replicas.toSet -- availableBrokerIds).size == replicas.size)
         throw new BrokerNotAvailableException(
-          s"Some brokers specified for partition id $partitionId are not available. " +
+          s"All brokers specified for partition id $partitionId are not available. " +
             s"Specified brokers: ${replicas.mkString(", ")}, " +
             s"available brokers: ${availableBrokerIds.mkString(", ")}.")
       partitionId -> replicas.size

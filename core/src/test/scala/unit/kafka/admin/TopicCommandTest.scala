@@ -24,7 +24,7 @@ import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, TopicExistsException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidReplicaAssignmentException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -160,7 +160,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testCreateWithValidReplicaAssignment() {
+  def testCreateWithAllAvailableBrokersReplicaAssignment() {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -184,13 +184,32 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testCreateWithInValidReplicaAssignment() {
+  def testCreateWithSomeAvailableBrokersReplicaAssignment() {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     val topic = "test"
     val replicaAssignment = "0:1,3:2,2:3"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    TopicCommand.createTopic(zkClient, createNotExistsOpts)
+  }
+
+  @Test
+  def testCreateWithNoAvailableBrokersReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,3:2,3:4"
 
     // create the topic
     val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
@@ -202,6 +221,29 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val createNotExistsOpts = new TopicCommandOptions(
       Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
     intercept[BrokerNotAvailableException] {
+      TopicCommand.createTopic(zkClient, createNotExistsOpts)
+    }
+  }
+
+  @Test
+  def testCreateWithDifferentRFReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,1:2,2:0:1"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    intercept[InvalidReplicaAssignmentException] {
+      TopicCommand.createTopic(zkClient, createOpts)
+    }
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    intercept[InvalidReplicaAssignmentException] {
       TopicCommand.createTopic(zkClient, createNotExistsOpts)
     }
   }

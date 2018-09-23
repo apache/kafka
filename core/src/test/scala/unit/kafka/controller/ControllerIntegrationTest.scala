@@ -305,7 +305,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @Test
   def testControlledShutdown() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(0  -> List(2, 0, 1), 1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
     // create brokers
@@ -343,7 +343,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
     controller.controlledShutdown(0, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
-    assertEquals(1, partitionsRemaining.size)
+    assertEquals(expectedReplicaAssignment.size, partitionsRemaining.size)
     // leader doesn't change since all the replicas are shut down
     assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
   }

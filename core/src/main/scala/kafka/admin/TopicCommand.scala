@@ -102,15 +102,6 @@ object TopicCommand extends Logging {
     try {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        def validateReplicaAssigment: Unit = {
-          val assignmentPartition0 = assignment.getOrElse(0,
-            throw new AdminOperationException(
-              s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
-                s"Assignment: $assignment"))
-          val allBrokers = adminZkClient.getBrokerMetadatas()
-          adminZkClient.validateReplicaAssignment(assignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
-        }
-        validateReplicaAssigment
         adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignment, configs, update = false)
       } else {
         CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
@@ -297,12 +288,7 @@ object TopicCommand extends Logging {
     val ret = new mutable.HashMap[Int, List[Int]]()
     for (i <- 0 until partitionList.size) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
-      val duplicateBrokers = CoreUtils.duplicates(brokerList)
-      if (duplicateBrokers.nonEmpty)
-        throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicateBrokers.mkString(",")))
       ret.put(i, brokerList.toList)
-      if (ret(i).size != ret(0).size)
-        throw new AdminOperationException("Partition " + i + " has different replication factor: " + brokerList)
     }
     ret.toMap
   }
