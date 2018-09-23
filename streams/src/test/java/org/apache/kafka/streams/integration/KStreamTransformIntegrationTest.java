@@ -34,7 +34,6 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -114,36 +113,31 @@ public class KStreamTransformIntegrationTest {
 
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream
-            .flatTransform(new TransformerSupplier<Integer, Integer, List<KeyValue<Integer, Integer>>>() {
-                @Override
-                public Transformer<Integer, Integer, List<KeyValue<Integer, Integer>>> get() {
-                    return new Transformer<Integer, Integer, List<KeyValue<Integer, Integer>>>() {
-                        private KeyValueStore<Integer, Integer> state;
+            .flatTransform(() -> new Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>>() {
+                    private KeyValueStore<Integer, Integer> state;
 
-                        @Override
-                        public void init(final ProcessorContext context) {
-                            state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
-                        }
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                    }
 
-                        @Override
-                        public List<KeyValue<Integer, Integer>> transform(final Integer key, final Integer value) {
-                            final List<KeyValue<Integer, Integer>> result = new ArrayList<>();
-                            state.putIfAbsent(key, 0);
-                            final Integer storedValue = state.get(key);
-                            int outputValue = storedValue.intValue();
-                            for (int i = 0; i < 3; i++) {
-                                result.add(new KeyValue<Integer, Integer>(key + i, value + outputValue++));
-                            }
-                            state.put(key, new Integer(outputValue));
-                            return result;
+                    @Override
+                    public Iterable<KeyValue<Integer, Integer>> transform(final Integer key, final Integer value) {
+                        final List<KeyValue<Integer, Integer>> result = new ArrayList<>();
+                        state.putIfAbsent(key, 0);
+                        final Integer storedValue = state.get(key);
+                        int outputValue = storedValue.intValue();
+                        for (int i = 0; i < 3; i++) {
+                            result.add(new KeyValue<Integer, Integer>(key + i, value + outputValue++));
                         }
+                        state.put(key, new Integer(outputValue));
+                        return result;
+                    }
 
-                        @Override
-                        public void close() {
-                        }
-                    };
-                }
-            }, "myTransformState")
+                    @Override
+                    public void close() {
+                    }
+                }, "myTransformState")
             .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.Integer()));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
@@ -187,33 +181,28 @@ public class KStreamTransformIntegrationTest {
 
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream
-            .transform(new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
-                @Override
-                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                        private KeyValueStore<Integer, Integer> state;
+            .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                    private KeyValueStore<Integer, Integer> state;
 
-                        @Override
-                        public void init(final ProcessorContext context) {
-                            state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
-                        }
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                    }
 
-                        @Override
-                        public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-                            state.putIfAbsent(key, 0);
-                            final Integer storedValue = state.get(key);
-                            int outputValue = storedValue.intValue();
-                            final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + outputValue++);
-                            state.put(key, outputValue);
-                            return result;
-                        }
+                    @Override
+                    public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                        state.putIfAbsent(key, 0);
+                        final Integer storedValue = state.get(key);
+                        int outputValue = storedValue.intValue();
+                        final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + outputValue++);
+                        state.put(key, outputValue);
+                        return result;
+                    }
 
-                        @Override
-                        public void close() {
-                        }
-                    };
-                }
-            }, "myTransformState")
+                    @Override
+                    public void close() {
+                    }
+                }, "myTransformState")
             .to(outputTopic, Produced.with(Serdes.Integer(), Serdes.Integer()));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();

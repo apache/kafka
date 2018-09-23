@@ -524,29 +524,24 @@ public class KStreamAggregationIntegrationTest {
                 .windowedBy(SessionWindows.with(sessionGap))
                 .count()
                 .toStream()
-                .transform(new TransformerSupplier<Windowed<String>, Long, KeyValue<Object, Object>>() {
-                    @Override
-                    public Transformer<Windowed<String>, Long, KeyValue<Object, Object>> get() {
-                        return new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {
-                            private ProcessorContext context;
+                .transform(() -> new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {
+                        private ProcessorContext context;
 
-                            @Override
-                            public void init(final ProcessorContext context) {
-                                this.context = context;
-                            }
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            this.context = context;
+                        }
 
-                            @Override
-                            public KeyValue<Object, Object> transform(final Windowed<String> key, final Long value) {
-                                results.put(key, KeyValue.pair(value, context.timestamp()));
-                                latch.countDown();
-                                return null;
-                            }
+                        @Override
+                        public KeyValue<Object, Object> transform(final Windowed<String> key, final Long value) {
+                            results.put(key, KeyValue.pair(value, context.timestamp()));
+                            latch.countDown();
+                            return null;
+                        }
 
-                            @Override
-                            public void close() {}
-                        };
-                    }
-                });
+                        @Override
+                        public void close() {}
+                    });
 
         startStreams();
         latch.await(30, TimeUnit.SECONDS);

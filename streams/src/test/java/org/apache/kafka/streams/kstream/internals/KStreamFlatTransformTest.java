@@ -31,7 +31,6 @@ import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
@@ -69,7 +68,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
 
     @Test
     public void shouldTransformInputRecordToMultipleOutputRecords() {
-        final List<KeyValue<Integer, Integer>> outputRecords = Arrays.asList(
+        final Iterable<KeyValue<Integer, Integer>> outputRecords = Arrays.asList(
                 KeyValue.pair(2, 20),
                 KeyValue.pair(3, 30),
                 KeyValue.pair(4, 40));
@@ -77,9 +76,9 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
         EasyMock.reset(transformer);
 
         EasyMock.expect(transformer.transform(inputKey, inputValue)).andReturn(outputRecords);
-        context.forward(outputRecords.get(0).key, outputRecords.get(0).value);
-        context.forward(outputRecords.get(1).key, outputRecords.get(1).value);
-        context.forward(outputRecords.get(2).key, outputRecords.get(2).value);
+        for (final KeyValue<Integer, Integer> outputRecord : outputRecords) {
+            context.forward(outputRecord.key, outputRecord.value);
+        }
         replayAll();
 
         processor.process(inputKey, inputValue);
