@@ -49,7 +49,6 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
@@ -709,30 +708,24 @@ public class KStreamAggregationIntegrationTest {
                .windowedBy(UnlimitedWindows.of().startOn(startTime))
                .count()
                .toStream()
-               .transform(new TransformerSupplier<Windowed<String>, Long, KeyValue<Object, Object>>() {
+               .transform(() -> new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {
+                   private ProcessorContext context;
+
                    @Override
-                   public Transformer<Windowed<String>, Long, KeyValue<Object, Object>> get() {
-                       return new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {
-                           private ProcessorContext context;
-
-                           @Override
-                           public void init(final ProcessorContext context) {
-                               this.context = context;
-                           }
-
-                           @Override
-                           public KeyValue<Object, Object> transform(final Windowed<String> key, final Long value) {
-                               results.put(key, KeyValue.pair(value, context.timestamp()));
-                               latch.countDown();
-                               return null;
-                           }
-
-                           @Override
-                           public void close() {}
-                       };
+                   public void init(final ProcessorContext context) {
+                       this.context = context;
                    }
-               });
 
+                   @Override
+                   public KeyValue<Object, Object> transform(final Windowed<String> key, final Long value) {
+                       results.put(key, KeyValue.pair(value, context.timestamp()));
+                       latch.countDown();
+                       return null;
+                   }
+
+                   @Override
+                   public void close() {}
+               });
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
         assertThat(results.get(new Windowed<>("bob", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(2L, t4)));
