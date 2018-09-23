@@ -235,6 +235,26 @@
 	Note, that the describe default behavior can be changed in the Processor API by assigning timestamps to output records explicitly when calling <code>#forward()</code>.
     </p>
 
+    <h3><a id="streams_concepts_aggregations" href="#streams_concepts_aggregations">Aggregations</a></h3>
+    <p>
+        An <strong>aggregation</strong> operation takes one input stream or table, and yields a new table by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum.
+    </p>
+
+    <p>
+        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+    </p>
+
+    <h3 <a id="streams_concepts_windowing" href="streams_concepts_windowing">Windowing</a></h3>
+    <p>
+        Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
+    </p>
+    <p>
+        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>retention period</strong> for the window. This retention period controls how long Kafka Streams will wait for <strong>out-of-order</strong> or <strong>late-arriving</strong> data records for a given window. If a record arrives after the retention period of a window has passed, the record is discarded and will not be processed in that window.
+    </p>
+    <p>
+        Late-arriving records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how late records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records can only be considered as such (i.e. as arriving &quot;late&quot;) for event-time or ingestion-time semantics. In both cases, Kafka Streams is able to properly handle late-arriving records.
+    </p>
+
     <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
     <p>
         When implementing stream processing use cases in practice, you typically need both <strong>streams</strong> and also <strong>databases</strong>.
