@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
 import java.io.Closeable;
 import java.util.Map;
 
@@ -44,6 +46,17 @@ public interface Deserializer<T> extends Closeable {
      * @return deserialized typed data; may be null
      */
     T deserialize(String topic, byte[] data);
+
+    /**
+     * Deserialize a record value from a byte array into a value or object.
+     * @param topic topic associated with the data
+     * @param headers headers associated with the record; may be empty.
+     * @param data serialized bytes; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.
+     * @return deserialized typed data; may be null
+     */
+    default T deserialize(String topic, Headers headers, byte[] data) {
+        return deserialize(topic, data);
+    }
 
     @Override
     void close();

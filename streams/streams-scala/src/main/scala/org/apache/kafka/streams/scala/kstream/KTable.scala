@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.state.KeyValueStore
 
 /**

@@ -66,61 +66,55 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  @Test
-  def testHeadersExtendedSerializerDeserializer() {
+  trait SerializerImpl extends Serializer[Array[Byte]]{
+    var serializer = new ByteArraySerializer()
+
+    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+      headers.add("content-type", "application/octet-stream".getBytes)
+      serializer.serialize(topic, data)
+    }
+
+    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+
+    override def close(): Unit = serializer.close()
+
+    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
+      fail("method should not be invoked")
+      null
+    }
+  }
+
+  trait DeserializerImpl extends Deserializer[Array[Byte]]{
+    var deserializer = new ByteArrayDeserializer()
+
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+      val header = headers.lastHeader("content-type")
+      assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
+      deserializer.deserialize(topic, data)
+    }
+
+    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+
+    override def close(): Unit = deserializer.close()
+
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
+      fail("method should not be invoked")
+      null
+    }
+  }
+
+  private def testHeadersSerializeDeserialize(serializer: Serializer[Array[Byte]], deserializer: Deserializer[Array[Byte]]): Unit = {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
-    val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
-
-      var serializer = new ByteArraySerializer()
-
-      override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        headers.add("content-type", "application/octet-stream".getBytes)
-        serializer.serialize(topic, data)
-      }
-
-      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-
-      override def close(): Unit = serializer.close()
-
-      override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
-        fail("method should not be invoked")
-        null
-      }
-    }
-
-
-    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] {
-
-      var deserializer = new ByteArrayDeserializer()
-
-      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        val header = headers.lastHeader("content-type")
-        assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
-        deserializer.deserialize(topic, data)
-      }
-
-      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
-
-
-      override def close(): Unit = deserializer.close()
-
-      override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
-        fail("method should not be invoked")
-        null
-      }
-
-    }
-
     val producer = createProducer(
       keySerializer = new ByteArraySerializer,
-      valueSerializer = extendedSerializer)
+      valueSerializer = serializer)
     producer.send(record)
 
     val consumer = createConsumer(
       keyDeserializer = new ByteArrayDeserializer,
-      valueDeserializer = extendedDeserializer)
+      valueDeserializer = deserializer)
     assertEquals(0, consumer.assignment.size)
     consumer.assign(List(tp).asJava)
     assertEquals(1, consumer.assignment.size)
@@ -129,6 +123,24 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = consumeRecords(consumer = consumer, numRecords = numRecords)
 
     assertEquals(numRecords, records.size)
+  }
+
+  @Test
+  def testHeadersExtendedSerializerDeserializer(): Unit = {
+    val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
+
+    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] with DeserializerImpl
+
+    testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
+  }
+
+  @Test
+  def testHeadersSerializerDeserializer(): Unit = {
+    val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
+
+    val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
+
+    testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
 
   @Test
@@ -1493,7 +1505,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val fetchLag0 = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1))
     assertNotNull(fetchLag0)
     val expectedLag = numMessages - records.count
-    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
+    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.metricValue.asInstanceOf[Double], epsilon)
 
     // Remove topic from subscription
     consumer.subscribe(List(topic2).asJava, listener0)
@@ -1566,7 +1578,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(fetchLag)
 
     val expectedLag = numMessages - records.count
-    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
+    assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.metricValue.asInstanceOf[Double], epsilon)
 
     consumer.assign(List(tp2).asJava)
     TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
@@ -1624,7 +1636,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     tags.put("partition", String.valueOf(tp.partition()))
     val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
 
-    assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
+    assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon)
   }
 
   @Test

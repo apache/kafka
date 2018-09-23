@@ -524,20 +524,24 @@ public class QueryableStateIntegrationTest {
             myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.<String, Long>keyValueStore());
 
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertEquals(myFilterStore.get(expectedEntry.key), expectedEntry.value);
+            TestUtils.waitForCondition(() -> expectedEntry.value.equals(myFilterStore.get(expectedEntry.key)),
+                    "Cannot get expected result");
         }
         for (final KeyValue<String, Long> batchEntry : batch1) {
             if (!expectedBatch1.contains(batchEntry)) {
-                assertNull(myFilterStore.get(batchEntry.key));
+                TestUtils.waitForCondition(() -> myFilterStore.get(batchEntry.key) == null,
+                        "Cannot get null result");
             }
         }
 
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertNull(myFilterNotStore.get(expectedEntry.key));
+            TestUtils.waitForCondition(() -> myFilterNotStore.get(expectedEntry.key) == null,
+                    "Cannot get null result");
         }
         for (final KeyValue<String, Long> batchEntry : batch1) {
             if (!expectedBatch1.contains(batchEntry)) {
-                assertEquals(myFilterNotStore.get(batchEntry.key), batchEntry.value);
+                TestUtils.waitForCondition(() -> batchEntry.value.equals(myFilterNotStore.get(batchEntry.key)),
+                        "Cannot get expected result");
             }
         }
     }
@@ -568,24 +572,25 @@ public class QueryableStateIntegrationTest {
             mockTime);
 
         final KTable<String, String> t1 = builder.table(streamOne);
-        final KTable<String, Long> t2 = t1.mapValues(new ValueMapper<String, Long>() {
+        t1.mapValues(new ValueMapper<String, Long>() {
             @Override
             public Long apply(final String value) {
                 return Long.valueOf(value);
             }
-        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()));
-        t2.toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+        }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
-        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
         final ReadOnlyKeyValueStore<String, Long>
             myMapStore = kafkaStreams.store("queryMapValues",
             QueryableStoreTypes.<String, Long>keyValueStore());
         for (final KeyValue<String, String> batchEntry : batch1) {
-            assertEquals(myMapStore.get(batchEntry.key), Long.valueOf(batchEntry.value));
+            assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
     }
 

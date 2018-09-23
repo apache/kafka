@@ -170,7 +170,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     // state mgr will be overridden by the state dir and store maps
     @Override
-    public void initialized() {}
+    public void initialize() {}
 
     public void setStreamTime(final long currentTime) {
         streamTime = currentTime;

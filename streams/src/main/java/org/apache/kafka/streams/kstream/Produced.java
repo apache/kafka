@@ -71,7 +71,8 @@ public class Produced<K, V> {
      * @param valueSerde    Serde to use for serializing the value
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and {@code keySerde} provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner}
+     *                      will be used
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner

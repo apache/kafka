@@ -74,7 +74,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         }
     };
 
-    private long streamTime = RecordQueue.NOT_KNOWN;
+    private long streamTime = RecordQueue.UNKNOWN;
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
