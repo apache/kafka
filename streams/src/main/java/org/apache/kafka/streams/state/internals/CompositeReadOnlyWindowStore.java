@@ -71,7 +71,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(K key, Instant from, Duration duration) throws IllegalArgumentException {
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
@@ -97,7 +97,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
         Objects.requireNonNull(from, "from can't be null");
         Objects.requireNonNull(to, "to can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
@@ -132,7 +132,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
             @Override
             public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {

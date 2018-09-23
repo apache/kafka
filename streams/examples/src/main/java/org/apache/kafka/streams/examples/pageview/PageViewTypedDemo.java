@@ -40,7 +40,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.tests;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
@@ -38,7 +39,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 public class StreamsStandByReplicaTest {
 
@@ -164,7 +164,7 @@ public class StreamsStandByReplicaTest {
     }
 
     private static void shutdown(final KafkaStreams streams) {
-        streams.close(10, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(10));
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {

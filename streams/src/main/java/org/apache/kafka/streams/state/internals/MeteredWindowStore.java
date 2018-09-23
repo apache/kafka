@@ -146,7 +146,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(K key, Instant from, Duration duration) throws IllegalArgumentException {
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         return new MeteredWindowStoreIterator<>(inner.fetch(keyBytes(key), from, duration),
             fetchTime,
             metrics,
@@ -165,7 +165,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         return new MeteredWindowedKeyValueIterator<>(inner.fetchAll(from, duration),
             fetchTime,
             metrics,
@@ -179,7 +179,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
         return new MeteredWindowedKeyValueIterator<>(inner.fetch(keyBytes(from), keyBytes(to), fromTime, duration),
             fetchTime,
             metrics,

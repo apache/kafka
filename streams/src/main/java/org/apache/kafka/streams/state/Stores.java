@@ -155,7 +155,7 @@ public class Stores {
      *                              careful to set it the same as the windowed keys you're actually storing.
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
-     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, long, long, boolean, long)} instead
+     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean, long)} instead
      */
     @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -271,8 +271,8 @@ public class Stores {
             throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
         }
 
-        long retentionPeriodMs = retentionPeriod.toMillis();
-        long windowSizeMs = windowSize.toMillis();
+        final long retentionPeriodMs = retentionPeriod.toMillis();
+        final long windowSizeMs = windowSize.toMillis();
 
         if (windowSizeMs > retentionPeriodMs) {
             throw new IllegalArgumentException("The retention period of the window store "

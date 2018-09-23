@@ -814,7 +814,7 @@ public class KafkaStreams {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
+        close(Duration.ofSeconds(DEFAULT_CLOSE_TIMEOUT));
     }
 
     /**

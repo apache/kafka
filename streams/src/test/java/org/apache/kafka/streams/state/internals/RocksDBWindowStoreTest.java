@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.header.Headers;
@@ -107,7 +108,7 @@ public class RocksDBWindowStoreTest {
 
     private WindowStore<Integer, String> createWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, retainDuplicates, segmentInterval),
+            Stores.persistentWindowStore(windowName, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize), retainDuplicates, segmentInterval),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -770,7 +771,7 @@ public class RocksDBWindowStoreTest {
         final long retentionPeriod = 0x7a00000000000000L;
 
         final WindowStore<String, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, true),
+            Stores.persistentWindowStore(windowName, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize), true),
             Serdes.String(),
             Serdes.String()).build();
 
@@ -846,7 +847,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, 60_000L, 60_000L, true),
+            Stores.persistentWindowStore(windowName, Duration.ofMinutes(1L), Duration.ofMinutes(1L), true),
             Serdes.Bytes(),
             Serdes.String()).build();
 

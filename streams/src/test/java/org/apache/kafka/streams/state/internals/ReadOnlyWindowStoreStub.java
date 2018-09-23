@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -60,9 +62,17 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
+
+        final long timeFrom = from.toEpochMilli();
+        final long timeTo = from.toEpochMilli() + duration.toMillis();
         final List<KeyValue<Long, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
             final Map<K, V> kvMap = data.get(now);
@@ -120,9 +130,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
+        final long timeFrom = from.toEpochMilli();
+        final long timeTo = from.toEpochMilli() + duration.toMillis();
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (final long now : data.keySet()) {
             if (!(now >= timeFrom && now <= timeTo)) continue;
@@ -166,9 +183,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+        return fetch(from, to, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+    }
+
+    @Override public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime,
+        final Duration duration) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
+        final long timeFrom = fromTime.toEpochMilli();
+        final long timeTo = duration.toMillis();
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
             final NavigableMap<K, V> kvMap = data.get(now);

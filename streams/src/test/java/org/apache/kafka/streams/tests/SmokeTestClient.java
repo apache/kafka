@@ -41,7 +41,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
@@ -83,7 +82,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(5));
         // do not remove these printouts since they are needed for health scripts
         if (!uncaughtException) {
             System.out.println("SMOKE-TEST-CLIENT-CLOSED");
@@ -253,7 +252,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-                streamsClient.close(30, TimeUnit.SECONDS);
+                streamsClient.close(Duration.ofSeconds(30));
             }
         });
 

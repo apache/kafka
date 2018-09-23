@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -101,7 +102,7 @@ public class CachingWindowStoreTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore("store-name", 3600000L, 60000L, false),
+            Stores.persistentWindowStore("store-name", Duration.ofHours(1L), Duration.ofMinutes(1L), false),
             Serdes.String(),
             Serdes.String())
             .withCachingEnabled();

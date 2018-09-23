@@ -74,7 +74,7 @@ public class KStreamKStreamJoinTest {
             },
             JoinWindows.of(ofMillis(100)),
             Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
-        )
+        );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

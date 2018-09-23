@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -54,7 +55,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -213,7 +213,7 @@ public class RepartitionOptimizingIntegrationTest {
         assertThat(3, equalTo(processorValueCollector.size()));
         assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
 
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(5));
     }
 
 

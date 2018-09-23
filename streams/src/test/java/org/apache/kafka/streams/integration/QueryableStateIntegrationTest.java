@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import java.time.Duration;
+import java.time.Instant;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -221,7 +222,7 @@ public class QueryableStateIntegrationTest {
     @After
     public void shutdown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close(30, TimeUnit.SECONDS);
+            kafkaStreams.close(Duration.ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -362,7 +363,7 @@ public class QueryableStateIntegrationTest {
                         final int index = metadata.hostInfo().port();
                         final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
                         final ReadOnlyWindowStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
-                        return store != null && store.fetch(key, from, to) != null;
+                        return store != null && store.fetch(key, Instant.ofEpochMilli(from), Duration.ofMillis(to - from)) != null;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
@@ -1018,7 +1019,7 @@ public class QueryableStateIntegrationTest {
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
                                               final String key) {
 
-        final WindowStoreIterator<Long> fetch = store.fetch(key, 0, System.currentTimeMillis());
+        final WindowStoreIterator<Long> fetch = store.fetch(key, Instant.ofEpochMilli(0), Duration.ofMillis(System.currentTimeMillis()));
         if (fetch.hasNext()) {
             final KeyValue<Long, Long> next = fetch.next();
             return Collections.singleton(KeyValue.pair(key, next.value));
@@ -1029,7 +1030,7 @@ public class QueryableStateIntegrationTest {
     private Map<String, Long> fetchMap(final ReadOnlyWindowStore<String, Long> store,
                                        final String key) {
 
-        final WindowStoreIterator<Long> fetch = store.fetch(key, 0, System.currentTimeMillis());
+        final WindowStoreIterator<Long> fetch = store.fetch(key, Instant.ofEpochMilli(0), Duration.ofMillis(System.currentTimeMillis()));
         if (fetch.hasNext()) {
             final KeyValue<Long, Long> next = fetch.next();
             return Collections.singletonMap(key, next.value);

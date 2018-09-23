@@ -93,7 +93,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public Cancellable schedule(Duration interval, PunctuationType type, Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
         return delegate.schedule(interval, type, callback);
     }
 

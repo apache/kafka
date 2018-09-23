@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.perf;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -471,8 +472,8 @@ public class SimpleBenchmark {
         final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 "store",
-                AGGREGATE_WINDOW_SIZE * 3,
-                AGGREGATE_WINDOW_SIZE,
+                Duration.ofMillis(AGGREGATE_WINDOW_SIZE * 3),
+                Duration.ofMillis(AGGREGATE_WINDOW_SIZE),
                 false,
                 60_000L
             ),
@@ -678,7 +679,7 @@ public class SimpleBenchmark {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
 
-                streamsClient.close(30, TimeUnit.SECONDS);
+                streamsClient.close(Duration.ofSeconds(30));
             }
         });
 

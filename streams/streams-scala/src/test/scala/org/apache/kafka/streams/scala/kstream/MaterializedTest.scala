@@ -18,6 +18,8 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
+import java.time.Duration
+
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala._
@@ -50,7 +52,7 @@ class MaterializedTest extends FlatSpec with Matchers {
   }
 
   "Create a Materialize with a window store supplier" should "create a Materialized with Serdes and a store supplier" in {
-    val storeSupplier = Stores.persistentWindowStore("store", 1, 1, true)
+    val storeSupplier = Stores.persistentWindowStore("store", Duration.ofMillis(1), Duration.ofMillis(1), true)
     val materialized: Materialized[String, Long, ByteArrayWindowStore] =
       Materialized.as[String, Long](storeSupplier)
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -200,7 +201,7 @@ public abstract class AbstractResetIntegrationTest {
 
     void cleanupTest() throws Exception {
         if (streams != null) {
-            streams.close(30, TimeUnit.SECONDS);
+            streams.close(Duration.ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }

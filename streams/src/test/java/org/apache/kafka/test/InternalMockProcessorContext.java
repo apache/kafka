@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.time.Duration;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -204,6 +205,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval, final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 

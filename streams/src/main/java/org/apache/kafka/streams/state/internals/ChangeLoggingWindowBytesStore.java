@@ -59,7 +59,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public WindowStoreIterator<byte[]> fetch(Bytes key, Instant from, Duration duration) throws IllegalArgumentException {
+    public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant from, final Duration duration) throws IllegalArgumentException {
         return bytesStore.fetch(key, from, duration);
     }
 
@@ -69,8 +69,8 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes from, Bytes to, Instant fromTime,
-        Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final Instant fromTime,
+        final Duration duration) throws IllegalArgumentException {
         return bytesStore.fetch(from, to, fromTime, duration);
     }
 
@@ -85,7 +85,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         return bytesStore.fetchAll(from, duration);
     }
 

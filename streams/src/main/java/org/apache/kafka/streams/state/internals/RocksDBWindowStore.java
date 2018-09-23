@@ -94,7 +94,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(K key, Instant from, Duration duration) throws IllegalArgumentException {
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 
@@ -105,7 +105,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
         return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
     }
 
@@ -122,7 +122,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 

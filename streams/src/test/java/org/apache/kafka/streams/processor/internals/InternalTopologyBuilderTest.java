@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -588,7 +589,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(
             Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("store1", 30_000L, 10_000L, false),
+                Stores.persistentWindowStore("store1", Duration.ofSeconds(30L), Duration.ofSeconds(10L), false),
                 Serdes.String(),
                 Serdes.String()
             ),

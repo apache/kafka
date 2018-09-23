@@ -162,7 +162,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     public TimeWindows advanceBy(final Duration advance) {
         ApiUtils.validateMillisecondDuration(advance, "advance");
 
-        long advanceMs = advance.toMillis();
+        final long advanceMs = advance.toMillis();
 
         if (advanceMs <= 0 || advanceMs > sizeMs) {
             throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d].", sizeMs));

@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement an IoT demo application

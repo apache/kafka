@@ -383,8 +383,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Cancellable schedule(Duration interval, PunctuationType type,
-        Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval, final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(interval.toMillis(), type, callback);
 
         punctuators.add(capturedPunctuator);
