@@ -105,8 +105,7 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or too big
      */
     public static SessionWindows with(final Duration inactivityGap) {
-        ApiUtils.validateMillisecondDuration(inactivityGap, "inactivityGap");
-
+        ApiUtils.validateMillisecondDurationPositive(inactivityGap, "inactivityGap");
         return new SessionWindows(inactivityGap.toMillis(), DEFAULT_RETENTION_MS, null);
     }
 
@@ -143,7 +142,6 @@ public final class SessionWindows {
      */
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
-
         return new SessionWindows(
             gapMs,
             maintainDurationMs,

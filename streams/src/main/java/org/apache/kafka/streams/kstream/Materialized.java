@@ -248,7 +248,6 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(retention, "retention");
-
         this.retention = retention;
         return this;
     }

@@ -378,6 +378,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    @Deprecated
     public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
         return schedule(Duration.ofMillis(intervalMs), type, callback);
     }

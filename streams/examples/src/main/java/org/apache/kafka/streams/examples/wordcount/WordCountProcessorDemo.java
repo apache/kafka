@@ -64,7 +64,7 @@ public final class WordCountProcessorDemo {
                 @SuppressWarnings("unchecked")
                 public void init(final ProcessorContext context) {
                     this.context = context;
-                    this.context.schedule(Duration.ofMillis(1000), PunctuationType.STREAM_TIME, timestamp -> {
+                    this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                         try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
                             System.out.println("----------- " + timestamp + " ----------- ");
 

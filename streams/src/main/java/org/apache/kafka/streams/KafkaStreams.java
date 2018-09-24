@@ -848,6 +848,8 @@ public class KafkaStreams {
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeout.toMillis());
 
+        ApiUtils.validateMillisecondDuration(timeout, "timeout");
+
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped

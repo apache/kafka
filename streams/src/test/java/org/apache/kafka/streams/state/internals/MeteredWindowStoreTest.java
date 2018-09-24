@@ -40,6 +40,8 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Instant.ofEpochMilli;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertEquals;
@@ -110,11 +112,11 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), ofEpochMilli(1), ofMillis(0))).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         EasyMock.replay(innerStoreMock);
 
         store.init(context, store);
-        store.fetch("a", 1, 1).close(); // recorded on close;
+        store.fetch("a", ofEpochMilli(1), ofMillis(0)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
@@ -123,11 +125,11 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), ofEpochMilli(1), ofMillis(0))).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         EasyMock.replay(innerStoreMock);
 
         store.init(context, store);
-        store.fetch("a", "b", 1, 1).close(); // recorded on close;
+        store.fetch("a", "b", ofEpochMilli(1), ofMillis(0)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());

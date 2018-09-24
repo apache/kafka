@@ -93,6 +93,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
+    @Deprecated
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }

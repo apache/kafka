@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.ApiUtils;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -141,12 +142,15 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    @Deprecated
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
         return new MeteredWindowStoreIterator<>(inner.fetch(keyBytes(key), from, duration),
             fetchTime,
             metrics,
@@ -160,12 +164,15 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
         return new MeteredWindowedKeyValueIterator<>(inner.fetchAll(from, duration),
             fetchTime,
             metrics,
@@ -180,6 +187,8 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
         return new MeteredWindowedKeyValueIterator<>(inner.fetch(keyBytes(from), keyBytes(to), fromTime, duration),
             fetchTime,
             metrics,

@@ -80,7 +80,6 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      */
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(start, "start");
-
         return new UnlimitedWindows(start.toEpochMilli());
     }
 

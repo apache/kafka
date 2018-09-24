@@ -64,6 +64,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Instant.ofEpochMilli;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -472,8 +473,8 @@ public class SimpleBenchmark {
         final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 "store",
-                Duration.ofMillis(AGGREGATE_WINDOW_SIZE * 3),
-                Duration.ofMillis(AGGREGATE_WINDOW_SIZE),
+                ofMillis(AGGREGATE_WINDOW_SIZE * 3),
+                ofMillis(AGGREGATE_WINDOW_SIZE),
                 false,
                 60_000L
             ),
@@ -500,7 +501,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(final Integer key, final byte[] value) {
                         final long timestamp = context().timestamp();
-                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, timestamp - 1000L, timestamp + 1000L);
+                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, ofEpochMilli(timestamp - 1000L), ofMillis(1000L));
                         while (iter.hasNext()) {
                             iter.next();
                         }

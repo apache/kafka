@@ -63,7 +63,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * |   A   |     25     |    35    |
      * +--------------------------------
      * </pre>
-     * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
+     * And we call {@code store.fetch("A", Instant.ofEpochMilli(10), Duration.ofMillis(20))} then the results will contain the first
      * three windows from the table above, i.e., all those where 10 <= start time <= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
@@ -102,7 +102,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * |   A   |     25     |    35    |
      * +--------------------------------
      * </pre>
-     * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
+     * And we call {@code store.fetch("A", ofEpochMilli(10), ofMillis(20))} then the results will contain the first
      * three windows from the table above, i.e., all those where 10 <= start time <= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
@@ -132,6 +132,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
      */
+    @Deprecated
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 
     /**

@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -88,25 +89,33 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    @Deprecated
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
+        return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
-        return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)),
+            from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
     }
 
     @Override
+    @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+        return fetch(from, to, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
-        return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)),
+            Bytes.wrap(serdes.rawKey(to)), fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     @Override
@@ -116,14 +125,18 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetchAll(timeFrom, timeTo);
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
-        return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
+        final KeyValueIterator<Bytes, byte[]> bytesIterator =
+            bytesStore.fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     private void maybeUpdateSeqnumForDups() {

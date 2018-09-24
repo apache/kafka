@@ -36,6 +36,8 @@ import org.junit.runner.RunWith;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Instant.ofEpochMilli;
 import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
@@ -97,21 +99,21 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        EasyMock.expect(inner.fetch(bytesKey, 0, 10)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock.expect(inner.fetch(bytesKey, ofEpochMilli(0), ofMillis(10))).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
 
         init();
 
-        store.fetch(bytesKey, 0, 10);
+        store.fetch(bytesKey, ofEpochMilli(0), ofMillis(10));
         EasyMock.verify(inner);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        EasyMock.expect(inner.fetch(bytesKey, bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(inner.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofMillis(1))).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
 
-        store.fetch(bytesKey, bytesKey, 0, 1);
+        store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofMillis(1));
         EasyMock.verify(inner);
     }
 

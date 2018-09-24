@@ -21,6 +21,7 @@ import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -181,6 +182,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
+    @Deprecated
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
@@ -190,6 +192,9 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
+
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, from, duration);
         if (cache == null) {
@@ -227,6 +232,9 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
+
+        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
 
         final long timeFrom = fromTime.toEpochMilli();
         final long timeTo = fromTime.toEpochMilli() + duration.toMillis();
@@ -281,6 +289,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
     
     @Override
+    @Deprecated
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
     }
@@ -288,6 +297,9 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         validateStoreOpen();
+
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
 
         final long timeFrom = from.toEpochMilli();
         final long timeTo = from.toEpochMilli() + duration.toMillis();

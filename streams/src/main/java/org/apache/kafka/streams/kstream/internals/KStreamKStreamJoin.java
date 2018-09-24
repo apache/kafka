@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -88,7 +90,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             final long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
             final long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
-            try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V2> iter =
+                     otherWindow.fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom))) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
                     context().forward(key, joiner.apply(value, iter.next().value));
