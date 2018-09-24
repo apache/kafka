@@ -208,15 +208,15 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetAllStreamsInstancesWithNoStoresNewVersion() {
 
-        final TaskId t5 = new TaskId(4, 1);
+        final TaskId task2p1 = new TaskId(2, 1);
         final HostInfo hostFour = new HostInfo("host-four", 8080);
-        hostToTasks.put(hostFour, Utils.mkSet(t5));
-        final TopicPartition tp5 = new TopicPartition("topic-five", 1);
+        hostToTasks.put(hostFour, Utils.mkSet(task2p1));
+        final TopicPartition tp5 = new TopicPartition("topic-four", 1);
 
-        metadataState1.onChangeNewVersion(hostToTasks, cluster.withPartitions(Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null))), 4);
+        metadataState1.onChangeNewVersion(hostToTasks, cluster.withPartitions(Collections.singletonMap(tp5, new PartitionInfo("topic-four", 1, null, null, null))), 4);
 
         final StreamsMetadata expected = new StreamsMetadata(hostFour, Collections.singleton(globalTable),
-                null, Collections.singleton(t5));
+                null, Collections.singleton(task2p1));
         final Collection<StreamsMetadata> actual = metadataState1.getAllMetadata();
         assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
     }
