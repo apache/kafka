@@ -64,7 +64,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
 
     }
 
