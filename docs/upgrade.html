@@ -39,6 +39,10 @@
         you will instead need to override <code>delivery.timeout.ms</code>.</li>
     <li>The <code>ListGroup</code> API now expects, as a recommended alternative, <code>Describe Group</code> access to the groups a user should be able to list.
         Even though the old <code>Describe Cluster</code> access is still supported for backward compatibility, using it for this API is not advised.</li>
+    <li><a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=87298242">KIP-336</a> deprecates the ExtendedSerializer and ExtendedDeserializer interfaces and
+        propagates the usage of Serializer and Deserializer. ExtendedSerializer and ExtendedDeserializer were introduced with
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a> to provide record headers for serializers and deserializers
+        in a Java 7 compatible fashion. Now we consolidated these interfaces as Java 7 support has been dropped since.</li>
 </ol>
 
 <h5><a id="upgrade_210_notable" href="#upgrade_210_notable">Notable changes in 2.1.0</a></h5>
