@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -33,29 +34,29 @@ import java.util.Collection;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.common.serialization.Serdes.Long;
+import static org.apache.kafka.common.serialization.Serdes.String;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
+import static org.apache.kafka.streams.kstream.WindowedSerdes.timeWindowedSerdeFrom;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorTest {
-    /**
-     * Use this value to indicate that the test correctness does not depend on any particular number
-     */
     private static final long ARBITRARY_LONG = 5L;
 
-    /**
-     * Use this value to indicate that the test correctness does not depend on any particular window
-     */
+    private static final long ARBITRARY_TIMESTAMP = 1993L;
+
+    private static final Change<Long> ARBITRARY_CHANGE = new Change<>(7L, 14L);
+
     private static final TimeWindow ARBITRARY_WINDOW = new TimeWindow(0L, 100L);
 
     @Test
     public void zeroTimeLimitShouldImmediatelyEmit() {
         final KTableSuppressProcessor<String, Long> processor =
-            new KTableSuppressProcessor<>(getImpl(untilTimeLimit(ZERO, unbounded())));
+            new KTableSuppressProcessor<>(getImpl(untilTimeLimit(ZERO, unbounded())), String(), new FullChangeSerde<>(Long()));
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
@@ -64,7 +65,7 @@ public class KTableSuppressProcessorTest {
         context.setTimestamp(timestamp);
         context.setStreamTime(timestamp);
         final String key = "hey";
-        final Change<Long> value = new Change<>(ARBITRARY_LONG, ARBITRARY_LONG);
+        final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
 
         assertThat(context.forwarded(), hasSize(1));
@@ -76,7 +77,11 @@ public class KTableSuppressProcessorTest {
     @Test
     public void windowedZeroTimeLimitShouldImmediatelyEmit() {
         final KTableSuppressProcessor<Windowed<String>, Long> processor =
-            new KTableSuppressProcessor<>(getImpl(untilTimeLimit(ZERO, unbounded())));
+            new KTableSuppressProcessor<>(
+                getImpl(untilTimeLimit(ZERO, unbounded())),
+                timeWindowedSerdeFrom(String.class),
+                new FullChangeSerde<>(Long())
+            );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
@@ -85,7 +90,7 @@ public class KTableSuppressProcessorTest {
         context.setTimestamp(timestamp);
         context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", ARBITRARY_WINDOW);
-        final Change<Long> value = new Change<>(ARBITRARY_LONG, ARBITRARY_LONG);
+        final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
 
         assertThat(context.forwarded(), hasSize(1));
@@ -94,21 +99,32 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
-    @Test
-    public void intermediateSuppressionShouldThrow() {
+    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    public void intermediateSuppressionShouldBufferAndEmitLater() {
         final KTableSuppressProcessor<String, Long> processor =
-            new KTableSuppressProcessor<>(getImpl(untilTimeLimit(Duration.ofMillis(1), unbounded())));
+            new KTableSuppressProcessor<>(
+                getImpl(untilTimeLimit(ofMillis(1), unbounded())),
+                String(),
+                new FullChangeSerde<>(Long())
+            );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
 
-        try {
-            processor.process("hey", new Change<>(null, 1L));
-            fail("expected an exception for now");
-        } catch (final KTableSuppressProcessor.NotImplementedException e) {
-            // expected
-        }
+        final long timestamp = 0L;
+        context.setRecordMetadata("topic", 0, 0, null, timestamp);
+        final String key = "hey";
+        final Change<Long> value = new Change<>(null, 1L);
+        processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
+
+        assertThat(context.scheduledPunctuators(), hasSize(1));
+        context.scheduledPunctuators().get(0).getPunctuator().punctuate(1);
+
+        assertThat(context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
+        assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
 
@@ -118,49 +134,68 @@ public class KTableSuppressProcessorTest {
     }
 
 
-    @Test
-    public void finalResultsSuppressionShouldThrow() {
-        final KTableSuppressProcessor<Windowed<String>, Long> processor =
-            new KTableSuppressProcessor<>(finalResults(ofMillis(1)));
+    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    public void finalResultsSuppressionShouldBufferAndEmitLater() {
+        final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
+            finalResults(ofMillis(1L)),
+            timeWindowedSerdeFrom(String.class),
+            new FullChangeSerde<>(Long())
+        );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
 
-        context.setTimestamp(ARBITRARY_LONG);
-        try {
-            processor.process(new Windowed<>("hey", ARBITRARY_WINDOW), new Change<>(ARBITRARY_LONG, ARBITRARY_LONG));
-            fail("expected an exception for now");
-        } catch (final KTableSuppressProcessor.NotImplementedException e) {
-            // expected
-        }
+        final long timestamp = ARBITRARY_TIMESTAMP;
+        context.setRecordMetadata("topic", 0, 0, null, timestamp);
+        final Windowed<String> key = new Windowed<>("hey", ARBITRARY_WINDOW);
+        final Change<Long> value = ARBITRARY_CHANGE;
+        processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
+
+        assertThat(context.scheduledPunctuators(), hasSize(1));
+        context.scheduledPunctuators().get(0).getPunctuator().punctuate(timestamp + 1L);
+
+        assertThat(context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
+        assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
-    @Test
-    public void finalResultsWith0GraceBeforeWindowEndShouldThrow() {
-        final KTableSuppressProcessor<Windowed<String>, Long> processor =
-            new KTableSuppressProcessor<>(finalResults(ofMillis(0)));
+    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    public void finalResultsWith0GraceBeforeWindowEndShouldBufferAndEmitLater() {
+        final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
+            finalResults(ofMillis(0)),
+            timeWindowedSerdeFrom(String.class),
+            new FullChangeSerde<>(Long())
+        );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
 
         final long timestamp = 5L;
-        context.setTimestamp(timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
-        final Change<Long> value = new Change<>(ARBITRARY_LONG, ARBITRARY_LONG);
-        try {
-            processor.process(key, value);
-            fail("expected an exception");
-        } catch (final KTableSuppressProcessor.NotImplementedException e) {
-            // expected
-        }
+        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        final long windowEnd = 100L;
+        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
+        final Change<Long> value = ARBITRARY_CHANGE;
+        processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
+
+        assertThat(context.scheduledPunctuators(), hasSize(1));
+        context.scheduledPunctuators().get(0).getPunctuator().punctuate(windowEnd);
+
+        assertThat(context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
+        assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
     @Test
     public void finalResultsWith0GraceAtWindowEndShouldImmediatelyEmit() {
-        final KTableSuppressProcessor<Windowed<String>, Long> processor =
-            new KTableSuppressProcessor<>(finalResults(ofMillis(0)));
+        final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
+            finalResults(ofMillis(0)),
+            timeWindowedSerdeFrom(String.class),
+            new FullChangeSerde<>(Long())
+        );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
@@ -169,7 +204,7 @@ public class KTableSuppressProcessorTest {
         context.setTimestamp(timestamp);
         context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
-        final Change<Long> value = new Change<>(ARBITRARY_LONG, ARBITRARY_LONG);
+        final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
 
         assertThat(context.forwarded(), hasSize(1));
