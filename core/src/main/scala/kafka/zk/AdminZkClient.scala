@@ -87,7 +87,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param config
    * @param rackAwareMode
    * @param update
-    */
+   */
   def createOrUpdateTopicPartitionAssignmentPathInZK(topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
@@ -257,6 +257,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException(
           s"Duplicate brokers not allowed in replica assignment: " +
             s"${replicas.mkString(", ")} for partition id $partitionId.")
+      // Topic creation should be interrupted if all the replicas are unavailable.
       if ((replicas.toSet -- availableBrokerIds).size == replicas.size)
         throw new BrokerNotAvailableException(
           s"All brokers specified for partition id $partitionId are not available. " +
