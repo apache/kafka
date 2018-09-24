@@ -25,7 +25,6 @@ import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec}
-import kafka.metrics.KafkaMetricsConfig._
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -203,6 +202,10 @@ object Defaults {
   val MetricSampleWindowMs = 30000
   val MetricReporterClasses = ""
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
+
+
+  /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
+  val KafkaMetricsPollingIntervalSeconds = 10
 
   /** ********* SSL configuration ***********/
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
@@ -410,6 +413,10 @@ object KafkaConfig {
   val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
   val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
+
+  /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
+  val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
+  val KafkaMetricsPollingIntervalSecondsProp = "kafka.metrics.polling.interval.secs"
 
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassProp = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
@@ -721,6 +728,17 @@ object KafkaConfig {
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
 
+
+  /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
+  val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +
+    " The reporters should implement <code>kafka.metrics.KafkaMetricsReporter</code> trait. If a client wants" +
+    " to expose JMX operations on a custom reporter, the custom reporter needs to additionally implement an MBean" +
+    " trait that extends <code>kafka.metrics.KafkaMetricsReporterMBean</code> trait so that the registered MBean is compliant with" +
+    " the standard MBean convention."
+
+  val KafkaMetricsPollingIntervalSecondsDoc = s"The metrics polling interval (in seconds) which can be used" +
+    s" in $KafkaMetricsReporterClassesProp implementations."
+
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassDoc = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC
 
@@ -948,7 +966,7 @@ object KafkaConfig {
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, "", LOW, KafkaMetricsReporterClassesDoc)
-      .define(KafkaMetricsPollingIntervalSecondsProp, INT, KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
+      .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 
       /** ********* Quota configuration ***********/
       .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ProducerQuotaBytesPerSecondDefaultDoc)

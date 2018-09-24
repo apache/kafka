@@ -725,9 +725,9 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
-        //Kafka Yammer metrics configs
-        case KafkaMetricsConfig.KafkaMetricsReporterClassesProp => // ignore
-        case KafkaMetricsConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
+        //Kafka Yammer metrics reporter configs
+        case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
+        case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
