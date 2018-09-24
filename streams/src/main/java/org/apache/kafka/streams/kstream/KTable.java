@@ -390,6 +390,16 @@ public interface KTable<K, V> {
     <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
+     * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
+     *
+     * This controls what updates downstream table and stream operations will receive.
+     *
+     * @param suppressed Configuration object determining what, if any, updates to suppress
+     * @return A new KTable with the desired suppression characteristics.
+     */
+    KTable<K, V> suppress(final Suppressed<K> suppressed);
+
+    /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possibly a new type), with default serializers, deserializers, and state store.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
