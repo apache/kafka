@@ -447,7 +447,7 @@ public class SslFactory implements Reconfigurable {
         private final Principal subjectPrincipal;
         private final Set<List<?>> subjectAltNames;
 
-        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException, IOException {
+        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException {
             Enumeration<String> aliases = keystore.aliases();
             List<CertificateEntries> entries = new ArrayList<>();
             while (aliases.hasMoreElements()) {
@@ -463,7 +463,7 @@ public class SslFactory implements Reconfigurable {
             this.subjectPrincipal = cert.getSubjectX500Principal();
             Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
             // use a set for comparison
-            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.<List<?>>emptySet();
+            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.emptySet();
         }
 
         @Override

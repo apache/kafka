@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="checkstyle/java.header" />
+    <property name="headerFile" value="${headerFile}" />
   </module>
 
   <module name="TreeWalker">
@@ -137,6 +137,6 @@
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="checkstyle/suppressions.xml"/>
+    <property name="file" value="${suppressionsFile}"/>
   </module>
 </module>

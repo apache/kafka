@@ -69,7 +69,7 @@ public class StandbyTask extends AbstractTask {
         log.trace("Initializing state stores");
         registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-        processorContext.initialized();
+        processorContext.initialize();
         taskInitialized = true;
         return true;
     }
@@ -103,6 +103,8 @@ public class StandbyTask extends AbstractTask {
         flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
+
+        commitNeeded = false;
     }
 
     /**
@@ -185,6 +187,11 @@ public class StandbyTask extends AbstractTask {
         }
 
         stateMgr.updateStandbyStates(partition, restoreRecords, lastOffset);
+
+        if (!restoreRecords.isEmpty()) {
+            commitNeeded = true;
+        }
+
         return remainingRecords;
     }
 

@@ -74,12 +74,12 @@ public class DeleteGroupsRequest extends AbstractRequest {
     }
 
     private DeleteGroupsRequest(Set<String> groups, short version) {
-        super(version);
+        super(ApiKeys.DELETE_GROUPS, version);
         this.groups = groups;
     }
 
     public DeleteGroupsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DELETE_GROUPS, version);
         Object[] groupsArray = struct.getArray(GROUPS_KEY_NAME);
         Set<String> groups = new HashSet<>(groupsArray.length);
         for (Object group : groupsArray)

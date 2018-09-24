@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala
+package org.apache.kafka.streams.scala.utils
 
 import java.util.Properties
 
@@ -24,8 +24,9 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import org.junit._
+import org.junit.experimental.categories.Category
 import org.junit.rules.TemporaryFolder
 import org.scalatest.junit.JUnitSuite
 
@@ -33,6 +34,7 @@ import org.scalatest.junit.JUnitSuite
  * Test suite base that prepares Kafka cluster for stream-table joins in Kafka Streams
  * <p>
  */
+@Category(Array(classOf[IntegrationTest]))
 class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamToTableJoinTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)

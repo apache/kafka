@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -34,6 +36,8 @@ import org.junit.Test;
 
 import java.util.Properties;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -44,7 +48,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowReduceTest {
 
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
     @Test
@@ -68,6 +72,7 @@ public class KStreamWindowReduceTest {
         }
     }
 
+    @Deprecated // testing deprecated functionality (behavior of until)
     @Test
     public void shouldLogAndMeterOnExpiredEvent() {
 
@@ -83,6 +88,7 @@ public class KStreamWindowReduceTest {
 
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            LogCaptureAppender.setClassLoggerToDebug(KStreamWindowReduce.class);
             final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
             driver.pipeInput(recordFactory.create("TOPIC", "k", "100", 100L));
             driver.pipeInput(recordFactory.create("TOPIC", "k", "0", 0L));
@@ -93,13 +99,24 @@ public class KStreamWindowReduceTest {
             driver.pipeInput(recordFactory.create("TOPIC", "k", "5", 5L));
             LogCaptureAppender.unregister(appender);
 
-            assertThat(getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue(), equalTo(5.0));
+            final Metric dropMetric = driver.metrics().get(new MetricName(
+                "late-record-drop-total",
+                "stream-processor-node-metrics",
+                "The total number of occurrence of late-record-drop operations.",
+                mkMap(
+                    mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry("processor-node-id", "KSTREAM-REDUCE-0000000002")
+                )
+            ));
+
+            assertThat(dropMetric.metricValue(), equalTo(5.0));
             assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[1] timestamp=[0] window=[0] expiration=[0]",
-                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[2] timestamp=[1] window=[0] expiration=[0]",
-                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[3] timestamp=[2] window=[0] expiration=[0]",
-                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[4] timestamp=[3] window=[0] expiration=[0]",
-                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[5] timestamp=[4] window=[0] expiration=[0]"
+                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[1] timestamp=[0] window=[0,5) expiration=[5]",
+                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[2] timestamp=[1] window=[0,5) expiration=[5]",
+                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[3] timestamp=[2] window=[0,5) expiration=[5]",
+                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[4] timestamp=[3] window=[0,5) expiration=[5]",
+                "Skipping record for expired window. key=[k] topic=[TOPIC] partition=[0] offset=[5] timestamp=[4] window=[0,5) expiration=[5]"
             ));
 
             OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@100/105]", "100", 100);

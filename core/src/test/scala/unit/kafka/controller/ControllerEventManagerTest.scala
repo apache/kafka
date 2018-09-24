@@ -54,7 +54,7 @@ class ControllerEventManagerTest {
     val controllerStats = new ControllerStats
     val eventProcessedListenerCount = new AtomicInteger
     controllerEventManager = new ControllerEventManager(0, controllerStats.rateAndTimeMetrics,
-      _ => eventProcessedListenerCount.incrementAndGet)
+      _ => eventProcessedListenerCount.incrementAndGet, () => ())
     controllerEventManager.start()
 
     val initialTimerCount = timer(metricName).count

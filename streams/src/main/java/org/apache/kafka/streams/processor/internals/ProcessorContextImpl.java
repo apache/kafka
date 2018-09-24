@@ -146,7 +146,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public void commit() {
-        task.needCommit();
+        task.requestCommit();
     }
 
     @Override

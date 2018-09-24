@@ -69,12 +69,12 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
     }
 
     private DescribeDelegationTokenRequest(short version, List<KafkaPrincipal> owners) {
-        super(version);
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN, version);
         this.owners = owners;
     }
 
     public DescribeDelegationTokenRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN, versionId);
 
         Object[] ownerArray = struct.getArray(OWNER_KEY_NAME);
 

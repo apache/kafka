@@ -53,7 +53,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
 
   @Test
   def testProduceConsume() {
-    val producer = producers.head
+    val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
     val producerRecords = (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes,
@@ -64,7 +64,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       assertTrue(recordMetadata.timestamp < now + TimeUnit.SECONDS.toMillis(60))
     }
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(topic))
     val consumerRecords = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
     TestUtils.waitUntilTrue(() => {

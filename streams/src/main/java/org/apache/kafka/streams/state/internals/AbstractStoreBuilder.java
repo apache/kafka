@@ -53,6 +53,12 @@ abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implement
     }
 
     @Override
+    public StoreBuilder<T> withCachingDisabled() {
+        enableCaching = false;
+        return this;
+    }
+
+    @Override
     public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
         Objects.requireNonNull(config, "config can't be null");
         enableLogging = true;

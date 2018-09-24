@@ -62,7 +62,6 @@ public class RecordQueueTest {
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
             null,
-            null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
             skippedRecordsSensor
@@ -102,7 +101,7 @@ public class RecordQueueTest {
 
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(RecordQueue.NOT_KNOWN, queue.timestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
 
         // add three 3 out-of-order records with timestamp 2, 1, 3
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -174,7 +173,7 @@ public class RecordQueueTest {
         queue.clear();
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(RecordQueue.NOT_KNOWN, queue.timestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
 
         // re-insert the three records with 4, 5, 6
         queue.addRawRecords(list3);
