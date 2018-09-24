@@ -14,16 +14,20 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
-from kafkatest.services.kafka import KafkaService
+from ducktape.utils.util import wait_until
+from kafkatest.services.kafka import config_property, KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import config_property
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.delegation_tokens import DelegationTokens
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from ducktape.utils.util import wait_until
 
+from datetime import datetime
+import time
+
+"""
+Basic tests to validate delegation token support
+"""
 class DelegationTokenTest(Test):
-    """Sanity checks on console consumer service class."""
     def __init__(self, test_context):
         super(DelegationTokenTest, self).__init__(test_context)
 
@@ -90,8 +94,16 @@ sasl.kerberos.service.name=kafka
 
         self.consumer.start()
         self.consumer.wait()
-        num_consumed = len(self.consumer.messages_consumed[1])
-        assert 1 == num_consumed, "number of consumed messages: %d" % num_consumed
+
+    def get_datetime_ms(self, input_date):
+        return int(time.mktime(datetime.strptime(input_date,"%Y-%m-%dT%H:%M").timetuple()) * 1000)
+
+    def renew_delegation_token(self):
+        dt = self.delegation_tokens.parse_delegation_token_out()
+        orig_expiry_date_ms = self.get_datetime_ms(dt["expirydate"])
+        new_expirydate_ms = orig_expiry_date_ms + 1000
+
+        self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
     def test_delegation_token_lifecycle(self, security_protocol='SASL_PLAINTEXT', sasl_mechanism='GSSAPI'):
         self.kafka.security_protocol = security_protocol
@@ -100,12 +112,17 @@ sasl.kerberos.service.name=kafka
         self.kafka.start()
 
         self.generate_delegation_token()
-
+        self.renew_delegation_token()
         self.produce_with_delegation_token()
         wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30,
                    err_msg="Expected producer to still be producing.")
+        assert 1 == self.producer.num_acked, "number of acked messages: %d" % self.producer.num_acked
+
         self.consume_with_delegation_token()
+        num_consumed = len(self.consumer.messages_consumed[1])
+        assert 1 == num_consumed, "number of consumed messages: %d" % num_consumed
 
         self.expire_delegation_token()
+
         self.produce_with_delegation_token()
         assert 0 == self.producer.num_acked, "number of acked messages: %d" % self.producer.num_acked

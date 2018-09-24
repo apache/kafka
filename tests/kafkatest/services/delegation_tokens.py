@@ -35,54 +35,71 @@ sasl.kerberos.service.name=kafka
         self.client_prop_path = os.path.join(self.kafka.PERSISTENT_ROOT, "client.properties")
         self.jaas_deleg_conf_path = os.path.join(self.kafka.PERSISTENT_ROOT, "jaas_deleg.conf")
         self.token_hmac_path = os.path.join(self.kafka.PERSISTENT_ROOT, "deleg_token_hmac.out")
-        self.create_delegation_token_out = os.path.join(self.kafka.PERSISTENT_ROOT, "delegation_token.out")
+        self.delegation_token_out = os.path.join(self.kafka.PERSISTENT_ROOT, "delegation_token.out")
         self.expire_delegation_token_out = os.path.join(self.kafka.PERSISTENT_ROOT, "expire_delegation_token.out")
+        self.renew_delegation_token_out = os.path.join(self.kafka.PERSISTENT_ROOT, "renew_delegation_token.out")
 
         self.node = self.kafka.nodes[0]
 
-    def generate_delegation_token(self):
+    def generate_delegation_token(self, maxlifetimeperiod=-1):
         self.node.account.create_file(self.client_prop_path, self.client_properties_content)
 
         cmd = self.base_cmd + "  --create" \
-                "  --max-life-time-period 1486750745585" \
-                "  --command-config %s > %s" % (self.client_prop_path, self.create_delegation_token_out)
+                              "  --max-life-time-period %s" \
+                              "  --command-config %s > %s" % (maxlifetimeperiod, self.client_prop_path, self.delegation_token_out)
         self.node.account.ssh(cmd, allow_fail=False)
 
     def expire_delegation_token(self, hmac):
         cmd = self.base_cmd + "  --expire" \
-                "  --expiry-time-period -1" \
-                "  --hmac %s"  \
-                "  --command-config %s > %s" % (hmac, self.client_prop_path, self.expire_delegation_token_out)
+                              "  --expiry-time-period -1" \
+                              "  --hmac %s" \
+                              "  --command-config %s > %s" % (hmac, self.client_prop_path, self.expire_delegation_token_out)
         self.node.account.ssh(cmd, allow_fail=False)
 
+    def renew_delegation_token(self, hmac, renew_time_period=-1):
+        cmd = self.base_cmd + "  --renew" \
+                              "  --renew-time-period %s" \
+                              "  --hmac %s" \
+                              "  --command-config %s > %s" \
+              % (renew_time_period, hmac, self.client_prop_path, self.renew_delegation_token_out)
+        return self.node.account.ssh_capture(cmd, allow_fail=False)
+
+    def describe_delegation_token(self):
+        cmd = self.base_cmd + "  --describe" \
+                              "  --command-config %s > %s" % (self.client_prop_path, self.delegation_token_out)
+        return self.node.account.ssh_capture(cmd, allow_fail=False)
+
     def create_jaas_conf_with_delegation_token(self):
+        dt = self.parse_delegation_token_out()
         jaas_deleg_content = """
 KafkaClient {
   org.apache.kafka.common.security.scram.ScramLoginModule required
-  username="TOKEN_ID"
-  password="TOKEN_HMAC"
+  username="%s"
+  password="%s"
   tokenauth=true;
 };
-"""
+""" % (dt["tokenid"], dt["hmac"])
         self.node.account.create_file(self.jaas_deleg_conf_path, jaas_deleg_content)
 
-        cmd = 'read -ra TOKEN <<< $(tail -1 %s) && ' \
-              'echo -n ${TOKEN[1]} > %s && '\
-              'sed -i -e "s/TOKEN_ID/${TOKEN[0]}/" %s &&' \
-              'sed -i -e "s|TOKEN_HMAC|${TOKEN[1]}|" %s' \
-              % (self.create_delegation_token_out,
-                 self.token_hmac_path,
-                 self.jaas_deleg_conf_path,
-                 self.jaas_deleg_conf_path)
-
-        self.node.account.ssh(cmd, allow_fail=False)
-
-        with self.node.account.open(self.jaas_deleg_conf_path, "r") as f:
-            jaas_deleg_conf = f.read()
-
-        return jaas_deleg_conf
+        return jaas_deleg_content
 
     def token_hmac(self):
-        with self.node.account.open(self.token_hmac_path, "r") as f:
-            token_hmac = f.read()
-        return token_hmac
+        dt = self.parse_delegation_token_out()
+        return dt["hmac"]
+
+    def parse_delegation_token_out(self):
+        cmd = "tail -1 %s" % self.delegation_token_out
+
+        output_iter = self.node.account.ssh_capture(cmd, allow_fail=False)
+        output = ""
+        for line in output_iter:
+            output += line
+
+        tokenid, hmac, owner, renewers, issuedate, expirydate, maxdate = output.split()
+        return {"tokenid" : tokenid,
+                "hmac" : hmac,
+                "owner" : owner,
+                "renewers" : renewers,
+                "issuedate" : issuedate,
+                "expirydate" :expirydate,
+                "maxdate" : maxdate}

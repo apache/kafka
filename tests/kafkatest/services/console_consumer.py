@@ -60,8 +60,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=30, print_timestamp=False,
-                 isolation_level="read_uncommitted", jaas_override_variables=None):
                  enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
                  kafka_opts_override="", consumer_properties={}, client_prop_file_override=""):
@@ -144,12 +142,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         return prop_file
 
     def get_user_consumer_properties(self):
-        consumer_properties = ""
+        return ' '.join("--consumer-property %s=%s" % (key,val) for (key,val) in self.consumer_properties.iteritems())
 
-        for key,value in self.consumer_properties.iteritems():
-            consumer_properties += " --consumer-property %s=%s" % (key, value)
-
-        return consumer_properties
 
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""

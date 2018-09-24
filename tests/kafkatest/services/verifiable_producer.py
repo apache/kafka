@@ -197,14 +197,6 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         except RemoteCommandError:
             return True
 
-    def get_user_consumer_properties(self):
-        consumer_properties = ""
-
-        for key,value in self.consumer_properties.iteritems():
-            consumer_properties += " --consumer-property %s=%s" % (key, value)
-
-        return consumer_properties
-
     def start_cmd(self, node, idx):
         cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         if self.kafka_opts_override:
