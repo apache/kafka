@@ -41,7 +41,7 @@ import java.util.Set;
 
 public abstract class AbstractTask implements Task {
 
-    final TaskMetadata id;
+    final TaskMetadata metadata;
     final String applicationId;
     final ProcessorTopology topology;
     final ProcessorStateManager stateMgr;
@@ -60,7 +60,7 @@ public abstract class AbstractTask implements Task {
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
-    AbstractTask(final TaskId id,
+    AbstractTask(final TaskId metadata,
                  final Collection<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
@@ -68,9 +68,9 @@ public abstract class AbstractTask implements Task {
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
-        this.id = new TaskMetadata(id,
-                                   partitions.size(),
-                                   topology.stateStores().size());
+        this.metadata = new TaskMetadata(metadata,
+                                         partitions.size(),
+                                         topology.stateStores().size());
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
@@ -78,14 +78,14 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task",metadata);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
         // create the processor state manager
         try {
             stateMgr = new ProcessorStateManager(
-                id,
+               metadata,
                 partitions,
                 isStandby,
                 stateDirectory,
@@ -99,8 +99,8 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public TaskMetadata id() {
-        return id;
+    public TaskMetadata metadata() {
+        return metadata;
     }
 
     @Override
@@ -153,7 +153,7 @@ public abstract class AbstractTask implements Task {
         final StringBuilder sb = new StringBuilder();
         sb.append(indent);
         sb.append("TaskId: ");
-        sb.append(id);
+        sb.append(metadata);
         sb.append("\n");
 
         // print topology
@@ -188,11 +188,11 @@ public abstract class AbstractTask implements Task {
                     log.trace("Updating store offset limits {} for changelog {}", offset, partition);
                 }
             } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s",metadata, partition), e);
             } catch (final WakeupException e) {
                 throw e;
             } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s",metadata, partition), e);
             }
         }
     }
@@ -215,13 +215,13 @@ public abstract class AbstractTask implements Task {
         }
 
         try {
-            if (!stateDirectory.lock(id.taskId)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
+            if (!stateDirectory.lock(metadata.taskId)) {
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix,metadata));
             }
         } catch (final IOException e) {
             throw new StreamsException(
                 String.format("%sFatal error while trying to lock the state directory for task %s",
-                logPrefix, id));
+                logPrefix,metadata));
         }
         log.trace("Initializing state stores");
 
@@ -253,7 +253,7 @@ public abstract class AbstractTask implements Task {
             exception = e;
         } finally {
             try {
-                stateDirectory.unlock(id.taskId);
+                stateDirectory.unlock(metadata.taskId);
             } catch (final IOException e) {
                 if (exception == null) {
                     exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);

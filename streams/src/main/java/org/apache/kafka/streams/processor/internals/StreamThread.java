@@ -929,7 +929,7 @@ public class StreamThread extends Thread {
 
             if (task.isClosed()) {
                 log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                    "Notifying the thread to trigger a new rebalance immediately.", task.metadata());
                 throw new TaskMigratedException(task);
             }
 
@@ -1064,7 +1064,7 @@ public class StreamThread extends Thread {
 
                             if (task.isClosed()) {
                                 log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                                    "Notifying the thread to trigger a new rebalance immediately.", task.metadata());
                                 throw new TaskMigratedException(task);
                             }
 
@@ -1101,7 +1101,7 @@ public class StreamThread extends Thread {
 
                         if (task.isClosed()) {
                             log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                                "Notifying the thread to trigger a new rebalance immediately.", task.metadata());
                             throw new TaskMigratedException(task);
                         }
 

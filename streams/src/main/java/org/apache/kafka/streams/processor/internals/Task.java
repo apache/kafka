@@ -56,8 +56,6 @@ public interface Task {
 
     ProcessorContext context();
 
-    TaskMetadata id();
-
     Set<TopicPartition> partitions();
 
     /**
@@ -68,5 +66,7 @@ public interface Task {
     boolean hasStateStores();
 
     String toString(final String indent);
+
+    TaskMetadata metadata();
 
 }

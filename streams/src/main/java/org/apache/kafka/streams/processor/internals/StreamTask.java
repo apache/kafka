@@ -339,7 +339,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             throw new TaskMigratedException(this, fatal);
         } catch (final KafkaException e) {
             throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
-                id(),
+                metadata(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),

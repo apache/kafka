@@ -159,8 +159,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         void addConsumer(final String consumerMemberId,
                          final SubscriptionInfo info) {
             consumers.add(consumerMemberId);
-            state.addPreviousActiveTasks(SubscriptionInfo.convertTasksToMetadata(info.prevTasks()));
-            state.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(info.standbyTasks()));
+            state.addPreviousActiveTasks(info.prevTaskMetadata() == null ? SubscriptionInfo.convertTasksToMetadata(info.prevTasks()) : info.prevTaskMetadata());
+            state.addPreviousStandbyTasks(info.standbyTaskMetadata() == null ? SubscriptionInfo.convertTasksToMetadata(info.standbyTasks()) : info.standbyTaskMetadata());
             state.incrementCapacity();
         }
 
