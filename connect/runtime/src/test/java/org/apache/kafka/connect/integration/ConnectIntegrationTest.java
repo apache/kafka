@@ -62,9 +62,8 @@ public class ConnectIntegrationTest {
         connect.kafka().createTopic("test-topic");
 
         // produce some strings into test topic
-        for (int i = 0; i < NUM_RECORDS_PRODUCED / 2; i++) {
-            connect.kafka().produce("test-topic", "hello-" + i);
-            connect.kafka().produce("test-topic", "world-" + i);
+        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
+            connect.kafka().produce("test-topic", "simple-message-value-" + i);
         }
 
         // consume all records from test topic or fail

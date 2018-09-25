@@ -153,13 +153,17 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {
             if (latch == null) {
-                throw new IllegalStateException("latch was not initialized");
+                throw new IllegalStateException("Illegal state encountered. Maybe this task was not started by the framework?");
             } else {
                 if (!latch.await(consumeMaxDurationMs, TimeUnit.MILLISECONDS)) {
-                    throw new DataException("Insufficient records seen by task");
+                    String msg = String.format("Insufficient records seen by task %s in %d millis. Records expected=%d, actual=%d",
+                            taskId,
+                            consumeMaxDurationMs,
+                            expectedRecords,
+                            expectedRecords - latch.getCount());
+                    throw new DataException(msg);
                 }
             }
         }
     }
-
 }

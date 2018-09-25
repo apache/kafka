@@ -43,8 +43,8 @@ public class DeadLetterQueueIntegrationTest {
 
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final int NUM_RECORDS_PRODUCED = 20;
-    private static final int EXPECTED_CORRECT_RECORDS = 18;
-    private static final int EXPECTED_INCORRECT_RECORDS = 2;
+    private static final int EXPECTED_CORRECT_RECORDS = 19;
+    private static final int EXPECTED_INCORRECT_RECORDS = 1;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
@@ -66,9 +66,8 @@ public class DeadLetterQueueIntegrationTest {
         connect.kafka().createTopic("test-topic");
 
         // produce some strings into test topic
-        for (int i = 0; i < NUM_RECORDS_PRODUCED / 2; i++) {
-            connect.kafka().produce("test-topic", "hello-" + i, String.valueOf(i));
-            connect.kafka().produce("test-topic", "world-" + i, String.valueOf(i));
+        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
+            connect.kafka().produce("test-topic", "key-" + i, "value-" + String.valueOf(i));
         }
 
         // consume all records from test topic
@@ -117,9 +116,9 @@ public class DeadLetterQueueIntegrationTest {
 
         @Override
         public R apply(R record) {
-            long val = Long.parseLong(String.valueOf(record.value()));
-            if (val == BAD_RECORD_VAL) {
-                throw new RetriableException("Error when when val=" + val);
+            String badVal = "value-" + BAD_RECORD_VAL;
+            if (badVal.equals(record.value())) {
+                throw new RetriableException("Error when when val=" + badVal);
             }
             return record;
         }
