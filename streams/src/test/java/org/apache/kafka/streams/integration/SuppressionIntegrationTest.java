@@ -120,6 +120,7 @@ public class SuppressionIntegrationTest {
                     new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
                     new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
                     new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    // this record is just here to advance stream time and flush the other records through the buffer
                     new KeyValueTimestamp<>("tick", "tick", scaledTime(5L))
                 )
             );
