@@ -100,16 +100,7 @@ public class SuppressionIntegrationTest {
         cleanStateBeforeTest(input, outputSuppressed, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(scaledTime(2L)), unbounded()))
@@ -118,7 +109,6 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             .toStream()
-            .filterNot((k, v) -> k.equals("tick"))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final KafkaStreams driver = getCleanStartedStreams(appId, builder);
@@ -139,7 +129,8 @@ public class SuppressionIntegrationTest {
                     new KeyValueTimestamp<>("v1", 1L, scaledTime(0L)),
                     new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
                     new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
-                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L))
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("tick", 1L, scaledTime(5L))
                 )
             );
             verifyOutput(
@@ -147,12 +138,26 @@ public class SuppressionIntegrationTest {
                 asList(
                     new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
                     new KeyValueTimestamp<>("v1", 1L, scaledTime(2L))
+                    // tick doesn't appear in the suppressed output because it it still buffered (until stream time 7)
                 )
             );
         } finally {
             driver.close();
             cleanStateAfterTest(driver);
         }
+    }
+
+    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
+        return builder
+            .table(
+                input,
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
     }
 
     @Test
@@ -166,16 +171,7 @@ public class SuppressionIntegrationTest {
         cleanStateBeforeTest(input, outputSuppressed, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
 
         valueCounts
             .suppress(untilTimeLimit(Duration.ZERO, unbounded()))
@@ -236,16 +232,7 @@ public class SuppressionIntegrationTest {
         cleanStateBeforeTest(input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
@@ -304,16 +291,7 @@ public class SuppressionIntegrationTest {
         cleanStateBeforeTest(input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
 
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
@@ -377,7 +355,7 @@ public class SuppressionIntegrationTest {
             .stream(input,
                     Consumed.with(STRING_SERDE, STRING_SERDE)
             )
-            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((String k1, String v1) -> k1, Serialized.with(STRING_SERDE, STRING_SERDE))
             .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 
@@ -400,7 +378,9 @@ public class SuppressionIntegrationTest {
                 new KeyValueTimestamp<>("k1", "v1", scaledTime(2L)),
                 new KeyValueTimestamp<>("k1", "v1", scaledTime(1L)),
                 new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
-                new KeyValueTimestamp<>("k1", "v1", scaledTime(4L))
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(4L)),
+                // note this event is dropped since it is out of the grace period
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(0L))
             ));
             verifyOutput(
                 outputRaw,
@@ -424,6 +404,16 @@ public class SuppressionIntegrationTest {
             driver.close();
             cleanStateAfterTest(driver);
         }
+    }
+
+    private KTable<Windowed<String>, Long> buildWindowedCountsTable(final String input, final StreamsBuilder builder) {
+        return builder
+            .stream(input,
+                    Consumed.with(STRING_SERDE, STRING_SERDE)
+            )
+            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
     }
 
     private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {

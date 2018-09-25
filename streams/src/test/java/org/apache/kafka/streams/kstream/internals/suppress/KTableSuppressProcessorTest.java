@@ -161,8 +161,13 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
+    /**
+     * Testing a special case of final results: that even with a grace period of 0,
+     * it will still buffer events and emit only after the end of the window.
+     * As opposed to emitting immediately the way regular suppresion would with a time limit of 0.
+     */
     @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
-    public void finalResultsWith0GraceBeforeWindowEndShouldBufferAndEmitLater() {
+    public void finalResultsWith0GraceShouldStillBufferUntilTheWindowEnd() {
         final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
             finalResults(ofMillis(0)),
             timeWindowedSerdeFrom(String.class),

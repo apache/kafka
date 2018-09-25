@@ -401,6 +401,8 @@ public class SuppressScenarioTest {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 5L));
+            // note this last record gets dropped because it is out of the grace period
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
@@ -528,8 +530,6 @@ public class SuppressScenarioTest {
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
-                    // TODO: it's not strictly necessary to emit these in final mode, but it's also not harmful... maybe?
-                    new KeyValueTimestamp<>("[k1@0/0]", null, 1L),
                     new KeyValueTimestamp<>("[k1@0/1]", 2L, 1L),
                     new KeyValueTimestamp<>("[k1@7/7]", 1L, 7L)
                 )
