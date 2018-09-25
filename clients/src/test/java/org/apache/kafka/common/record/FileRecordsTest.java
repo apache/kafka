@@ -46,7 +46,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -263,7 +262,7 @@ public class FileRecordsTest {
     public void testTruncateNotCalledIfSizeIsSameAsTargetSize() throws IOException {
         FileChannel channelMock = mock(FileChannel.class);
 
-        when(channelMock.size()).thenReturn(42L);//.atLeastOnce();
+        when(channelMock.size()).thenReturn(42L);
         when(channelMock.position(42L)).thenReturn(null);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);

@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
-import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.junit.Test;
@@ -34,7 +33,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,7 +63,7 @@ public class DefaultKafkaPrincipalBuilderTest {
 
     @Test
     public void testReturnAnonymousPrincipalForPlaintext() throws Exception {
-        try (DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null)){
+        try (DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null)) {
             assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(
                     new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
         }
