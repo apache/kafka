@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
