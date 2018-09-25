@@ -81,19 +81,9 @@ public class ConnectIntegrationTest {
 
         connect.startConnector("simple-conn", props);
 
-        MonitorableSinkConnector.MonitorableSinkTask task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
-        for (int i = 0; i < 10 && task == null; i++) {
-            log.debug("Sleeping for 200 before looking up task");
-            Thread.sleep(200);
-            task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
-        }
-        if (task == null) {
-            throw new ConnectException("Connector took too long to start");
-        }
+        MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
 
-        task.awaitRecords(CONSUME_MAX_DURATION_MS);
-
-        log.info("Connector read {} records from topic", NUM_RECORDS_PRODUCED);
+        log.debug("Connector read {} records from topic", NUM_RECORDS_PRODUCED);
         connect.deleteConnector("simple-conn");
     }
 }

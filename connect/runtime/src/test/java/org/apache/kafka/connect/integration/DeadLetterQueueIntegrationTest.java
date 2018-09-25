@@ -96,25 +96,15 @@ public class DeadLetterQueueIntegrationTest {
 
         connect.startConnector("simple-conn", props);
 
-        MonitorableSinkConnector.MonitorableSinkTask task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
-        for (int i = 0; i < 10 && task == null; i++) {
-            log.debug("Sleeping for 200 before looking up task");
-            Thread.sleep(200);
-            task = MonitorableSinkConnector.TASKS.get("simple-conn-0");
-        }
-        if (task == null) {
-            throw new ConnectException("Connector took too long to start");
-        }
-        task.awaitRecords(CONSUME_MAX_DURATION_MS);
+        MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
         for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC)) {
-            log.info("Consumed record (key={}, value={}) from dead letter queue topic {}", new String(recs.key()), new String(recs.value()), DLQ_TOPIC);
+            log.debug("Consumed record (key={}, value={}) from dead letter queue topic {}", new String(recs.key()), new String(recs.value()), DLQ_TOPIC);
         }
 
         connect.deleteConnector("simple-conn");
-
     }
 
     public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {

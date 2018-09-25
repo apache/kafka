@@ -18,6 +18,7 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -33,16 +34,51 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static final String EXPECTED_RECORDS = "expected_records";
     private static final Logger log = LoggerFactory.getLogger(MonitorableSinkConnector.class);
 
-    public static final Map<String, MonitorableSinkTask> TASKS = new ConcurrentHashMap<>();
+    private static final Map<String, Handle> HANDLES = new ConcurrentHashMap<>();
 
     private String connectorName;
     private String expectedRecordsStr;
+
+    public static class Handle {
+        private static final int MAX_WAIT_FOR_TASK_DURATION_MS = 60_000;
+
+        private final String taskName;
+        private final AtomicReference<MonitorableSinkTask> taskRef = new AtomicReference<>();
+        private final CountDownLatch taskAvailable = new CountDownLatch(1);
+
+        public Handle(String taskName) {
+            this.taskName = taskName;
+        }
+
+        public void task(MonitorableSinkTask task) {
+            if (this.taskRef.compareAndSet(null, task)) {
+                taskAvailable.countDown();
+            }
+        }
+
+        public MonitorableSinkTask task() {
+            try {
+                log.debug("Waiting on task {}", taskName);
+                taskAvailable.await(MAX_WAIT_FOR_TASK_DURATION_MS, TimeUnit.MILLISECONDS);
+                log.debug("Found task!");
+            } catch (InterruptedException e) {
+                throw new ConnectException("Could not find task for " + taskName, e);
+            }
+
+            return taskRef.get();
+        }
+    }
+
+    public static Handle taskInstances(String taskId) {
+        return HANDLES.computeIfAbsent(taskId, connName -> new Handle(taskId));
+    }
 
     @Override
     public void start(Map<String, String> props) {
@@ -68,6 +104,9 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         }
         return configs;
     }
+
+    // [2018-09-25 11:23:34,562] DEBUG Waiting on task simple-conn-0 (org.apache.kafka.connect.integration.MonitorableSinkConnector:68)
+    // [2018-09-25 11:23:36,058] DEBUG Found task! (org.apache.kafka.connect.integration.MonitorableSinkConnector:70)
 
     @Override
     public void stop() {
@@ -95,7 +134,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
             log.debug("Starting task {}", context);
             taskId = props.get("task.id");
             expectedRecords = Integer.parseInt(props.get(EXPECTED_RECORDS));
-            TASKS.put(taskId, this);
+            taskInstances(taskId).task(this);
             latch = new CountDownLatch(expectedRecords);
         }
 
@@ -109,7 +148,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void stop() {
-            log.info("Removing {}", TASKS.remove(taskId));
+            log.info("Removing {}", HANDLES.remove(taskId));
         }
 
         public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {
