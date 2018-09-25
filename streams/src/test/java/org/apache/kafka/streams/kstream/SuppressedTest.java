@@ -61,31 +61,31 @@ public class SuppressedTest {
         assertThat(
             "time alone should be set",
             untilTimeLimit(ofMillis(2), unbounded()),
-            is(new SuppressedImpl<>(ofMillis(2), unbounded(), null))
+            is(new SuppressedImpl<>(ofMillis(2), unbounded(), null, false))
         );
 
         assertThat(
             "time and unbounded buffer should be set",
             untilTimeLimit(ofMillis(2), unbounded()),
-            is(new SuppressedImpl<>(ofMillis(2), unbounded(), null))
+            is(new SuppressedImpl<>(ofMillis(2), unbounded(), null, false))
         );
 
         assertThat(
             "time and keys buffer should be set",
             untilTimeLimit(ofMillis(2), maxRecords(2)),
-            is(new SuppressedImpl<>(ofMillis(2), maxRecords(2), null))
+            is(new SuppressedImpl<>(ofMillis(2), maxRecords(2), null, false))
         );
 
         assertThat(
             "time and size buffer should be set",
             untilTimeLimit(ofMillis(2), maxBytes(2)),
-            is(new SuppressedImpl<>(ofMillis(2), maxBytes(2), null))
+            is(new SuppressedImpl<>(ofMillis(2), maxBytes(2), null, false))
         );
 
         assertThat(
             "all constraints should be set",
             untilTimeLimit(ofMillis(2L), maxRecords(3L).withMaxBytes(2L)),
-            is(new SuppressedImpl<>(ofMillis(2), new EagerBufferConfigImpl(3L, 2L), null))
+            is(new SuppressedImpl<>(ofMillis(2), new EagerBufferConfigImpl(3L, 2L), null, false))
         );
     }
 

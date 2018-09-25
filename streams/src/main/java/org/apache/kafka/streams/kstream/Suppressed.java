@@ -155,6 +155,6 @@ public interface Suppressed<K> {
      * @return a suppression configuration
      */
     static <K> Suppressed<K> untilTimeLimit(final Duration timeToWaitForMoreEvents, final BufferConfig bufferConfig) {
-        return new SuppressedImpl<>(timeToWaitForMoreEvents, bufferConfig, null);
+        return new SuppressedImpl<>(timeToWaitForMoreEvents, bufferConfig, null, false);
     }
 }

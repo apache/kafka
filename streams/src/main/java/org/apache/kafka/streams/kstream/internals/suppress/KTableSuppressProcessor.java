@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -23,12 +24,21 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 import java.time.Duration;
 
+import static java.util.Objects.requireNonNull;
+
 public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private final SuppressedImpl<K> suppress;
     private InternalProcessorContext internalProcessorContext;
 
-    public KTableSuppressProcessor(final SuppressedImpl<K> suppress) {
-        this.suppress = suppress;
+    private final Serde<K> keySerde;
+    private final Serde<Change<V>> valueSerde;
+
+    public KTableSuppressProcessor(final SuppressedImpl<K> suppress,
+                                   final Serde<K> keySerde,
+                                   final Serde<Change<V>> valueSerde) {
+        this.suppress = requireNonNull(suppress);
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
     }
 
     @Override
@@ -39,10 +49,16 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     @Override
     public void process(final K key, final Change<V> value) {
         if (suppress.getTimeToWaitForMoreEvents() == Duration.ZERO && definedRecordTime(key) <= internalProcessorContext.streamTime()) {
-            internalProcessorContext.forward(key, value);
+            if (shouldForward(value)) {
+                internalProcessorContext.forward(key, value);
+            } // else skip
         } else {
             throw new NotImplementedException();
         }
+    }
+
+    private boolean shouldForward(final Change<V> value) {
+        return !(value.newValue == null && suppress.suppressTombstones());
     }
 
     private long definedRecordTime(final K key) {
@@ -55,10 +71,14 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     @Override
     public String toString() {
-        return "KTableSuppressProcessor{suppress=" + suppress + '}';
+        return "KTableSuppressProcessor{" +
+            "suppress=" + suppress +
+            ", keySerde=" + keySerde +
+            ", valueSerde=" + valueSerde +
+            '}';
     }
 
-    static class NotImplementedException extends RuntimeException {
+    public static class NotImplementedException extends RuntimeException {
         NotImplementedException() {
             super();
         }

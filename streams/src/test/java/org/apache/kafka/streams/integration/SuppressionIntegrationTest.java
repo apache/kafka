@@ -42,9 +42,14 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -58,12 +63,18 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import static java.lang.Long.MAX_VALUE;
+import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
+import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
+import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 
 @Category({IntegrationTest.class})
 public class SuppressionIntegrationTest {
@@ -75,6 +86,79 @@ public class SuppressionIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int COMMIT_INTERVAL = 100;
     private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
+    private static final long TIMEOUT_MS = 30_000L;
+
+    @Ignore
+    @Test
+    public void shouldSuppressIntermediateEventsWithEmitAfter() throws InterruptedException {
+        final String testId = "-shouldSuppressIntermediateEventsWithEmitAfter";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputSuppressed, outputRaw);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            .suppress(untilTimeLimit(ofMillis(scaledTime(2L)), unbounded()))
+            .toStream()
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    // this record is just here to advance stream time and flush the other records through the buffer
+                    new KeyValueTimestamp<>("tick", "tick", scaledTime(5L))
+                )
+            );
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(0L)),
+                    new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("tick", 1L, scaledTime(5L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                asList(
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L))
+                )
+            );
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
+    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
+        return builder
+            .table(
+                input,
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+    }
 
     @Test
     public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() throws InterruptedException {
@@ -87,16 +171,7 @@ public class SuppressionIntegrationTest {
         cleanStateBeforeTest(input, outputSuppressed, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
 
         valueCounts
             .suppress(untilTimeLimit(Duration.ZERO, unbounded()))
@@ -145,10 +220,200 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private void cleanStateBeforeTest(final String... topic) throws InterruptedException {
-        CLUSTER.deleteAllTopicsAndWait(30_000L);
-        for (final String s : topic) {
-            CLUSTER.createTopic(s, 1, 1);
+    @Ignore
+    @Test
+    public void shouldSuppressIntermediateEventsWithRecordLimit() throws InterruptedException {
+        final String testId = "-shouldSuppressIntermediateEventsWithKeyLimit";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
+            .toStream()
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(0L)),
+                    new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", 1L, scaledTime(3L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                asList(
+                    // consecutive updates to v1 get suppressed into only the latter.
+                    new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L))
+                )
+            );
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
+    @Ignore
+    @Test
+    public void shouldSuppressIntermediateEventsWithBytesLimit() throws InterruptedException {
+        final String testId = "-shouldSuppressIntermediateEventsWithBytesLimit";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
+            .suppress(untilTimeLimit(Duration.ofMillis(MAX_VALUE), maxBytes(200L).emitEarlyWhenFull()))
+            .toStream()
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(0L)),
+                    new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", 1L, scaledTime(3L))
+                )
+            );
+            verifyOutput(
+                outputSuppressed,
+                asList(
+                    // consecutive updates to v1 get suppressed into only the latter.
+                    new KeyValueTimestamp<>("v1", 0L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L))
+                )
+            );
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
+    @Ignore
+    @Test
+    public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
+        final String testId = "-shouldSupportFinalResultsForTimeWindows";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Windowed<String>, Long> valueCounts = builder
+            .stream(input,
+                    Consumed.with(STRING_SERDE, STRING_SERDE)
+            )
+            .groupBy((String k1, String v1) -> k1, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
+
+        valueCounts
+            .suppress(untilWindowCloses(unbounded()))
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        try {
+            produceSynchronously(input, asList(
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(1L)),
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(2L)),
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(1L)),
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(4L)),
+                // note this event is dropped since it is out of the grace period
+                new KeyValueTimestamp<>("k1", "v1", scaledTime(0L))
+            ));
+            verifyOutput(
+                outputRaw,
+                asList(
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 0L, 2L), 1L, scaledTime(0L)),
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 0L, 2L), 2L, scaledTime(1L)),
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 2L, 4L), 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 0L, 2L), 3L, scaledTime(1L)),
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L)),
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 4L, 6L), 1L, scaledTime(4L))
+                )
+            );
+
+            verifyOutput(
+                outputSuppressed,
+                singletonList(
+                    new KeyValueTimestamp<>(scaledWindowKey("k1", 0L, 2L), 4L, scaledTime(0L))
+                )
+            );
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
+    private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
+        return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
+    }
+
+    private void cleanStateBeforeTest(final String... topics) throws InterruptedException {
+        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
+        for (final String topic : topics) {
+            CLUSTER.createTopic(topic, 1, 1);
         }
     }
 
@@ -167,7 +432,7 @@ public class SuppressionIntegrationTest {
 
     private void cleanStateAfterTest(final KafkaStreams driver) throws InterruptedException {
         driver.cleanUp();
-        CLUSTER.deleteAllTopicsAndWait(30_000L);
+        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
     }
 
     private long scaledTime(final long unscaledTime) {
@@ -195,19 +460,21 @@ public class SuppressionIntegrationTest {
                 );
                 futures.add(f);
             }
-            for (final Future<RecordMetadata> future : futures) {
-                try {
-                    future.get();
-                } catch (final InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+
             // TODO: test EOS
             //noinspection ConstantConditions
             if (false) {
                 producer.commitTransaction();
             } else {
                 producer.flush();
+            }
+
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    future.get();
+                } catch (final InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }

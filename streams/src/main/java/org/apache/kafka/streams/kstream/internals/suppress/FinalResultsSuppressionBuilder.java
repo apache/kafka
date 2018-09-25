@@ -34,7 +34,8 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         return new SuppressedImpl<>(
             gracePeriod,
             bufferConfig,
-            (ProcessorContext context, K key) -> key.window().end()
+            (ProcessorContext context, K key) -> key.window().end(),
+            true
         );
     }
 
