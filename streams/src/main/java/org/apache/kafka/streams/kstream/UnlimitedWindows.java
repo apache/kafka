@@ -68,7 +68,10 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      */
     @Deprecated
     public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
-        return startOn(Instant.ofEpochMilli(startMs));
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
+        }
+        return new UnlimitedWindows(startMs);
     }
 
     /**
@@ -80,7 +83,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      */
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(start, "start");
-        return new UnlimitedWindows(start.toEpochMilli());
+        return startOn(start.toEpochMilli());
     }
 
     @Override

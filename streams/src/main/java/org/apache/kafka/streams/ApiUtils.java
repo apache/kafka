@@ -27,73 +27,38 @@ public final class ApiUtils {
     }
 
     /**
-     * Validates that milliseconds from duration {@code d} can be retrieved and is not negative.
-     * @param d Duration to check
+     * Validates that milliseconds from {@code duration} can be retrieved.
+     * @param duration Duration to check.
      * @param name Name of params for an error message.
+     * @return Milliseconds from {@code duration}.
      */
-    public static void validateMillisecondDuration(final Duration d, final String name) {
-        validateMillisecondDuration(d, name, false);
-    }
-
-    /**
-     * Validates that milliseconds from duration {@code d} can be retrieved and is not negative.
-     * @param d Duration to check
-     * @param name Name of params for an error message.
-     * @param canBeNegative If {@code true} duration can have negative value.
-     */
-    public static void validateMillisecondDuration(final Duration d, final String name, final boolean canBeNegative) {
-        final long msec = toMillis(d, name);
-
-        if (!canBeNegative && msec < 0)
-            throw new IllegalArgumentException(name + " cannot be negative.");
-    }
-
-    /**
-     * Validates that milliseconds from duration {@code d} can be retrieved and is positive.
-     * @param d Duration to check
-     * @param name Name of params for an error message.
-     */
-    public static void validateMillisecondDurationPositive(final Duration d, final String name) {
-        final long msec = toMillis(d, name);
-
-        if (msec <= 0)
-            throw new IllegalArgumentException(name + " should be larger than zero.");
-    }
-
-    /**
-     * Validates that milliseconds from instant {@code i} can be retrieved and is not negative.
-     * @param i Instant to check
-     * @param name Name of params for an error message.
-     */
-    public static void validateMillisecondInstant(final Instant i, final String name) {
-        final long msec = toMillis(i, name);
-
-        if (msec < 0)
-            throw new IllegalArgumentException(name + " should be positive.");
-    }
-
-    private static long toMillis(final Instant i, final String name) {
+    public static long validateMillisecondDuration(final Duration duration, final String name) {
         try {
-            Objects.requireNonNull(i);
+            Objects.requireNonNull(duration);
 
-            return i.toEpochMilli();
+            return duration.toMillis();
         } catch (final NullPointerException e) {
-            throw new IllegalArgumentException(name + " shouldn't be null.", e);
+            throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.", e);
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException(name + " can't be converted to milliseconds. " +  i +
-                " is negative or too big", e);
+            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. ", e);
         }
     }
 
-    private static long toMillis(final Duration d, final String name) {
+    /**
+     * Validates that milliseconds from {@code instant} can be retrieved.
+     * @param instant Instant to check.
+     * @param name Name of params for an error message.
+     * @return Milliseconds from {@code instant}.
+     */
+    public static long validateMillisecondInstant(final Instant instant, final String name) {
         try {
-            Objects.requireNonNull(d);
+            Objects.requireNonNull(instant);
 
-            return d.toMillis();
+            return instant.toEpochMilli();
         } catch (final NullPointerException e) {
-            throw new IllegalArgumentException(name + " shouldn't be null.", e);
+            throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.", e);
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException(name + " can't be converted to milliseconds. " +  d +
+            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. " +  instant +
                 " is negative or too big", e);
         }
     }

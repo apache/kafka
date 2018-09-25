@@ -91,31 +91,29 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     @Override
     @Deprecated
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
     }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(from, "from");
         ApiUtils.validateMillisecondDuration(duration, "duration");
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)),
-            from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
+        return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 
     @Override
     @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
-        return fetch(from, to, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
         ApiUtils.validateMillisecondDuration(duration, "duration");
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)),
-            Bytes.wrap(serdes.rawKey(to)), fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+        return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
     }
 
     @Override
@@ -127,16 +125,15 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     @Override
     @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetchAll(timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(from, "from");
         ApiUtils.validateMillisecondDuration(duration, "duration");
-        final KeyValueIterator<Bytes, byte[]> bytesIterator =
-            bytesStore.fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
-        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+        return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 
     private void maybeUpdateSeqnumForDups() {

@@ -195,8 +195,9 @@ public class Stores {
                                                                  final long retentionPeriod,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
-        return persistentWindowStore(name, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize),
-            retainDuplicates);
+        // we're arbitrarily defaulting to segments no smaller than one minute.
+        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
     }
 
     /**
@@ -218,9 +219,7 @@ public class Stores {
         ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
         ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
 
-        // we're arbitrarily defaulting to segments no smaller than one minute.
-        final long defaultSegmentInterval = Math.max(retentionPeriod.toMillis() / 2, 60_000L);
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
+        return persistentWindowStore(name, retentionPeriod.toMillis(), windowSize.toMillis(), retainDuplicates);
     }
 
     /**
@@ -242,8 +241,23 @@ public class Stores {
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates,
                                                                  final long segmentInterval) {
-        return persistentWindowStore(name, Duration.ofMillis(retentionPeriod), Duration.ofMillis(windowSize),
-            retainDuplicates, segmentInterval);
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriod < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSize < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (segmentInterval < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
+        }
+        if (windowSize > retentionPeriod) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                                                   + name + " must be no smaller than its window size. Got size=["
+                                                   + windowSize + "], retention=[" + retentionPeriod + "]");
+        }
+
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
     }
 
     /**
@@ -267,21 +281,10 @@ public class Stores {
         ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
         ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
 
-        if (segmentInterval < 1L) {
-            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
-        }
-
         final long retentionPeriodMs = retentionPeriod.toMillis();
         final long windowSizeMs = windowSize.toMillis();
 
-        if (windowSizeMs > retentionPeriodMs) {
-            throw new IllegalArgumentException("The retention period of the window store "
-                + name + " must be no smaller than its window size. Got size=["
-                + windowSize + "], retention=[" + retentionPeriod + "]");
-        }
-
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriodMs, segmentInterval,
-            windowSizeMs, retainDuplicates);
+        return persistentWindowStore(name, retentionPeriodMs, windowSizeMs, retainDuplicates, segmentInterval);
     }
 
     /**

@@ -112,7 +112,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), ofEpochMilli(1), ofMillis(0))).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         EasyMock.replay(innerStoreMock);
 
         store.init(context, store);
@@ -125,7 +125,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), ofEpochMilli(1), ofMillis(0))).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         EasyMock.replay(innerStoreMock);
 
         store.init(context, store);

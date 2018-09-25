@@ -90,7 +90,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
-        return schedule(Duration.ofMillis(intervalMs), type, callback);
+        return delegate.schedule(intervalMs, type, callback);
     }
 
     @Override

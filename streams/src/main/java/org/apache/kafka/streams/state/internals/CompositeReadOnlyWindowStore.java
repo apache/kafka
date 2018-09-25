@@ -69,18 +69,11 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @Override
     @Deprecated
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        return fetch(key, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
-    }
-
-    @Override
-    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
         Objects.requireNonNull(key, "key can't be null");
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondDuration(duration, "duration");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
-                final WindowStoreIterator<V> result = windowStore.fetch(key, from, duration);
+                final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
@@ -88,34 +81,41 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 }
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
-                    "State store is not available anymore and may have been migrated to another instance; " +
-                        "please re-discover its location from the state metadata.");
+                        "State store is not available anymore and may have been migrated to another instance; " +
+                                "please re-discover its location from the state metadata.");
             }
         }
         return KeyValueIterators.emptyWindowStoreIterator();
     }
 
     @Override
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Duration duration) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondDuration(duration, "duration");
+        return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
-        return fetch(from, to, Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+        Objects.requireNonNull(from, "from can't be null");
+        Objects.requireNonNull(to, "to can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
+            @Override
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
+                return store.fetch(from, to, timeFrom, timeTo);
+            }
+        };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                                                       new CompositeKeyValueIterator<>(
+                                                               provider.stores(storeName, windowStoreType).iterator(),
+                                                               nextIteratorFunction));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Duration duration) throws IllegalArgumentException {
-        Objects.requireNonNull(from, "from can't be null");
-        Objects.requireNonNull(to, "to can't be null");
         ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
         ApiUtils.validateMillisecondDuration(duration, "duration");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.fetch(from, to, fromTime, duration);
-            }
-        };
-        return new DelegatingPeekingKeyValueIterator<>(storeName,
-            new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
-                nextIteratorFunction));
+        return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
     }
 
     @Override
@@ -135,23 +135,22 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @Override
     @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        return fetchAll(Instant.ofEpochMilli(timeFrom), Duration.ofMillis(timeTo - timeFrom));
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
+            @Override
+            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
+                return store.fetchAll(timeFrom, timeTo);
+            }
+        };
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                new CompositeKeyValueIterator<>(
+                        provider.stores(storeName, windowStoreType).iterator(),
+                        nextIteratorFunction));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(from, "from");
         ApiUtils.validateMillisecondDuration(duration, "duration");
-
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.fetchAll(from, duration);
-            }
-        };
-        return new DelegatingPeekingKeyValueIterator<>(storeName,
-            new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
-                nextIteratorFunction));
+        return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
     }
 }

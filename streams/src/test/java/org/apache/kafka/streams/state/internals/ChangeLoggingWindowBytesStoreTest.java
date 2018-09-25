@@ -99,7 +99,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        EasyMock.expect(inner.fetch(bytesKey, ofEpochMilli(0), ofMillis(10))).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        EasyMock.expect(inner.fetch(bytesKey, 0, 10)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
 
         init();
 
@@ -109,7 +109,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        EasyMock.expect(inner.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofMillis(1))).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(inner.fetch(bytesKey, bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
 

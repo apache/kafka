@@ -116,7 +116,7 @@ public final class JoinWindows extends Windows<Window> {
     @Deprecated
     public static JoinWindows of(final long timeDifferenceMs) throws IllegalArgumentException {
         // This is a static factory method, so we initialize grace and retention to the defaults.
-        return of(Duration.ofMillis(timeDifferenceMs));
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, null, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -129,7 +129,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference");
-        return new JoinWindows(timeDifference.toMillis(), timeDifference.toMillis(), null, DEFAULT_RETENTION_MS);
+        return of(timeDifference.toMillis());
     }
 
     /**
@@ -146,7 +146,7 @@ public final class JoinWindows extends Windows<Window> {
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     @Deprecated
     public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
-        return before(Duration.ofMillis(timeDifferenceMs));
+        return new JoinWindows(timeDifferenceMs, afterMs, grace, maintainDurationMs, segments);
     }
 
     /**
@@ -161,8 +161,8 @@ public final class JoinWindows extends Windows<Window> {
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows before(final Duration timeDifference) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference", true);
-        return new JoinWindows(timeDifference.toMillis(), afterMs, grace, maintainDurationMs, segments);
+        ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference");
+        return before(timeDifference.toMillis());
     }
 
     /**
@@ -179,7 +179,7 @@ public final class JoinWindows extends Windows<Window> {
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     @Deprecated
     public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
-        return after(Duration.ofMillis(timeDifferenceMs));
+        return new JoinWindows(beforeMs, timeDifferenceMs, grace, maintainDurationMs, segments);
     }
 
     /**
@@ -194,8 +194,8 @@ public final class JoinWindows extends Windows<Window> {
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows after(final Duration timeDifference) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference", true);
-        return new JoinWindows(beforeMs, timeDifference.toMillis(), grace, maintainDurationMs, segments);
+        ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference");
+        return after(timeDifference.toMillis());
     }
 
     /**
@@ -226,6 +226,10 @@ public final class JoinWindows extends Windows<Window> {
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        if (afterWindowEnd.toMillis() < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
         return new JoinWindows(beforeMs, afterMs, afterWindowEnd, maintainDurationMs, segments);
     }
 

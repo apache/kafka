@@ -88,12 +88,15 @@ public final class SessionWindows {
      * @param inactivityGapMs the gap of inactivity between sessions in milliseconds
      * @return a new window specification with default maintain duration of 1 day
      *
-     * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative or too big
+     * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative
      * @deprecated User {@link #with(Duration)} instead.
      */
     @Deprecated
     public static SessionWindows with(final long inactivityGapMs) {
-        return with(Duration.ofMillis(inactivityGapMs));
+        if (inactivityGapMs <= 0) {
+            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
+        }
+        return new SessionWindows(inactivityGapMs, DEFAULT_RETENTION_MS, null);
     }
 
     /**
@@ -105,8 +108,8 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or too big
      */
     public static SessionWindows with(final Duration inactivityGap) {
-        ApiUtils.validateMillisecondDurationPositive(inactivityGap, "inactivityGap");
-        return new SessionWindows(inactivityGap.toMillis(), DEFAULT_RETENTION_MS, null);
+        ApiUtils.validateMillisecondDuration(inactivityGap, "inactivityGap");
+        return with(inactivityGap.toMillis());
     }
 
     /**
@@ -142,6 +145,10 @@ public final class SessionWindows {
      */
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        if (afterWindowEnd.toMillis() < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
         return new SessionWindows(
             gapMs,
             maintainDurationMs,

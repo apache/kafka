@@ -100,12 +100,16 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param sizeMs The size of the window in milliseconds
      * @return a new window definition with default maintain duration of 1 day
-     * @throws IllegalArgumentException if the specified window size is zero or negative or too big
+     * @throws IllegalArgumentException if the specified window size is zero or negative
      * @deprecated Use {@link #of(Duration)} instead
      */
     @Deprecated
     public static TimeWindows of(final long sizeMs) throws IllegalArgumentException {
-        return of(Duration.ofMillis(sizeMs));
+        if (sizeMs <= 0) {
+            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
+        }
+        // This is a static factory method, so we initialize grace and retention to the defaults.
+        return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -121,9 +125,8 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the specified window size is zero or negative or too big
      */
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDurationPositive(size, "size");
-        // This is a static factory method, so we initialize grace and retention to the defaults.
-        return new TimeWindows(size.toMillis(), size.toMillis(), null, DEFAULT_RETENTION_MS);
+        ApiUtils.validateMillisecondDuration(size, "size");
+        return of(size.toMillis());
     }
 
     /**
@@ -142,7 +145,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     @Deprecated
     public TimeWindows advanceBy(final long advanceMs) {
-        return advanceBy(Duration.ofMillis(advanceMs));
+        if (advanceMs <= 0 || advanceMs > sizeMs) {
+            throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d].", sizeMs));
+        }
+        return new TimeWindows(sizeMs, advanceMs, grace, maintainDurationMs, segments);
     }
 
     /**
@@ -159,12 +165,8 @@ public final class TimeWindows extends Windows<TimeWindow> {
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows advanceBy(final Duration advance) {
-        ApiUtils.validateMillisecondDurationPositive(advance, "advance");
-        final long advanceMs = advance.toMillis();
-        if (advanceMs > sizeMs) {
-            throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d].", sizeMs));
-        }
-        return new TimeWindows(sizeMs, advanceMs, grace, maintainDurationMs, segments);
+        ApiUtils.validateMillisecondDuration(advance, "advance");
+        return advanceBy(advance.toMillis());
     }
 
     @Override
@@ -197,6 +199,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        if (afterWindowEnd.toMillis() < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
         return new TimeWindows(sizeMs, advanceMs, afterWindowEnd, maintainDurationMs, segments);
     }
 
