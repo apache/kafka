@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.streams.state.internals.buffer;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.internals.ContextualRecord;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -30,6 +31,11 @@ import java.util.function.Supplier;
 class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     private final Map<Bytes, TimeKey> index = new HashMap<>();
     private final TreeMap<TimeKey, ContextualRecord> sortedMap = new TreeMap<>();
+
+    // track keys that need to be flushed.
+    // keys should be removed before update to maintain update order, rather than insertion order.
+    private final LinkedHashSet<Bytes> dirtyKeys = new LinkedHashSet<>();
+
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
 
@@ -51,6 +57,8 @@ class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
                 delegate.remove();
                 index.remove(next.getKey().key());
 
+                markDirtyKey(next.getKey().key());
+
                 memBufferSize = memBufferSize - computeRecordSize(next.getKey().key(), next.getValue());
 
                 // peek at the next record so we can update the minTimestamp
@@ -69,6 +77,11 @@ class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     public void put(final long time,
                     final Bytes key,
                     final ContextualRecord value) {
+        cleanPut(time, key, value);
+        markDirtyKey(key);
+    }
+
+    void cleanPut(final long time, final Bytes key, final ContextualRecord value) {
         // non-resetting semantics:
         // if there was a previous version of the same record,
         // then insert the new record in the same place in the priority queue
@@ -86,6 +99,37 @@ class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
                 memBufferSize
                     + computeRecordSize(key, value)
                     - (removedValue == null ? 0 : computeRecordSize(key, removedValue));
+        }
+    }
+
+    void cleanDrop(final Bytes key) {
+        final TimeKey timeKey = index.remove(key);
+        if (timeKey != null) {
+            sortedMap.remove(timeKey);
+        }
+    }
+
+    private void markDirtyKey(final Bytes key) {
+        dirtyKeys.remove(key);
+        dirtyKeys.add(key);
+    }
+
+    LinkedHashSet<Bytes> getAndClearDirtyKeys() {
+        final LinkedHashSet<Bytes> toReturn = new LinkedHashSet<>(dirtyKeys);
+        dirtyKeys.clear();
+        return toReturn;
+    }
+
+    /**
+     * @return the buffer time and full record corresponding to the given key
+     */
+    KeyValue<Long, ContextualRecord> get(final Bytes key) {
+        final TimeKey timeKey = index.get(key);
+        if (timeKey == null) {
+            return null;
+        } else {
+            final ContextualRecord contextualRecord = sortedMap.get(timeKey);
+            return new KeyValue<>(timeKey.time(), contextualRecord);
         }
     }
 
@@ -112,5 +156,13 @@ class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
             size += value.sizeBytes();
         }
         return size;
+    }
+
+    public void clear() {
+        index.clear();
+        sortedMap.clear();
+        dirtyKeys.clear();
+        memBufferSize = 0;
+        minTimestamp = Long.MAX_VALUE;
     }
 }

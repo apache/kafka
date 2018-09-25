@@ -16,14 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -53,14 +45,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.time.Duration;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -519,43 +507,7 @@ public class SuppressionIntegrationTest {
     }
 
     private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
-        final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, STRING_SERIALIZER.getClass().getName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, STRING_SERIALIZER.getClass().getName()),
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
-        ));
-        try (final Producer<String, String> producer = new KafkaProducer<>(producerConfig)) {
-            // TODO: test EOS
-            //noinspection ConstantConditions
-            if (false) {
-                producer.initTransactions();
-                producer.beginTransaction();
-            }
-            final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
-            for (final KeyValueTimestamp<String, String> record : toProduce) {
-                final Future<RecordMetadata> f = producer.send(
-                    new ProducerRecord<>(topic, null, record.timestamp(), record.key(), record.value(), null)
-                );
-                futures.add(f);
-            }
-
-            // TODO: test EOS
-            //noinspection ConstantConditions
-            if (false) {
-                producer.commitTransaction();
-            } else {
-                producer.flush();
-            }
-
-            for (final Future<RecordMetadata> future : futures) {
-                try {
-                    future.get();
-                } catch (final InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
+        IntegrationTestUtils.produceSynchronously(CLUSTER.bootstrapServers(), topic, STRING_SERIALIZER, STRING_SERIALIZER, false, toProduce);
     }
 
     private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
@@ -563,69 +515,14 @@ public class SuppressionIntegrationTest {
         assertThat(driver.state(), is(KafkaStreams.State.ERROR));
     }
 
-    private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> expected) {
-        final List<ConsumerRecord<String, Long>> results;
-        try {
-            final Properties properties = mkProperties(
-                mkMap(
-                    mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
-                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
-                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
-                )
-            );
-            results = IntegrationTestUtils.waitUntilMinRecordsReceived(properties, topic, expected.size());
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
+        IntegrationTestUtils.verifyOutput(
+            CLUSTER.bootstrapServers(),
+            topic,
+            STRING_DESERIALIZER,
+            LONG_DESERIALIZER,
+            keyValueTimestamps
+        );
 
-        if (results.size() != expected.size()) {
-            throw new AssertionError(printRecords(results) + " != " + expected);
-        }
-        final Iterator<KeyValueTimestamp<String, Long>> expectedIterator = expected.iterator();
-        for (final ConsumerRecord<String, Long> result : results) {
-            final KeyValueTimestamp<String, Long> expected1 = expectedIterator.next();
-            try {
-                compareKeyValueTimestamp(result, expected1.key(), expected1.value(), expected1.timestamp());
-            } catch (final AssertionError e) {
-                throw new AssertionError(printRecords(results) + " != " + expected, e);
-            }
-        }
-    }
-
-    private <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record, final K expectedKey, final V expectedValue, final long expectedTimestamp) {
-        Objects.requireNonNull(record);
-        final K recordKey = record.key();
-        final V recordValue = record.value();
-        final long recordTimestamp = record.timestamp();
-        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with timestamp=" + expectedTimestamp +
-                                                            " but was <" + recordKey + ", " + recordValue + "> with timestamp=" + recordTimestamp);
-        if (recordKey != null) {
-            if (!recordKey.equals(expectedKey)) {
-                throw error;
-            }
-        } else if (expectedKey != null) {
-            throw error;
-        }
-        if (recordValue != null) {
-            if (!recordValue.equals(expectedValue)) {
-                throw error;
-            }
-        } else if (expectedValue != null) {
-            throw error;
-        }
-        if (recordTimestamp != expectedTimestamp) {
-            throw error;
-        }
-    }
-
-    private <K, V> String printRecords(final List<ConsumerRecord<K, V>> result) {
-        final StringBuilder resultStr = new StringBuilder();
-        resultStr.append("[\n");
-        for (final ConsumerRecord<?, ?> record : result) {
-            resultStr.append("  ").append(record.toString()).append("\n");
-        }
-        resultStr.append("]");
-        return resultStr.toString();
     }
 }

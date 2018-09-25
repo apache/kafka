@@ -23,16 +23,20 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
@@ -47,8 +51,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -58,6 +65,10 @@ import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import scala.Option;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -174,15 +185,6 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
-                                                                         final Headers headers,
-                                                                         final Long timestamp)
-        throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, headers, timestamp, false);
-    }
-
-    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
-                                                                         final Collection<KeyValue<K, V>> records,
-                                                                         final Properties producerConfig,
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
@@ -212,7 +214,50 @@ public class IntegrationTestUtils {
             producer.flush();
         }
     }
-    
+
+    public static <K, V> void produceSynchronously(final String broker,
+                                                   final String topic,
+                                                   final Serializer<K> keySerializer,
+                                                   final Serializer<V> valueSerializer,
+                                                   final boolean eos,
+                                                   final List<KeyValueTimestamp<K, V>> toProduce) {
+        final Properties producerConfig = mkProperties(mkMap(
+            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
+            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName()),
+            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName()),
+            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker)
+        ));
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            // TODO: test EOS
+            //noinspection ConstantConditions
+            if (false) {
+                producer.initTransactions();
+                producer.beginTransaction();
+            }
+            final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
+            for (final KeyValueTimestamp<K, V> record : toProduce) {
+                final Future<RecordMetadata> f = producer.send(
+                    new ProducerRecord<>(topic, null, record.timestamp(), record.key(), record.value(), null)
+                );
+                futures.add(f);
+            }
+
+            if (eos) {
+                producer.commitTransaction();
+            } else {
+                producer.flush();
+            }
+
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    future.get();
+                } catch (final InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
     public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                                 final Collection<KeyValue<K, V>> records,
                                                                                 final Properties producerConfig,
@@ -227,7 +272,7 @@ public class IntegrationTestUtils {
                 f.get();
                 producer.abortTransaction();
             }
-        }    
+        }
     }
 
     public static <V> void produceValuesSynchronously(final String topic,
@@ -297,7 +342,7 @@ public class IntegrationTestUtils {
                                                                                   final int expectedNumRecords) throws InterruptedException {
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
-    
+
     /**
      * Wait until enough data (key-value records) has been consumed.
      *
@@ -481,6 +526,79 @@ public class IntegrationTestUtils {
             return true;
         }, timeout, "metadata for topic=" + topic + " partition=" + partition + " not propagated to all brokers");
 
+    }
+
+    public static <K, V> void verifyOutput(final String broker,
+                                           final String topic,
+                                           final Deserializer<K> keyDeserializer,
+                                           final Deserializer<V> valueDeserializer,
+                                           final List<KeyValueTimestamp<String, Long>> expected) {
+        final List<ConsumerRecord<String, Long>> results;
+        try {
+            final Properties properties = mkProperties(
+                mkMap(
+                    mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
+                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName()),
+                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName())
+                )
+            );
+            results = IntegrationTestUtils.waitUntilMinRecordsReceived(properties, topic, expected.size());
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (results.size() != expected.size()) {
+            throw new AssertionError(printRecords(results) + " != " + expected);
+        }
+        final Iterator<KeyValueTimestamp<String, Long>> expectedIterator = expected.iterator();
+        for (final ConsumerRecord<String, Long> result : results) {
+            final KeyValueTimestamp<String, Long> expected1 = expectedIterator.next();
+            try {
+                compareKeyValueTimestamp(result, expected1.key(), expected1.value(), expected1.timestamp());
+            } catch (final AssertionError e) {
+                throw new AssertionError(printRecords(results) + " != " + expected, e);
+            }
+        }
+    }
+
+    private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,
+                                                        final K expectedKey,
+                                                        final V expectedValue,
+                                                        final long expectedTimestamp) {
+        Objects.requireNonNull(record);
+        final K recordKey = record.key();
+        final V recordValue = record.value();
+        final long recordTimestamp = record.timestamp();
+        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with timestamp=" + expectedTimestamp +
+                                                            " but was <" + recordKey + ", " + recordValue + "> with timestamp=" + recordTimestamp);
+        if (recordKey != null) {
+            if (!recordKey.equals(expectedKey)) {
+                throw error;
+            }
+        } else if (expectedKey != null) {
+            throw error;
+        }
+        if (recordValue != null) {
+            if (!recordValue.equals(expectedValue)) {
+                throw error;
+            }
+        } else if (expectedValue != null) {
+            throw error;
+        }
+        if (recordTimestamp != expectedTimestamp) {
+            throw error;
+        }
+    }
+
+    private static <K, V> String printRecords(final List<ConsumerRecord<K, V>> result) {
+        final StringBuilder resultStr = new StringBuilder();
+        resultStr.append("[\n");
+        for (final ConsumerRecord<?, ?> record : result) {
+            resultStr.append("  ").append(record.toString()).append("\n");
+        }
+        resultStr.append("]");
+        return resultStr.toString();
     }
 
     /**
