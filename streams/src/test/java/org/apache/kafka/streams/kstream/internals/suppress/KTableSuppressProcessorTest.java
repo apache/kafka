@@ -135,7 +135,7 @@ public class KTableSuppressProcessorTest {
 
 
     @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
-    public void finalResultsSuppressionShouldBufferAndEmitLater() {
+    public void finalResultsSuppressionShouldBufferAndEmitAtGraceExpiration() {
         final KTableSuppressProcessor<Windowed<String>, Long> processor = new KTableSuppressProcessor<>(
             finalResults(ofMillis(1L)),
             timeWindowedSerdeFrom(String.class),
