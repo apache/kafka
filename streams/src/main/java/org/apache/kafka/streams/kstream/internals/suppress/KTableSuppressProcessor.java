@@ -49,10 +49,16 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     @Override
     public void process(final K key, final Change<V> value) {
         if (suppress.getTimeToWaitForMoreEvents() == Duration.ZERO && definedRecordTime(key) <= internalProcessorContext.streamTime()) {
-            internalProcessorContext.forward(key, value);
+            if (shouldForward(value)) {
+                internalProcessorContext.forward(key, value);
+            } // else skip
         } else {
             throw new NotImplementedException();
         }
+    }
+
+    private boolean shouldForward(final Change<V> value) {
+        return !(value.newValue == null && suppress.suppressTombstones());
     }
 
     private long definedRecordTime(final K key) {

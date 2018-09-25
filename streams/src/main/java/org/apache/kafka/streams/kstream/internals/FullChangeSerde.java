@@ -57,6 +57,9 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
 
             @Override
             public byte[] serialize(final String topic, final Change<T> data) {
+                if (data == null) {
+                    return null;
+                }
                 final byte[] oldBytes = data.oldValue == null ? null : innerSerializer.serialize(topic, data.oldValue);
                 final int oldSize = oldBytes == null ? -1 : oldBytes.length;
                 final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, data.newValue);
@@ -95,6 +98,9 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
 
             @Override
             public Change<T> deserialize(final String topic, final byte[] data) {
+                if (data == null) {
+                    return null;
+                }
                 final ByteBuffer buffer = byteBufferDeserializer.deserialize(null, data);
 
                 final int oldSize = buffer.getInt();
@@ -110,7 +116,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                     buffer.get(newBytes);
                 }
                 final T newValue = newBytes == null ? null : innerDeserializer.deserialize(topic, newBytes);
-                return new Change<>(oldValue, newValue);
+                return new Change<>(newValue, oldValue);
             }
 
             @Override

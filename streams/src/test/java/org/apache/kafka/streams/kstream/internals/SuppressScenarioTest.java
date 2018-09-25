@@ -60,7 +60,6 @@ import java.util.Properties;
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
@@ -179,7 +178,6 @@ public class SuppressScenarioTest {
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
         valueCounts
             .toStream()
-            .filterNot((k, v) -> k.equals("tick"))
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         final Properties config = Utils.mkProperties(Utils.mkMap(
@@ -200,23 +198,32 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("v1", 1L, 2L)
                 )
             );
+            // note that the current stream time is 2, which causes v1 to age out of the buffer, since
+            // it has been buffered since time 0 (even though the current version of it in the buffer has timestamp 1)
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                emptyList()
+                singletonList(new KeyValueTimestamp<>("v1", 0L, 1L))
             );
+            // inserting a dummy "tick" record just to advance stream time
             driver.pipeInput(recordFactory.create("input", "tick", "tick", 3L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                emptyList()
+                singletonList(new KeyValueTimestamp<>("tick", 1L, 3L))
             );
+            // the stream time is now 3, so it's time to emit this record
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 singletonList(new KeyValueTimestamp<>("v2", 1L, 1L))
             );
+
+
             driver.pipeInput(recordFactory.create("input", "tick", "tick", 4L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                emptyList()
+                asList(
+                    new KeyValueTimestamp<>("tick", 0L, 4L),
+                    new KeyValueTimestamp<>("tick", 1L, 4L)
+                )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
@@ -227,11 +234,22 @@ public class SuppressScenarioTest {
             driver.pipeInput(recordFactory.create("input", "tick", "tick", 5L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                emptyList()
+                asList(
+                    new KeyValueTimestamp<>("tick", 0L, 5L),
+                    new KeyValueTimestamp<>("tick", 1L, 5L)
+                )
             );
+            // Note that because the punctuate runs before the process call, the tick at time 5 causes
+            // the previous tick to age out of the buffer, so at this point, we see the prior value emitted
+            // and the new value is still buffered.
+
+            // Also worth noting is that "tick" ages out because it has been buffered since time 3, even though
+            // the current timestamp of the buffered record is 4.
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                emptyList()
+                singletonList(
+                    new KeyValueTimestamp<>("tick", 1L, 4L)
+                )
             );
         }
     }

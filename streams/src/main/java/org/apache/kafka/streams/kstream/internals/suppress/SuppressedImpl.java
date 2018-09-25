@@ -29,13 +29,16 @@ public class SuppressedImpl<K> implements Suppressed<K> {
     private final BufferConfig bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
+    private final boolean suppressTombstones;
 
     public SuppressedImpl(final Duration suppressionTime,
                           final BufferConfig bufferConfig,
-                          final TimeDefinition<K> timeDefinition) {
+                          final TimeDefinition<K> timeDefinition,
+                          final boolean suppressTombstones) {
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? (context, anyKey) -> context.timestamp() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : bufferConfig;
+        this.suppressTombstones = suppressTombstones;
     }
 
     interface TimeDefinition<K> {
@@ -72,5 +75,9 @@ public class SuppressedImpl<K> implements Suppressed<K> {
             ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
             ", timeDefinition=" + timeDefinition +
             '}';
+    }
+
+    boolean suppressTombstones() {
+        return suppressTombstones;
     }
 }

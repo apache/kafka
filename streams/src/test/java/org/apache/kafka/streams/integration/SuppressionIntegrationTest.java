@@ -137,9 +137,8 @@ public class SuppressionIntegrationTest {
             verifyOutput(
                 outputSuppressed,
                 asList(
-                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L)),
-                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L))
-                    // tick doesn't appear in the suppressed output because it it still buffered (until stream time 7)
+                    new KeyValueTimestamp<>("v1", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("v2", 1L, scaledTime(1L))
                 )
             );
         } finally {
@@ -405,16 +404,6 @@ public class SuppressionIntegrationTest {
             driver.close();
             cleanStateAfterTest(driver);
         }
-    }
-
-    private KTable<Windowed<String>, Long> buildWindowedCountsTable(final String input, final StreamsBuilder builder) {
-        return builder
-            .stream(input,
-                    Consumed.with(STRING_SERDE, STRING_SERDE)
-            )
-            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
-            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
     }
 
     private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
