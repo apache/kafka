@@ -45,7 +45,8 @@ public class RecordsUtil {
         long startNanos = time.nanoseconds();
 
         for (RecordBatch batch : batches) {
-            if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
+            if (toMagic < RecordBatch.MAGIC_VALUE_V2 &&
+                (batch.isControlBatch() || batch.compressionType() == CompressionType.ZSTD))
                 continue;
 
             if (batch.magic() <= toMagic) {
