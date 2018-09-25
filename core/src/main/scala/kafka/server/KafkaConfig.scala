@@ -205,6 +205,7 @@ object Defaults {
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
+  val KafkaMetricReporterClasses = ""
   val KafkaMetricsPollingIntervalSeconds = 10
 
   /** ********* SSL configuration ***********/
@@ -965,7 +966,7 @@ object KafkaConfig {
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
-      .define(KafkaMetricsReporterClassesProp, LIST, "", LOW, KafkaMetricsReporterClassesDoc)
+      .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
       .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 
       /** ********* Quota configuration ***********/
