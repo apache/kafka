@@ -110,7 +110,7 @@ public final class JoinWindows extends Windows<Window> {
      * the timestamp of the record from the primary stream.
      *
      * @param timeDifferenceMs join window interval in milliseconds
-     * @throws IllegalArgumentException if {@code timeDifferenceMs} is negative or too big
+     * @throws IllegalArgumentException if {@code timeDifferenceMs} is negative
      * @deprecated Use {@link #of(Duration)} instead.
      */
     @Deprecated
@@ -140,7 +140,7 @@ public final class JoinWindows extends Windows<Window> {
      * value (which would result in a negative window size).
      *
      * @param timeDifferenceMs relative window start time in milliseconds
-     * @throws IllegalArgumentException if the resulting window size is negative or too big
+     * @throws IllegalArgumentException if the resulting window size is negative
      * @deprecated Use {@link #before(Duration)} instead.
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
@@ -229,7 +229,6 @@ public final class JoinWindows extends Windows<Window> {
         if (afterWindowEnd.toMillis() < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
-
         return new JoinWindows(beforeMs, afterMs, afterWindowEnd, maintainDurationMs, segments);
     }
 
