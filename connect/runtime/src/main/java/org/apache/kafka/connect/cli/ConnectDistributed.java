@@ -54,8 +54,8 @@ import java.util.Map;
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
-    private Time time = Time.SYSTEM;
-    private long initStart = time.hiResClockMs();
+    private final Time time = Time.SYSTEM;
+    private final long initStart = time.hiResClockMs();
 
     public static void main(String[] args) {
 
