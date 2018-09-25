@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
@@ -100,7 +101,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
         );
     }
 
@@ -134,7 +137,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             ),
             REDUCE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
         );
     }
 
@@ -170,7 +175,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
         );
     }
 
@@ -220,5 +227,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
         return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
+    }
+
+    private static <T> Serde<Windowed<T>> getWindowedSerde(final Serde<T> rawSerde) {
+        return rawSerde == null ? null : new WindowedSerdes.TimeWindowedSerde<>(rawSerde);
     }
 }

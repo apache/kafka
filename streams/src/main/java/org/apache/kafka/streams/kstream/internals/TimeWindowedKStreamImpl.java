@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -100,9 +101,12 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
         );
     }
+
 
 
     @Override
@@ -132,7 +136,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable());
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
+        );
     }
 
     @Override
@@ -159,7 +166,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
             REDUCE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            getWindowedSerde(materializedInternal.keySerde()),
+            materializedInternal.valueSerde()
         );
     }
 
@@ -225,5 +234,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             builder.withCachingEnabled();
         }
         return builder;
+    }
+
+    private static <T> Serde<Windowed<T>> getWindowedSerde(final Serde<T> rawSerde) {
+        return rawSerde == null ? null : new WindowedSerdes.TimeWindowedSerde<>(rawSerde);
     }
 }

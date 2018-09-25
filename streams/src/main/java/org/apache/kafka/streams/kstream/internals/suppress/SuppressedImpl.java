@@ -17,29 +17,31 @@
 package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 import java.util.Objects;
 
 public class SuppressedImpl<K> implements Suppressed<K> {
     private static final Duration DEFAULT_SUPPRESSION_TIME = Duration.ofMillis(Long.MAX_VALUE);
-    private static final StrictBufferConfig DEFAULT_BUFFER_CONFIG = BufferConfig.unbounded();
+    private static final StrictBufferConfigImpl DEFAULT_BUFFER_CONFIG = (StrictBufferConfigImpl) BufferConfig.unbounded();
 
-    private final BufferConfig bufferConfig;
+    private final BufferConfigImpl bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
+    private final boolean suppressTombstones;
 
     public SuppressedImpl(final Duration suppressionTime,
                           final BufferConfig bufferConfig,
-                          final TimeDefinition<K> timeDefinition) {
+                          final TimeDefinition<K> timeDefinition,
+                          final boolean suppressTombstones) {
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? (context, anyKey) -> context.timestamp() : timeDefinition;
-        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : bufferConfig;
+        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigImpl) bufferConfig;
+        this.suppressTombstones = suppressTombstones;
     }
 
-    interface TimeDefinition<K> {
-        long time(final ProcessorContext context, final K key);
+    BufferConfigImpl getBufferConfig() {
+        return bufferConfig;
     }
 
     TimeDefinition<K> getTimeDefinition() {
@@ -48,6 +50,10 @@ public class SuppressedImpl<K> implements Suppressed<K> {
 
     Duration getTimeToWaitForMoreEvents() {
         return timeToWaitForMoreEvents == null ? Duration.ZERO : timeToWaitForMoreEvents;
+    }
+
+    boolean shouldSuppressTombstones() {
+        return suppressTombstones;
     }
 
     @Override

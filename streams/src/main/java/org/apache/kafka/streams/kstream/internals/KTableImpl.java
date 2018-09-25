@@ -365,7 +365,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final String name = builder.newProcessorName(SUPPRESS_NAME);
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier =
-            () -> new KTableSuppressProcessor<>(buildSuppress(suppressed));
+            () -> new KTableSuppressProcessor<>(
+                buildSuppress(suppressed),
+                keySerde,
+                valSerde == null ? null : new FullChangeSerde<>(valSerde)
+            );
 
         final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(
             suppressionSupplier,

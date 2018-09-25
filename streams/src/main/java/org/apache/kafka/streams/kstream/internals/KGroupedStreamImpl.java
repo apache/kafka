@@ -92,7 +92,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return doAggregate(
             new KStreamReduce<>(materializedInternal.storeName(), reducer),
             REDUCE_NAME,
-            materializedInternal
+            materializedInternal,
+            materializedInternal.keySerde()
         );
     }
 
@@ -114,7 +115,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return doAggregate(
             new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
             AGGREGATE_NAME,
-            materializedInternal
+            materializedInternal,
+            materializedInternal.keySerde()
         );
     }
 
@@ -156,7 +158,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return doAggregate(
             new KStreamAggregate<>(materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             AGGREGATE_NAME,
-            materializedInternal);
+            materializedInternal,
+            materializedInternal.keySerde()
+        );
     }
 
     @Override
@@ -191,12 +195,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     private <KR, T> KTable<KR, T> doAggregate(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
                                               final String functionName,
-                                              final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+                                              final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                              final Serde<KR> resultKeySerde) {
         return aggregateBuilder.build(
             aggregateSupplier,
             functionName,
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
-            materializedInternal.isQueryable()
+            materializedInternal.isQueryable(),
+            resultKeySerde,
+            materializedInternal.valueSerde()
         );
     }
 }
