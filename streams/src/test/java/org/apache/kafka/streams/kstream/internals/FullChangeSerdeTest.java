@@ -23,12 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import static java.util.Collections.emptyMap;
-import static org.hamcrest.CoreMatchers.any;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
