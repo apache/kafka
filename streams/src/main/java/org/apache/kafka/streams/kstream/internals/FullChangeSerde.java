@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.ByteBufferDeserializer;
+import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -45,6 +47,8 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
     @Override
     public Serializer<Change<T>> serializer() {
         final Serializer<T> innerSerializer = inner.serializer();
+        final ByteBufferSerializer byteBufferSerializer = new ByteBufferSerializer();
+
         return new Serializer<Change<T>>() {
             @Override
             public void configure(final Map<String, ?> configs, final boolean isKey) {
@@ -69,7 +73,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 if (newBytes != null) {
                     buffer.put(newBytes);
                 }
-                return buffer.array();
+                return byteBufferSerializer.serialize(null, buffer);
             }
 
             @Override
@@ -82,6 +86,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
     @Override
     public Deserializer<Change<T>> deserializer() {
         final Deserializer<T> innerDeserializer = inner.deserializer();
+        final ByteBufferDeserializer byteBufferDeserializer = new ByteBufferDeserializer();
         return new Deserializer<Change<T>>() {
             @Override
             public void configure(final Map<String, ?> configs, final boolean isKey) {
@@ -90,7 +95,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
 
             @Override
             public Change<T> deserialize(final String topic, final byte[] data) {
-                final ByteBuffer buffer = ByteBuffer.wrap(data);
+                final ByteBuffer buffer = byteBufferDeserializer.deserialize(null, data);
 
                 final int oldSize = buffer.getInt();
                 final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
