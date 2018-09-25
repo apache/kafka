@@ -381,6 +381,11 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, groupId)
     producer.commitTransaction()  // ok
 
+    // The call to commit the transaction may return before all markers are visible, so we initialize a second
+    // producer to ensure the transaction completes and the committed offsets are visible.
+    val producer2 = transactionalProducers(1)
+    producer2.initTransactions()
+
     assertEquals(offsetAndMetadata, consumer.committed(tp))
   }
 
