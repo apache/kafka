@@ -46,7 +46,17 @@ public interface StateStore {
     String name();
 
     /**
-     * Initializes this state store
+     * Initializes this state store.
+     *
+     * The implementation of this function must register the root store in the context via the
+     * {@link ProcessorContext#register(StateStore, StateRestoreCallback)} function, where the
+     * first {@code StateStore} parameter should always be the passed-in {@code root} object, and the
+     * second {@code StateRestoreCallback} is what users need to instantiate.
+     *
+     * Note that if the state store implementation itself supports bulk writes, users can implement another
+     * interface {@link BatchingStateRestoreCallback} which extends {@link StateRestoreCallback} and could
+     * let users instantiate bulk-load restoration logic instead of restoring one record at a time.
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
