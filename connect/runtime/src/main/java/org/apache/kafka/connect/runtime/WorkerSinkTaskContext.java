@@ -159,6 +159,16 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     }
 
     @Override
+    public String connectorId() {
+        return sinkTask.id().connector();
+    }
+
+    @Override
+    public int taskId() {
+        return sinkTask.id().task();
+    }
+
+    @Override
     public String toString() {
         return "WorkerSinkTaskContext{" +
                "id=" + sinkTask.id +

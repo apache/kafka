@@ -95,4 +95,15 @@ public interface SinkTaskContext {
      */
     void requestCommit();
 
+    /**
+     * Get the tasks's ID.
+     * @return the task's ID
+     */
+    int taskId();
+
+    /**
+     * Get the connector's ID.
+     * @return the connector's ID.
+     */
+    String connectorId();
 }
