@@ -968,7 +968,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionForBeginTransaction() {
+    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionForBeginTransaction() {
         task = createStatelessTask(createConfig(true));
         producer.fenceProducer();
 

@@ -246,6 +246,8 @@ public class TopologyTestDriver implements Closeable {
 
         processorTopology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
+                (globalTopology != null && globalTopology.hasPersistentGlobalStore());
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -256,7 +258,7 @@ public class TopologyTestDriver implements Closeable {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime);
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
 
         final MetricConfig metricConfig = new MetricConfig()
             .samples(streamsConfig.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))

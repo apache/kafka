@@ -565,7 +565,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldFlushAllStoresEvenIfStoreThrowsExcepiton() throws IOException {
+    public void shouldFlushAllStoresEvenIfStoreThrowsException() throws IOException {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),
