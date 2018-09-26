@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -33,6 +35,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -47,6 +50,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +58,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 
-
 public class SslFactory implements Reconfigurable {
+    private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
+
     private final Mode mode;
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
@@ -183,6 +188,9 @@ public class SslFactory implements Reconfigurable {
                 !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
                 !Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
 
+        if (!keystoreChanged) {
+            keystoreChanged = keystore.modified();
+        }
         if (keystoreChanged) {
             return createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                     (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
@@ -197,6 +205,9 @@ public class SslFactory implements Reconfigurable {
                 !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), truststore.path) ||
                 !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG), truststore.password);
 
+        if (!truststoreChanged) {
+            truststoreChanged = truststore.modified();
+        }
         if (truststoreChanged) {
             return createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                     (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
@@ -306,6 +317,7 @@ public class SslFactory implements Reconfigurable {
         private final String path;
         private final Password password;
         private final Password keyPassword;
+        private long fileLastModifiedMs;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -327,10 +339,21 @@ public class SslFactory implements Reconfigurable {
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
+                fileLastModifiedMs = lastModifiedMs(path);
+
+                log.debug("Loaded key store with path {} modification time {}", path, new Date(fileLastModifiedMs));
                 return ks;
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
             }
+        }
+
+        private long lastModifiedMs(String path) {
+            return new File(path).lastModified();
+        }
+
+        boolean modified() {
+            return lastModifiedMs(path) != this.fileLastModifiedMs;
         }
     }
 
