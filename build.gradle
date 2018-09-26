@@ -43,6 +43,26 @@ spotless {
 
 apply from: "$rootDir/gradle/dependencies.gradle"
 
+task copyGitHooks(type: Copy) {
+    description 'Copies the git hooks.'
+    from("${rootDir}/bin/git-hooks/") {
+        include '*'
+    }
+    into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+    description 'Installs the git hooks.'
+    group 'git hooks'
+    workingDir rootDir
+    commandLine 'chmod'
+    args '-R', '+x', '.git/hooks/'
+    dependsOn copyGitHooks
+    doLast {
+        logger.info('Git hook installed successfully.')
+    }
+}
+
 allprojects {
 
   repositories {
@@ -160,6 +180,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   uploadArchives {
@@ -1537,3 +1558,4 @@ task aggregatedJavadoc(type: Javadoc) {
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
   options.links "http://docs.oracle.com/javase/7/docs/api/"
 }
+
