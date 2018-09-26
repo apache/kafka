@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;

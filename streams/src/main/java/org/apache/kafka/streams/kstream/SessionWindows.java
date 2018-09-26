@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 
@@ -105,7 +105,7 @@ public final class SessionWindows {
      * @param inactivityGap the gap of inactivity between sessions
      * @return a new window specification with default maintain duration of 1 day
      *
-     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or too big
+     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows with(final Duration inactivityGap) {
         ApiUtils.validateMillisecondDuration(inactivityGap, "inactivityGap");

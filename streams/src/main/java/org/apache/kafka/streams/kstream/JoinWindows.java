@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -125,7 +125,7 @@ public final class JoinWindows extends Windows<Window> {
      * the timestamp of the record from the primary stream.
      *
      * @param timeDifference join window interval
-     * @throws IllegalArgumentException if {@code timeDifference} is negative or too big
+     * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
      */
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(timeDifference, "timeDifference");
@@ -157,7 +157,7 @@ public final class JoinWindows extends Windows<Window> {
      * value (which would result in a negative window size).
      *
      * @param timeDifference relative window start time
-     * @throws IllegalArgumentException if the resulting window size is negative or too big
+     * @throws IllegalArgumentException if the resulting window size is negative or can't be represented as {@code long milliseconds}
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows before(final Duration timeDifference) throws IllegalArgumentException {
@@ -173,7 +173,7 @@ public final class JoinWindows extends Windows<Window> {
      * value (which would result in a negative window size).
      *
      * @param timeDifferenceMs relative window end time in milliseconds
-     * @throws IllegalArgumentException if the resulting window size is negative or too big
+     * @throws IllegalArgumentException if the resulting window size is negative or can't be represented as {@code long milliseconds}
      * @deprecated Use {@link #after(Duration)} instead
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
@@ -190,7 +190,7 @@ public final class JoinWindows extends Windows<Window> {
      * value (which would result in a negative window size).
      *
      * @param timeDifference relative window end time
-     * @throws IllegalArgumentException if the resulting window size is negative or too big
+     * @throws IllegalArgumentException if the resulting window size is negative or can't be represented as {@code long milliseconds}
      */
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
     public JoinWindows after(final Duration timeDifference) throws IllegalArgumentException {

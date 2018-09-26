@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams;
+package org.apache.kafka.streams.internals;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-/**
- */
 public final class ApiUtils {
     private ApiUtils() {
     }

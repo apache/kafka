@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
@@ -906,7 +907,7 @@ public class KafkaStreams {
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
-     * @throws IllegalArgumentException if {@param timeout} is negative or too big
+     * @throws IllegalArgumentException if {@param timeout} is negative or can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(timeout, "timeout");

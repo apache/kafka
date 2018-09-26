@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -122,7 +122,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param size The size of the window
      * @return a new window definition with default maintain duration of 1 day
-     * @throws IllegalArgumentException if the specified window size is zero or negative or too big
+     * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(size, "size");
@@ -194,7 +194,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
-     * @throws IllegalArgumentException if afterWindowEnd is negative or too big
+     * @throws IllegalArgumentException if afterWindowEnd is negative or can't be represented as {@code long milliseconds}
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {

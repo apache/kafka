@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import java.time.Instant;
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 

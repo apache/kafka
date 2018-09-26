@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.perf;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -64,6 +63,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
 
 /**
@@ -501,7 +501,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(final Integer key, final byte[] value) {
                         final long timestamp = context().timestamp();
-                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, ofEpochMilli(timestamp - 1000L), ofMillis(1000L));
+                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, ofEpochMilli(timestamp - 1000L), ofSeconds(1L));
                         while (iter.hasNext()) {
                             iter.next();
                         }
@@ -680,7 +680,7 @@ public class SimpleBenchmark {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
 
-                streamsClient.close(Duration.ofSeconds(30));
+                streamsClient.close(ofSeconds(30));
             }
         });
 

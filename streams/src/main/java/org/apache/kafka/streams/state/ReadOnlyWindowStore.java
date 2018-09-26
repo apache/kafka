@@ -114,7 +114,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
-     * @throws IllegalArgumentException if duration is negative or too big
+     * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
      */
     WindowStoreIterator<V> fetch(K key, Instant from, Duration duration) throws IllegalArgumentException;
 
@@ -148,7 +148,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
-     * @throws IllegalArgumentException if duration is negative or too big
+     * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Duration duration)
         throws IllegalArgumentException;
@@ -182,7 +182,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if {@code null} is used for any key
-     * @throws IllegalArgumentException if duration is negative or too big
+     * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Duration duration) throws IllegalArgumentException;
 }

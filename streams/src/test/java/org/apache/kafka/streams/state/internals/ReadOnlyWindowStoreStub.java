@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.time.Duration;
 import java.time.Instant;
-import org.apache.kafka.streams.ApiUtils;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
