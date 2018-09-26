@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
-import scala.util.Random
+import scala.util.{Failure, Random, Success, Try}
 
 object SimpleAclAuthorizer {
   //optional override zookeeper cluster configuration where acls will be stored, if not specified acls will be stored in
@@ -235,12 +235,17 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     inWriteLock(lock) {
       val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
       for (rType <- resourceTypes) {
-        val resourceType = ResourceType.fromString(rType)
-        val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceType.name
-        val resourceNames = zkUtils.getChildren(resourceTypePath)
-        for (resourceName <- resourceNames) {
-          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName.toString))
-          updateCache(new Resource(resourceType, resourceName), versionedAcls)
+        val resourceType = Try(ResourceType.fromString(rType))
+        resourceType match {
+          case Success(resourceTypeObj) => {
+            val resourceTypePath = SimpleAclAuthorizer.AclZkPath + "/" + resourceTypeObj.name
+            val resourceNames = zkUtils.getChildren(resourceTypePath)
+            for (resourceName <- resourceNames) {
+              val versionedAcls = getAclsFromZk(Resource(resourceTypeObj, resourceName.toString))
+              updateCache(new Resource(resourceTypeObj, resourceName), versionedAcls)
+            }
+          }
+          case Failure(f) => warn(s"Ignoring unknown ResourceType: $rType")
         }
       }
     }
