@@ -558,6 +558,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
                                                   final Serialized<K1, V1> serialized) {
+        Objects.requireNonNull(selector, "selector can't be null");
+        Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
         return groupBy(selector, Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
     }

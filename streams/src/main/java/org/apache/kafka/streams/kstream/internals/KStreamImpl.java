@@ -791,23 +791,31 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
-        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector);
-        selectKeyMapNode.keyChangingOperation(true);
 
-        builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
-        return new KGroupedStreamImpl<>(selectKeyMapNode.nodeName(),
-                                        serializedInternal.keySerde(),
-                                        serializedInternal.valueSerde() != null ? serializedInternal.valueSerde() : valSerde,
-                                        sourceNodes,
-                                        true,
-                                        selectKeyMapNode,
-                                        builder);
+        return groupBy(selector, Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
+
+
     }
 
     @Override
     public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                               final Grouped<KR, V> grouped) {
-        return null;
+        Objects.requireNonNull(selector, "selector can't be null");
+        Objects.requireNonNull(grouped, "grouped can't be null");
+        final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
+        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector);
+        selectKeyMapNode.keyChangingOperation(true);
+
+        builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
+        return new KGroupedStreamImpl<>(
+                builder,
+                selectKeyMapNode.nodeName(),
+                sourceNodes,
+                groupedInternal.keySerde(),
+                groupedInternal.valueSerde(),
+                true,
+                selectKeyMapNode
+        );
     }
 
     @Override
