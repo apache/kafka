@@ -156,12 +156,12 @@ public class ProduceRequest extends AbstractRequest {
             return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId);
         }
 
-        private Builder(short minVersion,
-                        short maxVersion,
-                        short acks,
-                        int timeout,
-                        Map<TopicPartition, MemoryRecords> partitionRecords,
-                        String transactionalId) {
+        public Builder(short minVersion,
+                       short maxVersion,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords,
+                       String transactionalId) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.acks = acks;
             this.timeout = timeout;
