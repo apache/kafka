@@ -181,7 +181,17 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Wait for producer to update metadata for the partition
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
-      producer.send(record).get()
+      try {
+        producer.send(record).get()
+      } catch {
+        case e: ExecutionException => {
+          e.getCause match {
+            case t: KafkaStorageException =>
+            case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
+            case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
+          }
+        }
+      }
       producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
     }, "Expected new leader for the partition", 6000L)
 
