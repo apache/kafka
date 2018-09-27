@@ -268,18 +268,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>();
         for (TopicPartition partition : partitions) {
-            OffsetAndMetadata singleResult = new OffsetAndMetadata(0)
+            OffsetAndMetadata singleResult = new OffsetAndMetadata(0);
             if (subscriptions.isAssigned(partition)) {
                 singleResult = committed.get(partition);
             }
-            result.put(singleResult);
+            result.put(partition, singleResult);
         }
         return result;
     }
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(Collection<TopicPartition> partitions, final Duration timeout) {
-        return committed(partition);
+        return committed(partitions);
     }
 
     @Override

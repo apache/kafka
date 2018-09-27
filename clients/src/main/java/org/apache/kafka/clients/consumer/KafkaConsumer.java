@@ -1639,7 +1639,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
      * {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      *
-     * @param partition The list of partitions to check
+     * @param partitions The list of partitions to check
      * @return The map of partitions and their last committed offsets and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
@@ -1654,7 +1654,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(Collection<TopicPartition> partitions) {
-        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
+        return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     /**
@@ -1663,7 +1663,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
-     * @param partition The list of partitions to check
+     * @param partitions The list of partitions to check
      * @param timeout  The maximum amount of time to await the current committed offset
      * @return The map of partitions and their last committed offsets and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
@@ -1682,10 +1682,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
-                    Collections.unmodifiableCollection(partitions), time.timer(timeout));
+                    Collections.unmodifiableSet(new HashSet<>(partitions)), time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                        "committed offset for partition " + partition + " could be determined");
+                        "committed offsets for the partitions " + partitions + " could be determined");
             }
             return offsets;
         } finally {
