@@ -143,8 +143,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
-    * test log race condition between log retention, log compaction,
-    * topic deletion, log truncation and topic retention policy change
+    * test log race condition between log retention,
+    * topic deletion, and log truncation
     */
   @Test
   def testLogsRaceCondition(): Unit = {
@@ -157,50 +157,13 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     log.appendAsLeader(records, leaderEpoch = 0)
     log.onHighWatermarkIncremented(2L)
 
-    // prepare log cleanup policy
-    val deletionlogProps = new Properties()
-    deletionlogProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
-    val deletionConfig = LogConfig(deletionlogProps)
-
-    val compactionlogProps = new Properties()
-    compactionlogProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    compactionlogProps.put(LogConfig.MinCleanableDirtyRatioProp, 0: Integer)
-    val compactionConfig = LogConfig(compactionlogProps)
-
-    val compactAndDeleteLogProps = new Properties()
-    compactAndDeleteLogProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
-    val compactAndDeleteConfig = LogConfig(compactionlogProps)
-
-    val logConfigSet = List(deletionConfig, compactionConfig, compactAndDeleteConfig)
-
     val numOfRun = 100
-    var jobRetention = 0
-    var jobCompaction = 0
 
     def logRetention(): Unit = {
       for (i <- 0 until numOfRun) {
         val retetionLogs = cleanerManager.pauseCleaningForNonCompactedPartitions()
-        if (retetionLogs.nonEmpty)
-          jobRetention += 1
         Thread.`yield`()
         cleanerManager.resumeCleaning(retetionLogs.map(_._1))
-        Thread.`yield`()
-      }
-    }
-
-    def logCompaction(): Unit = {
-      for (i <- 0 until numOfRun) {
-        cleanerManager.grabFilthiestCompactedLog(time) match {
-          case None =>
-          case Some(cleanable) =>
-            Thread.`yield`()
-            // cleanerManager.doneDeleting is equivalent to cleanerManager.doneCleaning regarding statechange
-            cleanerManager.doneDeleting(Seq(cleanable.topicPartition))
-            jobCompaction += 1
-        }
-
-        val deletable = cleanerManager.deletableLogs()
-        cleanerManager.doneDeleting(deletable.map(_._1))
         Thread.`yield`()
       }
     }
@@ -223,51 +186,22 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       }
     }
 
-    def logChangePolicy(): Unit = {
-      for (i <- 0 until numOfRun) {
-        log.config = logConfigSet(i % logConfigSet.size)
-        Thread.`yield`()
-      }
-      // reset back to delete retention
-      log.config = deletionConfig
-    }
-
     assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
 
-    // run log retention, log compaction, and log truncation
-    // in parallel without config change function
+    // run log retention and log truncation in parallel
     TestUtils.assertConcurrent("Concurrent log race condition test",
-      Seq(logRetention, logCompaction, logTruncation),
+      Seq(logRetention, logTruncation),
       60000)
 
     // make sure state is cleared at the end
     assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
 
-    // log retention, log compaction, and topic deletion
+    // log retention and topic deletion
     TestUtils.assertConcurrent("Concurrent log race condition test",
-      Seq(logRetention, logCompaction, topicDetention),
+      Seq(logRetention, topicDetention),
       60000)
 
     assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
-
-    var retryCount = 0
-    val maxRetry = 20
-    // best effort retry to get some jobs done for both log compaction and log retention
-    do {
-      // with config change and topic deletion
-      TestUtils.assertConcurrent("Concurrent log race condition test-0 with config change ",
-        Seq(logRetention, logCompaction, topicDetention, logChangePolicy),
-        60000)
-      assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
-
-      // with config change and log truncation
-      TestUtils.assertConcurrent("Concurrent log race condition test-1 with config change 1",
-        Seq(logRetention, logCompaction, logTruncation, logChangePolicy),
-        60000)
-      assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
-
-      retryCount += 1
-    } while ((jobCompaction < 2 || jobRetention < 2) && retryCount < maxRetry)
   }
 
   /**
