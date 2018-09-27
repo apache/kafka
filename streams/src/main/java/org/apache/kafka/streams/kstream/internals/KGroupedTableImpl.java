@@ -56,11 +56,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
-                      final Set<String> sourceNodes,
-                      final Serde<K> keySerde,
-                      final Serde<V> valSerde,
+                      final String sourceName,
+                      final GroupedInternal<K, V> groupedInternal,
                       final StreamsGraphNode streamsGraphNode) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(builder, name, Collections.singleton(sourceName), streamsGraphNode);
+        this.keySerde = groupedInternal.keySerde();
+        this.valSerde = groupedInternal.valueSerde();
+        this.repartitionTopicName = groupedInternal.name();
     }
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
@@ -69,7 +72,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
-        final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+        final String repartitionTopic = (repartitionTopicName != null ? repartitionTopicName : materialized.storeName())
+                + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
         final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, topic);
 

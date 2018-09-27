@@ -566,11 +566,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V1> joinOther = (KStreamImpl<K, V1>) other;
 
         if (joinThis.repartitionRequired) {
-            joinThis = joinThis.repartitionForJoin(joined);
+            final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : null;
+            joinThis = joinThis.repartitionForJoin(joined.keySerde(), joined.valueSerde(), leftJoinRepartitionTopicName);
         }
 
         if (joinOther.repartitionRequired) {
-            joinOther = joinOther.repartitionForJoin(Joined.with(joined.keySerde(), joined.otherValueSerde(), joined.valueSerde()));
+            final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : null;
+            joinOther = joinOther.repartitionForJoin(joined.keySerde(), joined.otherValueSerde(), rightJoinRepartitionTopicName);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -615,8 +617,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final String name,
                                                      final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
-        final String baseName = topicNamePrefix != null ? topicNamePrefix : name;
-        final String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
+        final String repartitionTopicBaseName = repartitionTopicNamePrefix != null ? repartitionTopicNamePrefix : name;
+        final String repartitionTopic = repartitionTopicBaseName + REPARTITION_TOPIC_SUFFIX;
         final String sinkName = builder.newProcessorName(SINK_NAME);
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String sourceName = builder.newProcessorName(SOURCE_NAME);
@@ -811,8 +813,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 builder,
                 selectKeyMapNode.nodeName(),
                 sourceNodes,
-                groupedInternal.keySerde(),
-                groupedInternal.valueSerde(),
+                groupedInternal,
                 true,
                 selectKeyMapNode
         );
@@ -827,13 +828,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @SuppressWarnings("deprecation")
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
-        return new KGroupedStreamImpl<>(this.name,
-                                        serializedInternal.keySerde() != null ? serializedInternal.keySerde() : keySerde,
-                                        serializedInternal.valueSerde() != null ? serializedInternal.valueSerde() : valSerde,
-                                        sourceNodes,
-                                        this.repartitionRequired,
-                                        streamsGraphNode,
-                                        builder);
+        return groupByKey(Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
     }
 
     @Override
@@ -843,9 +838,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KGroupedStreamImpl<>(builder,
                 this.name,
                 sourceNodes,
-                groupedInternal.keySerde(),
-                groupedInternal.valueSerde(),
-                this.repartitionRequired,
+                groupedInternal,
+                repartitionRequired,
                 streamsGraphNode);
     }
 

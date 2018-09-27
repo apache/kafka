@@ -585,8 +585,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 builder,
                 selectName,
                 this.name,
-                groupedInternal.keySerde(),
-                groupedInternal.valueSerde(),
+                groupedInternal,
                 groupByMapNode
         );
     }

@@ -36,6 +36,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final boolean repartitionRequired;
+    private final String repartitionTopicName;
     private final Set<String> sourceNodes;
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
@@ -52,7 +53,8 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final boolean repartitionRequired,
                                   final Set<String> sourceNodes,
                                   final String name,
-                                  final StreamsGraphNode streamsGraphNode) {
+                                  final StreamsGraphNode streamsGraphNode,
+                                  final String repartitionTopicName) {
 
         this.builder = builder;
         this.keySerde = keySerde;
@@ -61,6 +63,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.sourceNodes = sourceNodes;
         this.name = name;
         this.streamsGraphNode = streamsGraphNode;
+        this.repartitionTopicName = repartitionTopicName;
     }
 
     <KR, T> KTable<KR, T> build(final String functionName,
@@ -74,7 +77,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
-        final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
+        final String sourceName = repartitionIfRequired(repartitionTopicName != null ? repartitionTopicName : storeBuilder.name(), repartitionNodeBuilder);
 
         StreamsGraphNode parentNode = streamsGraphNode;
 
