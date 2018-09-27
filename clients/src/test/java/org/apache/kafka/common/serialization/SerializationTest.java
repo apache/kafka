@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -38,13 +39,14 @@ public class SerializationTest {
         {
             put(String.class, Arrays.asList("my string"));
             put(Short.class, Arrays.asList((short) 32767, (short) -32768));
-            put(Integer.class, Arrays.asList((int) 423412424, (int) -41243432));
+            put(Integer.class, Arrays.asList(423412424, -41243432));
             put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList("my string".getBytes()));
             put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
+            put(UUID.class, Arrays.asList(UUID.randomUUID()));
         }
     };
 

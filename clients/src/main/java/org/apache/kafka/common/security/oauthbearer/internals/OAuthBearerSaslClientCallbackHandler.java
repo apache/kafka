@@ -53,7 +53,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
 
     /**
      * Return true if this instance has been configured, otherwise false
-     * 
+     *
      * @return true if this instance has been configured, otherwise false
      */
     public boolean configured() {
@@ -91,8 +91,8 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
             throw new IllegalArgumentException("Callback had a token already");
         Subject subject = Subject.getSubject(AccessController.getContext());
         Set<OAuthBearerToken> privateCredentials = subject != null
-                ? subject.getPrivateCredentials(OAuthBearerToken.class)
-                : Collections.<OAuthBearerToken>emptySet();
+            ? subject.getPrivateCredentials(OAuthBearerToken.class)
+            : Collections.emptySet();
         if (privateCredentials.size() != 1)
             throw new IOException(
                     String.format("Unable to find OAuth Bearer token in Subject's private credentials (size=%d)",

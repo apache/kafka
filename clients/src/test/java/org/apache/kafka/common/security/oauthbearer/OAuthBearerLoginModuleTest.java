@@ -134,14 +134,14 @@ public class OAuthBearerLoginModuleTest {
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
-        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
-        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
         OAuthBearerLoginModule loginModule3 = new OAuthBearerLoginModule();
-        loginModule3.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule3.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -230,11 +230,11 @@ public class OAuthBearerLoginModuleTest {
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
-        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
-        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -290,8 +290,8 @@ public class OAuthBearerLoginModuleTest {
 
         // Create login module
         OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
-        loginModule.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -342,14 +342,14 @@ public class OAuthBearerLoginModuleTest {
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
-        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
-        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
         OAuthBearerLoginModule loginModule3 = new OAuthBearerLoginModule();
-        loginModule3.initialize(subject, testTokenCallbackHandler, Collections.<String, Object>emptyMap(),
-                Collections.<String, Object>emptyMap());
+        loginModule3.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());

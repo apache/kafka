@@ -2429,19 +2429,17 @@ public class TransactionManagerTest {
         }, new AddOffsetsToTxnResponse(0, error));
     }
 
-    private void prepareTxnOffsetCommitResponse(final String consumerGroupId, final long producerId,
-                                                final short producerEpoch, Map<TopicPartition, Errors> txnOffsetCommitResponse) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) body;
-                assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
-                assertEquals(producerId, txnOffsetCommitRequest.producerId());
-                assertEquals(producerEpoch, txnOffsetCommitRequest.producerEpoch());
-                return true;
-            }
+    private void prepareTxnOffsetCommitResponse(final String consumerGroupId,
+                                                final long producerId,
+                                                final short producerEpoch,
+                                                Map<TopicPartition, Errors> txnOffsetCommitResponse) {
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
+            assertEquals(producerId, txnOffsetCommitRequest.producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.producerEpoch());
+            return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
-
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {

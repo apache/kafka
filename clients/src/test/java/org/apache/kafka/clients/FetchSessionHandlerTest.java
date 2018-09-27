@@ -18,13 +18,13 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -52,13 +53,11 @@ public class FetchSessionHandlerTest {
 
     private static final LogContext LOG_CONTEXT = new LogContext("[FetchSessionHandler]=");
 
-    private static final Logger log = LOG_CONTEXT.logger(FetchSessionHandler.class);
-
     /**
      * Create a set of TopicPartitions.  We use a TreeSet, in order to get a deterministic
      * ordering for test purposes.
      */
-    private final static Set<TopicPartition> toSet(TopicPartition... arr) {
+    private static Set<TopicPartition> toSet(TopicPartition... arr) {
         TreeSet<TopicPartition> set = new TreeSet<>(new Comparator<TopicPartition>() {
             @Override
             public int compare(TopicPartition o1, TopicPartition o2) {
@@ -70,7 +69,7 @@ public class FetchSessionHandlerTest {
     }
 
     @Test
-    public void testFindMissing() throws Exception {
+    public void testFindMissing() {
         TopicPartition foo0 = new TopicPartition("foo", 0);
         TopicPartition foo1 = new TopicPartition("foo", 1);
         TopicPartition bar0 = new TopicPartition("bar", 0);
@@ -95,7 +94,7 @@ public class FetchSessionHandlerTest {
 
         ReqEntry(String topic, int partition, long fetchOffset, long logStartOffset, int maxBytes) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes);
+            this.data = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes, Optional.empty());
         }
     }
 
@@ -153,11 +152,11 @@ public class FetchSessionHandlerTest {
 
     private static final class RespEntry {
         final TopicPartition part;
-        final FetchResponse.PartitionData data;
+        final FetchResponse.PartitionData<MemoryRecords> data;
 
         RespEntry(String topic, int partition, long highWatermark, long lastStableOffset) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new FetchResponse.PartitionData(
+            this.data = new FetchResponse.PartitionData<>(
                 Errors.NONE,
                 highWatermark,
                 lastStableOffset,
@@ -167,8 +166,8 @@ public class FetchSessionHandlerTest {
         }
     }
 
-    private static LinkedHashMap<TopicPartition, FetchResponse.PartitionData> respMap(RespEntry... entries) {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> map = new LinkedHashMap<>();
+    private static LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> respMap(RespEntry... entries) {
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> map = new LinkedHashMap<>();
         for (RespEntry entry : entries) {
             map.put(entry.part, entry.data);
         }
@@ -180,13 +179,13 @@ public class FetchSessionHandlerTest {
      * Pre-KIP-227 brokers always supply this kind of response.
      */
     @Test
-    public void testSessionless() throws Exception {
+    public void testSessionless() {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
                                new ReqEntry("foo", 1, 10, 110, 210)),
@@ -194,7 +193,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse<MemoryRecords> resp = new FetchResponse<>(Errors.NONE,
             respMap(new RespEntry("foo", 0, 0, 0),
                     new RespEntry("foo", 1, 0, 0)),
             0, INVALID_SESSION_ID);
@@ -202,7 +201,7 @@ public class FetchSessionHandlerTest {
 
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertEquals(INVALID_SESSION_ID, data2.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data2.metadata().epoch());
@@ -214,13 +213,13 @@ public class FetchSessionHandlerTest {
      * Test handling an incremental fetch session.
      */
     @Test
-    public void testIncrementals() throws Exception {
+    public void testIncrementals() {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
             new ReqEntry("foo", 1, 10, 110, 210)),
@@ -228,7 +227,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse<MemoryRecords> resp = new FetchResponse<>(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20)),
             0, 123);
@@ -237,11 +236,11 @@ public class FetchSessionHandlerTest {
         // Test an incremental fetch request which adds one partition and modifies another.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder2.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 120, 210));
+            new FetchRequest.PartitionData(10, 120, 210, Optional.empty()));
         builder2.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 200, 200));
+            new FetchRequest.PartitionData(20, 200, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertFalse(data2.metadata().isFull());
         assertMapEquals(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
@@ -252,24 +251,24 @@ public class FetchSessionHandlerTest {
                 new ReqEntry("foo", 1, 10, 120, 210)),
             data2.toSend());
 
-        FetchResponse resp2 = new FetchResponse(Errors.NONE,
+        FetchResponse<MemoryRecords> resp2 = new FetchResponse<>(Errors.NONE,
             respMap(new RespEntry("foo", 1, 20, 20)),
             0, 123);
         handler.handleResponse(resp2);
 
         // Skip building a new request.  Test that handling an invalid fetch session epoch response results
         // in a request which closes the session.
-        FetchResponse resp3 = new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
+        FetchResponse<MemoryRecords> resp3 = new FetchResponse<>(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
             0, INVALID_SESSION_ID);
         handler.handleResponse(resp3);
 
         FetchSessionHandler.Builder builder4 = handler.newBuilder();
         builder4.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder4.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 120, 210));
+            new FetchRequest.PartitionData(10, 120, 210, Optional.empty()));
         builder4.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 200, 200));
+            new FetchRequest.PartitionData(20, 200, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data4 = builder4.build();
         assertTrue(data4.metadata().isFull());
         assertEquals(data2.metadata().sessionId(), data4.metadata().sessionId());
@@ -284,11 +283,11 @@ public class FetchSessionHandlerTest {
      * Test that calling FetchSessionHandler#Builder#build twice fails.
      */
     @Test
-    public void testDoubleBuild() throws Exception {
+    public void testDoubleBuild() {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.build();
         try {
             builder.build();
@@ -299,15 +298,15 @@ public class FetchSessionHandlerTest {
     }
 
     @Test
-    public void testIncrementalPartitionRemoval() throws Exception {
+    public void testIncrementalPartitionRemoval() {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         builder.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         builder.add(new TopicPartition("bar", 0),
-            new FetchRequest.PartitionData(20, 120, 220));
+            new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
             new ReqEntry("foo", 1, 10, 110, 210),
@@ -315,7 +314,7 @@ public class FetchSessionHandlerTest {
             data.toSend(), data.sessionPartitions());
         assertTrue(data.metadata().isFull());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse<MemoryRecords> resp = new FetchResponse<>(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20),
                     new RespEntry("bar", 0, 10, 20)),
@@ -325,7 +324,7 @@ public class FetchSessionHandlerTest {
         // Test an incremental fetch request which removes two partitions.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         builder2.add(new TopicPartition("foo", 1),
-            new FetchRequest.PartitionData(10, 110, 210));
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         assertFalse(data2.metadata().isFull());
         assertEquals(123, data2.metadata().sessionId());
@@ -340,12 +339,12 @@ public class FetchSessionHandlerTest {
 
         // A FETCH_SESSION_ID_NOT_FOUND response triggers us to close the session.
         // The next request is a session establishing FULL request.
-        FetchResponse resp2 = new FetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
+        FetchResponse<MemoryRecords> resp2 = new FetchResponse<>(Errors.FETCH_SESSION_ID_NOT_FOUND,
             respMap(), 0, INVALID_SESSION_ID);
         handler.handleResponse(resp2);
         FetchSessionHandler.Builder builder3 = handler.newBuilder();
         builder3.add(new TopicPartition("foo", 0),
-            new FetchRequest.PartitionData(0, 100, 200));
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data3 = builder3.build();
         assertTrue(data3.metadata().isFull());
         assertEquals(INVALID_SESSION_ID, data3.metadata().sessionId());

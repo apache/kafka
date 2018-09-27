@@ -174,7 +174,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                 samples = new ArrayList<>(metrics.size());
                 for (KafkaMetric metric : metrics.values()) {
                     MetricName name = metric.metricName();
-                    double value = metric.value();
+                    double value = (Double) metric.metricValue();
                     samples.add(new MetricValue(name.name(), name.group(), name.tags(), value));
                 }
             }

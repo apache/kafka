@@ -46,7 +46,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -369,19 +371,22 @@ public class IntegrationTestUtils {
                         readKeyValues(topic, consumer, waitTime, expectedRecords.size());
                 accumData.addAll(readData);
 
-                final int accumLastIndex = accumData.size() - 1;
-                final int expectedLastIndex = expectedRecords.size() - 1;
-
                 // filter out all intermediate records we don't want
                 final List<KeyValue<K, V>> accumulatedActual = accumData.stream().filter(expectedRecords::contains).collect(Collectors.toList());
 
-                // need this check as filtering above could have removed the last record from accumData, but it did not
-                // equal the last expected record
-                final boolean lastRecordsMatch = accumData.get(accumLastIndex).equals(expectedRecords.get(expectedLastIndex));
+                // still need to check that for each key, the ordering is expected
+                final Map<K, List<KeyValue<K, V>>> finalAccumData = new HashMap<>();
+                for (final KeyValue<K, V> kv : accumulatedActual) {
+                    finalAccumData.computeIfAbsent(kv.key, key -> new ArrayList<>()).add(kv);
+                }
+                final Map<K, List<KeyValue<K, V>>> finalExpected = new HashMap<>();
+                for (final KeyValue<K, V> kv : expectedRecords) {
+                    finalExpected.computeIfAbsent(kv.key, key -> new ArrayList<>()).add(kv);
+                }
 
                 // returns true only if the remaining records in both lists are the same and in the same order
                 // and the last record received matches the last expected record
-                return accumulatedActual.equals(expectedRecords) && lastRecordsMatch;
+                return finalAccumData.equals(finalExpected);
 
             };
             final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;

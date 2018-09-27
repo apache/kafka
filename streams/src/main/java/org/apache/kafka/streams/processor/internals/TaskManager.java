@@ -409,8 +409,8 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process() {
-        return active.process();
+    int process(final long now) {
+        return active.process(now);
     }
 
     /**
@@ -424,8 +424,8 @@ public class TaskManager {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    int maybeCommitActiveTasks() {
-        return active.maybeCommit();
+    int maybeCommitActiveTasksPerUserRequested() {
+        return active.maybeCommitPerUserRequested();
     }
 
     void maybePurgeCommitedRecords() {

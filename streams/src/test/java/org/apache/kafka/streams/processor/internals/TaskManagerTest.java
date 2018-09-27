@@ -590,19 +590,19 @@ public class TaskManagerTest {
 
     @Test
     public void shouldMaybeCommitActiveTasks() {
-        EasyMock.expect(active.maybeCommit()).andReturn(5);
+        EasyMock.expect(active.maybeCommitPerUserRequested()).andReturn(5);
         replay();
 
-        assertThat(taskManager.maybeCommitActiveTasks(), equalTo(5));
+        assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(5));
         verify(active);
     }
 
     @Test
     public void shouldProcessActiveTasks() {
-        EasyMock.expect(active.process()).andReturn(10);
+        EasyMock.expect(active.process(0L)).andReturn(10);
         replay();
 
-        assertThat(taskManager.process(), equalTo(10));
+        assertThat(taskManager.process(0L), equalTo(10));
         verify(active);
     }
 

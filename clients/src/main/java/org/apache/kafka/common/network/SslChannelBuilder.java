@@ -163,7 +163,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
          * No-Op for plaintext authenticator
          */
         @Override
-        public void authenticate() throws IOException {}
+        public void authenticate() {}
 
         /**
          * Constructs Principal using configured principalBuilder.

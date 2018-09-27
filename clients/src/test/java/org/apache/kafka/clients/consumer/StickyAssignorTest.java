@@ -711,8 +711,8 @@ public class StickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = CollectionUtils.groupDataByTopic(partitions);
-                Map<String, List<Integer>> otherMap = CollectionUtils.groupDataByTopic(otherPartitions);
+                Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
+                Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())

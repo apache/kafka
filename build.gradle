@@ -19,6 +19,9 @@ buildscript {
   repositories {
     mavenCentral()
     jcenter()
+    maven {
+      url "https://plugins.gradle.org/m2/"
+    }
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 
@@ -30,6 +33,7 @@ buildscript {
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
     classpath 'org.owasp:dependency-check-gradle:3.2.1'
     classpath "com.diffplug.spotless:spotless-plugin-gradle:3.10.0"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.3"
   }
 }
 
@@ -85,7 +89,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.8.1"
+  gradleVersion = "4.10"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -145,9 +149,8 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
-
-  if (!JavaVersion.current().isJava9Compatible())
-    apply plugin: 'findbugs'
+  if (!JavaVersion.current().isJava11Compatible())
+    apply plugin: "com.github.spotbugs"
 
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
@@ -364,18 +367,20 @@ subprojects {
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  if (!JavaVersion.current().isJava9Compatible()) {
-    findbugs {
-      toolVersion = "3.0.1"
-      excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+  if (!JavaVersion.current().isJava11Compatible()) {
+    spotbugs {
+      // 3.1.6 has a regression that breaks our build, seems to be https://github.com/spotbugs/spotbugs/pull/688
+      toolVersion = '3.1.5'
+      excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
       ignoreFailures = false
     }
-    test.dependsOn('findbugsMain')
+    test.dependsOn('spotbugsMain')
 
-    tasks.withType(FindBugs) {
+    tasks.withType(com.github.spotbugs.SpotBugsTask) {
       reports {
-        xml.enabled(project.hasProperty('xmlFindBugsReport'))
-        html.enabled(!project.hasProperty('xmlFindBugsReport'))
+        // Continue supporting `xmlFindBugsReport` for compatibility
+        xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
+        html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
       }
     }
   }
@@ -408,7 +413,7 @@ subprojects {
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
-  taskGraph.getAllTasks().findAll { it.name.contains('findbugsScoverage') || it.name.contains('findbugsTest') }.each { task ->
+  taskGraph.getAllTasks().findAll { it.name.contains('spotbugsScoverage') || it.name.contains('spotbugsTest') }.each { task ->
     task.enabled = false
   }
 }
@@ -1177,6 +1182,18 @@ project(':streams:upgrade-system-tests-11') {
 
   dependencies {
     testCompile libs.kafkaStreams_11
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-20') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-20"
+
+  dependencies {
+    testCompile libs.kafkaStreams_20
   }
 
   systemTestLibs {

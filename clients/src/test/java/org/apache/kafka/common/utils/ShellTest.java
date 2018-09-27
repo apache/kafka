@@ -49,7 +49,7 @@ public class ShellTest {
     private final static String NONEXISTENT_PATH = "/dev/a/path/that/does/not/exist/in/the/filesystem";
 
     @Test
-    public void testAttemptToRunNonExistentProgram() throws Exception {
+    public void testAttemptToRunNonExistentProgram() {
         assumeTrue(!OperatingSystem.IS_WINDOWS);
         try {
             Shell.execCommand(NONEXISTENT_PATH);

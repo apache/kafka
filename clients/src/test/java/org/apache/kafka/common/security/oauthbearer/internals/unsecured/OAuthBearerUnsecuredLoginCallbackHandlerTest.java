@@ -29,7 +29,6 @@ import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.LoginException;
 
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
@@ -91,7 +90,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void validOptionsWithExplicitOptionValues()
-            throws IOException, UnsupportedCallbackException, LoginException {
+            throws IOException, UnsupportedCallbackException {
         String explicitScope1 = "scope1";
         String explicitScope2 = "scope2";
         String explicitScopeClaimName = "putScopeInHere";
@@ -142,7 +141,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
                 (Map) options);
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = new OAuthBearerUnsecuredLoginCallbackHandler();
         callbackHandler.time(mockTime);
-        callbackHandler.configure(Collections.<String, Object>emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+        callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }
