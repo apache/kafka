@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
@@ -25,6 +24,7 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.junit.Test;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -55,12 +55,12 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
-        Stores.persistentWindowStore(null, Duration.ofMillis(0L), Duration.ofMillis(0L), false, 0L);
+        Stores.persistentWindowStore(null, 0L, 0L, false, 0L);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
-        Stores.persistentWindowStore("anyName", Duration.ofMillis(-1L), Duration.ofMillis(0L), false, 0L);
+        Stores.persistentWindowStore("anyName", -1L, 0L, false, 0L);
     }
 
     @Deprecated
@@ -71,22 +71,23 @@ public class StoresTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
-        Stores.persistentWindowStore("anyName", Duration.ofMillis(0L), Duration.ofMillis(-1L), false);
+        Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfSegmentIntervalIsTooSmall() {
-        Stores.persistentWindowStore("anyName", Duration.ofMillis(1L), Duration.ofMillis(1L), false, -1L);
+        Stores.persistentWindowStore("anyName", 1L, 1L, false, -1L);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentSessionStoreStoreNameIsNull() {
-        Stores.persistentSessionStore(null, 0);
+        Stores.persistentSessionStore(null, ofMillis(0));
+
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentSessionStoreRetentionPeriodIsNegative() {
-        Stores.persistentSessionStore("anyName", -1);
+        Stores.persistentSessionStore("anyName", ofMillis(-1));
     }
 
     @Test(expected = NullPointerException.class)
@@ -121,18 +122,18 @@ public class StoresTest {
 
     @Test
     public void shouldCreateRocksDbWindowStore() {
-        assertThat(Stores.persistentWindowStore("store", Duration.ofMillis(1L), Duration.ofMillis(1L), false).get(), instanceOf(RocksDBWindowStore.class));
+        assertThat(Stores.persistentWindowStore("store", ofMillis(1L), ofMillis(1L), false).get(), instanceOf(RocksDBWindowStore.class));
     }
 
     @Test
     public void shouldCreateRocksDbSessionStore() {
-        assertThat(Stores.persistentSessionStore("store", 1).get(), instanceOf(RocksDBSessionStore.class));
+        assertThat(Stores.persistentSessionStore("store", ofMillis(1)).get(), instanceOf(RocksDBSessionStore.class));
     }
 
     @Test
     public void shouldBuildWindowStore() {
         final WindowStore<String, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore("store", Duration.ofMillis(3L), Duration.ofMillis(3L), true),
+            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
             Serdes.String(),
             Serdes.String()
         ).build();
@@ -152,7 +153,7 @@ public class StoresTest {
     @Test
     public void shouldBuildSessionStore() {
         final SessionStore<String, String> store = Stores.sessionStoreBuilder(
-            Stores.persistentSessionStore("name", 10),
+            Stores.persistentSessionStore("name", ofMillis(10)),
             Serdes.String(),
             Serdes.String()
         ).build();

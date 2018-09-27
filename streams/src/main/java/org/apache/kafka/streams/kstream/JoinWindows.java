@@ -136,7 +136,7 @@ public final class JoinWindows extends Windows<Window> {
      * Changes the start window boundary to {@code timeDifferenceMs} but keep the end window boundary as is.
      * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifferenceMs} earlier than the timestamp of the record from the primary stream.
-     * {@code timeDifferenceMs} can be negative but it's absolute value must not be larger than current window "after"
+     * {@code timeDifferenceMs} can be negative but its absolute value must not be larger than current window "after"
      * value (which would result in a negative window size).
      *
      * @param timeDifferenceMs relative window start time in milliseconds
@@ -153,7 +153,7 @@ public final class JoinWindows extends Windows<Window> {
      * Changes the start window boundary to {@code timeDifference} but keep the end window boundary as is.
      * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifference} earlier than the timestamp of the record from the primary stream.
-     * {@code timeDifference} can be negative but it's absolute value must not be larger than current window "after"
+     * {@code timeDifference} can be negative but its absolute value must not be larger than current window "after"
      * value (which would result in a negative window size).
      *
      * @param timeDifference relative window start time
@@ -169,7 +169,7 @@ public final class JoinWindows extends Windows<Window> {
      * Changes the end window boundary to {@code timeDifferenceMs} but keep the start window boundary as is.
      * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifferenceMs} later than the timestamp of the record from the primary stream.
-     * {@code timeDifferenceMs} can be negative but it's absolute value must not be larger than current window "before"
+     * {@code timeDifferenceMs} can be negative but its absolute value must not be larger than current window "before"
      * value (which would result in a negative window size).
      *
      * @param timeDifferenceMs relative window end time in milliseconds
@@ -186,7 +186,7 @@ public final class JoinWindows extends Windows<Window> {
      * Changes the end window boundary to {@code timeDifference} but keep the start window boundary as is.
      * Thus, records of the same key are joinable if the timestamp of a record from the secondary stream is at most
      * {@code timeDifference} later than the timestamp of the record from the primary stream.
-     * {@code timeDifference} can be negative but it's absolute value must not be larger than current window "before"
+     * {@code timeDifference} can be negative but its absolute value must not be larger than current window "before"
      * value (which would result in a negative window size).
      *
      * @param timeDifference relative window end time

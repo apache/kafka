@@ -74,7 +74,7 @@ class MaterializedTest extends FlatSpec with Matchers {
   }
 
   "Create a Materialize with a session store supplier" should "create a Materialized with Serdes and a store supplier" in {
-    val storeSupplier = Stores.persistentSessionStore("store", 1)
+    val storeSupplier = Stores.persistentSessionStore("store", Duration.ofMillis(1))
     val materialized: Materialized[String, Long, ByteArraySessionStore] =
       Materialized.as[String, Long](storeSupplier)
 

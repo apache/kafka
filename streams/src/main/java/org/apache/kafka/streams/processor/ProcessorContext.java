@@ -165,8 +165,8 @@ public interface ProcessorContext {
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      */
     Cancellable schedule(final Duration interval,
-        final PunctuationType type,
-        final Punctuator callback) throws IllegalArgumentException;
+                         final PunctuationType type,
+                         final Punctuator callback) throws IllegalArgumentException;
 
     /**
      * Forwards a key/value pair to all downstream processors.

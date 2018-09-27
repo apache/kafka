@@ -155,7 +155,7 @@ public class Stores {
      *                              careful to set it the same as the windowed keys you're actually storing.
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
-     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean, long)} instead
+     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, long, long, boolean, long)} instead
      */
     @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -212,9 +212,9 @@ public class Stores {
      * @return an instance of {@link WindowBytesStoreSupplier}
      */
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
-        final Duration retentionPeriod,
-        final Duration windowSize,
-        final boolean retainDuplicates) throws IllegalArgumentException {
+                                                                 final Duration retentionPeriod,
+                                                                 final Duration windowSize,
+                                                                 final boolean retainDuplicates) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
         ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
         ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
@@ -233,7 +233,6 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
-     * @deprecated Use {@link #persistentWindowStore(String, Duration, Duration, boolean, long)}
      */
     @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -261,33 +260,6 @@ public class Stores {
     }
 
     /**
-     * Create a persistent {@link WindowBytesStoreSupplier}.
-     * @param name                  name of the store (cannot be {@code null})
-     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
-     *                              Note that the retention period must be at least long enough to contain the
-     *                              windowed data's entire life cycle, from window-start through window-end,
-     *                              and for the entire grace period.
-     * @param segmentInterval       size of segments
-     * @param windowSize            size of the windows
-     * @param retainDuplicates      whether or not to retain duplicates.
-     * @return an instance of {@link WindowBytesStoreSupplier}
-     */
-    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
-        final Duration retentionPeriod,
-        final Duration windowSize,
-        final boolean retainDuplicates,
-        final long segmentInterval) {
-        Objects.requireNonNull(name, "name cannot be null");
-        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
-        ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
-
-        final long retentionPeriodMs = retentionPeriod.toMillis();
-        final long windowSizeMs = windowSize.toMillis();
-
-        return persistentWindowStore(name, retentionPeriodMs, windowSizeMs, retainDuplicates, segmentInterval);
-    }
-
-    /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
      * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
@@ -303,6 +275,21 @@ public class Stores {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
         return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     *                          Note that the retention period must be at least long enough to contain the
+     *                          windowed data's entire life cycle, from window-start through window-end,
+     *                          and for the entire grace period.
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final Duration retentionPeriod) {
+        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
+        return persistentSessionStore(name, retentionPeriod.toMillis());
     }
 
 

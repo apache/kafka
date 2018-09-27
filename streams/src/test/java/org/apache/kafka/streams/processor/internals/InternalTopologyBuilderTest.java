@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -48,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -589,7 +589,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(
             Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("store1", Duration.ofSeconds(30L), Duration.ofSeconds(10L), false),
+                Stores.persistentWindowStore("store1", ofSeconds(30L), ofSeconds(10L), false),
                 Serdes.String(),
                 Serdes.String()
             ),
@@ -597,7 +597,7 @@ public class InternalTopologyBuilderTest {
         );
         builder.addStateStore(
                 Stores.sessionStoreBuilder(
-                        Stores.persistentSessionStore("store2", 30000), Serdes.String(), Serdes.String()
+                        Stores.persistentSessionStore("store2", ofSeconds(30)), Serdes.String(), Serdes.String()
                 ),
                 "processor"
         );

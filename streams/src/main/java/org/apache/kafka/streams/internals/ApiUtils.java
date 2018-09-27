@@ -56,8 +56,7 @@ public final class ApiUtils {
         } catch (final NullPointerException e) {
             throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.", e);
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. " +  instant +
-                " is negative or too big", e);
+            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. ", e);
         }
     }
 }
