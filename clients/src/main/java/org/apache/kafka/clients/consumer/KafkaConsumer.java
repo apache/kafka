@@ -1631,6 +1631,69 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Get the last committed offset for the list of given partitions (whether the commit happened by this process or
+     * another). These offsets will be used as the position for the consumer in the event of a failure.
+     * <p>
+     * This call will do a remote call to get the latest committed offsets from the server, and will block until the
+     * committed offsets is gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
+     * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
+     * {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
+     *
+     * @param partition The list of partitions to check
+     * @return The map of partitions and their last committed offsets and metadata or null if there was no prior commit
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
+     *             the timeout specified by {@code default.api.timeout.ms} expires.
+     */
+    @Override
+    public Map<TopicPartition, OffsetAndMetadata> committed(Collection<TopicPartition> partitions) {
+        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
+    }
+
+    /**
+     * Get the last committed offset for the list of given partitions (whether the commit happened by this process or
+     * another). These offsets will be used as the position for the consumer in the event of a failure.
+     * <p>
+     * This call will block to do a remote call to get the latest committed offsets from the server.
+     *
+     * @param partition The list of partitions to check
+     * @param timeout  The maximum amount of time to await the current committed offset
+     * @return The map of partitions and their last committed offsets and metadata or null if there was no prior commit
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
+     *             expiration of the timeout
+     */
+    @Override
+    public Map<TopicPartition, OffsetAndMetadata> committed(Collection<TopicPartition> partitions, final Duration timeout) {
+        acquireAndEnsureOpen();
+        try {
+            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
+                    Collections.unmodifiableCollection(partitions), time.timer(timeout));
+            if (offsets == null) {
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
+                        "committed offset for partition " + partition + " could be determined");
+            }
+            return offsets;
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Get the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
