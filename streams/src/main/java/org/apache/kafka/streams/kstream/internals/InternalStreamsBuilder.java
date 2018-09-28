@@ -44,6 +44,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -59,7 +61,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
+    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
     private final Set<StreamsGraphNode> mergeNodes = new HashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
@@ -251,7 +253,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
 
         if (node.isKeyChangingOperation()) {
-            keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
+            keyChangingOperationsToOptimizableRepartitionNodes.put(node, new LinkedHashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
             final StreamsGraphNode parentNode = getKeyChangingParentNode(node);
             if (parentNode != null) {
@@ -314,8 +316,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             final SerializedInternal serialized = new SerializedInternal(getRepartitionSerdes(entry.getValue()));
+            final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
 
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
+                                                                                      repartitionTopicName,
                                                                                       serialized.keySerde(),
                                                                                       serialized.valueSerde());
 
@@ -391,6 +395,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     @SuppressWarnings("unchecked")
     private OptimizableRepartitionNode createRepartitionNode(final String name,
+                                                             final String repartitionTopicName,
                                                              final Serde keySerde,
                                                              final Serde valueSerde) {
 
@@ -398,7 +403,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
-                                              name + "-optimized",
+                                              repartitionTopicName,
                                               name,
                                               repartitionNodeBuilder);
 
@@ -414,6 +419,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             return keyChangingNode;
         }
         return null;
+    }
+
+    private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+        return repartitionNodes.iterator().next().repartitionTopic();
     }
 
     @SuppressWarnings("unchecked")

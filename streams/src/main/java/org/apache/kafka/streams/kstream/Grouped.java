@@ -57,7 +57,7 @@ public class Grouped<K, V> {
      * @see KStream#groupBy(KeyValueMapper, Grouped)
      * @see KTable#groupBy(KeyValueMapper, Grouped)
      */
-    public static Grouped named(final String name) {
+    public static <K, V> Grouped<K, V> named(final String name) {
         return new Grouped<>(name, null, null);
     }
 
@@ -128,7 +128,7 @@ public class Grouped<K, V> {
      * @param name the name used for a repartition topic if required
      * @return this
      */
-    public Grouped withName(final String name) {
+    public Grouped<K, V> withName(final String name) {
         this.name = name;
         return this;
     }

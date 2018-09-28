@@ -618,7 +618,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
         final String repartitionTopicBaseName = repartitionTopicNamePrefix != null ? repartitionTopicNamePrefix : name;
-        final String repartitionTopic = repartitionTopicBaseName + REPARTITION_TOPIC_SUFFIX;
+        final String repartitionTopic = repartitionTopicBaseName.endsWith(REPARTITION_TOPIC_SUFFIX) ? repartitionTopicBaseName  : repartitionTopicBaseName + REPARTITION_TOPIC_SUFFIX;
         final String sinkName = builder.newProcessorName(SINK_NAME);
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String sourceName = builder.newProcessorName(SOURCE_NAME);
