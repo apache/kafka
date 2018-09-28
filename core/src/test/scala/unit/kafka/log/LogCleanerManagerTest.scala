@@ -77,17 +77,17 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
-    * When looking for logs with segments ready to be deleted we shouldn't consider
-    * logs with cleanup.policy=compact as they shouldn't have segments truncated.
+    * When looking for logs with segments ready to be deleted we should consider
+    * logs with cleanup.policy=compact because they may have segments from before the log start offset
     */
   @Test
-  def testLogsWithSegmentsToDeleteShouldNotConsiderCleanupPolicyCompactLogs(): Unit = {
+  def testLogsWithSegmentsToDeleteShouldConsiderCleanupPolicyCompactLogs(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val readyToDelete = cleanerManager.deletableLogs().size
-    assertEquals("should have 1 logs ready to be deleted", 0, readyToDelete)
+    assertEquals("should have 1 logs ready to be deleted", 1, readyToDelete)
   }
 
   /**

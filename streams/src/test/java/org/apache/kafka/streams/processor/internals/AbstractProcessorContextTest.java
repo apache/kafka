@@ -58,7 +58,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
-        context.initialized();
+        context.initialize();
         try {
             context.register(stateStore, null);
             fail("should throw illegal state exception when context already initialized");

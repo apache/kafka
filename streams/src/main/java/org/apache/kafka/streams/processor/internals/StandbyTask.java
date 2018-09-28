@@ -69,7 +69,7 @@ public class StandbyTask extends AbstractTask {
         log.trace("Initializing state stores");
         registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-        processorContext.initialized();
+        processorContext.initialize();
         taskInitialized = true;
         return true;
     }

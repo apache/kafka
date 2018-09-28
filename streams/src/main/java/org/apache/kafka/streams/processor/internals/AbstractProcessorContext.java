@@ -203,7 +203,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
         initialized = true;
     }
 
