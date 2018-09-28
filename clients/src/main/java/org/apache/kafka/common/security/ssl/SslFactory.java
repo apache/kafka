@@ -353,7 +353,13 @@ public class SslFactory implements Reconfigurable {
         }
 
         boolean modified() {
-            return lastModifiedMs(path) != this.fileLastModifiedMs;
+            long modifiedMs = lastModifiedMs(path);
+            if (modifiedMs == 0) {
+                log.warn("Modification time of key store with path {} could not be obtained", path);
+                return false;
+            } else {
+                return modifiedMs != this.fileLastModifiedMs;
+            }
         }
     }
 
