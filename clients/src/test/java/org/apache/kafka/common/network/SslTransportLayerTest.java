@@ -1073,7 +1073,6 @@ public class SslTransportLayerTest {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
             TestSslTransportLayer transportLayer = newTransportLayer(id, key, sslEngine);
-            transportLayer.startHandshake();
             return transportLayer;
         }
 
@@ -1146,6 +1145,12 @@ public class SslTransportLayerTest {
                     return false;
                 resetDelayedFlush();
                 return super.flush(buf);
+            }
+
+            @Override
+            protected void startHandshake() throws IOException {
+                assertTrue("SSL handshake initialized too early", socketChannel().isConnected());
+                super.startHandshake();
             }
 
             private void resetDelayedFlush() {
