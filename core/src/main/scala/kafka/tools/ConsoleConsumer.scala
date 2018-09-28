@@ -66,9 +66,7 @@ object ConsoleConsumer extends Logging {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
-    /*
-    Fix for KAFKA-6764. partition/offset is honoured only when group-id not passed.
-     */
+    // partition & offset is honoured only when group-id not passed.
     val consumerWrapper =
       if (!conf.groupIdPassed && conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
@@ -379,6 +377,9 @@ object ConsoleConsumer extends Logging {
           consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
+
+    if (groupIdPassed && partitionArg.isDefined)
+      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
