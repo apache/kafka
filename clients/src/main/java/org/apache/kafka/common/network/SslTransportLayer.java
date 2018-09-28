@@ -182,6 +182,9 @@ public class SslTransportLayer implements TransportLayer {
         } finally {
             socketChannel.socket().close();
             socketChannel.close();
+            netReadBuffer = null;
+            netWriteBuffer = null;
+            appReadBuffer = null;
         }
     }
 
