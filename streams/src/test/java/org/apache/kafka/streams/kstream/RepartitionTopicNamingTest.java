@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.junit.Test;
 
@@ -75,6 +76,40 @@ public class RepartitionTopicNamingTest {
         assertTrue(unOptimizedTopology.contains(fourthRepartitionTopicName + "-left-repartition"));
 
     }
+
+    // can't use same repartition topic name
+    @Test(expected = TopologyException.class)
+    public void shouldFailWithSameRepartitionTopicName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.named("grouping")).count().toStream();
+        builder.<String, String>stream("topicII").selectKey((k, v) -> k).groupByKey(Grouped.named("grouping")).count().toStream();
+        builder.build();
+    }
+
+    // each KGroupedStream will result in repartition, can' reuse
+    // KGroupedStreams when specifying repartition topic names
+    // need to have separate groupByKey calls when naming repartition topics
+    // see test shouldHandleUniqueGroupedInstances below for an example
+    @Test(expected = TopologyException.class)
+    public void shouldFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.named("grouping"));
+        kGroupedStream.windowedBy(TimeWindows.of(10)).count();
+        kGroupedStream.windowedBy(TimeWindows.of(30)).count();
+        builder.build();
+    }
+
+
+    @Test
+    public void shouldHandleUniqueGroupedInstances() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStreamKeySelect = builder.<String, String>stream("topic").selectKey((k, v) -> k);
+        kStreamKeySelect.groupByKey(Grouped.named("grouping")).windowedBy(TimeWindows.of(10)).count();
+        kStreamKeySelect.groupByKey(Grouped.named("groupingII")).windowedBy(TimeWindows.of(30)).count();
+        builder.build();
+    }
+
+
 
     @Test
     public void shouldKeepRepartitionTopicNameForJoins() {
