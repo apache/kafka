@@ -17,6 +17,8 @@
 
 package kafka.api
 
+import org.apache.kafka.common.config.ConfigDef.Validator
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.record.RecordVersion
 
 /**
@@ -266,4 +268,15 @@ case object KAFKA_2_1_IV1 extends DefaultApiVersion {
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 18
+}
+
+object ApiVersionValidator extends Validator {
+
+  override def ensureValid(name: String, value: Any): Unit = {
+    try {
+      ApiVersion(value.toString)
+    } catch {
+      case e: IllegalArgumentException => throw new ConfigException(name, value.toString, e.getMessage)
+    }
+  }
 }
