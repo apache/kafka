@@ -131,7 +131,7 @@ For the Streams archetype project, one cannot use gradle to upload to maven; ins
     cd streams/quickstart
     mvn deploy
 
-Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
+Please note for this to work you should create/update user maven settings (typically, `${M2_HOME}/conf/settings.xml` or `${USER_HOME}/.m2/settings.xml`) to assign the following variables
 
     <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
