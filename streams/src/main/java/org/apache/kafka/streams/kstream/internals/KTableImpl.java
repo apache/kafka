@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -588,12 +589,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 groupedInternal,
                 groupByMapNode
         );
-    }
-
-    @Override
-    public <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
-                                                  final Grouped<KR, VR> grouped) {
-        return null;
     }
 
     @SuppressWarnings("unchecked")
