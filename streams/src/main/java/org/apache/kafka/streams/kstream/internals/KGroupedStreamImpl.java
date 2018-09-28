@@ -48,6 +48,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
                        final Serde<K> keySerde,
                        final Serde<V> valSerde,
                        final Set<String> sourceNodes,
+                       final GroupedInternal<K, V> groupedInternal,
                        final boolean repartitionRequired,
                        final StreamsGraphNode streamsGraphNode,
                        final InternalStreamsBuilder builder) {

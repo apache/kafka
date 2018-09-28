@@ -132,7 +132,7 @@ public class RepartitionTopicNamingTest {
     }
 
     @Test
-    public void shouldKeepRepartitionTopicNameForGroupByKeyWindows() {
+    public void shouldKeepRepartitionTopicNameForGroupByNoWindows() {
 
         final String expectedNoWindowRepartitionTopic = "(topic: kstream-grouping-repartition)";
 

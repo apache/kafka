@@ -33,11 +33,11 @@ public class Joined<K, V, VO> {
     private Joined(final Serde<K> keySerde,
         final Serde<V> valueSerde,
         final Serde<VO> otherValueSerde,
-        final String repartitionTopicName) {
+        final String name) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
-        this.name = repartitionTopicName;
+        this.name = name;
     }
 
     /**
@@ -77,9 +77,9 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance with the provided serdes
      */
     public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
-        final Serde<V> valueSerde,
-        final Serde<VO> otherValueSerde,
-        final String name) {
+                                                   final Serde<V> valueSerde,
+                                                   final Serde<VO> otherValueSerde,
+                                                   final String name) {
         return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
@@ -94,7 +94,7 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the keySerde
      */
     public static <K, V, VO> Joined<K, V, VO> keySerde(final Serde<K> keySerde) {
-        return with(keySerde, null, null);
+        return new Joined<>(keySerde, null, null, null);
     }
 
     /**
@@ -108,7 +108,7 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the valueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> valueSerde(final Serde<V> valueSerde) {
-        return with(null, valueSerde, null);
+        return new Joined<>(null, valueSerde, null, null);
     }
 
     /**
@@ -122,7 +122,7 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the otherValueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> otherValueSerde(final Serde<VO> otherValueSerde) {
-        return with(null, null, otherValueSerde);
+        return new Joined<>(null, null, otherValueSerde, null);
     }
 
     /**
@@ -136,8 +136,8 @@ public class Joined<K, V, VO> {
      * @param <VO> other value type
      * @return new {@code Joined} instance configured with the name
      */
-    public static <K, V, VO> Joined<K, V, VO> name(final String name) {
-        return with(null, null, null, name);
+    public static <K, V, VO> Joined<K, V, VO> named(final String name) {
+        return new Joined<>(null, null, null, name);
     }
 
 

@@ -48,22 +48,20 @@ class GroupedStreamAggregateBuilder<K, V> {
     final Initializer<V> reduceInitializer = () -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
-                                  final Serde<K> keySerde,
-                                  final Serde<V> valueSerde,
+                                  final GroupedInternal<K, V> groupedInternal,
                                   final boolean repartitionRequired,
                                   final Set<String> sourceNodes,
                                   final String name,
-                                  final StreamsGraphNode streamsGraphNode,
-                                  final String repartitionTopicName) {
+                                  final StreamsGraphNode streamsGraphNode) {
 
         this.builder = builder;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        this.keySerde = groupedInternal.keySerde();
+        this.valueSerde = groupedInternal.valueSerde();
         this.repartitionRequired = repartitionRequired;
         this.sourceNodes = sourceNodes;
         this.name = name;
         this.streamsGraphNode = streamsGraphNode;
-        this.repartitionTopicName = repartitionTopicName;
+        this.repartitionTopicName = groupedInternal.name();
     }
 
     <KR, T> KTable<KR, T> build(final String functionName,

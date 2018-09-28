@@ -590,7 +590,7 @@ public interface KTable<K, V> {
      * provided {@link KeyValueMapper}.
      * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value (with should both have unmodified type).
+     * The {@link KeyValueMapper} selects a new key and value (with both maybe being the same type or a new type).
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
@@ -610,7 +610,10 @@ public interface KTable<K, V> {
      * @param <KR>          the key type of the result {@link KGroupedTable}
      * @param <VR>          the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KTable#groupBy(KeyValueMapper, Grouped)} instead
      */
+    @Deprecated
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
                                            final Serialized<KR, VR> serialized);
 
@@ -621,14 +624,15 @@ public interface KTable<K, V> {
      * provided {@link KeyValueMapper}.
      * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value (with should both have unmodified type).
+     * The {@link KeyValueMapper} selects a new key and value (with both maybe being the same type or a new type).
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},  "XXX" is
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#named(String)} or an internally generated name.
      *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -637,7 +641,8 @@ public interface KTable<K, V> {
      * on the new key.
      *
      * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
-     * @param grouped    the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     * @param grouped       the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                      and the name for a repartition topic if repartitioning is required.
      * @param <KR>          the key type of the result {@link KGroupedTable}
      * @param <VR>          the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}

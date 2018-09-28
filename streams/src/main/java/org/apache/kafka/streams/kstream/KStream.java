@@ -774,7 +774,7 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -782,7 +782,7 @@ public interface KStream<K, V> {
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
      * If the last key changing operator changed the key type, it is recommended to use
-     * {@link #groupByKey(Serialized)} instead.
+     * {@link #groupByKey(org.apache.kafka.streams.kstream.Grouped)} instead.
      *
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
@@ -803,7 +803,7 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     *<p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -813,6 +813,8 @@ public interface KStream<K, V> {
      *
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupByKey(Grouped)} instead
      */
     @Deprecated
     KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized);
@@ -830,8 +832,10 @@ public interface KStream<K, V> {
      * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#named(String)} or an internally generated name,
+     * and "-repartition" is a fixed suffix.
      *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -839,6 +843,8 @@ public interface KStream<K, V> {
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
      *
+     * @param  grouped  the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                  and the name for a repartition topic if repartitioning is required.
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
      */
@@ -849,15 +855,15 @@ public interface KStream<K, V> {
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>
+     *You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
@@ -877,14 +883,14 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -896,6 +902,8 @@ public interface KStream<K, V> {
      * @param selector a {@link KeyValueMapper} that computes a new key for grouping
      * @param <KR>     the key type of the result {@link KGroupedStream}
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupBy(KeyValueMapper, Grouped)} instead
      */
     @Deprecated
     <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
@@ -906,15 +914,15 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Grouped}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
-     *
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#named(String)} or an internally generated name.
+     * <p>
+     *You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
@@ -923,6 +931,8 @@ public interface KStream<K, V> {
      * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
      *
      * @param selector a {@link KeyValueMapper} that computes a new key for grouping
+     * @param grouped  the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                  and the name for a repartition topic if repartitioning is required.
      * @param <KR>     the key type of the result {@link KGroupedStream}
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      */
@@ -991,7 +1001,7 @@ public interface KStream<K, V> {
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p><
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream

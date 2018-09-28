@@ -60,8 +60,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
-    private final Set<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
+    private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
+    private final LinkedHashSet<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -306,7 +306,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
 
-        for (final Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
+        for (final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
 
             final StreamsGraphNode keyChangingNode = entry.getKey();
 
@@ -382,7 +382,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         for (final Map.Entry<StreamsGraphNode, Set<StreamsGraphNode>> entry : mergeNodesToKeyChangers.entrySet()) {
             final StreamsGraphNode mergeKey = entry.getKey();
             final Collection<StreamsGraphNode> keyChangingParents = entry.getValue();
-            final Set<OptimizableRepartitionNode> repartitionNodes = new LinkedHashSet<>();
+            final LinkedHashSet<OptimizableRepartitionNode> repartitionNodes = new LinkedHashSet<>();
             for (final StreamsGraphNode keyChangingParent : keyChangingParents) {
                 repartitionNodes.addAll(keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingParent));
                 keyChangingOperationsToOptimizableRepartitionNodes.remove(keyChangingParent);
@@ -393,7 +393,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private OptimizableRepartitionNode createRepartitionNode(final String name,
+    private OptimizableRepartitionNode createRepartitionNode(final String nodeName,
                                                              final String repartitionTopicName,
                                                              final Serde keySerde,
                                                              final Serde valueSerde) {
@@ -403,7 +403,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
-                                              name,
+                                              nodeName,
                                               repartitionNodeBuilder);
 
         return repartitionNodeBuilder.build();

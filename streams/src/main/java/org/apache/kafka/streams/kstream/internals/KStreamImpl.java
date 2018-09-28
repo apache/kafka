@@ -618,6 +618,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
         final String repartitionTopicBaseName = repartitionTopicNamePrefix != null ? repartitionTopicNamePrefix : name;
+        // Since we may get an existing repartition topic name,
+        // we don't want to append `-repartition` at the end and change it.
+        //For example, we may get `KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition`
+        // for a repartition topic name resulting from an optimization operation and
+        // appending another `-repartition` would break the topology.
         final String repartitionTopic = repartitionTopicBaseName.endsWith(REPARTITION_TOPIC_SUFFIX) ? repartitionTopicBaseName  : repartitionTopicBaseName + REPARTITION_TOPIC_SUFFIX;
         final String sinkName = builder.newProcessorName(SINK_NAME);
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
@@ -787,7 +792,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @SuppressWarnings("deprecation")
+    @Deprecated
     public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                               final Serialized<KR, V> serialized) {
         Objects.requireNonNull(selector, "selector can't be null");
@@ -825,7 +830,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @SuppressWarnings("deprecation")
+    @Deprecated
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
         return groupByKey(Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));

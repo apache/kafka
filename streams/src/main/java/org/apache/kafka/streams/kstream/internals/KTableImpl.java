@@ -557,6 +557,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
+    @Deprecated
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
                                                   final Serialized<K1, V1> serialized) {
         Objects.requireNonNull(selector, "selector can't be null");
