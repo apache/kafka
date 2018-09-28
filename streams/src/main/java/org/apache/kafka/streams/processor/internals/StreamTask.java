@@ -233,6 +233,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             partitionQueues.put(partition, queue);
         }
 
+        idleStartTime = RecordQueue.UNKNOWN;
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
         processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
@@ -355,10 +356,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            // after processing this record, if its partition queue's buffered size has been
-            // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
-                consumer.resume(singleton(partition));
+            // if we are not in the enforced processing state, then after processing
+            // this record, if its partition queue's buffered size has been decreased below
+            // the threshold, we can then resume the consumption on this partition;
+            // otherwise, we only resume the consumption on this partition after it
+            // has been drained.
+            if (idleStartTime != RecordQueue.UNKNOWN) {
+                if (recordInfo.queue().isEmpty()) {
+                    consumer.resume(singleton(partition));
+                }
+            } else {
+                if (recordInfo.queue().size() == maxBufferedSize) {
+                    consumer.resume(singleton(partition));
+                }
             }
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
@@ -713,10 +723,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
 
-        // if after adding these records, its partition queue's buffered size has been
-        // increased beyond the threshold, we can then pause the consumption for this partition
-        if (newQueueSize > maxBufferedSize) {
-            consumer.pause(singleton(partition));
+        // if we are not in the enforced processing state, then after adding these records,
+        // we can then pause the consumption for this partition if its partition queue's
+        // buffered size has been increased beyond the threshold;
+        // otherwise, we will immediately pause the consumption on this partition after it
+        // has at least some records already
+        if (idleStartTime != RecordQueue.UNKNOWN) {
+            if (newQueueSize > 0) {
+                consumer.pause(singleton(partition));
+            }
+        } else {
+            if (newQueueSize > maxBufferedSize) {
+                consumer.pause(singleton(partition));
+            }
         }
     }
 

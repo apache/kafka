@@ -273,7 +273,12 @@ public class StreamTaskTest {
             getConsumerRecord(partition2, 65)
         ));
 
-        assertTrue(task.process());
+        assertEquals(6, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(5, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
@@ -286,29 +291,92 @@ public class StreamTaskTest {
             getConsumerRecord(partition1, 50)
         ));
 
+        assertEquals(8, task.numBuffered());
         assertEquals(2, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition1));
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(7, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(6, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertTrue(task.process());
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(5, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
         assertEquals(0, consumer.paused().size());
+
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());  // 1: 40
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());  // 2: 45
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());  // 1: 50
+        assertEquals(2, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+        assertEquals(0, consumer.paused().size());
+
+        assertFalse(task.isProcessable(time.milliseconds()));  // we are idle now
+
+        time.sleep(100L);
+
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());  // start enforce processing
+        assertEquals(1, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(3, source2.numReceived);  // 1: 55
+        assertEquals(0, consumer.paused().size());
+
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 70),
+            getConsumerRecord(partition2, 80),
+            getConsumerRecord(partition2, 90)
+        ));
+
+        assertEquals(4, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        // we are enforced processing now
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(3, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(2, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(1, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        // only resume if we are enforced processing when the fetched partition is empty
+        assertTrue(task.isProcessable(time.milliseconds()) && task.process());
+        assertEquals(0, task.numBuffered());
+        assertEquals(0, consumer.paused().size());
+
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 100),
+            getConsumerRecord(partition2, 110)
+        ));
+
+        // pause immediately if we are enforced processing when there are at least some records already
+        assertEquals(2, task.numBuffered());
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
     }
 
     @SuppressWarnings("unchecked")
@@ -1392,7 +1460,7 @@ public class StreamTaskTest {
             topicPartition.topic(),
             topicPartition.partition(),
             offset,
-            0L,
+            offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
             0L,
             0,
