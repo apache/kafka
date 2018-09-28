@@ -379,7 +379,7 @@ object ConsoleConsumer extends Logging {
     }
 
     if (groupIdPassed && partitionArg.isDefined)
-      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified.")
+      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
