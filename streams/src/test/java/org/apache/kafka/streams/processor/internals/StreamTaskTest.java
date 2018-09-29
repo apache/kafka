@@ -1392,7 +1392,7 @@ public class StreamTaskTest {
             topicPartition.topic(),
             topicPartition.partition(),
             offset,
-            0L,
+            offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
             0L,
             0,
