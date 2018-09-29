@@ -182,7 +182,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
-    @Deprecated
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
@@ -277,7 +276,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
     
     @Override
-    @Deprecated
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         validateStoreOpen();
 

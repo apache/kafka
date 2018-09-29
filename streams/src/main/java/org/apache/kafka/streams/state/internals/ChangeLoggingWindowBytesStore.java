@@ -55,7 +55,6 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    @Deprecated
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
     }
@@ -86,7 +85,6 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
     
     @Override
-    @Deprecated
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return bytesStore.fetchAll(timeFrom, timeTo);
     }
