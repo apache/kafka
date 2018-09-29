@@ -14,7 +14,7 @@ package kafka.api
 
 import java.util
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Properties}
+import java.util.{Collections, Locale, Optional, Properties}
 
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -503,7 +503,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
 
     // sync commit
-    val syncMetadata = new OffsetAndMetadata(5, "foo")
+    val syncMetadata = new OffsetAndMetadata(5, Optional.of(15), "foo")
     consumer.commitSync(Map((tp, syncMetadata)).asJava)
     assertEquals(syncMetadata, consumer.committed(tp))
 

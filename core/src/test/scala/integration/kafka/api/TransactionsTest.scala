@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
 
 import kafka.integration.KafkaServerTestHarness
@@ -365,6 +365,31 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testOffsetMetadataInSendOffsetsToTransaction() = {
+    val tp = new TopicPartition(topic1, 0)
+    val groupId = "group"
+
+    val producer = transactionalProducers.head
+    val consumer = createReadCommittedConsumer(groupId)
+
+    consumer.subscribe(List(topic1).asJava)
+
+    producer.initTransactions()
+
+    producer.beginTransaction()
+    val offsetAndMetadata = new OffsetAndMetadata(110L, Optional.of(15), "some metadata")
+    producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, groupId)
+    producer.commitTransaction()  // ok
+
+    // The call to commit the transaction may return before all markers are visible, so we initialize a second
+    // producer to ensure the transaction completes and the committed offsets are visible.
+    val producer2 = transactionalProducers(1)
+    producer2.initTransactions()
+
+    assertEquals(offsetAndMetadata, consumer.committed(tp))
+  }
+
+  @Test
   def testFencingOnSend() {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
@@ -434,7 +459,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "5", willBeCommitted = false))
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
-      servers.foreach { case (server) =>
+      servers.foreach { server =>
         error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
