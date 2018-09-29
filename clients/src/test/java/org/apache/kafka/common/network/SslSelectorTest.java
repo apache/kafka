@@ -321,7 +321,6 @@ public class SslSelectorTest extends SelectorTest {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
             TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
-            transportLayer.startHandshake();
             return transportLayer;
         }
 
