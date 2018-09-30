@@ -71,9 +71,13 @@ public interface Transformer<K, V, R> {
      * attached} to this operator can be accessed and modified
      * arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
      * <p>
-     * If more than one output record should be forwarded downstream {@link ProcessorContext#forward(Object, Object)}
+     * If only one record should be forward downstream, {@code transform} can return a new {@link KeyValue}. If
+     * more than one output record should be forwarded downstream, {@link ProcessorContext#forward(Object, Object)}
      * and {@link ProcessorContext#forward(Object, Object, To)} can be used.
-     * If record should not be forwarded downstream, {@code transform} can return {@code null}.
+     * If no record should be forwarded downstream, {@code transform} can return {@code null}.
+     *
+     * Note that returning a new {@link KeyValue} is merely for convenience. The same can be achieved by using
+     * {@link ProcessorContext#forward(Object, Object)} and returning {@code null}.
      *
      * @param key the key for the record
      * @param value the value for the record
