@@ -253,7 +253,7 @@ class AdminManager(val config: KafkaConfig,
           }.toMap
         }
 
-        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
+        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment,
           newPartition.totalCount, reassignment, validateOnly = validateOnly)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {

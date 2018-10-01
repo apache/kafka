@@ -187,7 +187,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   *
   * @param topic Topic for adding partitions to
   * @param existingAssignment A map from partition id to its assigned replicas
-  * @param allBrokers All brokers in the cluster
   * @param numPartitions Number of partitions to be set
   * @param replicaAssignment Manual replica assignment, or none
   * @param validateOnly If true, validate the parameters without actually adding the partitions
@@ -195,10 +194,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   */
   def addPartitions(topic: String,
                     existingAssignment: Map[Int, Seq[Int]],
-                    allBrokers: Seq[BrokerMetadata],
                     numPartitions: Int = 1,
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
+                    rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                     validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
+    val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
         s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
@@ -213,12 +213,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     replicaAssignment.foreach { proposedReplicaAssignment =>
       validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0.size,
-        allBrokers.map(_.id).toSet)
+        brokerMetadatas.map(_.id).toSet)
     }
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
-      val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
+      val startIndex = math.max(0, brokerMetadatas.indexWhere(_.id >= existingAssignmentPartition0.head))
+      AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitionsToAdd, existingAssignmentPartition0.size,
         startIndex, existingAssignment.size)
     }
     val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
