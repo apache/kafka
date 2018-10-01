@@ -42,23 +42,17 @@ private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningS
 /**
   * This class manages the state of each partition being cleaned.
   * LogCleaningState defines the cleaning states that a TopicPartition can be in.
-  * 1. None : No cleaning state in a TopicPartition
-  * 2. LogCleaningInProgress   : The cleaning is currently in progress. It can only be transited from None State by logcleaner.
-  *                              It can be transited to None State by logcleaner (when cleanning finished) or to
-  *                              LogCleaningAborted state by topic deletion, log truncation, or partition movement(future log).
-  *                              However, there should not be more than one entity that tries to move this state to LogCleaningAborted
-  *                              at the same time.  Logcleaner only starts working on a TopicPartition if it can put the TopicPartition
-  *                              in this state.
-  * 3. LogCleaningAborted      : The cleaning is aborted. It is transited from LogCleaningInProgress by aborting operation (see previous state)
-  *                              and can be moved to LogCleaningPaused(1) by logcleaner. Aborting already aborted
-  *                              TopicPartition is not allowed.
-  * 2. LogCleaningPaused(i)    : The cleaning is paused i times. LogCleaningPaused(1) is transited from LogCleaningAborted by logcleaner
-  *                              or from None state by log retention, log truncation, and partition movement.  LogCleaningPaused(i) can
-  *                              be moved to LogCleaningPaused(i+1) (by aborting an already paused topic partition)
-  *                              or LogCleaningPaused(i-1) (by resumeCleaning). If the end state is LogCleaningPaused(0),
-  *                              the state will be removed and becomes a None State.  log retention, topic deletion, log truncation,
-  *                              and partition movement only starts working on a TopicPartition if it can put the TopicPartition
-  *                              in LogCleaningPaused(i) state.
+  * 1. None                    : No cleaning state in a TopicPartition.
+  *                              Valid previous state are None, LogCleaningInProgress and LogCleaningPaused(1)
+  * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when it finishes cleaning
+  *                              or become LogCleaningAborted when there is an abort on this topic partition.
+  *                              Valid previous state is None.
+  * 3. LogCleaningAborted      : The cleaning is aborted. In this state, it can become LogCleaningPaused(1) when abort is finished.
+  *                              Valid previous state is LogCleaningInProgress.
+  * 4. LogCleaningPaused(i)    : The cleaning is paused i times. Valid previous state of LogCleaningPaused(1) are LogCleaningAborted,
+  *                              None and LogCleaningPaused(2). LogCleaningPaused(i) can become LogCleaningPaused(i+1) or
+  *                              LogCleaningPaused(i-1). If the end state is LogCleaningPaused(0),
+  *                              the state will be removed and becomes a None State.
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
@@ -244,9 +238,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
     *  Resume the cleaning of paused partitions.
-    *  If the partition is paused by log retention and then paused again by
-    *  topic deletion, truncation or partition movement, each call of this function will undo
-    *  one pause.
+    *  Each call of this function will undo one pause.
     */
   def resumeCleaning(topicPartitions: Iterable[TopicPartition]){
     inLock(lock) {

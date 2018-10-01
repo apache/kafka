@@ -143,11 +143,11 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
-    * test log race condition between log retention,
-    * topic deletion, and log truncation
+    * test log retention, topic deletion, and log truncation can handle
+    * pause and resume cleaning on a topic partition correctly.
     */
   @Test
-  def testLogsRaceCondition(): Unit = {
+  def testLogsRetentionDeletionTruncationHandlePauseAndResumeCleaning(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
@@ -193,14 +193,15 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       Seq(logRetention, logTruncation),
       60000)
 
-    // make sure state is cleared at the end
+    // make sure state is cleared
     assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
 
-    // log retention and topic deletion
+    // run log retention and topic deletion in parallel
     TestUtils.assertConcurrent("Concurrent log race condition test",
       Seq(logRetention, topicDetention),
       60000)
 
+    // make sure state is cleared at the end
     assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
   }
 
