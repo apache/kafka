@@ -22,14 +22,18 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -394,6 +398,395 @@ public class ProducerConfig extends AbstractConfig {
 
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtmlTable());
+    }
+
+    public static ProducerConfigBuilder builder() {
+        return new ProducerConfigBuilder();
+    }
+
+    /**
+     * Builder for {@link ProducerConfig}
+     */
+    public static class ProducerConfigBuilder {
+
+        private final Map<String, Object> props = new HashMap<String, Object>();
+
+        private ProducerConfigBuilder() { }
+
+        /**
+         * @see ProducerConfig#BOOTSTRAP_SERVERS_CONFIG
+         *
+         * @param bootstrapServer boot strap server (if provided multiple times, will be overwritten each time)
+         * @return the builder
+         */
+        ProducerConfigBuilder bootstrapServer(final String bootstrapServer) {
+            props.put(BOOTSTRAP_SERVERS_CONFIG, Collections.singletonList(bootstrapServer));
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#BOOTSTRAP_SERVERS_CONFIG
+         *
+         * @param bootstrapServers boot strap servers configuration
+         * @return the builder
+         */
+        public ProducerConfigBuilder bootstrapServers(final List<String> bootstrapServers) {
+            props.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#METADATA_MAX_AGE_CONFIG
+         *
+         * @param metadataMaxAge metadata max age (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder metadataMaxAge(final long metadataMaxAge) {
+            props.put(METADATA_MAX_AGE_CONFIG, metadataMaxAge);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#BATCH_SIZE_CONFIG
+         *
+         * @param batchSize batch size
+         * @return the builder
+         */
+        public ProducerConfigBuilder batchSize(final int batchSize) {
+            props.put(BATCH_SIZE_CONFIG, batchSize);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#ACKS_CONFIG
+         *
+         * @param acks the number of acks
+         * @return the builder
+         */
+        public ProducerConfigBuilder acks(final String acks) {
+            props.put(ACKS_CONFIG, acks);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#LINGER_MS_CONFIG
+         *
+         * @param linger how long to linger (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder linger(final int linger) {
+            props.put(LINGER_MS_CONFIG, linger);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#REQUEST_TIMEOUT_MS_CONFIG
+         *
+         * @param requestTimeout request timeout (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder requestTimeout(final int requestTimeout) {
+            props.put(REQUEST_TIMEOUT_MS_CONFIG, requestTimeout);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#DELIVERY_TIMEOUT_MS_CONFIG
+         *
+         * @param deliveryTimeout delivery timeout (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder deliveryTimeout(final int deliveryTimeout) {
+            props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeout);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#CLIENT_ID_CONFIG
+         *
+         * @param clientId client ID
+         * @return the builder
+         */
+        public ProducerConfigBuilder clientId(final String clientId) {
+            props.put(CLIENT_ID_CONFIG, clientId);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#SEND_BUFFER_CONFIG
+         *
+         * @param sendBuffer number of bytes
+         * @return the builder
+         */
+        public ProducerConfigBuilder sendBuffer(final int sendBuffer) {
+            props.put(SEND_BUFFER_CONFIG, sendBuffer);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#RECEIVE_BUFFER_CONFIG
+         *
+         * @param receiveBuffer number of bytes
+         * @return the builder
+         */
+        public ProducerConfigBuilder receiveBuffer(final int receiveBuffer) {
+            props.put(RECEIVE_BUFFER_CONFIG, receiveBuffer);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#MAX_REQUEST_SIZE_CONFIG
+         *
+         * @param maxRequestSize maximum request size in bytes
+         * @return the builder
+         */
+        public ProducerConfigBuilder maxRequestSize(final int maxRequestSize) {
+            props.put(MAX_REQUEST_SIZE_CONFIG, maxRequestSize);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#RECONNECT_BACKOFF_MS_CONFIG
+         *
+         * @param reconnectBackoff reconnect backoff (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder reconnectBackoff(final long reconnectBackoff) {
+            props.put(RECONNECT_BACKOFF_MS_CONFIG, reconnectBackoff);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#RECONNECT_BACKOFF_MAX_MS_CONFIG
+         *
+         * @param reconnectBackoffMax reconnect backoff maximum (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder reconnectBackoffMax(final long reconnectBackoffMax) {
+            props.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, reconnectBackoffMax);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#MAX_BLOCK_MS_CONFIG
+         *
+         * @param maxBlock maximum blocking time (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder maxBlock(final long maxBlock) {
+            props.put(MAX_BLOCK_MS_CONFIG, maxBlock);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#BUFFER_MEMORY_CONFIG
+         *
+         * @param bufferMemory buffer memory in bytes
+         * @return the builder
+         */
+        public ProducerConfigBuilder bufferMemory(final long bufferMemory) {
+            props.put(BUFFER_MEMORY_CONFIG, bufferMemory);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#RETRY_BACKOFF_MS_CONFIG
+         *
+         * @param retryBackoff retry backoff (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder retryBackoff(final long retryBackoff) {
+            props.put(RETRY_BACKOFF_MS_CONFIG, retryBackoff);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#COMPRESSION_TYPE_CONFIG
+         *
+         * @param compressionType the compression type
+         * @return the builder
+         */
+        public ProducerConfigBuilder compressionType(final String compressionType) {
+            props.put(COMPRESSION_TYPE_CONFIG, compressionType);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#METRICS_SAMPLE_WINDOW_MS_CONFIG
+         *
+         * @param metricsSampleWindow metrics sample window (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder metricsSampleWindow(final long metricsSampleWindow) {
+            props.put(METRICS_SAMPLE_WINDOW_MS_CONFIG, metricsSampleWindow);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#METRICS_NUM_SAMPLES_CONFIG
+         *
+         * @param metricsNumSamples metrics numbner of sample
+         * @return the builder
+         */
+        public ProducerConfigBuilder metricsNumSamples(final int metricsNumSamples) {
+            props.put(METRICS_NUM_SAMPLES_CONFIG, metricsNumSamples);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#METRICS_RECORDING_LEVEL_CONFIG
+         *
+         * @param metricsRecordingLevel the metrics recording level
+         * @return the builder
+         */
+        public ProducerConfigBuilder metricsRecordingLevel(final String metricsRecordingLevel) {
+            props.put(METRICS_RECORDING_LEVEL_CONFIG, metricsRecordingLevel);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#METRIC_REPORTER_CLASSES_CONFIG
+         *
+         * @param metricsReporterClasses the metrics reporter classes (nulls ignored)
+         * @return the builder
+         */
+        public ProducerConfigBuilder metricsReporterClasses(final List<Class<?>> metricsReporterClasses) {
+            final List<String> metricReporterClassList = metricsReporterClasses.stream()
+                    .filter(Objects::nonNull)
+                    .map(Class::getName)
+                    .collect(Collectors.toList());
+            props.put(METRIC_REPORTER_CLASSES_CONFIG, metricReporterClassList);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
+         *
+         * @param maxInFlightRequestsPerConnection maximum number of in-flight requests per connection
+         * @return the builder
+         */
+        public ProducerConfigBuilder maxInFlightRequestsPerConnection(final int maxInFlightRequestsPerConnection) {
+            props.put(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsPerConnection);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#RETRIES_CONFIG
+         *
+         * @param retries number of retries
+         * @return the builder
+         */
+        public ProducerConfigBuilder retries(final int retries) {
+            props.put(RETRIES_CONFIG, retries);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#KEY_SERIALIZER_CLASS_CONFIG
+         *
+         * @param keySerializerClass the key serializer class
+         * @return the builder
+         */
+        public ProducerConfigBuilder keySerializerClass(final Class<? extends Serializer> keySerializerClass) {
+            props.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass.getName());
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#VALUE_SERIALIZER_CLASS_CONFIG
+         *
+         * @param valueSerializerClass the value serializer class
+         * @return the builder
+         */
+        public ProducerConfigBuilder valueSerializerClass(final Class<? extends Serializer> valueSerializerClass) {
+            props.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass.getName());
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#CONNECTIONS_MAX_IDLE_MS_CONFIG
+         *
+         * @param connectionsMaxIdle connections max idle (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder connectionsMaxIdle(final long connectionsMaxIdle) {
+            props.put(CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdle);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#PARTITIONER_CLASS_CONFIG
+         *
+         * @param partitionerClass the partitioner class
+         * @return the builder
+         */
+        public ProducerConfigBuilder partitionerClass(final Class<?> partitionerClass) {
+            props.put(PARTITIONER_CLASS_CONFIG, partitionerClass.getName());
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#INTERCEPTOR_CLASSES_CONFIG
+         *
+         * @param interceptorClasses the interceptor classes (nulls ignored)
+         * @return the builder
+         */
+        public ProducerConfigBuilder interceptorClasses(final List<Class<?>> interceptorClasses) {
+            final List<String> interceptorClassList = interceptorClasses.stream()
+                    .filter(Objects::nonNull)
+                    .map(Class::getName)
+                    .collect(Collectors.toList());
+            props.put(INTERCEPTOR_CLASSES_CONFIG, interceptorClassList);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG
+         *
+         * @param enableIdempotence whether or not to enable idempotence
+         * @return the builder
+         */
+        public ProducerConfigBuilder enableIdempotence(final boolean enableIdempotence) {
+            props.put(ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#TRANSACTION_TIMEOUT_CONFIG
+         *
+         * @param transactionTimeout transaction timeout (ms)
+         * @return the builder
+         */
+        public ProducerConfigBuilder transactionalTimeout(final long transactionTimeout) {
+            props.put(TRANSACTION_TIMEOUT_CONFIG, transactionTimeout);
+            return this;
+        }
+
+        /**
+         * @see ProducerConfig#TRANSACTIONAL_ID_CONFIG
+         *
+         * @param transactionalId transactional ID
+         * @return the builder
+         */
+        public ProducerConfigBuilder transactionalId(final String transactionalId) {
+            props.put(TRANSACTIONAL_ID_CONFIG, transactionalId);
+            return this;
+        }
+
+        public ProducerConfigBuilder property(final String key, final String value) {
+            props.put(key, value);
+            return this;
+        }
+
+        /**
+         * Build the producer configuration properties
+         *
+         * @return an instance of {@link Map}
+         */
+        public Map<String, Object> build() {
+            return props;
+        }
+
     }
 
 }

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -56,12 +53,14 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -81,6 +80,10 @@ public class KafkaProducerTest {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer()).close();
+        Map<String, Object> configs = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .build();
+        new KafkaProducer<>(configs, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
     @Test(expected = ConfigException.class)
@@ -92,10 +95,12 @@ public class KafkaProducerTest {
 
     @Test
     public void testConstructorFailureCloseResource() {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
-        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        Map<String, Object> props = ProducerConfig.builder()
+                .bootstrapServer("some.invalid.hostname.foo.bar.local:9999")
+                .clientId("testConstructorClose")
+                .metricsReporterClasses(Collections.singletonList(MockMetricsReporter.class))
+                .property(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL)
+                .build();
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
@@ -110,11 +115,12 @@ public class KafkaProducerTest {
 
     @Test
     public void testSerializerClose() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        configs.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL);
+        Map<String, Object> configs = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .clientId("testConstructorClose")
+                .metricsReporterClasses(Collections.singletonList(MockMetricsReporter.class))
+                .property(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL)
+                .build();
         final int oldInitCount = MockSerializer.INIT_COUNT.get();
         final int oldCloseCount = MockSerializer.CLOSE_COUNT.get();
 
@@ -131,11 +137,11 @@ public class KafkaProducerTest {
     @Test
     public void testInterceptorConstructClose() {
         try {
-            Properties props = new Properties();
-            // test with client ID assigned by KafkaProducer
-            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
-            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+            Map<String, Object> props = ProducerConfig.builder()
+                    .bootstrapServer("localhost:9999")
+                    .interceptorClasses(Collections.singletonList(MockProducerInterceptor.class))
+                    .property(MockProducerInterceptor.APPEND_STRING_PROP, "something")
+                    .build();
 
             KafkaProducer<String, String> producer = new KafkaProducer<>(
                     props, new StringSerializer(), new StringSerializer());
@@ -157,10 +163,11 @@ public class KafkaProducerTest {
     @Test
     public void testPartitionerClose() {
         try {
-            Properties props = new Properties();
-            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            Map<String, Object> props = ProducerConfig.builder()
+                    .bootstrapServer("localhost:9999")
+                    .partitionerClass(MockPartitioner.class)
+                    .build();
             MockPartitioner.resetCounters();
-            props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
 
             KafkaProducer<String, String> producer = new KafkaProducer<>(
                     props, new StringSerializer(), new StringSerializer());
@@ -178,10 +185,11 @@ public class KafkaProducerTest {
 
     @Test
     public void shouldCloseProperlyAndThrowIfInterrupted() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
-        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "1");
+        Map<String, Object> props = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .partitionerClass(MockPartitioner.class)
+                .batchSize(1)
+                .build();
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -234,34 +242,38 @@ public class KafkaProducerTest {
 
     @Test
     public void testOsDefaultSocketBufferSizes() {
-        Map<String, Object> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        config.put(ProducerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        Map<String, Object> config = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .sendBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE)
+                .receiveBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE)
+                .build();
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
     @Test(expected = KafkaException.class)
     public void testInvalidSocketSendBufferSize() {
-        Map<String, Object> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        config.put(ProducerConfig.SEND_BUFFER_CONFIG, -2);
+        Map<String, Object> config = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .sendBuffer(-2)
+                .build();
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
     @Test(expected = KafkaException.class)
     public void testInvalidSocketReceiveBufferSize() {
-        Map<String, Object> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, -2);
+        Map<String, Object> config = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .receiveBuffer(-2)
+                .build();
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testMetadataFetch() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        Map<String, Object> props = ProducerConfig.builder()
+                .bootstrapServer("localhost:9999")
+                .build();
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
@@ -385,9 +397,10 @@ public class KafkaProducerTest {
 
     @Test
     public void testTopicRefreshInMetadata() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9999"))
+                .maxBlock(600000)
+                .build();
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
@@ -506,14 +519,23 @@ public class KafkaProducerTest {
         try (KafkaProducer producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
             assertEquals(Sensor.RecordingLevel.DEBUG, producer.metrics.config().recordLevel());
         }
+
+        Map<String, Object> configs  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9999"))
+                .metricsRecordingLevel("DEBUG")
+                .build();
+        try (KafkaProducer producer = new KafkaProducer<>(configs, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertEquals(Sensor.RecordingLevel.DEBUG, producer.metrics.config().recordLevel());
+        }
     }
 
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testInterceptorPartitionSetOnTooLargeRecord() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9999"))
+                .maxRequestSize(1)
+                .build();
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
 
@@ -558,10 +580,11 @@ public class KafkaProducerTest {
 
     @Test(expected = TimeoutException.class)
     public void testInitTransactionTimeout() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9000"))
+                .transactionalId("bad-transaction")
+                .maxBlock(5)
+                .build();
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -583,10 +606,11 @@ public class KafkaProducerTest {
 
     @Test(expected = KafkaException.class)
     public void testOnlyCanExecuteCloseAfterInitTransactionsTimeout() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9000"))
+                .transactionalId("bad-transaction")
+                .maxBlock(5)
+                .build();
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -617,9 +641,10 @@ public class KafkaProducerTest {
     @Test
     public void testSendToInvalidTopic() throws Exception {
 
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9000"))
+                .maxBlock(15000)
+                .build();
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster();
@@ -657,9 +682,10 @@ public class KafkaProducerTest {
 
     @Test
     public void testCloseWhenWaitingForMetadataUpdate() throws InterruptedException {
-        Properties props = new Properties();
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> props  = ProducerConfig.builder()
+                .bootstrapServers(Collections.singletonList("localhost:9000"))
+                .maxBlock(5)
+                .build();
 
         // Simulate a case where metadata for a particular topic is not available. This will cause KafkaProducer#send to
         // block in Metadata#awaitUpdate for the configured max.block.ms. When close() is invoked, KafkaProducer#send should
