@@ -713,7 +713,7 @@ public class Values {
         return DOUBLEQOUTE.matcher(replace1).replaceAll("\\\\\"");
     }
 
-    protected static DateFormat dateFormatFor(java.util.Date value) {
+    public static DateFormat dateFormatFor(java.util.Date value) {
         if (value.getTime() < MILLIS_PER_DAY) {
             return new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
         }
