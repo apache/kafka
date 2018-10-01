@@ -23,7 +23,6 @@ import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.IsolationLevel
 
 import scala.collection._
 
@@ -40,17 +39,17 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchMaxBytes: Int,
                          hardMaxBytesLimit: Boolean,
                          fetchOnlyLeader: Boolean,
-                         fetchOnlyCommitted: Boolean,
+                         fetchIsolation: FetchIsolation,
                          isFromFollower: Boolean,
                          replicaId: Int,
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
-  override def toString = "[minBytes: " + fetchMinBytes + ", " +
-    "maxBytes:" + fetchMaxBytes + ", " +
-    "onlyLeader:" + fetchOnlyLeader + ", " +
-    "onlyCommitted: " + fetchOnlyCommitted + ", " +
-    "replicaId: " + replicaId + ", " +
-    "partitionStatus: " + fetchPartitionStatus + "]"
+  override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
+    "maxBytes=" + fetchMaxBytes + ", " +
+    "onlyLeader=" + fetchOnlyLeader + ", " +
+    "fetchIsolation=" + fetchIsolation + ", " +
+    "replicaId=" + replicaId + ", " +
+    "partitionStatus=" + fetchPartitionStatus + ")"
 }
 /**
  * A delayed fetch operation that can be created by the replica manager and watched
@@ -60,7 +59,6 @@ class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
-                   isolationLevel: IsolationLevel,
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -88,12 +86,11 @@ class DelayedFetch(delayMs: Long,
               expectLeader = fetchMetadata.fetchOnlyLeader)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
-            val endOffset = if (isolationLevel == IsolationLevel.READ_COMMITTED)
-              offsetSnapshot.lastStableOffset
-            else if (fetchMetadata.fetchOnlyCommitted)
-              offsetSnapshot.highWatermark
-            else
-              offsetSnapshot.logEndOffset
+            val endOffset = fetchMetadata.fetchIsolation match {
+              case FetchLogEnd => offsetSnapshot.logEndOffset
+              case FetchHighWatermark => offsetSnapshot.highWatermark
+              case FetchTxnCommitted => offsetSnapshot.lastStableOffset
+            }
 
             // Go directly to the check for Case D if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,
@@ -156,12 +153,11 @@ class DelayedFetch(delayMs: Long,
     val logReadResults = replicaManager.readFromLocalLog(
       replicaId = fetchMetadata.replicaId,
       fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,
-      readOnlyCommitted = fetchMetadata.fetchOnlyCommitted,
+      fetchIsolation = fetchMetadata.fetchIsolation,
       fetchMaxBytes = fetchMetadata.fetchMaxBytes,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
       readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
-      quota = quota,
-      isolationLevel = isolationLevel)
+      quota = quota)
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,

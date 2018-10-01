@@ -31,8 +31,8 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
-  private val partitionBrokerIdMap = new mutable.HashMap[TopicPartition, BrokerAndFetcherId]
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
+  private val partitionBrokerIdMap = new mutable.HashMap[TopicPartition, BrokerAndFetcherId]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   this.logIdent = "[" + name + "] "

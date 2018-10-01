@@ -43,7 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have DESCRIBE access to a requested topic
  * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
  * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
- *     either matches the known leader epoch on the broker or is empty
+ *     matches the known leader epoch on the broker or is empty
  * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
  * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} If the broker does not have metadata for a topic or partition

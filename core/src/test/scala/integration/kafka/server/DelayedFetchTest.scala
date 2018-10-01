@@ -56,7 +56,6 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchMetadata = fetchMetadata,
       replicaManager = replicaManager,
       quota = replicaQuota,
-      isolationLevel = IsolationLevel.READ_UNCOMMITTED,
       responseCallback = callback)
 
     val partition = mock(classOf[Partition])
@@ -85,7 +84,7 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchMaxBytes = maxBytes,
       hardMaxBytesLimit = false,
       fetchOnlyLeader = true,
-      fetchOnlyCommitted = false,
+      fetchIsolation = FetchLogEnd,
       isFromFollower = true,
       replicaId = replicaId,
       fetchPartitionStatus = Seq((topicPartition, fetchStatus)))
@@ -98,12 +97,11 @@ class DelayedFetchTest extends EasyMockSupport {
     EasyMock.expect(replicaManager.readFromLocalLog(
       replicaId = replicaId,
       fetchOnlyFromLeader = true,
-      readOnlyCommitted = false,
+      fetchIsolation = FetchLogEnd,
       fetchMaxBytes = maxBytes,
       hardMaxBytesLimit = false,
       readPartitionInfo = Seq((topicPartition, fetchPartitionData)),
-      quota = replicaQuota,
-      isolationLevel = IsolationLevel.READ_UNCOMMITTED))
+      quota = replicaQuota))
       .andReturn(Seq((topicPartition, buildReadResultWithError(error))))
   }
 

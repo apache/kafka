@@ -352,7 +352,7 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       initialFetchStates.foreach { case (tp, initialFetchState) =>
-        // We can skip the truncation step iff the leader epoch either matches the existing epoch
+        // We can skip the truncation step iff the leader epoch matches the existing epoch
         val currentState = partitionStates.stateValue(tp)
         val updatedState = if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.leaderEpoch) {
           currentState
@@ -723,7 +723,9 @@ case class PartitionFetchState(fetchOffset: Long,
   override def toString: String = {
     s"FetchState(fetchOffset=$fetchOffset" +
       s", currentLeaderEpoch=$currentLeaderEpoch" +
-      s", state=$state)"
+      s", state=$state" +
+      s", delay=${delay.delayMs}ms" +
+      s")"
   }
 }
 

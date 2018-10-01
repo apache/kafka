@@ -1106,9 +1106,14 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def readUncommitted(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
-                                   minOneMessage: Boolean = false): FetchDataInfo = {
-    read(startOffset, maxLength, maxOffset, minOneMessage, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+  private[log] def readUncommitted(startOffset: Long,
+                                   maxLength: Int,
+                                   maxOffset: Option[Long] = None,
+                                   minOneMessage: Boolean = true): FetchDataInfo = {
+    read(startOffset, maxLength,
+      maxOffset = None,
+      minOneMessage = true,
+      includeAbortedTxns = false)
   }
 
   /**
@@ -1118,18 +1123,15 @@ class Log(@volatile var dir: File,
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
-   * @param isolationLevel The isolation level of the fetcher. The READ_UNCOMMITTED isolation level has the traditional
-   *                       read semantics (e.g. consumers are limited to fetching up to the high watermark). In
-   *                       READ_COMMITTED, consumers are limited to fetching up to the last stable offset. Additionally,
-   *                       in READ_COMMITTED, the transaction index is consulted after fetching to collect the list
-   *                       of aborted transactions in the fetch range which the consumer uses to filter the fetched
-   *                       records before they are returned to the user. Note that fetches from followers always use
-   *                       READ_UNCOMMITTED.
+   * @param includeAbortedTxns Whether or not to lookup aborted transactions for fetched data
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
-           isolationLevel: IsolationLevel): FetchDataInfo = {
+  def read(startOffset: Long,
+           maxLength: Int,
+           maxOffset: Option[Long],
+           minOneMessage: Boolean,
+           includeAbortedTxns: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
       trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
 
@@ -1139,7 +1141,7 @@ class Log(@volatile var dir: File,
       val next = currentNextOffsetMetadata.messageOffset
       if (startOffset == next) {
         val abortedTransactions =
-          if (isolationLevel == IsolationLevel.READ_COMMITTED) Some(List.empty[AbortedTransaction])
+          if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
           else None
         return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
           abortedTransactions = abortedTransactions)
@@ -1179,10 +1181,10 @@ class Log(@volatile var dir: File,
         if (fetchInfo == null) {
           segmentEntry = segments.higherEntry(segmentEntry.getKey)
         } else {
-          return isolationLevel match {
-            case IsolationLevel.READ_UNCOMMITTED => fetchInfo
-            case IsolationLevel.READ_COMMITTED => addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
-          }
+          return if (includeAbortedTxns)
+            addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
+          else
+            fetchInfo
         }
       }
 
@@ -1336,7 +1338,7 @@ class Log(@volatile var dir: File,
    */
   def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
-      val fetchDataInfo = readUncommitted(offset, 1)
+      val fetchDataInfo = readUncommitted(offset, maxLength = 1)
       Some(fetchDataInfo.fetchOffsetMetadata)
     } catch {
       case _: OffsetOutOfRangeException => None

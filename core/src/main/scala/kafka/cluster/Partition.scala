@@ -733,8 +733,8 @@ class Partition(val topicPartition: TopicPartition,
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException("Number of insync replicas for partition %s is [%d], below required minimum [%d]"
-              .format(topicPartition, inSyncSize, minIsr))
+            throw new NotEnoughReplicasException(s"The size of the current ISR ${inSyncReplicas.map(_.brokerId)} " +
+              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
           val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
@@ -759,9 +759,8 @@ class Partition(val topicPartition: TopicPartition,
   def readRecords(fetchOffset: Long,
                   currentLeaderEpoch: Optional[Integer],
                   maxBytes: Int,
-                  isolationLevel: IsolationLevel,
+                  fetchIsolation: FetchIsolation,
                   fetchOnlyFromLeader: Boolean,
-                  readOnlyCommitted: Boolean,
                   minOneMessage: Boolean): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
@@ -777,20 +776,16 @@ class Partition(val topicPartition: TopicPartition,
     val initialLogEndOffset = localReplica.logEndOffset.messageOffset
     val initialLastStableOffset = localReplica.lastStableOffset.messageOffset
 
-    // decide whether to only fetch committed data (i.e. messages below high watermark)
-    val maxOffsetOpt = if (readOnlyCommitted) {
-      val maxOffset = if (isolationLevel == IsolationLevel.READ_COMMITTED)
-        localReplica.lastStableOffset.messageOffset
-      else
-        initialHighWatermark
-      Some(maxOffset)
-    } else {
-      None
+    val maxOffsetOpt = fetchIsolation match {
+      case FetchLogEnd => None
+      case FetchHighWatermark => Some(initialHighWatermark)
+      case FetchTxnCommitted => Some(initialHighWatermark)
     }
 
     val fetchedData = localReplica.log match {
       case Some(log) =>
-        log.read(fetchOffset, maxBytes, maxOffsetOpt, minOneMessage, isolationLevel)
+        log.read(fetchOffset, maxBytes, maxOffsetOpt, minOneMessage,
+          includeAbortedTxns = fetchIsolation == FetchTxnCommitted)
 
       case None =>
         error(s"Leader does not have a local log")
@@ -937,13 +932,18 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-    * @param leaderEpoch Requested leader epoch
-    * @return The requested leader epoch and the end offset of this leader epoch, or if the requested
-    *         leader epoch is unknown, the leader epoch less than the requested leader epoch and the end offset
-    *         of this leader epoch. The end offset of a leader epoch is defined as the start
-    *         offset of the first leader epoch larger than the leader epoch, or else the log end
-    *         offset if the leader epoch is the latest leader epoch.
-    */
+   * Get the last known offset and epoch of the first prior message to the given epoch.
+   *
+   * @param currentLeaderEpoch The expected epoch of the current leader (if known)
+   * @param leaderEpoch Requested leader epoch
+   * @param fetchOnlyFromLeader Whether or not to require servicing only from the leader
+   *
+   * @return The requested leader epoch and the end offset of this leader epoch, or if the requested
+   *         leader epoch is unknown, the leader epoch less than the requested leader epoch and the end offset
+   *         of this leader epoch. The end offset of a leader epoch is defined as the start
+   *         offset of the first leader epoch larger than the leader epoch, or else the log end
+   *         offset if the leader epoch is the latest leader epoch.
+   */
   def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
                                leaderEpoch: Int,
                                fetchOnlyFromLeader: Boolean): EpochEndOffset = {

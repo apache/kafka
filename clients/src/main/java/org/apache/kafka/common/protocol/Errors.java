@@ -283,7 +283,7 @@ public enum Errors {
             TopicDeletionDisabledException::new),
     FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
             FencedLeaderEpochException::new),
-    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is older than the epoch on the broker",
+    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
             UnknownLeaderEpochException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

@@ -266,9 +266,8 @@ class PartitionTest {
       try {
         partition.readRecords(0L, currentLeaderEpochOpt,
           maxBytes = 1024,
-          isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+          fetchIsolation = FetchLogEnd,
           fetchOnlyFromLeader = true,
-          readOnlyCommitted = false,
           minOneMessage = false)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
@@ -295,9 +294,8 @@ class PartitionTest {
       try {
         partition.readRecords(0L, currentLeaderEpochOpt,
           maxBytes = 1024,
-          isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+          fetchIsolation = FetchLogEnd,
           fetchOnlyFromLeader = fetchOnlyLeader,
-          readOnlyCommitted = false,
           minOneMessage = false)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")

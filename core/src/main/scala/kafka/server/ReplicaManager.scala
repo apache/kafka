@@ -802,18 +802,24 @@ class ReplicaManager(val config: KafkaConfig,
                     isolationLevel: IsolationLevel) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
     val fetchOnlyFromLeader = replicaId != Request.DebuggingConsumerId && replicaId != Request.FutureLocalReplicaId
-    val fetchOnlyCommitted = !isFromFollower && replicaId != Request.FutureLocalReplicaId
+
+    val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
+      FetchLogEnd
+    else if (isolationLevel == IsolationLevel.READ_COMMITTED)
+      FetchTxnCommitted
+    else
+      FetchHighWatermark
+
 
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
         fetchOnlyFromLeader = fetchOnlyFromLeader,
-        readOnlyCommitted = fetchOnlyCommitted,
+        fetchIsolation = fetchIsolation,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
-        quota = quota,
-        isolationLevel = isolationLevel)
+        quota = quota)
       if (isFromFollower) updateFollowerLogReadResults(replicaId, result)
       else result
     }
@@ -845,8 +851,8 @@ class ReplicaManager(val config: KafkaConfig,
         (topicPartition, FetchPartitionStatus(result.info.fetchOffsetMetadata, fetchInfo))
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
-        fetchOnlyCommitted, isFromFollower, replicaId, fetchPartitionStatus)
-      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, isolationLevel, responseCallback)
+        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
+      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
@@ -863,12 +869,11 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def readFromLocalLog(replicaId: Int,
                        fetchOnlyFromLeader: Boolean,
-                       readOnlyCommitted: Boolean,
+                       fetchIsolation: FetchIsolation,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
-                       quota: ReplicaQuota,
-                       isolationLevel: IsolationLevel): Seq[(TopicPartition, LogReadResult)] = {
+                       quota: ReplicaQuota): Seq[(TopicPartition, LogReadResult)] = {
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -892,9 +897,8 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOffset = fetchInfo.fetchOffset,
           currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
           maxBytes = adjustedMaxBytes,
-          isolationLevel = isolationLevel,
+          fetchIsolation = fetchIsolation,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
-          readOnlyCommitted = readOnlyCommitted,
           minOneMessage = minOneMessage)
 
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
