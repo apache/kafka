@@ -35,7 +35,6 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -317,7 +316,7 @@ public class SslFactory implements Reconfigurable {
         private final String path;
         private final Password password;
         private final Password keyPassword;
-        private long fileLastModifiedMs;
+        private Long fileLastModifiedMs;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -341,25 +340,26 @@ public class SslFactory implements Reconfigurable {
                 ks.load(in, passwordChars);
                 fileLastModifiedMs = lastModifiedMs(path);
 
-                log.debug("Loaded key store with path {} modification time {}", path, new Date(fileLastModifiedMs));
+                log.debug("Loaded key store with path {} modification time {}", path,
+                        fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs));
                 return ks;
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
             }
         }
 
-        private long lastModifiedMs(String path) {
-            return new File(path).lastModified();
+        private Long lastModifiedMs(String path) {
+            try {
+                return Files.getLastModifiedTime(Paths.get(path)).toMillis();
+            } catch (IOException e) {
+                log.error("Modification time of key store could not be obtained: " + path, e);
+                return null;
+            }
         }
 
         boolean modified() {
-            long modifiedMs = lastModifiedMs(path);
-            if (modifiedMs == 0) {
-                log.warn("Modification time of key store with path {} could not be obtained", path);
-                return false;
-            } else {
-                return modifiedMs != this.fileLastModifiedMs;
-            }
+            Long modifiedMs = lastModifiedMs(path);
+            return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
         }
     }
 

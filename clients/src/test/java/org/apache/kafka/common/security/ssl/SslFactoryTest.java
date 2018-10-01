@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Map;
 
@@ -119,8 +120,9 @@ public class SslFactoryTest {
         assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
         sslContext = sslFactory.sslContext();
 
-        // Verify that the context is not recreated if `lastModified` is zero (since it could indicate I/O error)
-        keyStoreFile.setLastModified(0);
+        // Verify that the context is not recreated if modification time cannot be determined
+        keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
+        Files.delete(keyStoreFile.toPath());
         sslFactory.reconfigure(sslConfig);
         assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
     }
