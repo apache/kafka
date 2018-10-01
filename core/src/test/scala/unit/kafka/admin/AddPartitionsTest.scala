@@ -61,8 +61,7 @@ class AddPartitionsTest extends BaseRequestTest {
   @Test
   def testWrongReplicaCount(): Unit = {
     try {
-      adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
+      adminZkClient.addPartitions(topic1, topic1Assignment, 2, Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
       fail("Add partitions should fail")
     } catch {
       case _: InvalidReplicaAssignmentException => //this is good
@@ -72,8 +71,7 @@ class AddPartitionsTest extends BaseRequestTest {
   @Test
   def testMissingPartition0(): Unit = {
     try {
-      adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
+      adminZkClient.addPartitions(topic5, topic5Assignment, 2, Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
       fail("Add partitions should fail")
     } catch {
       case e: AdminOperationException => //this is good
@@ -83,7 +81,7 @@ class AddPartitionsTest extends BaseRequestTest {
 
   @Test
   def testIncrementPartitions(): Unit = {
-    adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 3)
+    adminZkClient.addPartitions(topic1, topic1Assignment, 3)
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1)
     val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2)
@@ -109,8 +107,7 @@ class AddPartitionsTest extends BaseRequestTest {
   @Test
   def testManualAssignmentOfReplicas(): Unit = {
     // Add 2 partitions
-    adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3,
-      Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
+    adminZkClient.addPartitions(topic2, topic2Assignment, 3, Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1)
     val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2)
@@ -138,7 +135,7 @@ class AddPartitionsTest extends BaseRequestTest {
 
   @Test
   def testReplicaPlacementAllServers(): Unit = {
-    adminZkClient.addPartitions(topic3, topic3Assignment, adminZkClient.getBrokerMetadatas(), 7)
+    adminZkClient.addPartitions(topic3, topic3Assignment, 7)
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1)
@@ -162,7 +159,7 @@ class AddPartitionsTest extends BaseRequestTest {
 
   @Test
   def testReplicaPlacementPartialServers(): Unit = {
-    adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3)
+    adminZkClient.addPartitions(topic2, topic2Assignment, 3)
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)

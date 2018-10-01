@@ -158,8 +158,9 @@ object TopicCommand extends Logging {
           val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
           AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
         }
-        val allBrokers = adminZkClient.getBrokerMetadatas()
-        adminZkClient.addPartitions(topic, existingAssignment, allBrokers, nPartitions, newAssignment)
+        val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
+                            else RackAwareMode.Enforced
+        adminZkClient.addPartitions(topic, existingAssignment, nPartitions, newAssignment, rackAwareMode)
         println("Adding partitions succeeded!")
       }
     }
