@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -40,11 +41,9 @@ import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
-public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K> implements TimeWindowedKStream<K, V> {
+public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
 
     private final Windows<W> windows;
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
@@ -55,9 +54,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final Serde<V> valSerde,
                             final boolean repartitionRequired,
                             final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
-        this.valSerde = valSerde;
-        this.keySerde = keySerde;
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name, streamsGraphNode);
     }
@@ -92,18 +89,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         return aggregateBuilder.build(
-            new KStreamWindowAggregate<>(
-                windows,
-                materializedInternal.storeName(),
-                aggregateBuilder.countInitializer,
-                aggregateBuilder.countAggregator
-            ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
-        );
+            new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
-
 
     @Override
     public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -124,15 +116,12 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materializedInternal.withKeySerde(keySerde);
         }
         return aggregateBuilder.build(
-            new KStreamWindowAggregate<>(
-                windows,
-                materializedInternal.storeName(),
-                initializer,
-                aggregator
-            ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable());
+            new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
@@ -156,11 +145,12 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         return aggregateBuilder.build(
-            new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
             REDUCE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
-        );
+            new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

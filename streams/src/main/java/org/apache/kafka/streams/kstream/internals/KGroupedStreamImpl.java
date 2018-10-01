@@ -36,24 +36,22 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.Objects;
 import java.util.Set;
 
-class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
+class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedStream<K, V> {
 
     static final String REDUCE_NAME = "KSTREAM-REDUCE-";
     static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final boolean repartitionRequired;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
-    KGroupedStreamImpl(final InternalStreamsBuilder builder,
-                       final String name,
-                       final Set<String> sourceNodes,
+    KGroupedStreamImpl(final String name,
                        final Serde<K> keySerde,
                        final Serde<V> valSerde,
+                       final Set<String> sourceNodes,
                        final boolean repartitionRequired,
-                       final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
+                       final StreamsGraphNode streamsGraphNode,
+                       final InternalStreamsBuilder builder) {
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             keySerde,
@@ -63,8 +61,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             name,
             streamsGraphNode
         );
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
     }
 
@@ -189,14 +185,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         );
     }
 
-    private <KR, T> KTable<KR, T> doAggregate(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
-                                              final String functionName,
-                                              final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, K, V, T> aggregateSupplier,
+                                         final String functionName,
+                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(
-            aggregateSupplier,
             functionName,
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
-            materializedInternal.isQueryable()
-        );
+            aggregateSupplier,
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde(),
+            materializedInternal.valueSerde());
     }
 }
