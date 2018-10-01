@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -93,7 +94,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materialize(materializedInternal),
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             materializedInternal.isQueryable(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.keySerde() != null ? new TimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }
 
@@ -120,7 +121,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materialize(materializedInternal),
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
             materializedInternal.isQueryable(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.keySerde() != null ? new TimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }
 
@@ -149,7 +150,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materialize(materializedInternal),
             new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
             materializedInternal.isQueryable(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.TimeWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.keySerde() != null ? new TimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }
 
