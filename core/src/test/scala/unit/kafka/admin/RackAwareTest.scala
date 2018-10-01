@@ -27,6 +27,7 @@ trait RackAwareTest {
                                numPartitions: Int,
                                replicationFactor: Int,
                                verifyRackAware: Boolean = true,
+                               verifyRackUnAware: Boolean = false,
                                verifyLeaderDistribution: Boolean = true,
                                verifyReplicasDistribution: Boolean = true) {
     // always verify that no broker will be assigned for more than one replica
@@ -38,6 +39,11 @@ trait RackAwareTest {
     if (verifyRackAware) {
       val partitionRackMap = distribution.partitionRacks
       assertEquals("More than one replica of the same partition is assigned to the same rack",
+        List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
+    }
+    if (verifyRackUnAware) {
+      val partitionRackMap = distribution.partitionRacks
+      assertNotEquals("All replicas of all partitions are assigned to different racks",
         List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
     }
 
