@@ -59,8 +59,9 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type,
-        final Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         return null;
     }
 

@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.time.Duration;
-import java.time.Instant;
 import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
 
 /**
- * Iterator interface of {@link KeyValue} with key typed {@link Long} used for {@link WindowStore#fetch(Object, Instant, Duration)}.
+ * Iterator interface of {@link KeyValue} with key typed {@link Long} used for {@link WindowStore#fetch(Object, long, long)}.
  *
  * Users must call its {@code close} method explicitly upon completeness to release resources,
  * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.

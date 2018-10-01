@@ -211,8 +211,9 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type,
-        final Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 

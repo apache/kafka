@@ -226,8 +226,10 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         };
     }
 
-    @Override public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime,
-        final Duration duration) throws IllegalArgumentException {
+    @Override public KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                            final K to,
+                                                            final Instant fromTime,
+                                                            final Duration duration) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
         ApiUtils.validateMillisecondDuration(duration, "duration");
         return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());

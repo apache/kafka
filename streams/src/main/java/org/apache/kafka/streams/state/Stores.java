@@ -210,6 +210,7 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final Duration retentionPeriod,
@@ -233,6 +234,7 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @deprecated Use {@link #persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
     @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,

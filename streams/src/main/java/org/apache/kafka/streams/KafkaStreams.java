@@ -906,8 +906,8 @@ public class KafkaStreams {
      * @param timeout  how long to wait for the threads to shutdown
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
-     * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
-     * @throws IllegalArgumentException if {@param timeout} can't be represented as {@code long milliseconds}
+     * Note that this method must not be called in the {@link StateListener#onChange(State, State)} callback of {@link StateListener}.
+     * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(timeout, "timeout");

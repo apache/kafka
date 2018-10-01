@@ -136,8 +136,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * <p>
      * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
      *
-     * @param advanceMs The advance interval ("hop") in milliseconds of the window, with the requirement that
-     *                  {@code 0 < advanceMs &le; sizeMs}.
+     * @param advanceMs The advance interval ("hop") in milliseconds of the window, with the requirement that {@code 0 < advanceMs <= sizeMs}.
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
      * @deprecated Use {@link #advanceBy(Duration)} instead
@@ -158,8 +157,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * <p>
      * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
      *
-     * @param advance The advance interval ("hop") of the window, with the requirement that
-     *                  {@code 0 < advance.toMillis() &le; sizeMs}.
+     * @param advance The advance interval ("hop") of the window, with the requirement that {@code 0 < advance.toMillis() <= sizeMs}.
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
      */
@@ -194,7 +192,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
-     * @throws IllegalArgumentException if afterWindowEnd is negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {

@@ -32,13 +32,12 @@ public final class ApiUtils {
      */
     public static long validateMillisecondDuration(final Duration duration, final String name) {
         try {
-            Objects.requireNonNull(duration);
+            if (duration == null)
+                throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.");
 
             return duration.toMillis();
-        } catch (final NullPointerException e) {
-            throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.", e);
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. ", e);
+            throw new IllegalArgumentException("[" + name + "] can't be converted to milliseconds. ", e);
         }
     }
 
@@ -50,13 +49,12 @@ public final class ApiUtils {
      */
     public static long validateMillisecondInstant(final Instant instant, final String name) {
         try {
-            Objects.requireNonNull(instant);
+            if (instant == null)
+                throw new IllegalArgumentException("[" + name + "] shouldn't be null.");
 
             return instant.toEpochMilli();
-        } catch (final NullPointerException e) {
-            throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.", e);
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("[" + Objects.toString(name) + "] can't be converted to milliseconds. ", e);
+            throw new IllegalArgumentException("[" + name + "] can't be converted to milliseconds. ", e);
         }
     }
 }

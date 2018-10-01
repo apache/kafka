@@ -79,7 +79,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      *
      * @param start the window start time
      * @return a new unlimited window that starts at {@code start}
-     * @throws IllegalArgumentException if the start time is negative
+     * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(start, "start");

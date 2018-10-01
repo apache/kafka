@@ -390,8 +390,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type,
-        final Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         ApiUtils.validateMillisecondDuration(interval, "interval");
         return schedule(interval.toMillis(), type, callback);
     }
