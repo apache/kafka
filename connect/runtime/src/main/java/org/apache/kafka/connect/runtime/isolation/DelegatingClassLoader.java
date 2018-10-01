@@ -94,7 +94,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
-        this(pluginPaths, ClassLoader.getSystemClassLoader());
+        this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
     public Set<PluginDesc<Connector>> connectors() {
