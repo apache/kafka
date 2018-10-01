@@ -279,6 +279,40 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
+  def testCreateAlterTopicWithRackAwareDisabled() {
+    val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
+    TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
+
+    val numPartitions = 18
+    val replicationFactor = 3
+    val createOpts = new TopicCommandOptions(Array(
+      "--partitions", numPartitions.toString,
+      "--replication-factor", replicationFactor.toString,
+      "--topic", "foo",
+      "--disable-rack-aware"))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    var assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    checkReplicaDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor,
+      verifyRackAware = false, verifyRackUnAware = true)
+
+    val alteredNumPartitions = 36
+    // verify that adding partitions will also be rack aware
+    val alterOpts = new TopicCommandOptions(Array(
+      "--partitions", alteredNumPartitions.toString,
+      "--topic", "foo",
+      "--disable-rack-aware"))
+    TopicCommand.alterTopic(zkClient, alterOpts)
+    assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor,
+      verifyRackAware = false, verifyRackUnAware = true)
+  }
+
+  @Test
   def testDescribeAndListTopicsMarkedForDeletion() {
     val brokers = List(0)
     val topic = "testtopic"
