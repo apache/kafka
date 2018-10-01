@@ -566,12 +566,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V1> joinOther = (KStreamImpl<K, V1>) other;
 
         if (joinThis.repartitionRequired) {
-            final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : null;
+            final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : joinThis.name;
             joinThis = joinThis.repartitionForJoin(joined.keySerde(), joined.valueSerde(), leftJoinRepartitionTopicName);
         }
 
         if (joinOther.repartitionRequired) {
-            final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : null;
+            final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : joinOther.name;
             joinOther = joinOther.repartitionForJoin(joined.keySerde(), joined.otherValueSerde(), rightJoinRepartitionTopicName);
         }
 
@@ -602,6 +602,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                                          repartitionValueSerde,
                                                                          null,
                                                                          name,
+                                                                         joinRepartitionName,
                                                                          optimizableRepartitionNodeBuilder);
 
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
@@ -613,17 +614,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
                                                      final Serde<K1> keySerde,
                                                      final Serde<V1> valSerde,
-                                                     final String topicNamePrefix,
-                                                     final String name,
+                                                     final String repartitionTopicNamePrefix,
                                                      final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
-        final String repartitionTopicBaseName = repartitionTopicNamePrefix != null ? repartitionTopicNamePrefix : name;
-        // Since we may get an existing repartition topic name,
-        // we don't want to append `-repartition` at the end and change it.
-        //For example, we may get `KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition`
-        // for a repartition topic name resulting from an optimization operation and
-        // appending another `-repartition` would break the topology.
-        final String repartitionTopic = repartitionTopicBaseName.endsWith(REPARTITION_TOPIC_SUFFIX) ? repartitionTopicBaseName  : repartitionTopicBaseName + REPARTITION_TOPIC_SUFFIX;
+
+        final String repartitionTopic = repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
         final String sinkName = builder.newProcessorName(SINK_NAME);
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String sourceName = builder.newProcessorName(SOURCE_NAME);
@@ -784,6 +779,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // do not have serde for joined result
         return new KStreamImpl<>(name, joined.keySerde() != null ? joined.keySerde() : keySerde, null, allSourceNodes, false, streamTableJoinNode, builder);
+
     }
 
     @Override
@@ -800,8 +796,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
 
         return groupBy(selector, Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
-
-
     }
 
     @Override
@@ -814,14 +808,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         selectKeyMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
+
         return new KGroupedStreamImpl<>(
-                builder,
-                selectKeyMapNode.nodeName(),
-                sourceNodes,
-                groupedInternal,
-                true,
-                selectKeyMapNode
-        );
+            builder,
+            selectKeyMapNode.nodeName(),
+            sourceNodes,
+            groupedInternal,
+            true,
+            selectKeyMapNode);
     }
 
     @Override
@@ -840,12 +834,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public KGroupedStream<K, V> groupByKey(final Grouped<K, V> grouped) {
         final GroupedInternal<K, V> groupedInternal = new GroupedInternal<>(grouped);
 
-        return new KGroupedStreamImpl<>(builder,
-                this.name,
-                sourceNodes,
-                groupedInternal,
-                repartitionRequired,
-                streamsGraphNode);
+        return new KGroupedStreamImpl<>(
+            builder,
+            name,
+            sourceNodes,
+            groupedInternal,
+            repartitionRequired,
+            streamsGraphNode);
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

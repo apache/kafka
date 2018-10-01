@@ -24,16 +24,16 @@ import org.apache.kafka.common.serialization.Serde;
  */
 public class Joined<K, V, VO> {
 
-    private Serde<K> keySerde;
-    private Serde<V> valueSerde;
-    private Serde<VO> otherValueSerde;
-    private String name;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private final Serde<VO> otherValueSerde;
+    private final String name;
 
 
     private Joined(final Serde<K> keySerde,
-        final Serde<V> valueSerde,
-        final Serde<VO> otherValueSerde,
-        final String name) {
+                   final Serde<V> valueSerde,
+                   final Serde<VO> otherValueSerde,
+                   final String name) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -146,11 +146,10 @@ public class Joined<K, V, VO> {
      * key serde as defined in config
      *
      * @param keySerde the key serde to use. If null the default key serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code name}
      */
     public Joined<K, V, VO> withKeySerde(final Serde<K> keySerde) {
-        this.keySerde = keySerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -158,11 +157,10 @@ public class Joined<K, V, VO> {
      * value serde as defined in config
      *
      * @param valueSerde the value serde to use. If null the default value serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withValueSerde(final Serde<V> valueSerde) {
-        this.valueSerde = valueSerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -170,11 +168,10 @@ public class Joined<K, V, VO> {
      * value serde as defined in config
      *
      * @param otherValueSerde the otherValue serde to use. If null the default value serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withOtherValueSerde(final Serde<VO> otherValueSerde) {
-        this.otherValueSerde = otherValueSerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -183,11 +180,10 @@ public class Joined<K, V, VO> {
      *
      * @param name the name used as the base for naming components of the join including any
      * repartition topics
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code name}
      */
     public Joined<K, V, VO> withName(final String name) {
-        this.name = name;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     public Serde<K> keySerde() {

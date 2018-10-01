@@ -21,9 +21,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -314,13 +314,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 continue;
             }
 
-            final SerializedInternal serialized = new SerializedInternal(getRepartitionSerdes(entry.getValue()));
-            final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
+            final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
-            final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
-                                                                                      repartitionTopicName,
-                                                                                      serialized.keySerde(),
-                                                                                      serialized.valueSerde());
+            final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
+            //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
+            final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
+                                                                                      groupedInternal.keySerde(),
+                                                                                      groupedInternal.valueSerde());
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -393,8 +393,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private OptimizableRepartitionNode createRepartitionNode(final String nodeName,
-                                                             final String repartitionTopicName,
+    private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
                                                              final Serde keySerde,
                                                              final Serde valueSerde) {
 
@@ -403,8 +402,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
-                                              nodeName,
                                               repartitionNodeBuilder);
+
+        // ensures setting the repartition topic to the name of the
+        // first repartition topic to get merged
+        // this may be an auto-generated name or a user specified name
+        repartitionNodeBuilder.withRepartitionTopic(repartitionTopicName);
 
         return repartitionNodeBuilder.build();
 
@@ -425,7 +428,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private SerializedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+    private GroupedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
         Serde keySerde = null;
         Serde valueSerde = null;
 
@@ -443,7 +446,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
 
-        return new SerializedInternal(Serialized.with(keySerde, valueSerde));
+        return new GroupedInternal(Grouped.with(keySerde, valueSerde));
     }
 
     private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,
