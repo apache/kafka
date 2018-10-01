@@ -225,4 +225,17 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3, 0)
     assertEquals(expectedAssignment, actualAssignment)
   }
+
+
+  @Test
+  def testIncompleteRackAssignmentInMetadatas() {
+    val brokerMetadatas = Seq(new BrokerMetadata(0, Some("rack")),new BrokerMetadata(1,None),new BrokerMetadata(2,None))
+
+    try {
+      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 3)
+    } catch {
+      case e: AdminOperationException =>
+        assertTrue(e.getMessage.contains("Not all brokers have rack information for replica rack aware assignment."))
+    }
+  }
 }
