@@ -348,10 +348,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         mergeNode.setMergeNode(true);
         builder.addGraphNode(Arrays.asList(this.streamsGraphNode, streamImpl.streamsGraphNode), mergeNode);
 
-        // inherit from both streams, with this stream taking higher priority
-        final Serde<K> keySerde = this.keySerde != null ? this.keySerde : ((KStreamImpl<K, V>) stream).keySerde;
-        final Serde<V> valSerde = this.valSerde != null ? this.valSerde : ((KStreamImpl<K, V>) stream).valSerde;
-        return new KStreamImpl<>(name, keySerde, valSerde, allSourceNodes, requireRepartitioning, mergeNode, builder);
+        // drop the serde as we cannot safely use either one to represent both streams
+        return new KStreamImpl<>(name, null, null, allSourceNodes, requireRepartitioning, mergeNode, builder);
     }
 
     @Override
@@ -567,11 +565,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V1> joinOther = (KStreamImpl<K, V1>) other;
 
         if (joinThis.repartitionRequired) {
-            joinThis = joinThis.repartitionForJoin(joined.keySerde(), joined.valueSerde());
+            joinThis = joinThis.repartitionForJoin(joined);
         }
 
         if (joinOther.repartitionRequired) {
-            joinOther = joinOther.repartitionForJoin(joined.keySerde(), joined.otherValueSerde());
+            joinOther = joinOther.repartitionForJoin(Joined.with(joined.keySerde(), joined.otherValueSerde(), joined.valueSerde()));
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -589,17 +587,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
      * Repartition a stream. This is required on join operations occurring after
      * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
      *
-     * @param keySerde Serdes for serializing the keys
-     * @param valSerde Serdes for serializing the values
+     * @param joined joined control object
      * @return a new {@link KStreamImpl}
      */
-    private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
-                                                 final Serde<V> valSerde) {
-
+    private KStreamImpl<K, V> repartitionForJoin(final Joined<K, V, ?> joined) {
+        final Serde<K> repartitionKeySerde = joined.keySerde() != null ? joined.keySerde() : keySerde;
+        final Serde<V> repartitionValueSerde = joined.valueSerde() != null ? joined.valueSerde() : valSerde;
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         final String repartitionedSourceName = createRepartitionedSource(builder,
-                                                                         keySerde,
-                                                                         valSerde,
+                                                                         repartitionKeySerde,
+                                                                         repartitionValueSerde,
                                                                          null,
                                                                          name,
                                                                          optimizableRepartitionNodeBuilder);
@@ -607,7 +604,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
 
-        return new KStreamImpl<>(repartitionedSourceName, keySerde, valSerde, Collections.singleton(repartitionedSourceName), false, optimizableRepartitionNode, builder);
+        return new KStreamImpl<>(repartitionedSourceName, repartitionKeySerde, repartitionValueSerde, Collections.singleton(repartitionedSourceName), false, optimizableRepartitionNode, builder);
     }
 
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
@@ -680,7 +677,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined.keySerde(), joined.valueSerde());
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, false);
         } else {
             return doStreamTableJoin(other, joiner, joined, false);
@@ -688,10 +685,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <K1, V1, R> KStream<K, R> leftJoin(final GlobalKTable<K1, V1> globalTable,
-                                              final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
-                                              final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return globalTableJoin(globalTable, keyMapper, joiner, true);
+    public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return leftJoin(other, joiner, Joined.with(null, null, null));
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> other,
+                                            final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
+                                            final Joined<K, V, VT> joined) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(joined, "joined can't be null");
+        if (repartitionRequired) {
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
+            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, true);
+        } else {
+            return doStreamTableJoin(other, joiner, joined, true);
+        }
     }
 
     @Override
@@ -699,6 +709,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                             final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
                                             final ValueJoiner<? super V, ? super V1, ? extends V2> joiner) {
         return globalTableJoin(globalTable, keyMapper, joiner, false);
+    }
+
+    @Override
+    public <K1, V1, R> KStream<K, R> leftJoin(final GlobalKTable<K1, V1> globalTable,
+                                              final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
+                                              final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return globalTableJoin(globalTable, keyMapper, joiner, true);
     }
 
     private <K1, V1, V2> KStream<K, V2> globalTableJoin(final GlobalKTable<K1, V1> globalTable,
@@ -759,26 +776,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // do not have serde for joined result
         return new KStreamImpl<>(name, joined.keySerde() != null ? joined.keySerde() : keySerde, null, allSourceNodes, false, streamTableJoinNode, builder);
-    }
-
-    @Override
-    public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return leftJoin(other, joiner, Joined.with(null, null, null));
-    }
-
-    @Override
-    public <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> other,
-                                            final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
-                                            final Joined<K, V, VT> joined) {
-        Objects.requireNonNull(other, "other can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
-        Objects.requireNonNull(joined, "joined can't be null");
-        if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(joined.keySerde(), joined.valueSerde());
-            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, true);
-        } else {
-            return doStreamTableJoin(other, joiner, joined, true);
-        }
     }
 
     @Override
@@ -924,8 +921,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
 
-            // do not have serde for joined result
-            return new KStreamImpl<K1, R>(joinMergeName, joined.keySerde() != null ? joined.keySerde() : ((AbstractStream) lhs).keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
+            // do not have serde for joined result;
+            // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
+            return new KStreamImpl<>(joinMergeName, joined.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
         }
     }
 

@@ -32,6 +32,14 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+/*
+ * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
+ *
+ * 1) Overridden values via control objects (e.g. Materialized, Serialized, Consumed, etc)
+ * 2) Serdes that can be inferred from the operator itself (e.g. groupBy().count(), where value serde can default to `LongSerde`).
+ * 3) Serde inherited from parent operator if possible (note if the key / value types have been changed, then the corresponding serde cannot be inherited).
+ * 4) Default serde specified in the config.
+ */
 public abstract class AbstractStream<K, V> {
 
     protected final String name;
