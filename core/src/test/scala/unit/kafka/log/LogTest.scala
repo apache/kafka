@@ -1307,7 +1307,8 @@ class LogTest {
         assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
       }
 
-      assertEquals(Seq.empty, log.readUncommitted(i, 1, Some(1), minOneMessage = true).records.batches.asScala.toIndexedSeq)
+      val fetchedData = log.readUncommitted(i, 1, Some(1), minOneMessage = true)
+      assertEquals(Seq.empty, fetchedData.records.batches.asScala.toIndexedSeq)
     }
   }
 
@@ -3421,7 +3422,7 @@ class LogTest {
     assertEquals(None, log.firstUnstableOffset.map(_.messageOffset))
 
     // now check that a fetch includes the aborted transaction
-    val fetchDataInfo = log.readUncommitted(0L, 2048)
+    val fetchDataInfo = log.read(0L, 2048, maxOffset = None, minOneMessage = true, includeAbortedTxns = true)
     assertEquals(1, fetchDataInfo.abortedTransactions.size)
 
     assertTrue(fetchDataInfo.abortedTransactions.isDefined)

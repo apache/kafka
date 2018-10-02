@@ -779,7 +779,7 @@ class Partition(val topicPartition: TopicPartition,
     val maxOffsetOpt = fetchIsolation match {
       case FetchLogEnd => None
       case FetchHighWatermark => Some(initialHighWatermark)
-      case FetchTxnCommitted => Some(initialHighWatermark)
+      case FetchTxnCommitted => Some(initialLastStableOffset)
     }
 
     val fetchedData = localReplica.log match {

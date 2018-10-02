@@ -1111,8 +1111,8 @@ class Log(@volatile var dir: File,
                                    maxOffset: Option[Long] = None,
                                    minOneMessage: Boolean = true): FetchDataInfo = {
     read(startOffset, maxLength,
-      maxOffset = None,
-      minOneMessage = true,
+      maxOffset = maxOffset,
+      minOneMessage = minOneMessage,
       includeAbortedTxns = false)
   }
 
