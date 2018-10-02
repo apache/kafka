@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serde;
  * The class that is used to capture the key and value {@link Serde}s and set the part of name used for
  * repartition topics when performing {@link KStream#groupBy(KeyValueMapper, Grouped)}, {@link
  * KStream#groupByKey(Grouped)}, or {@link KTable#groupBy(KeyValueMapper, Grouped)} operations.  Note
- * that Kafka Streams does not always create repartition topic[s] for grouping operations.
+ * that Kafka Streams does not always create repartition topics for grouping operations.
  *
  * @param <K> the key type
  * @param <V> the value type
@@ -109,7 +109,7 @@ public class Grouped<K, V> {
 
 
     /**
-     * Create a {@code Grouped} instance with the provided keySerde and valueSerde.  If the keySerde and/or the valueSerde is
+     * Create a {@link Grouped} instance with the provided keySerde and valueSerde.  If the keySerde and/or the valueSerde is
      * {@code null} the default value for the respective serde from config will be used.
      *
      * @param keySerde   the {@link Serde} used for serializing the key. If {@code null} the default key serde from config will be used
@@ -126,7 +126,7 @@ public class Grouped<K, V> {
 
     /**
      * Perform the grouping operation with the name for a repartition topic if required.  Note
-     * that Kafka Streams does not always create repartition topic[s] for grouping operations.
+     * that Kafka Streams does not always create repartition topics for grouping operations.
      *
      * @param name the name used as part of the repartition topic name if required
      * @return a new {@link Grouped} instance configured with the name
