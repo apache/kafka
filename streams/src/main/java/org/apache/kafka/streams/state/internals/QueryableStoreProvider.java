@@ -53,7 +53,7 @@ public class QueryableStoreProvider {
             return queryableStoreType.create(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(globalStoreProvider)), storeName);
         }
         final List<T> allStores = new ArrayList<>();
-        for (StateStoreProvider storeProvider : storeProviders) {
+        for (final StateStoreProvider storeProvider : storeProviders) {
             allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {

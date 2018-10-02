@@ -36,7 +36,7 @@ import java.util.ArrayDeque;
  */
 public class RecordQueue {
 
-    static final long NOT_KNOWN = -1L;
+    static final long UNKNOWN = -1L;
 
     private final Logger log;
     private final SourceNode source;
@@ -46,7 +46,7 @@ public class RecordQueue {
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
-    private long partitionTime = NOT_KNOWN;
+    private long partitionTime = UNKNOWN;
     private StampedRecord headRecord = null;
 
     RecordQueue(final TopicPartition partition,
@@ -151,7 +151,7 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
-        partitionTime = NOT_KNOWN;
+        partitionTime = UNKNOWN;
     }
 
     private void maybeUpdateTimestamp() {

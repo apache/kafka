@@ -89,7 +89,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
         try {
             thread.join();
-        } catch (Exception ex) {
+        } catch (final Exception ex) {
             // do not remove these printouts since they are needed for health scripts
             System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             // ignore
@@ -105,11 +105,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         fullProps.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         fullProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        fullProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         fullProps.put(ProducerConfig.ACKS_CONFIG, "all");
-
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        fullProps.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
 
         fullProps.putAll(props);
         return fullProps;

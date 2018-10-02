@@ -319,7 +319,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterReplicaLogDirsOptions).values.asScala.values
     futures.foreach { future =>
       val exception = intercept[ExecutionException](future.get)
-      assertTrue(exception.getCause.isInstanceOf[ReplicaNotAvailableException])
+      assertTrue(exception.getCause.isInstanceOf[UnknownTopicOrPartitionException])
     }
 
     createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
@@ -724,10 +724,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     client = AdminClient.create(createConfig)
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
     consumer.seekToBeginning(Collections.singleton(topicPartition))
     assertEquals(0L, consumer.position(topicPartition))
 
@@ -752,9 +753,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     client = AdminClient.create(createConfig)
 
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     var lowWatermark: Option[Long] = Some(result.lowWatermarks.get(topicPartition).get.lowWatermark)
     assertEquals(Some(5), lowWatermark)
@@ -790,9 +793,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     client = AdminClient.create(createConfig)
 
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
+
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
     val lowWatermark = result.lowWatermarks.get(topicPartition).get.lowWatermark
     assertEquals(3L, lowWatermark)
@@ -824,7 +830,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     killBroker(followerIndex)
 
     client = AdminClient.create(createConfig)
-    sendRecords(producers.head, 100, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 100, topicPartition)
 
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
     result.all().get()
@@ -840,7 +847,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
     killBroker(followerIndex)
-    sendRecords(producers.head, 100, topicPartition)
+    sendRecords(producer, 100, topicPartition)
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
     restartDeadBrokers()
@@ -852,7 +859,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client = AdminClient.create(createConfig)
     createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
     val expectedLEO = 100
-    sendRecords(producers.head, expectedLEO, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, expectedLEO, topicPartition)
 
     // delete records to move log start offset
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
@@ -884,10 +892,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     client = AdminClient.create(createConfig)
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
     assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
@@ -901,12 +910,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testConsumeAfterDeleteRecords(): Unit = {
-    val consumer = consumers.head
+    val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
     client = AdminClient.create(createConfig)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
     var messageCount = 0
     TestUtils.waitUntilTrue(() => {
       messageCount += consumer.poll(0).count
@@ -932,11 +942,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testDeleteRecordsWithException(): Unit = {
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
     client = AdminClient.create(createConfig)
 
-    sendRecords(producers.head, 10, topicPartition)
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
 
     assertEquals(5L, client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
       .lowWatermarks.get(topicPartition).get.lowWatermark)
@@ -1107,7 +1119,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
       waitForTopics(client, List(testTopicName), List())
 
-      val producer = createProducer
+      val producer = createProducer()
       try {
         producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
       } finally {
@@ -1119,11 +1131,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      val consumer = TestUtils.createConsumer(brokerList,
-        securityProtocol = this.securityProtocol,
-        trustStoreFile = this.trustStoreFile,
-        saslProperties = this.clientSaslProperties,
-        props = Some(newConsumerConfig))
+      val consumer = createConsumer(configOverrides = newConsumerConfig)
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {

@@ -21,7 +21,7 @@ import org.apache.kafka.common.header.Headers;
 
 public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
-    public StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
+    public StampedRecord(final ConsumerRecord<Object, Object> record, final long timestamp) {
         super(record, timestamp);
     }
 

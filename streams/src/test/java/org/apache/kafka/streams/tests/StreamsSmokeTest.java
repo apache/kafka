@@ -66,7 +66,7 @@ public class StreamsSmokeTest {
                 if (disableAutoTerminate) {
                     SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, false);
                 } else {
-                    Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
+                    final Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;

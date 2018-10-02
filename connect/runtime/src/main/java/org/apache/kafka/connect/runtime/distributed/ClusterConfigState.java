@@ -123,6 +123,10 @@ public class ClusterConfigState {
         return configs;
     }
 
+    public Map<String, String> rawConnectorConfig(String connector) {
+        return connectorConfigs.get(connector);
+    }
+
     /**
      * Get the target state of the connector
      * @param connector name of the connector
@@ -148,16 +152,28 @@ public class ClusterConfigState {
         return configs;
     }
 
+    public Map<String, String> rawTaskConfig(ConnectorTaskId task) {
+        return taskConfigs.get(task);
+    }
+
     /**
-     * Get all task configs for a connector.
+     * Get all task configs for a connector.  The configurations will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
+     * references replaced with the current values from external instances of
+     * {@link ConfigProvider}, and may include secrets.
      * @param connector name of the connector
      * @return a list of task configurations
      */
     public List<Map<String, String>> allTaskConfigs(String connector) {
         Map<Integer, Map<String, String>> taskConfigs = new TreeMap<>();
         for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
-            if (taskConfigEntry.getKey().connector().equals(connector))
-                taskConfigs.put(taskConfigEntry.getKey().task(), taskConfigEntry.getValue());
+            if (taskConfigEntry.getKey().connector().equals(connector)) {
+                Map<String, String> configs = taskConfigEntry.getValue();
+                if (configTransformer != null) {
+                    configs = configTransformer.transform(connector, configs);
+                }
+                taskConfigs.put(taskConfigEntry.getKey().task(), configs);
+            }
         }
         return new LinkedList<>(taskConfigs.values());
     }

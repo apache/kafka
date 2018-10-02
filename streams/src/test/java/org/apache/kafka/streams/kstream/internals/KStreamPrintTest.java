@@ -53,7 +53,7 @@ public class KStreamPrintTest {
         kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(byteOutStream, mapper, "test-stream"));
 
         printProcessor = kStreamPrint.get();
-        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        final ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
         EasyMock.replay(processorContext);
 
         printProcessor.init(processorContext);
@@ -85,7 +85,7 @@ public class KStreamPrintTest {
     @SuppressWarnings("unchecked")
     private <K, V> void doTest(final List<KeyValue<K, V>> inputRecords, final String[] expectedResult) {
 
-        for (KeyValue<K, V> record: inputRecords) {
+        for (final KeyValue<K, V> record: inputRecords) {
             printProcessor.process(record.key, record.value);
         }
         printProcessor.close();

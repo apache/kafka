@@ -16,7 +16,7 @@ import java.io.File
 
 import kafka.server.KafkaConfig
 import org.junit.{After, Before, Test}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.collection.JavaConverters._
@@ -46,20 +46,12 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   @Test
   def testMultipleBrokerMechanisms() {
 
-    val plainSaslProducer = producers.head
-    val plainSaslConsumer = consumers.head
+    val plainSaslProducer = createProducer()
+    val plainSaslConsumer = createConsumer()
 
     val gssapiSaslProperties = kafkaClientSaslProperties("GSSAPI", dynamicJaasConfig = true)
-    val gssapiSaslProducer = TestUtils.createProducer(brokerList,
-                                                         securityProtocol = this.securityProtocol,
-                                                         trustStoreFile = this.trustStoreFile,
-                                                         saslProperties = Some(gssapiSaslProperties))
-    producers += gssapiSaslProducer
-    val gssapiSaslConsumer = TestUtils.createConsumer(brokerList,
-                                                         securityProtocol = this.securityProtocol,
-                                                         trustStoreFile = this.trustStoreFile,
-                                                         saslProperties = Some(gssapiSaslProperties))
-    consumers += gssapiSaslConsumer
+    val gssapiSaslProducer = createProducer(configOverrides = gssapiSaslProperties)
+    val gssapiSaslConsumer = createConsumer(configOverrides = gssapiSaslProperties)
     val numRecords = 1000
     var startingOffset = 0
 

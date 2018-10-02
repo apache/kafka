@@ -56,7 +56,7 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet(), internalTopics, null);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null);
     }
 
     /**
@@ -70,7 +70,7 @@ public final class Cluster {
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics,
                    Node controller) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet(), internalTopics, controller);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller);
     }
 
     /**
@@ -117,11 +117,11 @@ public final class Cluster {
         HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
         HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
         for (Node n : this.nodes) {
-            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
+            partsForNode.put(n.id(), new ArrayList<>());
         }
         for (PartitionInfo p : partitions) {
             if (!partsForTopic.containsKey(p.topic()))
-                partsForTopic.put(p.topic(), new ArrayList<PartitionInfo>());
+                partsForTopic.put(p.topic(), new ArrayList<>());
             List<PartitionInfo> psTopic = partsForTopic.get(p.topic());
             psTopic.add(p);
 
@@ -157,8 +157,8 @@ public final class Cluster {
      * Create an empty cluster instance with no nodes and no topic-partitions.
      */
     public static Cluster empty() {
-        return new Cluster(null, new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), null);
+        return new Cluster(null, new ArrayList<>(0), new ArrayList<>(0), Collections.emptySet(),
+            Collections.emptySet(), null);
     }
 
     /**
@@ -171,8 +171,8 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(null, true, nodes, new ArrayList<PartitionInfo>(0),
-                            Collections.<String>emptySet(), Collections.<String>emptySet(), Collections.<String>emptySet(), null);
+        return new Cluster(null, true, nodes, new ArrayList<>(0),
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
     }
 
     /**
@@ -231,7 +231,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
         List<PartitionInfo> parts = this.partitionsByTopic.get(topic);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**
@@ -251,7 +251,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
         List<PartitionInfo> parts = this.availablePartitionsByTopic.get(topic);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**
@@ -261,7 +261,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
         List<PartitionInfo> parts = this.partitionsByNode.get(nodeId);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**

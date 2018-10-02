@@ -116,7 +116,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -133,7 +133,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -147,7 +147,7 @@ public class MeteredSessionStoreTest {
         metered.remove(new Windowed<>(key, new SessionWindow(0, 0)));
 
         final KafkaMetric metric = metric("remove-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -164,7 +164,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -181,7 +181,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -189,7 +189,7 @@ public class MeteredSessionStoreTest {
     public void shouldRecordRestoreTimeOnInit() {
         init();
         final KafkaMetric metric = metric("restore-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
     }
 
     @Test(expected = NullPointerException.class)

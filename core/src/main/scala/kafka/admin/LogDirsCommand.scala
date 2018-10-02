@@ -27,6 +27,7 @@ import scala.collection.JavaConverters._
 import scala.collection.Map
 import kafka.utils.{CommandLineUtils, Json}
 import joptsimple._
+import org.apache.kafka.common.utils.Utils
 
 /**
   * A command for querying log directory usage on the specified brokers
@@ -83,9 +84,12 @@ object LogDirsCommand {
     }
 
     private def createAdminClient(opts: LogDirsCommandOptions): JAdminClient = {
-        val props = new Properties()
+        val props = if (opts.options.has(opts.commandConfigOpt))
+            Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+        else
+            new Properties()
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-        props.put(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
+        props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
         JAdminClient.create(props)
     }
 
@@ -94,6 +98,10 @@ object LogDirsCommand {
         val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping")
           .withRequiredArg
           .describedAs("The server(s) to use for bootstrapping")
+          .ofType(classOf[String])
+        val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
+          .withRequiredArg
+          .describedAs("Admin client property file")
           .ofType(classOf[String])
         val describeOpt = parser.accepts("describe", "Describe the specified log directories on the specified brokers.")
         val topicListOpt = parser.accepts("topic-list", "The list of topics to be queried in the form \"topic1,topic2,topic3\". " +

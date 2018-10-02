@@ -16,10 +16,6 @@
   */
 package kafka.api
 
-import java.util.Properties
-
-import kafka.utils.TestUtils
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
@@ -57,21 +53,13 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   @Test(timeout = 15000)
   def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce(tp)
-    val consumer1 = consumers.head
+    val consumer1 = createConsumer()
 
-    val consumer2Config = new Properties
-    consumer2Config ++= consumerConfig
     // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
-    consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
-    consumer2Config.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
+    consumerConfig.remove(SaslConfigs.SASL_JAAS_CONFIG)
+    consumerConfig.remove(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS)
 
-    val consumer2 = TestUtils.createConsumer(brokerList,
-                                                securityProtocol = securityProtocol,
-                                                trustStoreFile = trustStoreFile,
-                                                saslProperties = clientSaslProperties,
-                                                props = Some(consumer2Config))
-    consumers += consumer2
-
+    val consumer2 = createConsumer()
     consumer1.assign(List(tp).asJava)
     consumer2.assign(List(tp).asJava)
 

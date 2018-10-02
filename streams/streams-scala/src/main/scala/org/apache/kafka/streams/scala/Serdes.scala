@@ -25,17 +25,17 @@ import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer, S
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
 object Serdes {
-  implicit val String: Serde[String] = JSerdes.String()
-  implicit val Long: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]
-  implicit val JavaLong: Serde[java.lang.Long] = JSerdes.Long()
-  implicit val ByteArray: Serde[Array[Byte]] = JSerdes.ByteArray()
-  implicit val Bytes: Serde[org.apache.kafka.common.utils.Bytes] = JSerdes.Bytes()
-  implicit val Float: Serde[Float] = JSerdes.Float().asInstanceOf[Serde[Float]]
-  implicit val JavaFloat: Serde[java.lang.Float] = JSerdes.Float()
-  implicit val Double: Serde[Double] = JSerdes.Double().asInstanceOf[Serde[Double]]
-  implicit val JavaDouble: Serde[java.lang.Double] = JSerdes.Double()
-  implicit val Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
-  implicit val JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
+  implicit def String: Serde[String] = JSerdes.String()
+  implicit def Long: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]
+  implicit def JavaLong: Serde[java.lang.Long] = JSerdes.Long()
+  implicit def ByteArray: Serde[Array[Byte]] = JSerdes.ByteArray()
+  implicit def Bytes: Serde[org.apache.kafka.common.utils.Bytes] = JSerdes.Bytes()
+  implicit def Float: Serde[Float] = JSerdes.Float().asInstanceOf[Serde[Float]]
+  implicit def JavaFloat: Serde[java.lang.Float] = JSerdes.Float()
+  implicit def Double: Serde[Double] = JSerdes.Double().asInstanceOf[Serde[Double]]
+  implicit def JavaDouble: Serde[java.lang.Double] = JSerdes.Double()
+  implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
+  implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
 
   implicit def timeWindowedSerde[T]: WindowedSerdes.TimeWindowedSerde[T] = new WindowedSerdes.TimeWindowedSerde[T]()
   implicit def sessionWindowedSerde[T]: WindowedSerdes.SessionWindowedSerde[T] =

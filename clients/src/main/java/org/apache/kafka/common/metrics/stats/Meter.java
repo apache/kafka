@@ -61,6 +61,9 @@ public class Meter implements CompoundStat {
      * Construct a Meter with provided time unit and provided {@link SampledStat} stats for Rate
      */
     public Meter(TimeUnit unit, SampledStat rateStat, MetricName rateMetricName, MetricName totalMetricName) {
+        if (!(rateStat instanceof SampledTotal) && !(rateStat instanceof Count)) {
+            throw new IllegalArgumentException("Meter is supported only for SampledTotal and Count");
+        }
         this.total = new Total();
         this.rate = new Rate(unit, rateStat);
         this.rateMetricName = rateMetricName;
@@ -77,6 +80,8 @@ public class Meter implements CompoundStat {
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
         rate.record(config, value, timeMs);
-        total.record(config, value, timeMs);
+        // Total metrics with Count stat should record 1.0 (as recorded in the count)
+        double totalValue = (rate.stat instanceof Count) ? 1.0 : value;
+        total.record(config, totalValue, timeMs);
     }
 }

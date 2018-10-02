@@ -28,19 +28,29 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
  */
 public class ProcessorParameters<K, V> {
 
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ProcessorSupplier<? super K, ? super V> processorSupplier;
     private final String processorName;
 
-    public ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
+    public ProcessorParameters(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+                               final String processorName) {
+
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }
 
-    public ProcessorSupplier<K, V> processorSupplier() {
+    public ProcessorSupplier<? super K, ? super V> processorSupplier() {
         return processorSupplier;
     }
 
     public String processorName() {
         return processorName;
+    }
+
+    @Override
+    public String toString() {
+        return "ProcessorParameters{" +
+               "processor class=" + processorSupplier.get().getClass() +
+               ", processor name='" + processorName + '\'' +
+               '}';
     }
 }

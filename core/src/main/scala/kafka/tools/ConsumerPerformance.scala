@@ -28,8 +28,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import kafka.utils.{CommandLineUtils, ToolsUtils}
 import java.util.{Collections, Properties, Random}
-
 import java.text.SimpleDateFormat
+import java.time.Duration
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -127,7 +127,7 @@ object ConsumerPerformance extends LazyLogging {
     var currentTimeMillis = lastConsumedTime
 
     while (messagesRead < count && currentTimeMillis - lastConsumedTime <= timeout) {
-      val records = consumer.poll(100).asScala
+      val records = consumer.poll(Duration.ofMillis(100)).asScala
       currentTimeMillis = System.currentTimeMillis
       if (records.nonEmpty)
         lastConsumedTime = currentTimeMillis

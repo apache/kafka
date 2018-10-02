@@ -212,17 +212,17 @@ public class SimpleBenchmark {
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 5) {
             System.err.println("Not enough parameters are provided; expecting propFileName, testName, numRecords, keySkew, valueSize");
             System.exit(1);
         }
 
-        String propFileName = args[0];
-        String testName = args[1].toLowerCase(Locale.ROOT);
-        int numRecords = Integer.parseInt(args[2]);
-        double keySkew = Double.parseDouble(args[3]); // 0d means even distribution
-        int valueSize = Integer.parseInt(args[4]);
+        final String propFileName = args[0];
+        final String testName = args[1].toLowerCase(Locale.ROOT);
+        final int numRecords = Integer.parseInt(args[2]);
+        final double keySkew = Double.parseDouble(args[3]); // 0d means even distribution
+        final int valueSize = Integer.parseInt(args[4]);
 
         final Properties props = Utils.loadProps(propFileName);
         final String kafka = props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
@@ -262,13 +262,10 @@ public class SimpleBenchmark {
         // improve producer throughput
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 128 * 1024);
-
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
     }
 
     private Properties setProduceConsumeProperties(final String clientId) {
-        Properties clientProps = new Properties();
+        final Properties clientProps = new Properties();
         clientProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
         clientProps.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         // the socket buffer needs to be large, especially when running in AWS with
@@ -608,7 +605,7 @@ public class SimpleBenchmark {
      * Measure the performance of a KTable-KTable left join. The setup is such that each
      * KTable record joins to exactly one element in the other KTable
      */
-    private void tableTableJoin(String kTableTopic1, String kTableTopic2) {
+    private void tableTableJoin(final String kTableTopic1, final String kTableTopic2) {
         final CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
@@ -677,7 +674,7 @@ public class SimpleBenchmark {
         final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
-            public void uncaughtException(Thread t, Throwable e) {
+            public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
 
                 streamsClient.close(30, TimeUnit.SECONDS);
@@ -687,19 +684,19 @@ public class SimpleBenchmark {
         return streamsClient;
     }
     
-    private double megabytesPerSec(long time, long processedBytes) {
+    private double megabytesPerSec(final long time, final long processedBytes) {
         return  (processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
     }
 
-    private double recordsPerSec(long time, int numRecords) {
+    private double recordsPerSec(final long time, final int numRecords) {
         return numRecords / (time / 1000.0);
     }
 
-    private List<TopicPartition> getAllPartitions(KafkaConsumer<?, ?> consumer, String... topics) {
-        ArrayList<TopicPartition> partitions = new ArrayList<>();
+    private List<TopicPartition> getAllPartitions(final KafkaConsumer<?, ?> consumer, final String... topics) {
+        final ArrayList<TopicPartition> partitions = new ArrayList<>();
 
-        for (String topic : topics) {
-            for (PartitionInfo info : consumer.partitionsFor(topic)) {
+        for (final String topic : topics) {
+            for (final PartitionInfo info : consumer.partitionsFor(topic)) {
                 partitions.add(new TopicPartition(info.topic(), info.partition()));
             }
         }

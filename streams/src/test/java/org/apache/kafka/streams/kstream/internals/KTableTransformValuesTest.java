@@ -413,7 +413,7 @@ public class KTableTransformValuesTest {
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
         return new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
             @Override
-            public KeyValue<String, Integer> apply(String key, Integer value) {
+            public KeyValue<String, Integer> apply(final String key, final Integer value) {
                 return new KeyValue<>(key, value);
             }
         };
@@ -422,7 +422,7 @@ public class KTableTransformValuesTest {
     private static ValueMapper<Integer, String> mapBackToStrings() {
         return new ValueMapper<Integer, String>() {
             @Override
-            public String apply(Integer value) {
+            public String apply(final Integer value) {
                 return value.toString();
             }
         };
