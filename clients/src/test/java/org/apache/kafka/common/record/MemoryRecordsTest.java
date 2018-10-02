@@ -246,63 +246,78 @@ public class MemoryRecordsTest {
     public void testFilterToEmptyBatchRetention() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             for (boolean isTransactional : Arrays.asList(true, false)) {
-                ByteBuffer buffer = ByteBuffer.allocate(2048);
-                long producerId = 23L;
-                short producerEpoch = 5;
-                long baseOffset = 3L;
-                int baseSequence = 10;
-                int partitionLeaderEpoch = 293;
-                int numRecords = 2;
+                for (boolean isControlBatch : Arrays.asList(true, false)) {
+                    if (!isTransactional && isControlBatch) {
+                        continue;
+                    }
 
-                MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
-                        baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
-                        partitionLeaderEpoch);
-                builder.append(11L, "2".getBytes(), "b".getBytes());
-                builder.append(12L, "3".getBytes(), "c".getBytes());
-                builder.close();
-                MemoryRecords records = builder.build();
+                    ByteBuffer buffer = ByteBuffer.allocate(2048);
+                    long producerId = 23L;
+                    short producerEpoch = 5;
+                    long baseOffset = 3L;
+                    int baseSequence = 10;
+                    int partitionLeaderEpoch = 293;
+                    int numRecords;
 
-                ByteBuffer filtered = ByteBuffer.allocate(2048);
-                MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
-                        new MemoryRecords.RecordFilter() {
-                            @Override
-                            protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                                // retain all batches
-                                return BatchRetention.RETAIN_EMPTY;
-                            }
+                    MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                            baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
+                            isControlBatch, partitionLeaderEpoch);
+                    if (isControlBatch) {
+                        EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, 0);
+                        builder.appendEndTxnMarker(12L, marker);
+                        numRecords = 1;
+                    } else {
+                        builder.append(11L, "2".getBytes(), "b".getBytes());
+                        builder.append(12L, "3".getBytes(), "c".getBytes());
+                        numRecords = 2;
+                    }
+                    builder.close();
+                    MemoryRecords records = builder.build();
 
-                            @Override
-                            protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
-                                // delete the records
-                                return false;
-                            }
-                        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                    ByteBuffer filtered = ByteBuffer.allocate(2048);
+                    MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+                            new MemoryRecords.RecordFilter() {
+                                @Override
+                                protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                                    // retain all batches
+                                    return BatchRetention.RETAIN_EMPTY;
+                                }
 
-                // Verify filter result
-                assertEquals(numRecords, filterResult.messagesRead());
-                assertEquals(records.sizeInBytes(), filterResult.bytesRead());
-                assertEquals(baseOffset + 1, filterResult.maxOffset());
-                assertEquals(0, filterResult.messagesRetained());
-                assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
-                assertEquals(12, filterResult.maxTimestamp());
-                assertEquals(baseOffset + 1, filterResult.shallowOffsetOfMaxTimestamp());
+                                @Override
+                                protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                                    // delete the records
+                                    return false;
+                                }
+                            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
-                // Verify filtered records
-                filtered.flip();
-                MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+                    // Verify filter result
+                    long expectedOffset = isControlBatch ? baseOffset : baseOffset + 1;
+                    assertEquals(numRecords, filterResult.messagesRead());
+                    assertEquals(records.sizeInBytes(), filterResult.bytesRead());
+                    assertEquals(expectedOffset, filterResult.maxOffset());
+                    assertEquals(0, filterResult.messagesRetained());
+                    assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
+                    assertEquals(12, filterResult.maxTimestamp());
+                    assertEquals(expectedOffset, filterResult.shallowOffsetOfMaxTimestamp());
 
-                List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-                assertEquals(1, batches.size());
+                    // Verify filtered records
+                    filtered.flip();
+                    MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-                MutableRecordBatch batch = batches.get(0);
-                assertEquals(0, batch.countOrNull().intValue());
-                assertEquals(12L, batch.maxTimestamp());
-                assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                assertEquals(baseOffset, batch.baseOffset());
-                assertEquals(baseOffset + 1, batch.lastOffset());
-                assertEquals(baseSequence, batch.baseSequence());
-                assertEquals(baseSequence + 1, batch.lastSequence());
-                assertEquals(isTransactional, batch.isTransactional());
+                    List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+                    assertEquals(1, batches.size());
+
+                    MutableRecordBatch batch = batches.get(0);
+                    assertEquals(0, batch.countOrNull().intValue());
+                    assertEquals(12L, batch.maxTimestamp());
+                    assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
+                    assertEquals(baseOffset, batch.baseOffset());
+                    assertEquals(expectedOffset, batch.lastOffset());
+                    assertEquals(baseSequence, batch.baseSequence());
+                    assertEquals(isControlBatch ? baseSequence : baseSequence + 1, batch.lastSequence());
+                    assertEquals(isTransactional, batch.isTransactional());
+                    assertFalse(batch.isControlBatch());
+                }
             }
         }
     }

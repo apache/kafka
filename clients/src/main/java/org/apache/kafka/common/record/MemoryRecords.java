@@ -222,7 +222,7 @@ public class MemoryRecords extends AbstractRecords {
                 DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), batchMagic, batch.producerId(),
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
-                        batch.isTransactional(), batch.isControlBatch());
+                        batch.isTransactional(), false);
                 filterResult.updateRetainedBatchMetadata(batch, 0, true);
             }
 
