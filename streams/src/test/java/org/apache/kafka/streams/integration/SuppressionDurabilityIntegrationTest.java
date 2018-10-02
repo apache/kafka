@@ -169,7 +169,7 @@ public class SuppressionDurabilityIntegrationTest {
                 )
             );
 
-            // bounce to ensure the and the history, including retractions,
+            // bounce to ensure that the history, including retractions,
             // get restored properly. (i.e., we shouldn't see those first events again)
 
             // restart the driver
