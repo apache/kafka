@@ -378,6 +378,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     props
   }
 
+  /**
+   * Validate the provided configs `propsOverride` and return the full Kafka configs with
+   * the configured defaults and these overrides.
+   *
+   * Note: The caller must acquire the read or write lock before invoking this method.
+   */
   private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
     validateConfigs(propsOverride, perBrokerConfig)
     val newProps = mutable.Map[String, String]()
