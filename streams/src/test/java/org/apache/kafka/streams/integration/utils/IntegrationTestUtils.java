@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.api.Request;
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -23,15 +26,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -61,17 +62,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-
-import kafka.api.Request;
-import kafka.server.KafkaServer;
-import kafka.server.MetadataCache;
-import scala.Option;
-
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -239,18 +229,10 @@ public class IntegrationTestUtils {
         }
     }
 
-    public static <K, V> void produceSynchronously(final String broker,
-                                                   final String topic,
-                                                   final Serializer<K> keySerializer,
-                                                   final Serializer<V> valueSerializer,
-                                                   final boolean eos,
-                                                   final List<KeyValueTimestamp<K, V>> toProduce) {
-        final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName()),
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, broker)
-        ));
+    public static <V, K> void produceSynchronously(final Properties producerConfig,
+                                                    final boolean eos,
+                                                    final String topic,
+                                                    final List<KeyValueTimestamp<K, V>> toProduce) {
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             // TODO: test EOS
             //noinspection ConstantConditions
@@ -552,22 +534,13 @@ public class IntegrationTestUtils {
 
     }
 
-    public static <K, V> void verifyOutput(final String broker,
-                                           final String topic,
-                                           final Deserializer<K> keyDeserializer,
-                                           final Deserializer<V> valueDeserializer,
-                                           final List<KeyValueTimestamp<String, Long>> expected) {
+    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
+                                                final String topic,
+                                                final List<KeyValueTimestamp<String, Long>> expected) {
+
         final List<ConsumerRecord<String, Long>> results;
         try {
-            final Properties properties = mkProperties(
-                mkMap(
-                    mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
-                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName()),
-                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName())
-                )
-            );
-            results = IntegrationTestUtils.waitUntilMinRecordsReceived(properties, topic, expected.size());
+            results = IntegrationTestUtils.waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -662,29 +635,11 @@ public class IntegrationTestUtils {
         return consumedValues;
     }
 
-    public static KafkaStreams getCleanStartedStreams(final String broker, final String appId, final boolean eosEnabled, final StreamsBuilder builder) {
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
-        ));
+    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
         final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
-        driver.cleanUp();
-        driver.start();
-        return driver;
-    }
-
-    public static KafkaStreams getStartedStreams(final String broker, final String appId, final boolean eosEnabled, final StreamsBuilder builder) {
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
-        ));
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
         driver.start();
         return driver;
     }

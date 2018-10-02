@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -26,6 +30,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -46,14 +51,18 @@ import org.junit.experimental.categories.Category;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getCleanStartedStreams;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
@@ -72,7 +81,6 @@ public class SuppressionIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int COMMIT_INTERVAL = 100;
-    private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
     private static final long TIMEOUT_MS = 30_000L;
 
     @Test
@@ -97,7 +105,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
 
         try {
             produceSynchronously(
@@ -168,7 +177,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
 
         try {
             produceSynchronously(
@@ -228,7 +238,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
                 input,
@@ -286,7 +297,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
                 input,
@@ -327,7 +339,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
                 input,
@@ -386,7 +399,8 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
                 input,
@@ -434,7 +448,8 @@ public class SuppressionIntegrationTest {
             .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(input, asList(
                 new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
@@ -470,16 +485,36 @@ public class SuppressionIntegrationTest {
         }
     }
 
+    private Properties getStreamsConfig(final String appId) {
+        return mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE)
+        ));
+    }
+
     private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
         return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
     }
 
+    /**
+     * scaling to ensure that there are commits in between the various test events,
+     * just to exercise that everything works properly in the presence of commits.
+     */
     private long scaledTime(final long unscaledTime) {
-        return SCALE_FACTOR * unscaledTime;
+        return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
-        IntegrationTestUtils.produceSynchronously(CLUSTER.bootstrapServers(), topic, STRING_SERIALIZER, STRING_SERIALIZER, false, toProduce);
+        final Properties producerConfig = mkProperties(mkMap(
+            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
+            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+        IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, toProduce);
     }
 
     private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
@@ -488,13 +523,15 @@ public class SuppressionIntegrationTest {
     }
 
     private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
-        IntegrationTestUtils.verifyOutput(
-            CLUSTER.bootstrapServers(),
-            topic,
-            STRING_DESERIALIZER,
-            LONG_DESERIALIZER,
-            keyValueTimestamps
+        final Properties properties = mkProperties(
+            mkMap(
+                mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
+                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
+                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
+            )
         );
+        IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
 
     }
 }

@@ -73,12 +73,12 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
         @Override
         public StoreBuilder<StateStore> withCachingEnabled() {
-            return this;
+            throw new UnsupportedOperationException();
         }
 
         @Override
         public StoreBuilder<StateStore> withCachingDisabled() {
-            return this;
+            throw new UnsupportedOperationException();
         }
 
         @Override
