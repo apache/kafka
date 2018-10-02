@@ -17,19 +17,16 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Windowed;
 
-@Deprecated
-public class SerializedInternal<K, V> extends Serialized<K, V> {
-    public SerializedInternal(final Serialized<K, V> serialized) {
-        super(serialized);
-    }
-
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
+class FullTimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    FullTimeWindowedSerde(final Serde<T> inner, final long windowSize) {
+        super(
+            new TimeWindowedSerializer<>(inner.serializer()),
+            new TimeWindowedDeserializer<>(inner.deserializer(), windowSize)
+        );
     }
 }

@@ -24,7 +24,7 @@ public class WindowedSerdes {
     static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
-            super(new TimeWindowedSerializer<T>(), new TimeWindowedDeserializer<T>());
+            super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
         }
 
         public TimeWindowedSerde(final Serde<T> inner) {
@@ -35,7 +35,7 @@ public class WindowedSerdes {
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
-            super(new SessionWindowedSerializer<T>(), new SessionWindowedDeserializer<T>());
+            super(new SessionWindowedSerializer<>(), new SessionWindowedDeserializer<>());
         }
 
         public SessionWindowedSerde(final Serde<T> inner) {

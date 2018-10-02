@@ -17,32 +17,32 @@
 package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
 
 import java.time.Duration;
 import java.util.Objects;
 
-public class SuppressedImpl<K> implements Suppressed<K> {
+public class SuppressedInternal<K> implements Suppressed<K> {
     private static final Duration DEFAULT_SUPPRESSION_TIME = Duration.ofMillis(Long.MAX_VALUE);
-    private static final StrictBufferConfig DEFAULT_BUFFER_CONFIG = BufferConfig.unbounded();
+    private static final StrictBufferConfigImpl DEFAULT_BUFFER_CONFIG = (StrictBufferConfigImpl) BufferConfig.unbounded();
 
-    private final BufferConfig bufferConfig;
+    private final BufferConfigInternal bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
     private final boolean suppressTombstones;
 
-    public SuppressedImpl(final Duration suppressionTime,
-                          final BufferConfig bufferConfig,
-                          final TimeDefinition<K> timeDefinition,
-                          final boolean suppressTombstones) {
+    public SuppressedInternal(final Duration suppressionTime,
+                              final BufferConfig bufferConfig,
+                              final TimeDefinition<K> timeDefinition,
+                              final boolean suppressTombstones) {
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
-        this.timeDefinition = timeDefinition == null ? (context, anyKey) -> context.timestamp() : timeDefinition;
-        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : bufferConfig;
+        this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefintion.instance() : timeDefinition;
+        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
         this.suppressTombstones = suppressTombstones;
     }
 
-    interface TimeDefinition<K> {
-        long time(final ProcessorContext context, final K key);
+    BufferConfigInternal getBufferConfig() {
+        return bufferConfig;
     }
 
     TimeDefinition<K> getTimeDefinition() {
@@ -53,11 +53,15 @@ public class SuppressedImpl<K> implements Suppressed<K> {
         return timeToWaitForMoreEvents == null ? Duration.ZERO : timeToWaitForMoreEvents;
     }
 
+    boolean shouldSuppressTombstones() {
+        return suppressTombstones;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        final SuppressedImpl<?> that = (SuppressedImpl<?>) o;
+        final SuppressedInternal<?> that = (SuppressedInternal<?>) o;
         return Objects.equals(bufferConfig, that.bufferConfig) &&
             Objects.equals(getTimeToWaitForMoreEvents(), that.getTimeToWaitForMoreEvents()) &&
             Objects.equals(getTimeDefinition(), that.getTimeDefinition());
@@ -70,14 +74,10 @@ public class SuppressedImpl<K> implements Suppressed<K> {
 
     @Override
     public String toString() {
-        return "SuppressedImpl{" +
+        return "SuppressedInternal{" +
             ", bufferConfig=" + bufferConfig +
             ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
             ", timeDefinition=" + timeDefinition +
             '}';
-    }
-
-    boolean suppressTombstones() {
-        return suppressTombstones;
     }
 }

@@ -49,7 +49,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -75,6 +74,9 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public class SuppressionIntegrationTest {
@@ -88,7 +90,6 @@ public class SuppressionIntegrationTest {
     private static final int SCALE_FACTOR = COMMIT_INTERVAL * 2;
     private static final long TIMEOUT_MS = 30_000L;
 
-    @Ignore
     @Test
     public void shouldSuppressIntermediateEventsWithEmitAfter() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithEmitAfter";
@@ -220,10 +221,9 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldSuppressIntermediateEventsWithRecordLimit() throws InterruptedException {
-        final String testId = "-shouldSuppressIntermediateEventsWithKeyLimit";
+        final String testId = "-shouldSuppressIntermediateEventsWithRecordLimit";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -279,7 +279,46 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
+    @Test
+    public void shouldShutdownWhenRecordConstraintIsViolated() throws InterruptedException {
+        final String testId = "-shouldShutdownWhenRecordConstraintIsViolated";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).shutDownWhenFull()))
+            .toStream()
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            verifyErrorShutdown(driver);
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
     @Test
     public void shouldSuppressIntermediateEventsWithBytesLimit() throws InterruptedException {
         final String testId = "-shouldSuppressIntermediateEventsWithBytesLimit";
@@ -339,7 +378,47 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    @Ignore
+    @Test
+    public void shouldShutdownWhenBytesConstraintIsViolated() throws InterruptedException {
+        final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
+            .suppress(untilTimeLimit(Duration.ofMillis(MAX_VALUE), maxBytes(200L).shutDownWhenFull()))
+            .toStream()
+            .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            verifyErrorShutdown(driver);
+        } finally {
+            driver.close();
+            cleanStateAfterTest(driver);
+        }
+    }
+
     @Test
     public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
         final String testId = "-shouldSupportFinalResultsForTimeWindows";
@@ -477,6 +556,11 @@ public class SuppressionIntegrationTest {
                 }
             }
         }
+    }
+
+    private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
+        waitForCondition(() -> !driver.state().isRunning(), TIMEOUT_MS, "Streams didn't shut down.");
+        assertThat(driver.state(), is(KafkaStreams.State.ERROR));
     }
 
     private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> expected) {

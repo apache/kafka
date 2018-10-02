@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Grouped;
 
-@Deprecated
-public class SerializedInternal<K, V> extends Serialized<K, V> {
-    public SerializedInternal(final Serialized<K, V> serialized) {
-        super(serialized);
+public class GroupedInternal<K, V> extends Grouped<K, V> {
+
+    GroupedInternal(final Grouped<K, V> grouped) {
+        super(grouped);
     }
 
     public Serde<K> keySerde() {
@@ -31,5 +32,9 @@ public class SerializedInternal<K, V> extends Serialized<K, V> {
 
     public Serde<V> valueSerde() {
         return valueSerde;
+    }
+
+    public String name() {
+        return name;
     }
 }

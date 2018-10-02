@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.suppress;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.internals.ContextualRecord;
 
-@Deprecated
-public class SerializedInternal<K, V> extends Serialized<K, V> {
-    public SerializedInternal(final Serialized<K, V> serialized) {
-        super(serialized);
-    }
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
+interface TimeOrderedKeyValueBuffer {
+    void evictWhile(final Supplier<Boolean> predicate, final Consumer<KeyValue<Bytes, ContextualRecord>> callback);
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
+    void put(final long time, final Bytes key, final ContextualRecord value);
+
+    int numRecords();
+
+    long bufferSize();
+
+    long minTimestamp();
 }

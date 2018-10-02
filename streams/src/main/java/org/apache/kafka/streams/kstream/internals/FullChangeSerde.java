@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.ByteBufferDeserializer;
-import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -29,6 +27,17 @@ import static java.util.Objects.requireNonNull;
 
 public class FullChangeSerde<T> implements Serde<Change<T>> {
     private final Serde<T> inner;
+
+    @SuppressWarnings("unchecked")
+    public static <T> FullChangeSerde<T> castOrWrap(final Serde<?> serde) {
+        if (serde == null) {
+            return null;
+        } else if (serde instanceof FullChangeSerde) {
+            return (FullChangeSerde<T>) serde;
+        } else {
+            return new FullChangeSerde<T>((Serde<T>) serde);
+        }
+    }
 
     public FullChangeSerde(final Serde<T> inner) {
         this.inner = requireNonNull(inner);
@@ -47,7 +56,6 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
     @Override
     public Serializer<Change<T>> serializer() {
         final Serializer<T> innerSerializer = inner.serializer();
-        final ByteBufferSerializer byteBufferSerializer = new ByteBufferSerializer();
 
         return new Serializer<Change<T>>() {
             @Override
@@ -65,8 +73,8 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, data.newValue);
                 final int newSize = newBytes == null ? -1 : newBytes.length;
 
-                final ByteBuffer buffer = ByteBuffer.allocate(
-                    4 + (oldSize == -1 ? 0 : oldSize) + 4 + (newSize == -1 ? 0 : newSize)
+                final ByteBuffer buffer = ByteBuffer.wrap(
+                    new byte[4 + (oldSize == -1 ? 0 : oldSize) + 4 + (newSize == -1 ? 0 : newSize)]
                 );
                 buffer.putInt(oldSize);
                 if (oldBytes != null) {
@@ -76,7 +84,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 if (newBytes != null) {
                     buffer.put(newBytes);
                 }
-                return byteBufferSerializer.serialize(null, buffer);
+                return buffer.array();
             }
 
             @Override
@@ -89,7 +97,6 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
     @Override
     public Deserializer<Change<T>> deserializer() {
         final Deserializer<T> innerDeserializer = inner.deserializer();
-        final ByteBufferDeserializer byteBufferDeserializer = new ByteBufferDeserializer();
         return new Deserializer<Change<T>>() {
             @Override
             public void configure(final Map<String, ?> configs, final boolean isKey) {
@@ -101,7 +108,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 if (data == null) {
                     return null;
                 }
-                final ByteBuffer buffer = byteBufferDeserializer.deserialize(null, data);
+                final ByteBuffer buffer = ByteBuffer.wrap(data);
 
                 final int oldSize = buffer.getInt();
                 final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
