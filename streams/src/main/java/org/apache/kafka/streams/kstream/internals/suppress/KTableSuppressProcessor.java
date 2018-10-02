@@ -28,8 +28,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.internals.ContextualRecord;
-import org.apache.kafka.streams.state.internals.buffer.InMemoryTimeOrderedKeyValueBufferStore;
-import org.apache.kafka.streams.state.internals.buffer.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import java.util.Objects;
 
@@ -71,7 +70,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         internalProcessorContext = (InternalProcessorContext) context;
         keySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
         valueSerde = valueSerde == null ? FullChangeSerde.castOrWrap(context.valueSerde()) : valueSerde;
-        buffer = Objects.requireNonNull((InMemoryTimeOrderedKeyValueBufferStore) context.getStateStore(storeName)).getBuffer();
+        buffer = Objects.requireNonNull((TimeOrderedKeyValueBuffer) context.getStateStore(storeName));
     }
 
     @Override

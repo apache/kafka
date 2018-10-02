@@ -26,14 +26,13 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -47,16 +46,14 @@ import org.junit.experimental.categories.Category;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
-import java.util.Properties;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getCleanStartedStreams;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
@@ -79,14 +76,14 @@ public class SuppressionIntegrationTest {
     private static final long TIMEOUT_MS = 30_000L;
 
     @Test
-    public void shouldSuppressIntermediateEventsWithEmitAfter() throws InterruptedException {
+    public void shouldSuppressIntermediateEventsWithEmitAfter() {
         final String testId = "-shouldSuppressIntermediateEventsWithEmitAfter";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputSuppressed, outputRaw);
+        cleanStateBeforeTest(CLUSTER, input, outputSuppressed, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -100,7 +97,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
 
         try {
             produceSynchronously(
@@ -132,7 +129,7 @@ public class SuppressionIntegrationTest {
             );
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -145,19 +142,19 @@ public class SuppressionIntegrationTest {
                     .withCachingDisabled()
                     .withLoggingDisabled()
             )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
     }
 
     @Test
-    public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() throws InterruptedException {
+    public void shouldNotSuppressIntermediateEventsWithZeroEmitAfter() {
         final String testId = "-shouldNotSuppressIntermediateEventsWithZeroEmitAfter";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputSuppressed, outputRaw);
+        cleanStateBeforeTest(CLUSTER, input, outputSuppressed, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -171,7 +168,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
 
         try {
             produceSynchronously(
@@ -205,19 +202,19 @@ public class SuppressionIntegrationTest {
             );
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
     @Test
-    public void shouldSuppressIntermediateEventsWithRecordLimit() throws InterruptedException {
+    public void shouldSuppressIntermediateEventsWithRecordLimit() {
         final String testId = "-shouldSuppressIntermediateEventsWithRecordLimit";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -231,7 +228,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
         try {
             produceSynchronously(
                 input,
@@ -263,7 +260,7 @@ public class SuppressionIntegrationTest {
             );
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -275,7 +272,7 @@ public class SuppressionIntegrationTest {
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -289,7 +286,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
         try {
             produceSynchronously(
                 input,
@@ -303,19 +300,19 @@ public class SuppressionIntegrationTest {
             verifyErrorShutdown(driver);
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
     @Test
-    public void shouldSuppressIntermediateEventsWithBytesLimit() throws InterruptedException {
+    public void shouldSuppressIntermediateEventsWithBytesLimit() {
         final String testId = "-shouldSuppressIntermediateEventsWithBytesLimit";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -330,7 +327,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
         try {
             produceSynchronously(
                 input,
@@ -362,7 +359,7 @@ public class SuppressionIntegrationTest {
             );
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -374,7 +371,7 @@ public class SuppressionIntegrationTest {
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -389,7 +386,7 @@ public class SuppressionIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
         try {
             produceSynchronously(
                 input,
@@ -403,26 +400,26 @@ public class SuppressionIntegrationTest {
             verifyErrorShutdown(driver);
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
     @Test
-    public void shouldSupportFinalResultsForTimeWindows() throws InterruptedException {
+    public void shouldSupportFinalResultsForTimeWindows() {
         final String testId = "-shouldSupportFinalResultsForTimeWindows";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream(input,
                     Consumed.with(STRING_SERDE, STRING_SERDE)
             )
-            .groupBy((String k1, String v1) -> k1, Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((String k1, String v1) -> k1, Grouped.with(STRING_SERDE, STRING_SERDE))
             .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 
@@ -437,7 +434,7 @@ public class SuppressionIntegrationTest {
             .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        final KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, false, builder);
         try {
             produceSynchronously(input, asList(
                 new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
@@ -469,37 +466,12 @@ public class SuppressionIntegrationTest {
             );
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
     private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
         return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
-    }
-
-    private void cleanStateBeforeTest(final String... topics) throws InterruptedException {
-        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
-        for (final String topic : topics) {
-            CLUSTER.createTopic(topic, 1, 1);
-        }
-    }
-
-    private KafkaStreams getCleanStartedStreams(final String appId, final StreamsBuilder builder) {
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL))
-        ));
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
-        driver.cleanUp();
-        driver.start();
-        return driver;
-    }
-
-    private void cleanStateAfterTest(final KafkaStreams driver) throws InterruptedException {
-        driver.cleanUp();
-        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
     }
 
     private long scaledTime(final long unscaledTime) {

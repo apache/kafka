@@ -44,7 +44,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.buffer.InMemoryTimeOrderedKeyValueBufferStore;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -373,7 +373,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
             null,
-            new InMemoryTimeOrderedKeyValueBufferStore.Builder(storeName),
+            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName),
             false
         );
 

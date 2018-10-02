@@ -26,7 +26,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -48,18 +47,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getCleanStartedStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.CoreMatchers.is;
@@ -109,7 +105,7 @@ public class SuppressionDurabilityIntegrationTest {
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(input, outputRaw, outputSuppressed);
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
@@ -128,7 +124,7 @@ public class SuppressionDurabilityIntegrationTest {
             .toStream()
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        KafkaStreams driver = getCleanStartedStreams(appId, builder);
+        KafkaStreams driver = getCleanStartedStreams(CLUSTER.bootstrapServers(), appId, eosEnabled, builder);
         try {
             // start by putting some stuff in the buffer
             produceSynchronously(
@@ -179,7 +175,7 @@ public class SuppressionDurabilityIntegrationTest {
             // restart the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            driver = getStartedStreams(appId, builder);
+            driver = getStartedStreams(CLUSTER.bootstrapServers(), appId, eosEnabled, builder);
 
 
             // flush those recovered buffered events out.
@@ -211,7 +207,7 @@ public class SuppressionDurabilityIntegrationTest {
 
         } finally {
             driver.close();
-            cleanStateAfterTest(driver);
+            cleanStateAfterTest(CLUSTER, driver);
         }
     }
 
@@ -224,45 +220,6 @@ public class SuppressionDurabilityIntegrationTest {
             keyValueTimestamps
         );
 
-    }
-
-    private void cleanStateBeforeTest(final String... topics) throws InterruptedException {
-        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
-        for (final String topic : topics) {
-            CLUSTER.createTopic(topic, 1, 1);
-        }
-    }
-
-    private void cleanStateAfterTest(final KafkaStreams driver) throws InterruptedException {
-        driver.cleanUp();
-        CLUSTER.deleteAllTopicsAndWait(TIMEOUT_MS);
-    }
-
-    private KafkaStreams getCleanStartedStreams(final String appId, final StreamsBuilder builder) {
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
-        ));
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
-        driver.cleanUp();
-        driver.start();
-        return driver;
-    }
-
-    private KafkaStreams getStartedStreams(final String appId, final StreamsBuilder builder) {
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
-        ));
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
-        driver.start();
-        return driver;
     }
 
     private long scaledTime(final long unscaledTime) {

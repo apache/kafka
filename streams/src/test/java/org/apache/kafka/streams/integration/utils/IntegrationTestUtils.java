@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
@@ -69,6 +70,8 @@ import scala.Option;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -76,6 +79,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
+    private static final long DEFAULT_COMMIT_INTERVAL = 100L;
     public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /*
@@ -120,6 +124,26 @@ public class IntegrationTestUtils {
             if (node.getAbsolutePath().startsWith(tmpDir)) {
                 Utils.delete(new File(node.getAbsolutePath()));
             }
+        }
+    }
+
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final String... topics) {
+        try {
+            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            for (final String topic : topics) {
+                cluster.createTopic(topic, 1, 1);
+            }
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void cleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
+        driver.cleanUp();
+        try {
+            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -636,6 +660,33 @@ public class IntegrationTestUtils {
             consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);
         }
         return consumedValues;
+    }
+
+    public static KafkaStreams getCleanStartedStreams(final String broker, final String appId, final boolean eosEnabled, final StreamsBuilder builder) {
+        final Properties streamsConfig = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
+        ));
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        driver.cleanUp();
+        driver.start();
+        return driver;
+    }
+
+    public static KafkaStreams getStartedStreams(final String broker, final String appId, final boolean eosEnabled, final StreamsBuilder builder) {
+        final Properties streamsConfig = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+            mkEntry(StreamsConfig.POLL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Objects.toString(DEFAULT_COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE)
+        ));
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        driver.start();
+        return driver;
     }
 
     /**
