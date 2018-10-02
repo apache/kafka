@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -45,17 +44,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
     KGroupedStreamImpl(final String name,
-                       final Serde<K> keySerde,
-                       final Serde<V> valSerde,
                        final Set<String> sourceNodes,
+                       final GroupedInternal<K, V> groupedInternal,
                        final boolean repartitionRequired,
                        final StreamsGraphNode streamsGraphNode,
                        final InternalStreamsBuilder builder) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
-            keySerde,
-            valSerde,
+            groupedInternal,
             repartitionRequired,
             sourceNodes,
             name,
@@ -165,7 +162,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             name,
             keySerde,
             valSerde,
-            repartitionRequired,
+            aggregateBuilder,
             streamsGraphNode
         );
     }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -565,11 +566,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V1> joinOther = (KStreamImpl<K, V1>) other;
 
         if (joinThis.repartitionRequired) {
-            joinThis = joinThis.repartitionForJoin(joined);
+            final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : joinThis.name;
+
+            joinThis = joinThis.repartitionForJoin(Joined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde(), leftJoinRepartitionTopicName));
         }
 
         if (joinOther.repartitionRequired) {
-            joinOther = joinOther.repartitionForJoin(Joined.with(joined.keySerde(), joined.otherValueSerde(), joined.valueSerde()));
+            final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : joinOther.name;
+            final Joined newJoined = Joined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde(), rightJoinRepartitionTopicName);
+            joinOther = joinOther.repartitionForJoin(newJoined);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -597,8 +602,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String repartitionedSourceName = createRepartitionedSource(builder,
                                                                          repartitionKeySerde,
                                                                          repartitionValueSerde,
-                                                                         null,
-                                                                         name,
+                                                                         joined.name(),
                                                                          optimizableRepartitionNodeBuilder);
 
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
@@ -610,12 +614,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
                                                      final Serde<K1> keySerde,
                                                      final Serde<V1> valSerde,
-                                                     final String topicNamePrefix,
-                                                     final String name,
+                                                     final String repartitionTopicNamePrefix,
                                                      final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
-        final String baseName = topicNamePrefix != null ? topicNamePrefix : name;
-        final String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
+
+        final String repartitionTopic = repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
         final String sinkName = builder.newProcessorName(SINK_NAME);
         final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String sourceName = builder.newProcessorName(SOURCE_NAME);
@@ -677,7 +680,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
+            final Joined<K, V, ?> updatedJoined = joined.name() != null ? joined : joined.withName(name);
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(updatedJoined);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, false);
         } else {
             return doStreamTableJoin(other, joiner, joined, false);
@@ -697,7 +701,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
+            final Joined<K, V, ?> updatedJoined = joined.name() != null ? joined : joined.withName(name);
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(updatedJoined);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, true);
         } else {
             return doStreamTableJoin(other, joiner, joined, true);
@@ -776,47 +781,68 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // do not have serde for joined result
         return new KStreamImpl<>(name, joined.keySerde() != null ? joined.keySerde() : keySerde, null, allSourceNodes, false, streamTableJoinNode, builder);
+
     }
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector) {
-        return groupBy(selector, Serialized.with(null, null));
+        return groupBy(selector, Grouped.with(null, valSerde));
     }
 
     @Override
+    @Deprecated
     public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                               final Serialized<KR, V> serialized) {
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
+
+        return groupBy(selector, Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
+    }
+
+    @Override
+    public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
+                                              final Grouped<KR, V> grouped) {
+        Objects.requireNonNull(selector, "selector can't be null");
+        Objects.requireNonNull(grouped, "grouped can't be null");
+        final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector);
         selectKeyMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
-        return new KGroupedStreamImpl<>(selectKeyMapNode.nodeName(),
-                                        serializedInternal.keySerde(),
-                                        serializedInternal.valueSerde() != null ? serializedInternal.valueSerde() : valSerde,
-                                        sourceNodes,
-                                        true,
-                                        selectKeyMapNode,
-                                        builder);
+
+        return new KGroupedStreamImpl<>(
+            selectKeyMapNode.nodeName(),
+            sourceNodes,
+            groupedInternal,
+            true,
+            selectKeyMapNode,
+            builder);
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey() {
-        return groupByKey(Serialized.with(null, null));
+        return groupByKey(Grouped.with(keySerde, valSerde));
     }
 
     @Override
+    @Deprecated
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
-        return new KGroupedStreamImpl<>(this.name,
-                                        serializedInternal.keySerde() != null ? serializedInternal.keySerde() : keySerde,
-                                        serializedInternal.valueSerde() != null ? serializedInternal.valueSerde() : valSerde,
-                                        sourceNodes,
-                                        this.repartitionRequired,
-                                        streamsGraphNode,
-                                        builder);
+        return groupByKey(Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
+    }
+
+    @Override
+    public KGroupedStream<K, V> groupByKey(final Grouped<K, V> grouped) {
+        final GroupedInternal<K, V> groupedInternal = new GroupedInternal<>(grouped);
+
+        return new KGroupedStreamImpl<>(
+            name,
+            sourceNodes,
+            groupedInternal,
+            repartitionRequired,
+            streamsGraphNode,
+            builder);
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

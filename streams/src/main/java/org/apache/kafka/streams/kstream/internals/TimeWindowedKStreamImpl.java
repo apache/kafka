@@ -52,11 +52,11 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final String name,
                             final Serde<K> keySerde,
                             final Serde<V> valSerde,
-                            final boolean repartitionRequired,
+                            final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                             final StreamsGraphNode streamsGraphNode) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
-        this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name, streamsGraphNode);
+        this.aggregateBuilder = aggregateBuilder;
     }
 
     @Override
