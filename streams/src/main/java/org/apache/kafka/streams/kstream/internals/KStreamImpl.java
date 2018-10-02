@@ -567,7 +567,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         if (joinThis.repartitionRequired) {
             final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : joinThis.name;
-
             joinThis = joinThis.repartitionForJoin(Joined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde(), leftJoinRepartitionTopicName));
         }
 
