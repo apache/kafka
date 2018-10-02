@@ -40,7 +40,11 @@ class LogSegmentTest {
                     indexIntervalBytes: Int = 10,
                     maxSegmentMs: Int = Int.MaxValue,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, maxSegmentMs, time)
+    val ms = FileRecords.open(Log.logFile(logDir, offset))
+    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
+    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
+    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
     segments += seg
     seg
   }
@@ -176,7 +180,9 @@ class LogSegmentTest {
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
-    assertFalse(reopened.shouldRoll(messagesSize = 1024,
+    val logConfig = LogConfig(Map().asJava)
+
+    assertFalse(reopened.shouldRoll(logConfig, messagesSize = 1024,
       maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = 100L,
       now = time.milliseconds()))
@@ -184,13 +190,13 @@ class LogSegmentTest {
     // The segment should not be rolled even if maxSegmentMs has been exceeded
     time.sleep(maxSegmentMs + 1)
     assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(reopened.shouldRoll(messagesSize = 1024,
+    assertFalse(reopened.shouldRoll(logConfig, messagesSize = 1024,
       maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = 100L,
       now = time.milliseconds()))
 
     // But we should still roll the segment if we cannot fit the next offset
-    assertTrue(reopened.shouldRoll(messagesSize = 1024,
+    assertTrue(reopened.shouldRoll(logConfig, messagesSize = 1024,
       maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = Int.MaxValue.toLong + 200,
       now = time.milliseconds()))

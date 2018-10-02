@@ -57,13 +57,11 @@ class LogSegment private[log] (val log: FileRecords,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
-                               val maxSegmentMs: Long,
-                               val maxSegmentBytes: Int,
                                val time: Time) extends Logging {
 
-  def shouldRoll(messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long, now: Long): Boolean = {
-    val reachedRollMs = timeWaitedForRoll(now, maxTimestampInMessages) > maxSegmentMs - rollJitterMs
-    size > maxSegmentBytes - messagesSize ||
+  def shouldRoll(config: LogConfig, messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long, now: Long): Boolean = {
+    val reachedRollMs = timeWaitedForRoll(now, maxTimestampInMessages) > config.segmentMs - rollJitterMs
+    size > config.segmentSize - messagesSize ||
       (size > 0 && reachedRollMs) ||
       offsetIndex.isFull || timeIndex.isFull || !canConvertToRelativeOffset(maxOffsetInMessages)
   }
@@ -637,8 +635,6 @@ object LogSegment {
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
-      maxSegmentMs = config.segmentMs,
-      maxSegmentBytes = config.segmentSize,
       time)
   }
 
