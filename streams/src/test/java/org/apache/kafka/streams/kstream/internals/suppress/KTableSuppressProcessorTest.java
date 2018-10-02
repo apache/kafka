@@ -147,22 +147,38 @@ public class KTableSuppressProcessorTest {
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         processor.init(context);
 
-        final long timestamp = 100L;
-        context.setRecordMetadata("topic", 0, 0, null, timestamp);
-        context.setStreamTime(timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(timestamp - 1L, timestamp));
+        final long windowStart = 99L;
+        final long recordTime = 99L;
+        final long windowEnd = 100L;
+        context.setRecordMetadata("topic", 0, 0, null, recordTime);
+        context.setStreamTime(recordTime);
+        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(windowStart, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
 
-        context.setRecordMetadata("topic", 0, 1, null, timestamp + 1L);
-        context.setStreamTime(timestamp + 1L);
-        processor.process(new Windowed<>("dummyKey", new TimeWindow(timestamp, timestamp + 1L)), ARBITRARY_CHANGE);
+        // although the stream time is now 100, we have to wait 1 ms after the window *end* before we
+        // emit "hey", so we don't emit yet.
+        final long windowStart2 = 100L;
+        final long recordTime2 = 100L;
+        final long windowEnd2 = 101L;
+        context.setRecordMetadata("topic", 0, 1, null, recordTime2);
+        context.setStreamTime(recordTime2);
+        processor.process(new Windowed<>("dummyKey1", new TimeWindow(windowStart2, windowEnd2)), ARBITRARY_CHANGE);
+        assertThat(context.forwarded(), hasSize(0));
+
+        // ok, now it's time to emit "hey"
+        final long windowStart3 = 101L;
+        final long recordTime3 = 101L;
+        final long windowEnd3 = 102L;
+        context.setRecordMetadata("topic", 0, 1, null, recordTime3);
+        context.setStreamTime(recordTime3);
+        processor.process(new Windowed<>("dummyKey2", new TimeWindow(windowStart3, windowEnd3)), ARBITRARY_CHANGE);
 
         assertThat(context.forwarded(), hasSize(1));
         final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
-        assertThat(capturedForward.timestamp(), is(timestamp));
+        assertThat(capturedForward.timestamp(), is(recordTime));
     }
 
     /**
