@@ -552,7 +552,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
-        return this.groupBy(selector, Grouped.with(null, null));
+        return groupBy(selector, Grouped.with(null, null));
     }
 
     @Override
