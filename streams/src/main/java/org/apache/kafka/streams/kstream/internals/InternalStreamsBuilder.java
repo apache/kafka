@@ -79,30 +79,33 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name, topics, consumed);
 
-        final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
-                                                                              topics,
-                                                                              consumed);
         addGraphNode(root, streamSourceNode);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
+        return new KStreamImpl<>(name,
+                                 consumed.keySerde(),
+                                 consumed.valueSerde(),
+                                 Collections.singleton(name),
+                                 false,
+                                 streamSourceNode,
+                                 this);
     }
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
-
-        final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
-                                                                                      topicPattern,
-                                                                                      consumed);
+        final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
 
         addGraphNode(root, streamPatternSourceNode);
 
-        return new KStreamImpl<>(this,
-                                 name,
+        return new KStreamImpl<>(name,
+                                 consumed.keySerde(),
+                                 consumed.valueSerde(),
                                  Collections.singleton(name),
                                  false,
-                                 streamPatternSourceNode);
+                                 streamPatternSourceNode,
+                                 this);
     }
 
     @SuppressWarnings("unchecked")
@@ -129,15 +132,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         addGraphNode(root, tableSourceNode);
 
-        return new KTableImpl<>(this,
-                                name,
-                                processorSupplier,
+        return new KTableImpl<>(name,
                                 consumed.keySerde(),
                                 consumed.valueSerde(),
                                 Collections.singleton(source),
                                 storeBuilder.name(),
                                 materialized.isQueryable(),
-                                tableSourceNode);
+                                processorSupplier,
+                                tableSourceNode,
+                                this);
     }
 
     @SuppressWarnings("unchecked")

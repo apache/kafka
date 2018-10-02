@@ -79,6 +79,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -176,16 +177,21 @@ public class StandbyTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = ProcessorStateException.class)
-    public void testUpdateNonPersistentStore() throws IOException {
+    @Test
+    public void testUpdateNonInitializedStore() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
         final StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
-        task.update(partition1,
-            singletonList(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue))
-        );
+        try {
+            task.update(partition1,
+                        singletonList(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue))
+            );
+            fail("expected an exception");
+        } catch (final NullPointerException npe) {
+            assertThat(npe.getMessage(), containsString("stateRestoreCallback must not be null"));
+        }
 
     }
 

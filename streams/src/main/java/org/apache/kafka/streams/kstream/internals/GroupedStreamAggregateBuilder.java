@@ -63,11 +63,12 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.streamsGraphNode = streamsGraphNode;
     }
 
-
-    <KR, T> KTable<KR, T> build(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
-                                final String functionName,
+    <KR, T> KTable<KR, T> build(final String functionName,
                                 final StoreBuilder<? extends StateStore> storeBuilder,
-                                final boolean isQueryable) {
+                                final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
+                                final boolean isQueryable,
+                                final Serde<KR> keySerde,
+                                final Serde<T> valSerde) {
 
         final String aggFunctionName = builder.newProcessorName(functionName);
 
@@ -95,13 +96,15 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 
-        return new KTableImpl<>(builder,
-                                aggFunctionName,
-                                aggregateSupplier,
+        return new KTableImpl<>(aggFunctionName,
+                                keySerde,
+                                valSerde,
                                 sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
                                 storeBuilder.name(),
                                 isQueryable,
-                                statefulProcessorNode);
+                                aggregateSupplier,
+                                statefulProcessorNode,
+                                builder);
     }
 
     /**
