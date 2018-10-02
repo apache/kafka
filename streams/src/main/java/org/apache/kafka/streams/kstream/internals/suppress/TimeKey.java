@@ -57,10 +57,4 @@ class TimeKey implements Comparable<TimeKey> {
         final int timeComparison = Long.compare(time, o.time);
         return timeComparison == 0 ? key.compareTo(o.key) : timeComparison;
     }
-
-    @Override
-    public String toString() {
-        return "TimeKey{time=" + time + ", key=" + key + '}';
-    }
-
 }

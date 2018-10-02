@@ -35,7 +35,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private final long maxRecords;
     private final long maxBytes;
     private final long suppressDurationMillis;
-    private final TimeOrderedKeyValueBuffer<Bytes, ContextualRecord> buffer;
+    private final TimeOrderedKeyValueBuffer buffer;
     private final TimeDefinition<K> bufferTimeDefinition;
     private final BufferFullStrategy bufferFullStrategy;
     private final boolean shouldSuppressTombstones;
@@ -69,14 +69,12 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     @Override
     public void process(final K key, final Change<V> value) {
-        final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, key);
-        final long streamTime = internalProcessorContext.streamTime();
-
-        buffer(bufferTime, key, value);
-        enforceConstraints(streamTime);
+        buffer(key, value);
+        enforceConstraints();
     }
 
-    private void buffer(final long bufferTime, final K key, final Change<V> value) {
+    private void buffer(final K key, final Change<V> value) {
+        final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, key);
         final ProcessorRecordContext recordContext = internalProcessorContext.recordContext();
 
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(null, key));
@@ -85,7 +83,8 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         buffer.put(bufferTime, serializedKey, new ContextualRecord(serializedValue, recordContext));
     }
 
-    private void enforceConstraints(final long streamTime) {
+    private void enforceConstraints() {
+        final long streamTime = internalProcessorContext.streamTime();
         final long expiryTime = streamTime - suppressDurationMillis;
 
         buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
@@ -111,14 +110,13 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     }
 
     private void emit(final KeyValue<Bytes, ContextualRecord> toEmit) {
-        final Bytes key = toEmit.key;
         final Change<V> value = valueSerde.deserializer().deserialize(null, toEmit.value.value());
         if (shouldForward(value)) {
             final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
             internalProcessorContext.setRecordContext(toEmit.value.recordContext());
             try {
-                final K key1 = keySerde.deserializer().deserialize(null, key.get());
-                internalProcessorContext.forward(key1, value);
+                final K key = keySerde.deserializer().deserialize(null, toEmit.key.get());
+                internalProcessorContext.forward(key, value);
             } finally {
                 internalProcessorContext.setRecordContext(prevRecordContext);
             }

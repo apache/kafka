@@ -14,23 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.internals.ContextualRecord;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Windowed;
 
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-
-interface TimeOrderedKeyValueBuffer {
-    void evictWhile(final Supplier<Boolean> predicate, final Consumer<KeyValue<Bytes, ContextualRecord>> callback);
-
-    void put(final long time, final Bytes key, final ContextualRecord value);
-
-    int numRecords();
-
-    long bufferSize();
-
-    long minTimestamp();
+class FullTimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    FullTimeWindowedSerde(final Serde<T> inner, final long windowSize) {
+        super(
+            new TimeWindowedSerializer<>(inner.serializer()),
+            new TimeWindowedDeserializer<>(inner.deserializer(), windowSize)
+        );
+    }
 }

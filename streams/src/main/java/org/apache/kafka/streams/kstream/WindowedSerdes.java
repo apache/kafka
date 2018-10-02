@@ -30,13 +30,6 @@ public class WindowedSerdes {
         public TimeWindowedSerde(final Serde<T> inner) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
         }
-
-        public TimeWindowedSerde(final Serde<T> inner, final long windowSize) {
-            super(
-                new TimeWindowedSerializer<>(inner.serializer()),
-                new TimeWindowedDeserializer<>(inner.deserializer(), windowSize)
-            );
-        }
     }
 
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {

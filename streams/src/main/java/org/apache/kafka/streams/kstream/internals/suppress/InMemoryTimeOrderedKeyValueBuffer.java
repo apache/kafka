@@ -27,7 +27,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer<Bytes, ContextualRecord> {
+class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     private final Map<Bytes, TimeKey> index = new HashMap<>();
     private final TreeMap<TimeKey, ContextualRecord> sortedMap = new TreeMap<>();
     private long memBufferSize = 0L;
@@ -78,7 +78,7 @@ class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer<Byt
             final TimeKey nextKey = new TimeKey(time, key);
             index.put(key, nextKey);
             sortedMap.put(nextKey, value);
-            minTimestamp = Math.min(minTimestamp, nextKey.time());
+            minTimestamp = Math.min(minTimestamp, time);
             memBufferSize = memBufferSize + computeRecordSize(key, value);
         } else {
             final ContextualRecord removedValue = sortedMap.put(previousKey, value);
