@@ -233,15 +233,12 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
     val follower = servers.filter(_.config.brokerId != leaderIdOpt.get).last
     val newPartition = new TopicPartition(topic, 1)
-    // capture the brokers before we shutdown so that we don't fail validation in `addPartitions`
-    val brokers = adminZkClient.getBrokerMetadatas()
     follower.shutdown()
     // wait until the broker has been removed from ZK to reduce non-determinism
     TestUtils.waitUntilTrue(() => zkClient.getBroker(follower.config.brokerId).isEmpty,
       s"Follower ${follower.config.brokerId} was not removed from ZK")
     // add partitions to topic
-    adminZkClient.addPartitions(topic, expectedReplicaAssignment, brokers, 2,
-      Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
+    adminZkClient.addPartitions(topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
     // start topic deletion
     adminZkClient.deleteTopic(topic)
     follower.startup()
@@ -258,13 +255,11 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     zkClient.createTopLevelPaths()
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
-    val brokers = adminZkClient.getBrokerMetadatas()
     // start topic deletion
     adminZkClient.deleteTopic(topic)
     // add partitions to topic
     val newPartition = new TopicPartition(topic, 1)
-    adminZkClient.addPartitions(topic, expectedReplicaAssignment, brokers, 2,
-      Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
+    adminZkClient.addPartitions(topic, expectedReplicaAssignment, 2, Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     assertTrue("Replica logs not deleted after delete topic is complete",
