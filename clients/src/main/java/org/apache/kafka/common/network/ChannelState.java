@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 
 /**
@@ -67,7 +68,6 @@ public class ChannelState {
     // AUTHENTICATION_FAILED has a custom exception. For other states,
     // create a reusable `ChannelState` instance per-state.
     public static final ChannelState NOT_CONNECTED = new ChannelState(State.NOT_CONNECTED);
-    public static final ChannelState AUTHENTICATE = new ChannelState(State.AUTHENTICATE);
     public static final ChannelState READY = new ChannelState(State.READY);
     public static final ChannelState EXPIRED = new ChannelState(State.EXPIRED);
     public static final ChannelState FAILED_SEND = new ChannelState(State.FAILED_SEND);
@@ -75,12 +75,16 @@ public class ChannelState {
 
     private final State state;
     private final AuthenticationException exception;
+    private final SocketAddress remoteAddress;
+
     public ChannelState(State state) {
-        this(state, null);
+        this(state, null, null);
     }
-    public ChannelState(State state, AuthenticationException exception) {
+
+    public ChannelState(State state, AuthenticationException exception, SocketAddress remoteAddress) {
         this.state = state;
         this.exception = exception;
+        this.remoteAddress = remoteAddress;
     }
 
     public State state() {
@@ -89,5 +93,9 @@ public class ChannelState {
 
     public AuthenticationException exception() {
         return exception;
+    }
+
+    public SocketAddress remoteAddress() {
+        return remoteAddress;
     }
 }

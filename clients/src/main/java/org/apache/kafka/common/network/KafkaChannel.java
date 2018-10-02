@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -131,7 +132,8 @@ public class KafkaChannel {
         } catch (AuthenticationException e) {
             // Clients are notified of authentication exceptions to enable operations to be terminated
             // without retries. Other errors are handled as network exceptions in Selector.
-            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+            SocketAddress remoteAddr = transportLayer.socketChannel() != null ? transportLayer.socketChannel().getRemoteAddress() : null;
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e, remoteAddr);
             if (authenticating) {
                 delayCloseOnAuthenticationFailure();
                 throw new DelayedResponseAuthenticationException(e);
@@ -157,8 +159,14 @@ public class KafkaChannel {
 
     public boolean finishConnect() throws IOException {
         boolean connected = transportLayer.finishConnect();
-        if (connected)
-            state = ready() ? ChannelState.READY : ChannelState.AUTHENTICATE;
+        if (connected) {
+            if (ready()) {
+                state = ChannelState.READY;
+            } else {
+                SocketAddress remoteAddr = transportLayer.socketChannel() != null ? transportLayer.socketChannel().getRemoteAddress() : null;
+                state = new ChannelState(ChannelState.State.AUTHENTICATE, null, remoteAddr);
+            }
+        }
         return connected;
     }
 

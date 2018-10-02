@@ -662,12 +662,12 @@ public class NetworkClient implements KafkaClient {
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
                 metadataUpdater.handleAuthenticationFailure(exception);
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, exception.getMessage());
+                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId, disconnectState.remoteAddress(), exception.getMessage());
                 break;
             case AUTHENTICATE:
                 // This warning applies to older brokers which don't provide feedback on authentication failures
-                log.warn("Connection to node {} terminated during authentication. This may indicate " +
-                        "that authentication failed due to invalid credentials.", nodeId);
+                log.warn("Connection to node {} ({}) terminated during authentication. This may indicate " +
+                        "that authentication failed due to invalid credentials.", nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
                 log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
