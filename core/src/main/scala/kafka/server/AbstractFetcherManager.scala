@@ -27,11 +27,11 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.mutable
 import scala.collection.{Map, Set}
 
-abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
+abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
-  private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
+  private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val partitionBrokerIdMap = new mutable.HashMap[TopicPartition, BrokerAndFetcherId]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
@@ -91,8 +91,17 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
     }
   }
 
+  // Visible for testing
+  private[server] def getFetcher(topicPartition: TopicPartition): Option[T] = {
+    lock synchronized {
+      partitionBrokerIdMap.get(topicPartition).flatMap { brokerAndFetcherId =>
+        fetcherThreadMap.get(BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId))
+      }
+    }
+  }
+
   // Visibility for testing
-  private[server] def getFetcherId(topicPartition: TopicPartition) : Int = {
+  private[server] def getFetcherId(topicPartition: TopicPartition): Int = {
     lock synchronized {
       Utils.abs(31 * topicPartition.topic.hashCode() + topicPartition.partition) % numFetchersPerBroker
     }
@@ -110,7 +119,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
+  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
   private def addOrUpdateBrokerAndFetcherId(topicPartition: TopicPartition,
                                             initialFetchState: InitialFetchState): BrokerAndFetcherId = {

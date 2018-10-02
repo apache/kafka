@@ -21,11 +21,11 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 
-import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
@@ -592,12 +592,12 @@ class AbstractFetcherThreadTest {
     }
 
     override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-     val state = replicaPartitionState(topicPartition)
-     state.log = state.log.takeWhile { batch =>
-       batch.lastOffset < truncationState.offset
-     }
-     state.logEndOffset = state.log.lastOption.map(_.lastOffset + 1).getOrElse(state.logStartOffset)
-     state.highWatermark = math.min(state.highWatermark, state.logEndOffset)
+      val state = replicaPartitionState(topicPartition)
+      state.log = state.log.takeWhile { batch =>
+        batch.lastOffset < truncationState.offset
+      }
+      state.logEndOffset = state.log.lastOption.map(_.lastOffset + 1).getOrElse(state.logStartOffset)
+      state.highWatermark = math.min(state.highWatermark, state.logEndOffset)
     }
 
     override def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
@@ -725,6 +725,7 @@ class AbstractFetcherThreadTest {
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
       leaderState.logEndOffset
     }
+
   }
 
 }
