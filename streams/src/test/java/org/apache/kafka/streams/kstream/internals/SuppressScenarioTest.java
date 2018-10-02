@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -32,7 +31,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -41,7 +39,6 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -60,6 +57,7 @@ import java.util.Properties;
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
@@ -159,7 +157,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldSuppressIntermediateEventsWithTimeLimit() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = builder
@@ -198,11 +196,9 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("v1", 1L, 2L)
                 )
             );
-            // note that the current stream time is 2, which causes v1 to age out of the buffer, since
-            // it has been buffered since time 0 (even though the current version of it in the buffer has timestamp 1)
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                singletonList(new KeyValueTimestamp<>("v1", 0L, 1L))
+                singletonList(new KeyValueTimestamp<>("v1", 1L, 2L))
             );
             // inserting a dummy "tick" record just to advance stream time
             driver.pipeInput(recordFactory.create("input", "tick", "tick", 3L));
@@ -225,36 +221,15 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("tick", 1L, 4L)
                 )
             );
+            // tick is still buffered, since it was first inserted at time 3, and it is only time 4 right now.
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                singletonList(
-                    new KeyValueTimestamp<>("v1", 1L, 2L)
-                )
-            );
-            driver.pipeInput(recordFactory.create("input", "tick", "tick", 5L));
-            verify(
-                drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                asList(
-                    new KeyValueTimestamp<>("tick", 0L, 5L),
-                    new KeyValueTimestamp<>("tick", 1L, 5L)
-                )
-            );
-            // Note that because the punctuate runs before the process call, the tick at time 5 causes
-            // the previous tick to age out of the buffer, so at this point, we see the prior value emitted
-            // and the new value is still buffered.
-
-            // Also worth noting is that "tick" ages out because it has been buffered since time 3, even though
-            // the current timestamp of the buffered record is 4.
-            verify(
-                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                singletonList(
-                    new KeyValueTimestamp<>("tick", 1L, 4L)
-                )
+                emptyList()
             );
         }
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldSuppressIntermediateEventsWithRecordLimit() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = builder
@@ -320,7 +295,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldSuppressIntermediateEventsWithBytesLimit() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = builder
@@ -351,8 +326,7 @@ public class SuppressScenarioTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
-            final ConsumerRecord<byte[], byte[]> consumerRecord = recordFactory.create("input", "k2", "v1", 2L);
-            driver.pipeInput(consumerRecord);
+            driver.pipeInput(recordFactory.create("input", "k2", "v1", 2L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
@@ -388,7 +362,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void shouldSupportFinalResultsForTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
@@ -442,7 +416,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void shouldSupportFinalResultsForTimeWindowsWithLargeJump() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
@@ -501,7 +475,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    @Test(expected = KTableSuppressProcessor.NotImplementedException.class)
+    @Test
     public void shouldSupportFinalResultsForSessionWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder

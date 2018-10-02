@@ -22,22 +22,22 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
 
-public class StrictBufferConfigImpl extends BufferConfigImpl<Suppressed.StrictBufferConfig> implements Suppressed.StrictBufferConfig {
+public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.StrictBufferConfig> implements Suppressed.StrictBufferConfig {
 
-    private final long maxKeys;
+    private final long maxRecords;
     private final long maxBytes;
     private final BufferFullStrategy bufferFullStrategy;
 
-    public StrictBufferConfigImpl(final long maxKeys,
+    public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
                                   final BufferFullStrategy bufferFullStrategy) {
-        this.maxKeys = maxKeys;
+        this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
     }
 
     public StrictBufferConfigImpl() {
-        this.maxKeys = Long.MAX_VALUE;
+        this.maxRecords = Long.MAX_VALUE;
         this.maxBytes = Long.MAX_VALUE;
         this.bufferFullStrategy = SHUT_DOWN;
     }
@@ -49,12 +49,12 @@ public class StrictBufferConfigImpl extends BufferConfigImpl<Suppressed.StrictBu
 
     @Override
     public Suppressed.StrictBufferConfig withMaxBytes(final long byteLimit) {
-        return new StrictBufferConfigImpl(maxKeys, byteLimit, bufferFullStrategy);
+        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy);
     }
 
     @Override
-    public long maxKeys() {
-        return maxKeys;
+    public long maxRecords() {
+        return maxRecords;
     }
 
     @Override
@@ -72,19 +72,19 @@ public class StrictBufferConfigImpl extends BufferConfigImpl<Suppressed.StrictBu
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final StrictBufferConfigImpl that = (StrictBufferConfigImpl) o;
-        return maxKeys == that.maxKeys &&
+        return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes &&
             bufferFullStrategy == that.bufferFullStrategy;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxKeys, maxBytes, bufferFullStrategy);
+        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy);
     }
 
     @Override
     public String toString() {
-        return "StrictBufferConfigImpl{maxKeys=" + maxKeys +
+        return "StrictBufferConfigImpl{maxKeys=" + maxRecords +
             ", maxBytes=" + maxBytes +
             ", bufferFullStrategy=" + bufferFullStrategy + '}';
     }

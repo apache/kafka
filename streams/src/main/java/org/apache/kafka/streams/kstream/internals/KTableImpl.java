@@ -40,7 +40,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
-import org.apache.kafka.streams.kstream.internals.suppress.SuppressedImpl;
+import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -357,12 +357,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public KTable<K, V> suppress(final Suppressed<K> suppressed) {
         final String name = builder.newProcessorName(SUPPRESS_NAME);
 
-        // TODO: follow-up pr to forward the k/v serdes
         final ProcessorSupplier<K, Change<V>> suppressionSupplier =
             () -> new KTableSuppressProcessor<>(
                 buildSuppress(suppressed),
-                null,
-                null
+                keySerde,
+                valSerde == null ? null : new FullChangeSerde<>(valSerde)
             );
 
         final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(
@@ -388,18 +387,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    private SuppressedImpl<K> buildSuppress(final Suppressed<K> suppress) {
+    private SuppressedInternal<K> buildSuppress(final Suppressed<K> suppress) {
         if (suppress instanceof FinalResultsSuppressionBuilder) {
             final long grace = findAndVerifyWindowGrace(streamsGraphNode);
 
             final FinalResultsSuppressionBuilder<?> builder = (FinalResultsSuppressionBuilder) suppress;
 
-            final SuppressedImpl<? extends Windowed> finalResultsSuppression =
+            final SuppressedInternal<? extends Windowed> finalResultsSuppression =
                 builder.buildFinalResultsSuppression(Duration.ofMillis(grace));
 
-            return (SuppressedImpl<K>) finalResultsSuppression;
-        } else if (suppress instanceof SuppressedImpl) {
-            return (SuppressedImpl<K>) suppress;
+            return (SuppressedInternal<K>) finalResultsSuppression;
+        } else if (suppress instanceof SuppressedInternal) {
+            return (SuppressedInternal<K>) suppress;
         } else {
             throw new IllegalArgumentException("Custom subclasses of Suppressed are not allowed.");
         }

@@ -16,43 +16,45 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.common.utils.Bytes;
 
-import java.time.Duration;
 import java.util.Objects;
 
-public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppressed<K> {
-    private final StrictBufferConfig bufferConfig;
+class TimeKey implements Comparable<TimeKey> {
+    private final long time;
+    private final Bytes key;
 
-    public FinalResultsSuppressionBuilder(final Suppressed.StrictBufferConfig bufferConfig) {
-        this.bufferConfig = bufferConfig;
+    TimeKey(final long time, final Bytes key) {
+        this.time = time;
+        this.key = key;
     }
 
-    public SuppressedInternal<K> buildFinalResultsSuppression(final Duration gracePeriod) {
-        return new SuppressedInternal<>(
-            gracePeriod,
-            bufferConfig,
-            TimeDefinitions.WindowEndTimeDefinition.instance(),
-            true
-        );
+    Bytes key() {
+        return key;
+    }
+
+    long time() {
+        return time;
     }
 
     @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        final FinalResultsSuppressionBuilder<?> that = (FinalResultsSuppressionBuilder<?>) o;
-        return Objects.equals(bufferConfig, that.bufferConfig);
+        final TimeKey timeKey = (TimeKey) o;
+        return time == timeKey.time &&
+            Objects.equals(key, timeKey.key);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(bufferConfig);
+        return Objects.hash(time, key);
     }
 
     @Override
-    public String toString() {
-        return "FinalResultsSuppressionBuilder{bufferConfig=" + bufferConfig + '}';
+    public int compareTo(final TimeKey o) {
+        // ordering of keys within a time uses hashCode.
+        final int timeComparison = Long.compare(time, o.time);
+        return timeComparison == 0 ? key.compareTo(o.key) : timeComparison;
     }
 }
