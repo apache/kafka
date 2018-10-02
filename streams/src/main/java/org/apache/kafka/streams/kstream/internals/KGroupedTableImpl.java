@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -58,13 +57,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
-                      final String sourceName,
+                      final Set<String> sourceNodes,
                       final GroupedInternal<K, V> groupedInternal,
                       final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
-        super(builder, name, Collections.singleton(sourceName), streamsGraphNode);
-        this.keySerde = groupedInternal.keySerde();
-        this.valSerde = groupedInternal.valueSerde();
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
+
         this.userSpecifiedName = groupedInternal.name();
     }
 
@@ -77,7 +74,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final String repartitionTopic = (userSpecifiedName != null ? userSpecifiedName : materialized.storeName())
                 + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, topic);
+        final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
 
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.streamsGraphNode, repartitionNode);

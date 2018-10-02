@@ -567,12 +567,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         if (joinThis.repartitionRequired) {
             final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : joinThis.name;
-            joinThis = joinThis.repartitionForJoin(joined.keySerde(), joined.valueSerde(), leftJoinRepartitionTopicName);
+
+            joinThis = joinThis.repartitionForJoin(Joined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde(), leftJoinRepartitionTopicName));
         }
 
         if (joinOther.repartitionRequired) {
             final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : joinOther.name;
-            joinOther = joinOther.repartitionForJoin(joined.keySerde(), joined.otherValueSerde(), rightJoinRepartitionTopicName);
+            final Joined newJoined = Joined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde(), rightJoinRepartitionTopicName);
+            joinOther = joinOther.repartitionForJoin(newJoined);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -600,9 +602,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String repartitionedSourceName = createRepartitionedSource(builder,
                                                                          repartitionKeySerde,
                                                                          repartitionValueSerde,
-                                                                         null,
-                                                                         name,
-                                                                         joinRepartitionName,
+                                                                         joined.name(),
                                                                          optimizableRepartitionNodeBuilder);
 
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
@@ -680,7 +680,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
+            final Joined<K, V, ?> updatedJoined = joined.name() != null ? joined : joined.withName(name);
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(updatedJoined);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, false);
         } else {
             return doStreamTableJoin(other, joiner, joined, false);
@@ -700,7 +701,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(joined);
+            final Joined<K, V, ?> updatedJoined = joined.name() != null ? joined : joined.withName(name);
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(updatedJoined);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, true);
         } else {
             return doStreamTableJoin(other, joiner, joined, true);
@@ -784,7 +786,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector) {
-        return groupBy(selector, Grouped.with(null, null));
+        return groupBy(selector, Grouped.with(null, valSerde));
     }
 
     @Override
@@ -810,17 +812,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
 
         return new KGroupedStreamImpl<>(
-            builder,
             selectKeyMapNode.nodeName(),
             sourceNodes,
             groupedInternal,
             true,
-            selectKeyMapNode);
+            selectKeyMapNode,
+            builder);
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey() {
-        return groupByKey(Grouped.with(null, null));
+        return groupByKey(Grouped.with(keySerde, valSerde));
     }
 
     @Override
@@ -835,12 +837,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final GroupedInternal<K, V> groupedInternal = new GroupedInternal<>(grouped);
 
         return new KGroupedStreamImpl<>(
-            builder,
             name,
             sourceNodes,
             groupedInternal,
             repartitionRequired,
-            streamsGraphNode);
+            streamsGraphNode,
+            builder);
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

@@ -96,7 +96,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         final StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
-        
+
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
                                 valSerde,
