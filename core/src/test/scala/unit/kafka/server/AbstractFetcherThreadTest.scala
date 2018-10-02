@@ -28,7 +28,7 @@ import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.UnknownLeaderEpochException
+import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
@@ -178,6 +178,75 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
+  def testUnknownLeaderEpochInTruncation(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new MockFetcherThread
+
+    // The replica's leader epoch is ahead of the leader
+    val replicaState = MockFetcherThread.PartitionState(leaderEpoch = 1)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 1)))
+
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0, new SimpleRecord("a".getBytes))
+    val leaderState = MockFetcherThread.PartitionState(Seq(batch), leaderEpoch = 0, highWatermark = 2L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    fetcher.doWork()
+
+    // Not data has been fetched and the follower is still truncating
+    assertEquals(0, replicaState.logEndOffset)
+    assertEquals(Some(Truncating), fetcher.fetchState(partition).map(_.state))
+
+    // Bump the epoch on the leader
+    fetcher.leaderPartitionState(partition).leaderEpoch += 1
+
+    // Now we can make progress
+    fetcher.doWork()
+
+    assertEquals(1, replicaState.logEndOffset)
+    assertEquals(Some(Fetching), fetcher.fetchState(partition).map(_.state))
+  }
+
+  @Test
+  def testUnknownLeaderEpochWhileFetching(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new MockFetcherThread
+
+    // This test is contrived because it shouldn't be possible to to see unknown leader epoch
+    // in the Fetching state unless the leader had validated the leader epoch while Truncating
+
+    val replicaState = MockFetcherThread.PartitionState(leaderEpoch = 1)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 1)))
+
+    val leaderState = MockFetcherThread.PartitionState(Seq(
+      mkBatch(baseOffset = 0L, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1L, leaderEpoch = 0, new SimpleRecord("b".getBytes))
+    ), leaderEpoch = 1, highWatermark = 2L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    fetcher.doWork()
+
+    // We have fetched one batch and gotten out of the truncation phase
+    assertEquals(1, replicaState.logEndOffset)
+    assertEquals(Some(Fetching), fetcher.fetchState(partition).map(_.state))
+
+    // Somehow the leader epoch rewinds
+    fetcher.leaderPartitionState(partition).leaderEpoch = 0
+
+    // We are stuck at the current offset
+    fetcher.doWork()
+    assertEquals(1, replicaState.logEndOffset)
+    assertEquals(Some(Fetching), fetcher.fetchState(partition).map(_.state))
+
+    // After returning to the right epoch, we can continue fetching
+    fetcher.leaderPartitionState(partition).leaderEpoch = 1
+    fetcher.doWork()
+    assertEquals(2, replicaState.logEndOffset)
+    assertEquals(Some(Fetching), fetcher.fetchState(partition).map(_.state))
+  }
+
+  @Test
   def testTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcher = new MockFetcherThread
@@ -187,16 +256,16 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
 
-    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 0, highWatermark = 0L)
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 0)))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 5)))
 
     val leaderLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 1, new SimpleRecord("a".getBytes)),
       mkBatch(baseOffset = 1, leaderEpoch = 3, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 2, leaderEpoch = 5, new SimpleRecord("c".getBytes)))
 
-    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 0, highWatermark = 2L)
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
     TestUtils.waitUntilTrue(() => {
@@ -221,28 +290,34 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    val replicaState = MockFetcherThread.PartitionState(leaderEpoch = 0)
+    val replicaState = MockFetcherThread.PartitionState(leaderEpoch = 5)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 0)))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 5)))
 
     val leaderLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 1, new SimpleRecord("a".getBytes)),
       mkBatch(baseOffset = 1, leaderEpoch = 3, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 2, leaderEpoch = 5, new SimpleRecord("c".getBytes)))
 
-    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 0, highWatermark = 2L)
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
     // Do one round of truncation
     fetcher.doWork()
+
+    // We only fetch one record at a time with mock fetcher
+    assertEquals(1, replicaState.logEndOffset)
     assertEquals(1, truncations)
 
     // Add partitions again with the same epoch
-    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 0)))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 5)))
 
     // Verify we did not truncate
     fetcher.doWork()
+
+    // No truncations occurred and we have fetched another record
     assertEquals(1, truncations)
+    assertEquals(2, replicaState.logEndOffset)
   }
 
   @Test
@@ -255,16 +330,16 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
 
-    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 0, highWatermark = 0L)
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 4, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 0)))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(3L, leaderEpoch = 4)))
 
     val leaderLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
 
-    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 0, highWatermark = 2L)
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 4, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
     // initial truncation and verify that the log end offset is updated
@@ -283,6 +358,35 @@ class AbstractFetcherThreadTest {
     assertEquals(0L, replicaState.logEndOffset)
     assertEquals(0L, replicaState.logStartOffset)
     assertEquals(0L, replicaState.highWatermark)
+  }
+
+  @Test
+  def testFencedOffsetResetAfterOutOfRange(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    var fetchedEarliestOffset = false
+    val fetcher = new MockFetcherThread() {
+      override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+        fetchedEarliestOffset = true
+        throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
+      }
+    }
+
+    val replicaLog = Seq()
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 4, highWatermark = 0L)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 4)))
+
+    val leaderLog = Seq(
+      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 4, highWatermark = 2L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    // After the out of range error, we get a fenced error and remove the partition
+    fetcher.doWork()
+    assertEquals(0, replicaState.logEndOffset)
+    assertTrue(fetchedEarliestOffset)
+    assertTrue(fetcher.fetchState(partition).isEmpty)
   }
 
   @Test
@@ -551,7 +655,7 @@ class AbstractFetcherThreadTest {
     private def lookupEndOffsetForEpoch(epochData: EpochData,
                                         partitionState: PartitionState): EpochEndOffset = {
       checkExpectedLeaderEpoch(epochData.currentLeaderEpoch, partitionState).foreach { error =>
-        new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+        return new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
       }
 
       var epochLowerBound = EpochEndOffset.UNDEFINED_EPOCH
@@ -587,7 +691,7 @@ class AbstractFetcherThreadTest {
           // for simplicity, we fetch only one batch at a time
           val records = leaderState.log.find(_.baseOffset >= fetchData.fetchOffset) match {
             case Some(batch) =>
-              val buffer = ByteBuffer.allocate(batch.sizeInBytes())
+              val buffer = ByteBuffer.allocate(batch.sizeInBytes)
               batch.writeTo(buffer)
               buffer.flip()
               MemoryRecords.readableRecords(buffer)

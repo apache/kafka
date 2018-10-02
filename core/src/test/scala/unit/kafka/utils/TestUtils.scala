@@ -862,7 +862,7 @@ object TestUtils extends Logging {
     }
 
     TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
-      s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout)
+      s"Did not observe leader change for partition $tp after $timeout ms", waitTime = timeout)
 
     newLeaderExists.get
   }
