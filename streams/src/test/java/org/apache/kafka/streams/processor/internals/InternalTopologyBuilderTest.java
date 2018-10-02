@@ -30,9 +30,11 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.MockWindowStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -780,5 +782,18 @@ public class InternalTopologyBuilderTest {
             "anyTopicName",
             sameNameForSourceAndProcessor,
             new MockProcessorSupplier());
+    }
+
+    @Test
+    public void shouldAllowAddGlobalStoreWithNonKVStore() {
+        final StoreBuilder windowStoreBuilder = new MockWindowStoreBuilder("store", false);
+        builder.addGlobalStore((StoreBuilder<WindowStore>) windowStoreBuilder.withLoggingDisabled(),
+                "name",
+                null,
+                null,
+                null,
+                "topicName",
+                "otherName",
+                new MockProcessorSupplier());
     }
 }
