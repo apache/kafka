@@ -56,11 +56,11 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         requireNonNull(suppress);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        maxRecords = suppress.getBufferConfig().maxRecords();
-        maxBytes = suppress.getBufferConfig().maxBytes();
-        suppressDurationMillis = suppress.getTimeToWaitForMoreEvents().toMillis();
-        bufferTimeDefinition = suppress.getTimeDefinition();
-        bufferFullStrategy = suppress.getBufferConfig().bufferFullStrategy();
+        maxRecords = suppress.bufferConfig().maxRecords();
+        maxBytes = suppress.bufferConfig().maxBytes();
+        suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
+        bufferTimeDefinition = suppress.timeDefinition();
+        bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
         shouldSuppressTombstones = suppress.shouldSuppressTombstones();
     }
 
