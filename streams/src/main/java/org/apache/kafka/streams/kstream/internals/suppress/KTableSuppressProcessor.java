@@ -28,6 +28,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.internals.ContextualRecord;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+
+import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 
@@ -35,25 +38,27 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private final long maxRecords;
     private final long maxBytes;
     private final long suppressDurationMillis;
-    private final TimeOrderedKeyValueBuffer buffer;
     private final TimeDefinition<K> bufferTimeDefinition;
     private final BufferFullStrategy bufferFullStrategy;
     private final boolean shouldSuppressTombstones;
+    private final String storeName;
+    private TimeOrderedKeyValueBuffer buffer;
     private InternalProcessorContext internalProcessorContext;
 
     private Serde<K> keySerde;
-    private Serde<Change<V>> valueSerde;
+    private FullChangeSerde<V> valueSerde;
 
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
+                                   final String storeName,
                                    final Serde<K> keySerde,
                                    final FullChangeSerde<V> valueSerde) {
+        this.storeName = storeName;
         requireNonNull(suppress);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         maxRecords = suppress.getBufferConfig().maxRecords();
         maxBytes = suppress.getBufferConfig().maxBytes();
         suppressDurationMillis = suppress.getTimeToWaitForMoreEvents().toMillis();
-        buffer = new InMemoryTimeOrderedKeyValueBuffer();
         bufferTimeDefinition = suppress.getTimeDefinition();
         bufferFullStrategy = suppress.getBufferConfig().bufferFullStrategy();
         shouldSuppressTombstones = suppress.shouldSuppressTombstones();
@@ -63,8 +68,9 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     @Override
     public void init(final ProcessorContext context) {
         internalProcessorContext = (InternalProcessorContext) context;
-        this.keySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
-        this.valueSerde = valueSerde == null ? FullChangeSerde.castOrWrap(context.valueSerde()) : valueSerde;
+        keySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
+        valueSerde = valueSerde == null ? FullChangeSerde.castOrWrap(context.valueSerde()) : valueSerde;
+        buffer = Objects.requireNonNull((TimeOrderedKeyValueBuffer) context.getStateStore(storeName));
     }
 
     @Override

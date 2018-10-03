@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.internals.ContextualRecord;
+import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-interface TimeOrderedKeyValueBuffer {
+public interface TimeOrderedKeyValueBuffer extends StateStore {
     void evictWhile(final Supplier<Boolean> predicate, final Consumer<KeyValue<Bytes, ContextualRecord>> callback);
 
     void put(final long time, final Bytes key, final ContextualRecord value);

@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
@@ -43,6 +44,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -356,20 +358,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public KTable<K, V> suppress(final Suppressed<K> suppressed) {
         final String name = builder.newProcessorName(SUPPRESS_NAME);
+        final String storeName = builder.newStoreName(SUPPRESS_NAME);
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier =
             () -> new KTableSuppressProcessor<>(
                 buildSuppress(suppressed),
+                storeName,
                 keySerde,
                 valSerde == null ? null : new FullChangeSerde<>(valSerde)
             );
 
-        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(
-            suppressionSupplier,
-            name
-        );
 
-        final ProcessorGraphNode<K, Change<V>> node = new ProcessorGraphNode<>(name, processorParameters, false);
+        final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
+            name,
+            new ProcessorParameters<>(suppressionSupplier, name),
+            null,
+            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName),
+            false
+        );
 
         builder.addGraphNode(streamsGraphNode, node);
 
