@@ -38,10 +38,16 @@ public class WorkerConfigTransformer {
         this.configTransformer = new ConfigTransformer(configProviders);
     }
 
+    public Map<String, String> transform(Map<String, String> configs) {
+        return transform(null, configs);
+    }
+
     public Map<String, String> transform(String connectorName, Map<String, String> configs) {
         if (configs == null) return null;
         ConfigTransformerResult result = configTransformer.transform(configs);
-        scheduleReload(connectorName, result.ttls());
+        if (connectorName != null) {
+            scheduleReload(connectorName, result.ttls());
+        }
         return result.data();
     }
 

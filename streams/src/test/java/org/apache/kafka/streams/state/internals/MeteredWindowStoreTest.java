@@ -71,7 +71,7 @@ public class MeteredWindowStoreTest {
             Serdes.String(),
             Serdes.Long(),
             streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             new RecordCollector.Supplier() {
                 @Override
                 public RecordCollector recordCollector() {

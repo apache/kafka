@@ -20,7 +20,7 @@ package kafka.utils
 import kafka.server.{KafkaConfig, ReplicaFetcherManager}
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.{IsrChangeNotificationZNode, TopicZNode, ZooKeeperTestHarness}
+import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -42,7 +42,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition(topic, partition)
     val leaderAndIsr = LeaderAndIsr(leader, leaderEpoch, isr, 1)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
-    zkClient.createTopicPartitionStatesRaw(Map(topicPartition -> leaderIsrAndControllerEpoch))
+    zkClient.createTopicPartitionStatesRaw(Map(topicPartition -> leaderIsrAndControllerEpoch), ZkVersion.MatchAnyVersion)
   }
 
   @Test

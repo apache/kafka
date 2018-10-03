@@ -156,7 +156,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Collections.<String>emptySet();
+        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Collections.emptySet();
     }
 
     @Override

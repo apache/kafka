@@ -169,6 +169,11 @@ public class ConnectorConfig extends AbstractConfig {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
+
+                    @Override
+                    public String toString() {
+                        return "unique transformation aliases";
+                    }
                 }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
                         in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,

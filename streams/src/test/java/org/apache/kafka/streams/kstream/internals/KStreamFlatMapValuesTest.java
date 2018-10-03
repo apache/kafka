@@ -38,17 +38,17 @@ public class KStreamFlatMapValuesTest {
 
     private String topicName = "topic";
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMapValues() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueMapper<Number, Iterable<String>> mapper =
+        final ValueMapper<Number, Iterable<String>> mapper =
             new ValueMapper<Number, Iterable<String>>() {
                 @Override
-                public Iterable<String> apply(Number value) {
-                    ArrayList<String> result = new ArrayList<String>();
+                public Iterable<String> apply(final Number value) {
+                    final ArrayList<String> result = new ArrayList<String>();
                     result.add("v" + value);
                     result.add("V" + value);
                     return result;
@@ -68,7 +68,7 @@ public class KStreamFlatMapValuesTest {
             }
         }
 
-        String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
+        final String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -76,13 +76,13 @@ public class KStreamFlatMapValuesTest {
 
     @Test
     public void testFlatMapValuesWithKeys() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueMapperWithKey<Integer, Number, Iterable<String>> mapper =
+        final ValueMapperWithKey<Integer, Number, Iterable<String>> mapper =
                 new ValueMapperWithKey<Integer, Number, Iterable<String>>() {
             @Override
             public Iterable<String> apply(final Integer readOnlyKey, final Number value) {
-                ArrayList<String> result = new ArrayList<>();
+                final ArrayList<String> result = new ArrayList<>();
                 result.add("v" + value);
                 result.add("k" + readOnlyKey);
                 return result;
@@ -103,7 +103,7 @@ public class KStreamFlatMapValuesTest {
             }
         }
 
-        String[] expected = {"0:v0", "0:k0", "1:v1", "1:k1", "2:v2", "2:k2", "3:v3", "3:k3"};
+        final String[] expected = {"0:v0", "0:k0", "1:v1", "1:k1", "2:v2", "2:k2", "3:v3", "3:k3"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

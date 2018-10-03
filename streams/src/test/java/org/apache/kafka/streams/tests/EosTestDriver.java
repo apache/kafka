@@ -57,7 +57,7 @@ import java.util.concurrent.TimeUnit;
 
 public class EosTestDriver extends SmokeTestUtil {
 
-    private static final int MAX_NUMBER_OF_KEYS = 100;
+    private static final int MAX_NUMBER_OF_KEYS = 20000;
     private static final long MAX_IDLE_TIME_MS = 600000L;
 
     private static boolean isRunning = true;

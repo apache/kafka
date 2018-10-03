@@ -85,7 +85,7 @@ public class TopicConfig {
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +
-        "Kafka adds an index entry to it's offset index. The default setting ensures that we index a " +
+        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
         "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
         "position in the log but makes the index larger. You probably don't need to change this.";
 
@@ -132,10 +132,10 @@ public class TopicConfig {
         "this configuration specifies the minimum number of replicas that must acknowledge " +
         "a write for the write to be considered successful. If this minimum cannot be met, " +
         "then the producer will raise an exception (either NotEnoughReplicas or " +
-        "NotEnoughReplicasAfterAppend).<br>When used together, min.insync.replicas and acks " +
+        "NotEnoughReplicasAfterAppend).<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
         "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-        "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
-        "produce with acks of \"all\". This will ensure that the producer raises an exception " +
+        "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
+        "produce with <code>acks</code> of \"all\". This will ensure that the producer raises an exception " +
         "if a majority of replicas do not receive a write.";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";

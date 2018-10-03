@@ -43,7 +43,7 @@ public class SessionWindowedDeserializerTest {
     @Test
     public void testWindowedKeyDeserializerNoArgConstructors() {
         sessionWindowedDeserializer.configure(props, true);
-        Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
+        final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
     }
@@ -51,7 +51,7 @@ public class SessionWindowedDeserializerTest {
     @Test
     public void testWindowedValueDeserializerNoArgConstructors() {
         sessionWindowedDeserializer.configure(props, false);
-        Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
+        final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
     }

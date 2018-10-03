@@ -434,16 +434,20 @@ object ConsumerGroupCommand extends Logging {
     private def getLogEndOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val offsets = getConsumer(groupId).endOffsets(topicPartitions.asJava)
       topicPartitions.map { topicPartition =>
-        val logEndOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(logEndOffset) => topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 
     private def getLogStartOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val offsets = getConsumer(groupId).beginningOffsets(topicPartitions.asJava)
       topicPartitions.map { topicPartition =>
-        val logStartOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(logStartOffset) => topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 

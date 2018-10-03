@@ -89,17 +89,17 @@ public class StateSerdesTest {
 
     @Test(expected = StreamsException.class)
     public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
-        Class myClass = Class.forName("java.lang.String");
-        StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
-        Integer myInt = 123;
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        final Integer myInt = 123;
         stateSerdes.rawValue(myInt);
     }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
-        Class myClass = Class.forName("java.lang.String");
-        StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
-        Integer myInt = 123;
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        final Integer myInt = 123;
         stateSerdes.rawKey(myInt);
     }
 

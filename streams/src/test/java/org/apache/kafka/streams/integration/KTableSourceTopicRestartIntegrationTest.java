@@ -227,7 +227,7 @@ public class KTableSourceTopicRestartIntegrationTest {
                                    final long endingOffset) {
             try {
                 produceKeyValues("d");
-            } catch (ExecutionException | InterruptedException e) {
+            } catch (final ExecutionException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }

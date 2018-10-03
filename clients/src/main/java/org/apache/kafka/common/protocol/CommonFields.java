@@ -27,7 +27,12 @@ public class CommonFields {
     public static final Field.Int32 PARTITION_ID = new Field.Int32("partition", "Topic partition id");
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
-    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The epoch");
+    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The leader epoch");
+    public static final Field.Int32 CURRENT_LEADER_EPOCH = new Field.Int32("current_leader_epoch",
+            "The current leader epoch, if provided, is used to fence consumers/replicas with old metadata. " +
+                    "If the epoch provided by the client is larger than the current epoch known to the broker, then " +
+                    "the UNKNOWN_LEADER_EPOCH error code will be returned. If the provided epoch is smaller, then " +
+                    "the FENCED_LEADER_EPOCH error code will be returned.");
 
     // Group APIs
     public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");
@@ -57,5 +62,14 @@ public class CommonFields {
 
     public static final Field.Str PRINCIPAL_TYPE = new Field.Str("principal_type", "principalType of the Kafka principal");
     public static final Field.Str PRINCIPAL_NAME = new Field.Str("name", "name of the Kafka principal");
+
+    public static final Field.Int64 COMMITTED_OFFSET = new Field.Int64("offset",
+            "Message offset to be committed");
+    public static final Field.NullableStr COMMITTED_METADATA = new Field.NullableStr("metadata",
+            "Any associated metadata the client wants to keep.");
+    public static final Field.Int32 COMMITTED_LEADER_EPOCH = new Field.Int32("leader_epoch",
+            "The leader epoch, if provided is derived from the last consumed record. " +
+                    "This is used by the consumer to check for log truncation and to ensure partition " +
+                    "metadata is up to date following a group rebalance.");
 
 }

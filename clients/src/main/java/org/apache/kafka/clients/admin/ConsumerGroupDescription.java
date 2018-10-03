@@ -45,7 +45,7 @@ public class ConsumerGroupDescription {
                                     Node coordinator) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members == null ? Collections.<MemberDescription>emptyList() :
+        this.members = members == null ? Collections.emptyList() :
             Collections.unmodifiableList(new ArrayList<>(members));
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.state = state;

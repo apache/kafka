@@ -93,7 +93,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public WindowStoreIterator<KeyValue> fetch(Object from, Object to, long timeFrom, long timeTo) {
+    public WindowStoreIterator<KeyValue> fetch(final Object from, final Object to, final long timeFrom, final long timeTo) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
     
@@ -103,7 +103,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
     
     @Override
-    public WindowStoreIterator<KeyValue> fetchAll(long timeFrom, long timeTo) {
+    public WindowStoreIterator<KeyValue> fetchAll(final long timeFrom, final long timeTo) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }

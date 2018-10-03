@@ -28,7 +28,9 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -38,7 +40,9 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
  * {@link OAuthBearerTokenCallback} and retrieves OAuth 2 Bearer Token that was
  * created when the {@code OAuthBearerLoginModule} logged in by looking for an
  * instance of {@link OAuthBearerToken} in the {@code Subject}'s private
- * credentials.
+ * credentials. This class also recognizes {@link SaslExtensionsCallback} and retrieves any SASL extensions that were
+ * created when the {@code OAuthBearerLoginModule} logged in by looking for an instance of {@link SaslExtensions}
+ * in the {@code Subject}'s public credentials
  * <p>
  * Use of this class is configured automatically and does not need to be
  * explicitly set via the {@code sasl.client.callback.handler.class}
@@ -49,7 +53,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
 
     /**
      * Return true if this instance has been configured, otherwise false
-     * 
+     *
      * @return true if this instance has been configured, otherwise false
      */
     public boolean configured() {
@@ -70,6 +74,8 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback)
                 handleCallback((OAuthBearerTokenCallback) callback);
+            else if (callback instanceof SaslExtensionsCallback)
+                handleCallback((SaslExtensionsCallback) callback, Subject.getSubject(AccessController.getContext()));
             else
                 throw new UnsupportedCallbackException(callback);
         }
@@ -85,12 +91,22 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
             throw new IllegalArgumentException("Callback had a token already");
         Subject subject = Subject.getSubject(AccessController.getContext());
         Set<OAuthBearerToken> privateCredentials = subject != null
-                ? subject.getPrivateCredentials(OAuthBearerToken.class)
-                : Collections.<OAuthBearerToken>emptySet();
+            ? subject.getPrivateCredentials(OAuthBearerToken.class)
+            : Collections.emptySet();
         if (privateCredentials.size() != 1)
             throw new IOException(
                     String.format("Unable to find OAuth Bearer token in Subject's private credentials (size=%d)",
                             privateCredentials.size()));
         callback.token(privateCredentials.iterator().next());
+    }
+
+    /**
+     * Attaches the first {@link SaslExtensions} found in the public credentials of the Subject
+     */
+    private static void handleCallback(SaslExtensionsCallback extensionsCallback, Subject subject) {
+        if (subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
+            SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
+            extensionsCallback.extensions(extensions);
+        }
     }
 }

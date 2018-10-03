@@ -71,7 +71,7 @@ public class ScramMessagesTest {
     @Test
     public void validClientFirstMessage() throws SaslException {
         String nonce = formatter.secureRandomString();
-        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce, Collections.<String, String>emptyMap());
+        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce, Collections.emptyMap());
         checkClientFirstMessage(m, "someuser", nonce, "");
 
         // Default format used by Kafka client: only user and nonce are specified
@@ -116,7 +116,7 @@ public class ScramMessagesTest {
     }
 
     @Test
-    public void invalidClientFirstMessage() throws SaslException {
+    public void invalidClientFirstMessage() {
         String nonce = formatter.secureRandomString();
         // Invalid entry in gs2-header
         String invalid = String.format("n,x=something,n=testuser,r=%s", nonce);
@@ -166,7 +166,7 @@ public class ScramMessagesTest {
     }
 
     @Test
-    public void invalidServerFirstMessage() throws SaslException {
+    public void invalidServerFirstMessage() {
         String nonce = formatter.secureRandomString();
         String salt = randomBytesAsString();
 
@@ -221,7 +221,7 @@ public class ScramMessagesTest {
     }
 
     @Test
-    public void invalidClientFinalMessage() throws SaslException {
+    public void invalidClientFinalMessage() {
         String nonce = formatter.secureRandomString();
         String channelBinding = randomBytesAsString();
         String proof = randomBytesAsString();
@@ -272,7 +272,7 @@ public class ScramMessagesTest {
     }
 
     @Test
-    public void invalidServerFinalMessage() throws SaslException {
+    public void invalidServerFinalMessage() {
         String serverSignature = randomBytesAsString();
 
         // Invalid error
@@ -299,7 +299,7 @@ public class ScramMessagesTest {
 
     private byte[] toBytes(String base64Str) {
         return Base64.getDecoder().decode(base64Str);
-    };
+    }
 
     private void checkClientFirstMessage(ClientFirstMessage message, String saslName, String nonce, String authzid) {
         assertEquals(saslName, message.saslName());

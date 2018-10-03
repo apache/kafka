@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.Deserializer
@@ -305,7 +305,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
       CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
 
-    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = 1)
 
     // Write one message while both brokers are up
     (0 until 1).foreach { i =>
@@ -328,7 +328,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = 1)
 
     //Write 3 messages
     (0 until 3).foreach { i =>
@@ -340,7 +340,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = 1)
 
     //Write 1 message
     (0 until 1).foreach { i =>
@@ -352,7 +352,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    producer = TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = 1)
 
     //Write 2 messages
     (0 until 2).foreach { i =>
@@ -411,11 +411,11 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1, lingerMs = 10000,
-      props = Option(CoreUtils.propsWith(
-        (ProducerConfig.BATCH_SIZE_CONFIG, String.valueOf(msg.length * 1000))
-        , (ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy")
-      )))
+    TestUtils.createProducer(getBrokerListStrFromServers(brokers),
+      acks = -1,
+      lingerMs = 10000,
+      batchSize = msg.length * 1000,
+      compressionType = "snappy")
   }
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
@@ -451,7 +451,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1)
+    TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = -1)
   }
 
   private def leader(): KafkaServer = {
