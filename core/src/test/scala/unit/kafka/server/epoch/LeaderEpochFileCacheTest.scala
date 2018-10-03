@@ -93,6 +93,7 @@ class LeaderEpochFileCacheTest {
 
     //Then the offset should NOT have been updated
     assertEquals(logEndOffset, cache.epochEntries(0).startOffset)
+    assertEquals(ListBuffer(EpochEntry(2, 9)), cache.epochEntries)
   }
 
   @Test
@@ -127,7 +128,6 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested(){
     logEndOffset = 73
-    def logEndOffsetFinder() = new LogOffsetMetadata(logEndOffset)
 
     //When (say a follower on older message format version) sends request for UNDEFINED_EPOCH
     val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
@@ -148,6 +148,19 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals((4, 11), epochAndOffset)
+  }
+
+  @Test
+  def shouldTruncateIfMatchingEpochButEarlierStartingOffset(): Unit = {
+    cache.assign(epoch = 5, startOffset = 11)
+    cache.assign(epoch = 6, startOffset = 12)
+    cache.assign(epoch = 7, startOffset = 13)
+
+    // epoch 7 starts at an earlier offset
+    cache.assign(epoch = 7, startOffset = 12)
+
+    assertEquals((5, 12), cache.endOffsetFor(5))
+    assertEquals((5, 12), cache.endOffsetFor(6))
   }
 
   @Test
@@ -249,10 +262,8 @@ class LeaderEpochFileCacheTest {
     //Then end offset for epoch 1 will have changed
     assertEquals((1, 8), cache.endOffsetFor(1))
 
-    //Then end offset for epoch 2 has to be the offset of the epoch 1 message (I can't think of a better option)
+    //Then end offset for epoch 2 is now undefined
     assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(2))
-
-    //Epoch history shouldn't have changed
     assertEquals(EpochEntry(1, 7), cache.epochEntries(0))
   }
 

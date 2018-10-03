@@ -27,13 +27,15 @@ import org.apache.kafka.common.TopicPartition
 import scala.collection.mutable.ListBuffer
 
 /**
-  * Represents a cache of (LeaderEpoch => Offset) mappings for a particular replica.
-  *
-  * Leader Epoch = epoch assigned to each leader by the controller.
-  * Offset = offset of the first message in each epoch.
-  *
-  * @param checkpoint the checkpoint file
-  */
+ * Represents a cache of (LeaderEpoch => Offset) mappings for a particular replica.
+ *
+ * Leader Epoch = epoch assigned to each leader by the controller.
+ * Offset = offset of the first message in each epoch.
+ *
+ * @param topicPartition the associated topic partition
+ * @param checkpoint the checkpoint file
+ * @param logEndOffset function to fetch the current log end offset
+ */
 class LeaderEpochFileCache(topicPartition: TopicPartition,
                            logEndOffset: () => Long,
                            checkpoint: LeaderEpochCheckpoint) extends Logging {
@@ -48,7 +50,14 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     */
   def assign(epoch: Int, startOffset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch != latestEpoch) {
+      val updateNeeded = if (epochs.isEmpty) {
+        true
+      } else {
+        val lastEntry = epochs.last
+        lastEntry.epoch != epoch || startOffset < lastEntry.startOffset
+      }
+
+      if (updateNeeded) {
         truncateAndAppend(EpochEntry(epoch, startOffset))
         flush()
       }
@@ -61,12 +70,18 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   private def truncateAndAppend(entryToAppend: EpochEntry): Unit = {
     validateAndMaybeWarn(entryToAppend)
 
-    epochs = epochs.filter { entry =>
+    val (retainedEpochs, removedEpochs) = epochs.partition { entry =>
       entry.epoch < entryToAppend.epoch && entry.startOffset < entryToAppend.startOffset
     }
-    epochs += entryToAppend
 
-    debug(s"Appended new epoch entry $entryToAppend. Cache now contains ${epochs.size} entries.")
+    epochs = retainedEpochs :+ entryToAppend
+
+    if (removedEpochs.isEmpty) {
+      debug(s"Appended new epoch entry $entryToAppend. Cache now contains ${epochs.size} entries.")
+    } else {
+      warn(s"New epoch entry $entryToAppend caused truncation of conflicting entries $removedEpochs. " +
+        s"Cache now contains ${epochs.size} entries.")
+    }
   }
 
   /**
@@ -111,19 +126,19 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
           if (subsequentEpochs.isEmpty) {
-            // The epoch is larger than any known epoch. This case should never be hit because the
-            // latest epoch is always the largest
+            // The requested epoch is larger than any known epoch. This case should never be hit because
+            // the latest cached epoch is always the largest.
             (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           } else if (previousEpochs.isEmpty) {
-            // The epoch is smaller than any known epoch, so we return the start offset of the first
+            // The requested epoch is smaller than any known epoch, so we return the start offset of the first
             // known epoch which is larger than it. This may be inaccurate as there could have been
             // epochs in between, but the point is that the data has already been removed from the log
             // and we want to ensure that the follower can replicate correctly beginning from the leader's
             // start offset.
             (requestedEpoch, subsequentEpochs.head.startOffset)
           } else {
-            // we must have at least one element in previous epochs list, because if we are here,
-            // it means that requestedEpoch >= epochs.head.epoch -- so at least the first epoch is
+            // We have at least one previous epoch and one subsequent epoch. The result is the first
+            // prior epoch and the starting offset of the first subsequent epoch.
             (previousEpochs.last.epoch, subsequentEpochs.head.startOffset)
           }
         }
@@ -164,11 +179,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
         val (subsequentEntries, previousEntries) = epochs.partition(_.startOffset > startOffset)
 
         previousEntries.lastOption.foreach { firstBeforeStartOffset =>
-          epochs = EpochEntry(firstBeforeStartOffset.epoch, startOffset) +: subsequentEntries
+          val updatedFirstEntry = EpochEntry(firstBeforeStartOffset.epoch, startOffset)
+          epochs = updatedFirstEntry +: subsequentEntries
 
           flush()
 
-          debug(s"Cleared entries ${previousEntries.tail} from epoch cache after " +
+          debug(s"Cleared entries $previousEntries and rewrote first entry $updatedFirstEntry after " +
             s"truncating to start offset $startOffset, leaving ${epochs.size} in the cache.")
         }
       }
