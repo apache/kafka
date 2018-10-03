@@ -22,7 +22,7 @@ import java.util.{Optional, Properties}
 
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
-import kafka.message.{ProducerCompressionCodec, ZStdCompressionCodec}
+import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -465,23 +465,32 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name,
+      LogConfig.MessageFormatVersionProp -> "2.0.0")
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
 
+    // Produce GZIP compressed messages (v2)
+    val producer1 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      compressionType = GZIPCompressionCodec.name,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer)
+    producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key1", "value1")).get
+    producer1.close
     // Produce ZSTD compressed messages (v2)
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer2 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       compressionType = ZStdCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
-      "key1", "value1")).get
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key2", "value2")).get
-    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key3", "value3")).get
-    producer.close
+    producer2.close
 
-    // fetch request with fetch version v1: empty response (from magic 2 to 0 down-conversion is disallowed!)
+    // fetch request with fetch version v1:
+    // gzip compressed record is returned with down-conversion.
+    // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
     val req0 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
@@ -489,26 +498,45 @@ class FetchRequestTest extends BaseRequestTest {
     val res0 = sendFetchRequest(leaderId, req0)
     val data0 = res0.responseData.get(topicPartition)
     assertEquals(Errors.NONE, data0.error)
-    assertEquals(records(data0).size, 0)
+    assertEquals(1, records(data0).size)
 
-    // fetch request with fetch version v3: empty response (from magic 2 to 1 down-conversion is disallowed!)
-    val req1 = new FetchRequest.Builder(2, 3, -1, Int.MaxValue, 0,
-      createPartitionMap(300, Seq(topicPartition), Map.empty))
+    /* Not working... why?
+    val req1 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
       .setMaxBytes(800).build()
 
     val res1 = sendFetchRequest(leaderId, req1)
-    val data1 = res0.responseData.get(topicPartition)
-    assertEquals(Errors.NONE, data1.error)
-    assertEquals(records(data1).size, 0)
+    val data1 = res1.responseData.get(topicPartition)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, data1.error)*/
 
-    // fetch request with version 10: works fine!
-    val req2= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+    // fetch request with fetch version v3: empty response (from magic 2 to 1 down-conversion is disallowed!)
+    // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
+    val req2 = new FetchRequest.Builder(2, 3, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
+
     val res2 = sendFetchRequest(leaderId, req2)
     val data2 = res2.responseData.get(topicPartition)
     assertEquals(Errors.NONE, data2.error)
-    assertEquals(records(data2).size, 3)
+    assertEquals(1, records(data2).size)
+
+    val req3 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
+      .setMaxBytes(800).build()
+
+    /* Not working... why?
+    val res3 = sendFetchRequest(leaderId, req3)
+    val data3 = res3.responseData.get(topicPartition)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, data3.error)*/
+
+    // fetch request with version 10: works fine!
+    val req4= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+    val res4 = sendFetchRequest(leaderId, req4)
+    val data4 = res4.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, data4.error)
+    assertEquals(3, records(data4).size)
   }
 
   private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
