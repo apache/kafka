@@ -17,24 +17,55 @@
 
 package kafka.admin
 
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.text.{ParseException, SimpleDateFormat}
+import java.time.Duration
+import java.time.temporal.{ChronoUnit, TemporalUnit}
 import java.util
-import java.util.{Date, Properties}
-
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Base64, Date, Properties}
 import javax.xml.datatype.DatatypeFactory
-import joptsimple.{OptionParser, OptionSpec}
+
+import joptsimple.{OptionParser, OptionSpec, ValueConverter}
+import kafka.admin.AuditType.AuditType
+import kafka.admin.ConsumerAuditMessageType.ConsumerAuditMessageType
+import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.utils._
 import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRebalanceListener, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Seq, Set}
+import scala.collection.{JavaConversions, Seq, Set}
 import scala.util.{Failure, Success, Try}
+
+object ConsumerAuditMessageType extends Enumeration {
+  type ConsumerAuditMessageType = Value
+  val GROUP_METADATA,GROUP_OFFSETS,PARTITION_ASSIGNMENT,OFFSET_COMMIT = Value
+
+}
+
+
+object AuditType extends Enumeration {
+  type AuditType = Value
+  val GROUP_METADATA,OFFSET_COMMITS = Value
+
+  def valueConverter = new ValueConverter[AuditType] {
+    override def valueType(): Class[_ <: AuditType] = classOf[AuditType]
+
+    override def convert(value: String): AuditType = AuditType.withName(value)
+
+    override def valuePattern(): String = AuditType.values mkString ","
+  }
+}
 
 object ConsumerGroupCommand extends Logging {
 
@@ -45,9 +76,9 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt,opts.auditOpt).count(opts.options.has)
     if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --audit")
 
     opts.checkArgs()
 
@@ -68,6 +99,8 @@ object ConsumerGroupCommand extends Logging {
         } else
           printOffsetsToReset(offsetsToReset)
       }
+      else if (opts.options.has(opts.auditOpt))
+        consumerGroupService.auditGroups()
     } catch {
       case e: Throwable =>
         printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
@@ -124,6 +157,142 @@ object ConsumerGroupCommand extends Logging {
 
     // `consumer` is only needed for `describe`, so we instantiate it lazily
     private var consumer: KafkaConsumer[String, String] = _
+
+    private def createAuditConsumer(bootstrapServer: String) = {
+      val properties = new Properties()
+      val deserializer = (new ByteArrayDeserializer).getClass.getName
+      val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
+      properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer)
+      properties.put(ConsumerConfig.GROUP_ID_CONFIG, "__audit-consumer-group-1")
+      properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+      properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
+      properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
+      properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
+      new KafkaConsumer[Array[Byte],Array[Byte]](properties)
+    }
+
+    private val auditRebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        println(s"Audit - Revoked partitions $partitions")
+      }
+
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        println(s"Audit - Assigned partitions $partitions")
+      }
+    }
+    val auditClose = new AtomicBoolean(false)
+
+    private def sendAsJsonObject(messageType: ConsumerAuditMessageType, m: Map[String,Any]): Unit = {
+      val messageTypePair = "consumerAuditMessageType" -> messageType.toString
+      val jm = JavaConversions.mapAsJavaMap(m + messageTypePair)
+      val s = Json.encodeAsString(jm)
+      println(s)
+    }
+
+    def auditGroups() = {
+      val auditType = opts.options.valueOf(opts.auditTypeOpt)
+
+      // TODO Should send all per-group committed offsets to some metric backend
+      // TODO Should periodically ask the brokers to provide per-topic end-offsets, and send them to some metric backend
+
+      val c = createAuditConsumer(opts.options.valueOf(opts.bootstrapServerOpt))
+      val d = Duration.of(Long.MaxValue,ChronoUnit.MILLIS)
+
+      try {
+        c.subscribe(List(Topic.GROUP_METADATA_TOPIC_NAME).asJavaCollection, auditRebalanceListener)
+        while (!auditClose.get()) {
+          val records = c.poll(d).asScala
+          for (r <- records) {
+            auditType match {
+              case AuditType.GROUP_METADATA =>
+                Option(r.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
+                  case groupMetadataKey: GroupMetadataKey =>
+                    val groupId = groupMetadataKey.key
+                    val value = r.value
+                    Option(value) match {
+                      case Some(v) =>
+                        val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(r.value),Time.SYSTEM)
+
+                        val groupMetadataAsMap = {
+                          Map(
+                            "groupId" -> groupId,
+                            "generation" -> groupMetadata.generationId,
+                            "protocolType" -> groupMetadata.protocolType.getOrElse(null),
+                            "currentState" -> groupMetadata.currentState.getClass.getSimpleName,
+                            "currentStateTimestamp" -> groupMetadata.currentStateTimestamp.getOrElse(null),
+                            "canRebalance" -> groupMetadata.canRebalance
+                          )
+                        }
+
+                        sendAsJsonObject(ConsumerAuditMessageType.GROUP_METADATA,groupMetadataAsMap)
+
+                        for ((topicPartition,offsetAndMetadata) <- groupMetadata.allOffsets) {
+                          val m = groupMetadataAsMap ++ Map(
+                            "topic" -> topicPartition.topic(),
+                            "partition" -> topicPartition.partition(),
+                            "offset" -> offsetAndMetadata.offset,
+                            "metadata" -> offsetAndMetadata.metadata,
+                            "commitTimestamp" -> offsetAndMetadata.commitTimestamp,
+                            "expireTimestamp" -> offsetAndMetadata.expireTimestamp.getOrElse(null))
+                          sendAsJsonObject(ConsumerAuditMessageType.GROUP_OFFSETS,m)
+                        }
+
+                        for (memberMetadata <- groupMetadata.allMemberMetadata) {
+                          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(memberMetadata.assignment))
+                          for (pt <- assignment.partitions().asScala) {
+                            val m = groupMetadataAsMap ++ Map(
+                              "memberId" -> memberMetadata.memberId,
+                              "clientId" -> memberMetadata.clientId,
+                              "clientHost" -> memberMetadata.clientHost,
+                              "rebalanceTimeoutMs" -> memberMetadata.rebalanceTimeoutMs,
+                              "sessionTimeoutMs" -> memberMetadata.sessionTimeoutMs,
+                              "protocolType" -> memberMetadata.protocolType,
+                              // TODO Add supportedProtocols
+                              "topic" -> pt.topic(),
+                              "partition" -> pt.partition(),
+                              "userData" -> Base64.getEncoder.encode(assignment.userData()))
+                            sendAsJsonObject(ConsumerAuditMessageType.PARTITION_ASSIGNMENT,m)
+                          }
+                        }
+                      case None => //
+                    }
+                  case _ => // separately parse offset commits
+                }
+              case AuditType.OFFSET_COMMITS =>
+                Option(r.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
+                  case offsetKey: OffsetKey =>
+                    val groupTopicPartition = offsetKey.key
+                    val value = r.value
+                    Option(value) match {
+                      case Some(v) =>
+                        val offsetMessage = GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value))
+                        val m = Map(
+                          "group" -> groupTopicPartition.group,
+                          "topic" -> groupTopicPartition.topicPartition.topic(),
+                          "partition" -> groupTopicPartition.topicPartition.partition(),
+                          "offset" -> offsetMessage.offset,
+                          "leaderEpoch" -> offsetMessage.leaderEpoch.orElse(null),
+                          "metadata" -> offsetMessage.metadata,
+                          "commitTimestamp" -> offsetMessage.commitTimestamp,
+                          "expireTimestamp" -> offsetMessage.expireTimestamp.getOrElse(null))
+                        sendAsJsonObject(ConsumerAuditMessageType.OFFSET_COMMIT,m)
+                      case None => //
+                    }
+                  case _ => // no-op
+                }
+            }
+          }
+        }
+      }
+      catch {
+        case e: WakeupException =>
+          if (!auditClose.get())
+            throw e
+      }
+      finally {
+        c.close()
+      }
+    }
 
     def listGroups(): List[String] = {
       val result = adminClient.listConsumerGroups(
@@ -773,10 +942,16 @@ object ConsumerGroupCommand extends Logging {
                            .availableIf(describeOpt)
     val stateOpt = parser.accepts("state", StateDoc)
                          .availableIf(describeOpt)
+    val auditOpt = parser.accepts("audit","Run a service which emits rebalancing and offset commits information in a machine-readable way")
+    val auditTypeOpt = parser.accepts("audit-type","Choose which types of events to audit")
+      .availableIf(auditOpt)
+      .withRequiredArg().withValuesConvertedBy(AuditType.valueConverter).defaultsTo(AuditType.GROUP_METADATA)
 
-    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+
+    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt, auditOpt)
 
     val options = parser.parse(args : _*)
+
 
     val describeOptPresent = options.has(describeOpt)
 
