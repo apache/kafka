@@ -216,7 +216,7 @@ abstract class AbstractFetcherThread(name: String,
     ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
-  private def onPartitionFenced(tp: TopicPartition): Unit = {
+  private def onPartitionFenced(tp: TopicPartition): Unit = inLock(partitionMapLock) {
     Option(partitionStates.stateValue(tp)).foreach { currentFetchState =>
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
@@ -415,7 +415,8 @@ abstract class AbstractFetcherThread(name: String,
    * @param tp                    Topic partition
    * @param leaderEpochOffset     Epoch end offset received from the leader for this topic partition
    */
-  private def getOffsetTruncationState(tp: TopicPartition, leaderEpochOffset: EpochEndOffset): OffsetTruncationState = {
+  private def getOffsetTruncationState(tp: TopicPartition,
+                                       leaderEpochOffset: EpochEndOffset): OffsetTruncationState = inLock(partitionMapLock) {
     if (leaderEpochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
       // truncate to initial offset which is the high watermark for follower replica. For
       // future replica, it is either high watermark of the future replica or current
