@@ -111,6 +111,7 @@ object ConsoleProducer {
 
   class ProducerConfig(args: Array[String]) {
     val parser = new OptionParser(false)
+    val help = parser.accepts("help", "Print all options and its descriptions")
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
       .withRequiredArg
       .describedAs("topic")
@@ -205,7 +206,7 @@ object ConsoleProducer {
       .ofType(classOf[String])
 
     val options = parser.parse(args : _*)
-    if (args.length == 0)
+    if (args.length == 0 || options.has(help))
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 

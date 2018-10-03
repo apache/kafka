@@ -190,6 +190,7 @@ object ConsoleConsumer extends Logging {
 
   class ConsumerConfig(args: Array[String]) {
     val parser = new OptionParser(false)
+    val help = parser.accepts("help", "Print all options and its descriptions")
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
       .describedAs("topic")
@@ -274,11 +275,12 @@ object ConsoleConsumer extends Logging {
       .describedAs("consumer group id")
       .ofType(classOf[String])
 
-    if (args.length == 0)
+    val options: OptionSet = tryParse(parser, args)
+
+    if (args.length == 0 || options.has(help))
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
 
     var groupIdPassed = true
-    val options: OptionSet = tryParse(parser, args)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
