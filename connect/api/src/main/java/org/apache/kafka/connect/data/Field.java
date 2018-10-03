@@ -71,7 +71,10 @@ public class Field {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, index, schema);
+        int result = index;
+        result = 31 * result + (name != null ? name.hashCode() : 0);
+        result = 31 * result + (schema != null ? schema.hashCode() : 0);
+        return result;
     }
 
     @Override
