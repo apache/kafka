@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
-import org.apache.kafka.streams.kstream.internals.suppress.SuppressedImpl;
+import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
 
@@ -155,6 +155,6 @@ public interface Suppressed<K> {
      * @return a suppression configuration
      */
     static <K> Suppressed<K> untilTimeLimit(final Duration timeToWaitForMoreEvents, final BufferConfig bufferConfig) {
-        return new SuppressedImpl<>(timeToWaitForMoreEvents, bufferConfig, null, false);
+        return new SuppressedInternal<>(timeToWaitForMoreEvents, bufferConfig, null, false);
     }
 }

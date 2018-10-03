@@ -38,9 +38,7 @@ import static org.junit.Assert.assertEquals;
 
 public class StreamsGraphTest {
 
-    final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
-    
-
+    private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
     // Test builds topology in succesive manner but only graph node not yet processed written to topology
 

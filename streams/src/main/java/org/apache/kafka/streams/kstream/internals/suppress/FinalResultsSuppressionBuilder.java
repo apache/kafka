@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -30,11 +29,11 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         this.bufferConfig = bufferConfig;
     }
 
-    public SuppressedImpl<K> buildFinalResultsSuppression(final Duration gracePeriod) {
-        return new SuppressedImpl<>(
+    public SuppressedInternal<K> buildFinalResultsSuppression(final Duration gracePeriod) {
+        return new SuppressedInternal<>(
             gracePeriod,
             bufferConfig,
-            (ProcessorContext context, K key) -> key.window().end(),
+            TimeDefinitions.WindowEndTimeDefinition.instance(),
             true
         );
     }

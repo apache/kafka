@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -32,12 +33,17 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -75,6 +81,8 @@ public class KStreamImplTest {
 
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    private Serde<String> mySerde = new Serdes.StringSerde();
 
     @Before
     public void before() {
@@ -178,6 +186,121 @@ public class KStreamImplTest {
             2 + // through
             1, // process
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
+    }
+
+    @Test
+    public void shouldPreserveSerdesForOperators() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("topic-1"), stringConsumed);
+        final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);
+        final GlobalKTable<String, String> table2 = builder.globalTable("topic-2", stringConsumed);
+        final ConsumedInternal<String, String> consumedInternal = new ConsumedInternal<>(stringConsumed);
+
+        final KeyValueMapper<String, String, String> selector = (key, value) -> key;
+        final KeyValueMapper<String, String, Iterable<KeyValue<String, String>>> flatSelector = (key, value) -> Collections.singleton(new KeyValue<>(key, value));
+        final ValueMapper<String, String> mapper = value -> value;
+        final ValueMapper<String, Iterable<String>> flatMapper = Collections::singleton;
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> value1;
+        final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier = () -> new Transformer<String, String, KeyValue<String, String>>() {
+            @Override
+            public void init(final ProcessorContext context) {}
+
+            @Override
+            public KeyValue<String, String> transform(final String key, final String value) {
+                return new KeyValue<>(key, value);
+            }
+
+            @Override
+            public void close() {}
+        };
+        final ValueTransformerSupplier<String, String> valueTransformerSupplier = () -> new ValueTransformer<String, String>() {
+            @Override
+            public void init(final ProcessorContext context) {}
+
+            @Override
+            public String transform(final String value) {
+                return value;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        assertEquals(((AbstractStream) stream1.filter((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.filter((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+
+        assertEquals(((AbstractStream) stream1.filterNot((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.filterNot((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+
+        assertNull(((AbstractStream) stream1.selectKey(selector)).keySerde());
+        assertEquals(((AbstractStream) stream1.selectKey(selector)).valueSerde(), consumedInternal.valueSerde());
+
+        assertNull(((AbstractStream) stream1.map(KeyValue::new)).keySerde());
+        assertNull(((AbstractStream) stream1.map(KeyValue::new)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.mapValues(mapper)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.mapValues(mapper)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.flatMap(flatSelector)).keySerde());
+        assertNull(((AbstractStream) stream1.flatMap(flatSelector)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.flatMapValues(flatMapper)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.flatMapValues(flatMapper)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).keySerde());
+        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.merge(stream1)).keySerde());
+        assertNull(((AbstractStream) stream1.merge(stream1)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.through("topic-3")).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.through("topic-3")).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) stream1.groupByKey()).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.groupByKey()).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.groupByKey(Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupByKey(Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) stream1.groupBy(selector)).keySerde(), null);
+        assertEquals(((AbstractStream) stream1.groupBy(selector)).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.groupBy(selector, Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupBy(selector, Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L))).keySerde(), null);
+        assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L))).valueSerde(), null);
+        assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(100L))).keySerde(), null);
+        assertEquals(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(100L))).valueSerde(), null);
+        assertEquals(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(100L))).keySerde(), null);
+        assertEquals(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(100L))).valueSerde(), null);
+        assertEquals(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(100L), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.join(table1, joiner)).valueSerde(), null);
+        assertEquals(((AbstractStream) stream1.join(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.join(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).valueSerde(), null);
+
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner)).valueSerde(), null);
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).valueSerde(), null);
+
+        assertEquals(((AbstractStream) stream1.join(table2, selector, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.join(table2, selector, joiner)).valueSerde(), null);
+
+        assertEquals(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).valueSerde(), null);
     }
 
     @Test

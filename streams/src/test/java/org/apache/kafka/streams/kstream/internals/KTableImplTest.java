@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -28,13 +30,17 @@ import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -62,6 +68,7 @@ import static org.junit.Assert.assertNull;
 
 public class KTableImplTest {
 
+    private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
@@ -69,6 +76,8 @@ public class KTableImplTest {
 
     private StreamsBuilder builder;
     private KTable<String, String> table;
+
+    private Serde<String> mySerde = new Serdes.StringSerde();
 
     @Before
     public void setUp() {
@@ -123,6 +132,74 @@ public class KTableImplTest {
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
         assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
         assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
+    }
+
+    @Test
+    public void shouldPreserveSerdesForOperators() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);
+        final ConsumedInternal<String, String> consumedInternal = new ConsumedInternal<>(stringConsumed);
+
+        final KeyValueMapper<String, String, String> selector = (key, value) -> key;
+        final ValueMapper<String, String> mapper = value -> value;
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> value1;
+        final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier = () -> new ValueTransformerWithKey<String, String, String>() {
+            @Override
+            public void init(final ProcessorContext context) {}
+
+            @Override
+            public String transform(final String key, final String value) {
+                return value;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        assertEquals(((AbstractStream) table1.filter((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.filter((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.filterNot((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.filterNot((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.mapValues(mapper)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) table1.mapValues(mapper)).valueSerde());
+        assertEquals(((AbstractStream) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.toStream()).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.toStream()).valueSerde(), consumedInternal.valueSerde());
+        assertNull(((AbstractStream) table1.toStream(selector)).keySerde());
+        assertEquals(((AbstractStream) table1.toStream(selector)).valueSerde(), consumedInternal.valueSerde());
+
+        assertEquals(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier)).valueSerde());
+        assertEquals(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).keySerde(), null);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).valueSerde(), null);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.join(table1, joiner)).valueSerde(), null);
+        assertEquals(((AbstractStream) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.leftJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.leftJoin(table1, joiner)).valueSerde(), null);
+        assertEquals(((AbstractStream) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) table1.outerJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) table1.outerJoin(table1, joiner)).valueSerde(), null);
+        assertEquals(((AbstractStream) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
     }
 
     @Test
