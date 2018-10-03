@@ -75,15 +75,15 @@ public class SuppressedInternal<K> implements Suppressed<K> {
         if (o == null || getClass() != o.getClass()) return false;
         final SuppressedInternal<?> that = (SuppressedInternal<?>) o;
         return suppressTombstones == that.suppressTombstones &&
-            Objects.equals(name(), that.name()) &&
-            Objects.equals(bufferConfig(), that.bufferConfig()) &&
-            Objects.equals(timeToWaitForMoreEvents(), that.timeToWaitForMoreEvents()) &&
-            Objects.equals(timeDefinition(), that.timeDefinition());
+            Objects.equals(name, that.name) &&
+            Objects.equals(bufferConfig, that.bufferConfig) &&
+            Objects.equals(timeToWaitForMoreEvents, that.timeToWaitForMoreEvents) &&
+            Objects.equals(timeDefinition, that.timeDefinition);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name(), bufferConfig(), timeToWaitForMoreEvents(), timeDefinition(), suppressTombstones);
+        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, suppressTombstones);
     }
 
     @Override
