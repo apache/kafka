@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.api.{ApiVersion, KAFKA_1_1_IV0, KAFKA_2_1_IV0}
+import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{Log, LogAppendInfo}
@@ -35,6 +35,7 @@ import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
 import java.nio.ByteBuffer
+import java.util.Optional
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
@@ -932,7 +933,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
@@ -974,7 +975,8 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsetAndMetadata = OffsetAndMetadata(offset, "", time.milliseconds())
+    val offsets = immutable.Map(topicPartition -> offsetAndMetadata)
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -996,7 +998,7 @@ class GroupMetadataManagerTest {
     group.completePendingTxnOffsetCommit(producerId, isCommit = true)
     assertTrue(group.hasOffsets)
     assertFalse(group.allOffsets.isEmpty)
-    assertEquals(Some(OffsetAndMetadata(offset)), group.offset(topicPartition))
+    assertEquals(Some(offsetAndMetadata), group.offset(topicPartition))
 
     EasyMock.verify(replicaManager)
   }
@@ -1014,7 +1016,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1053,7 +1055,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1091,7 +1093,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     EasyMock.replay(replicaManager)
 
@@ -1133,7 +1135,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1329,7 +1331,7 @@ class GroupMetadataManagerTest {
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
     val offsets = immutable.Map(
-      topicPartition1 -> OffsetAndMetadata(offset, "", startMs, startMs + 1),
+      topicPartition1 -> OffsetAndMetadata(offset, Optional.empty(), "", startMs, Some(startMs + 1)),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
 
     mockGetPartition()
@@ -1633,7 +1635,7 @@ class GroupMetadataManagerTest {
     )
 
     val apiVersion = KAFKA_1_1_IV0
-    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, apiVersion = apiVersion, retentionTime = Some(100))
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, apiVersion = apiVersion, retentionTimeOpt = Some(100))
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, apiVersion = apiVersion)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
@@ -1673,7 +1675,7 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
-    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, retentionTime = Some(100))
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, retentionTimeOpt = Some(100))
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
@@ -1698,6 +1700,70 @@ class GroupMetadataManagerTest {
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
       assertTrue(group.offset(topicPartition).map(_.expireTimestamp).get.nonEmpty)
     }
+  }
+
+  @Test
+  def testSerdeOffsetCommitValue(): Unit = {
+    val offsetAndMetadata = OffsetAndMetadata(
+      offset = 537L,
+      leaderEpoch = Optional.of(15),
+      metadata = "metadata",
+      commitTimestamp = time.milliseconds(),
+      expireTimestamp = None)
+
+    def verifySerde(apiVersion: ApiVersion, expectedOffsetCommitValueVersion: Int): Unit = {
+      val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)
+      val buffer = ByteBuffer.wrap(bytes)
+
+      assertEquals(expectedOffsetCommitValueVersion, buffer.getShort(0).toInt)
+
+      val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
+      assertEquals(offsetAndMetadata.offset, deserializedOffsetAndMetadata.offset)
+      assertEquals(offsetAndMetadata.metadata, deserializedOffsetAndMetadata.metadata)
+      assertEquals(offsetAndMetadata.commitTimestamp, deserializedOffsetAndMetadata.commitTimestamp)
+
+      // Serialization drops the leader epoch silently if an older inter-broker protocol is in use
+      val expectedLeaderEpoch = if (expectedOffsetCommitValueVersion >= 3)
+        offsetAndMetadata.leaderEpoch
+      else
+        Optional.empty()
+
+      assertEquals(expectedLeaderEpoch, deserializedOffsetAndMetadata.leaderEpoch)
+    }
+
+    for (version <- ApiVersion.allVersions) {
+      val expectedSchemaVersion = version match {
+        case v if v < KAFKA_2_1_IV0 => 1
+        case v if v < KAFKA_2_1_IV1 => 2
+        case _ => 3
+      }
+      verifySerde(version, expectedSchemaVersion)
+    }
+  }
+
+  @Test
+  def testSerdeOffsetCommitValueWithExpireTimestamp(): Unit = {
+    // If expire timestamp is set, we should always use version 1 of the offset commit
+    // value schema since later versions do not support it
+
+    val offsetAndMetadata = OffsetAndMetadata(
+      offset = 537L,
+      leaderEpoch = Optional.empty(),
+      metadata = "metadata",
+      commitTimestamp = time.milliseconds(),
+      expireTimestamp = Some(time.milliseconds() + 1000))
+
+    def verifySerde(apiVersion: ApiVersion): Unit = {
+      val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)
+      val buffer = ByteBuffer.wrap(bytes)
+      assertEquals(1, buffer.getShort(0).toInt)
+
+      val deserializedOffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(buffer)
+      assertEquals(offsetAndMetadata, deserializedOffsetAndMetadata)
+    }
+
+    for (version <- ApiVersion.allVersions)
+      verifySerde(version)
   }
 
   private def appendAndCaptureCallback(): Capture[Map[TopicPartition, PartitionResponse] => Unit] = {
@@ -1804,14 +1870,15 @@ class GroupMetadataManagerTest {
   private def createCommittedOffsetRecords(committedOffsets: Map[TopicPartition, Long],
                                            groupId: String = groupId,
                                            apiVersion: ApiVersion = ApiVersion.latestVersion,
-                                           retentionTime: Option[Long] = None): Seq[SimpleRecord] = {
+                                           retentionTimeOpt: Option[Long] = None): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
-      val offsetAndMetadata = retentionTime match {
-        case Some(timestamp) =>
-          val commitTimestamp = time.milliseconds()
-          OffsetAndMetadata(offset, "", commitTimestamp, commitTimestamp + timestamp)
+      val commitTimestamp = time.milliseconds()
+      val offsetAndMetadata = retentionTimeOpt match {
+        case Some(retentionTimeMs) =>
+          val expirationTime = commitTimestamp + retentionTimeMs
+          OffsetAndMetadata(offset, "", commitTimestamp, expirationTime)
         case None =>
-          OffsetAndMetadata(offset)
+          OffsetAndMetadata(offset, "", commitTimestamp)
       }
       val offsetCommitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
       val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)

@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ExtendedSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -416,15 +417,25 @@ public class KafkaProducerTest {
         Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
+    @SuppressWarnings("unchecked") // safe as generic parameters won't vary
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testHeadersWithExtendedClasses() throws Exception {
+        doTestHeaders(ExtendedSerializer.class);
+    }
+
+    @SuppressWarnings("unchecked")
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testHeaders() throws Exception {
+        doTestHeaders(Serializer.class);
+    }
+
+    private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
-        ExtendedSerializer<String> keySerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
-        @SuppressWarnings("unchecked")
-        ExtendedSerializer<String> valueSerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
+        T keySerializer = PowerMock.createNiceMock(serializerClassToMock);
+        T valueSerializer = PowerMock.createNiceMock(serializerClassToMock);
 
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);

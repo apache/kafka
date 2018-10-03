@@ -21,9 +21,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -43,7 +43,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -59,8 +60,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
-    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new HashMap<>();
-    private final Set<StreamsGraphNode> mergeNodes = new HashSet<>();
+    private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
+    private final LinkedHashSet<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -79,30 +80,33 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name, topics, consumed);
 
-        final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
-                                                                              topics,
-                                                                              consumed);
         addGraphNode(root, streamSourceNode);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
+        return new KStreamImpl<>(name,
+                                 consumed.keySerde(),
+                                 consumed.valueSerde(),
+                                 Collections.singleton(name),
+                                 false,
+                                 streamSourceNode,
+                                 this);
     }
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
-
-        final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name,
-                                                                                      topicPattern,
-                                                                                      consumed);
+        final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
 
         addGraphNode(root, streamPatternSourceNode);
 
-        return new KStreamImpl<>(this,
-                                 name,
+        return new KStreamImpl<>(name,
+                                 consumed.keySerde(),
+                                 consumed.valueSerde(),
                                  Collections.singleton(name),
                                  false,
-                                 streamPatternSourceNode);
+                                 streamPatternSourceNode,
+                                 this);
     }
 
     @SuppressWarnings("unchecked")
@@ -129,15 +133,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         addGraphNode(root, tableSourceNode);
 
-        return new KTableImpl<>(this,
-                                name,
-                                processorSupplier,
+        return new KTableImpl<>(name,
                                 consumed.keySerde(),
                                 consumed.valueSerde(),
                                 Collections.singleton(source),
                                 storeBuilder.name(),
                                 materialized.isQueryable(),
-                                tableSourceNode);
+                                processorSupplier,
+                                tableSourceNode,
+                                this);
     }
 
     @SuppressWarnings("unchecked")
@@ -248,7 +252,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
 
         if (node.isKeyChangingOperation()) {
-            keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
+            keyChangingOperationsToOptimizableRepartitionNodes.put(node, new LinkedHashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
             final StreamsGraphNode parentNode = getKeyChangingParentNode(node);
             if (parentNode != null) {
@@ -302,7 +306,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
 
-        for (final Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
+        for (final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
 
             final StreamsGraphNode keyChangingNode = entry.getKey();
 
@@ -310,11 +314,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 continue;
             }
 
-            final SerializedInternal serialized = new SerializedInternal(getRepartitionSerdes(entry.getValue()));
+            final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
-            final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
-                                                                                      serialized.keySerde(),
-                                                                                      serialized.valueSerde());
+            final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
+            //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
+            final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
+                                                                                      groupedInternal.keySerde(),
+                                                                                      groupedInternal.valueSerde());
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -363,7 +369,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void maybeUpdateKeyChangingRepartitionNodeMap() {
         final Map<StreamsGraphNode, Set<StreamsGraphNode>> mergeNodesToKeyChangers = new HashMap<>();
         for (final StreamsGraphNode mergeNode : mergeNodes) {
-            mergeNodesToKeyChangers.put(mergeNode, new HashSet<>());
+            mergeNodesToKeyChangers.put(mergeNode, new LinkedHashSet<>());
             final Collection<StreamsGraphNode> keys = keyChangingOperationsToOptimizableRepartitionNodes.keySet();
             for (final StreamsGraphNode key : keys) {
                 final StreamsGraphNode maybeParentKey = findParentNodeMatching(mergeNode, node -> node.parentNodes().contains(key));
@@ -376,7 +382,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         for (final Map.Entry<StreamsGraphNode, Set<StreamsGraphNode>> entry : mergeNodesToKeyChangers.entrySet()) {
             final StreamsGraphNode mergeKey = entry.getKey();
             final Collection<StreamsGraphNode> keyChangingParents = entry.getValue();
-            final Set<OptimizableRepartitionNode> repartitionNodes = new HashSet<>();
+            final LinkedHashSet<OptimizableRepartitionNode> repartitionNodes = new LinkedHashSet<>();
             for (final StreamsGraphNode keyChangingParent : keyChangingParents) {
                 repartitionNodes.addAll(keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingParent));
                 keyChangingOperationsToOptimizableRepartitionNodes.remove(keyChangingParent);
@@ -387,7 +393,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private OptimizableRepartitionNode createRepartitionNode(final String name,
+    private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
                                                              final Serde keySerde,
                                                              final Serde valueSerde) {
 
@@ -395,9 +401,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
-                                              name + "-optimized",
-                                              name,
+                                              repartitionTopicName,
                                               repartitionNodeBuilder);
+
+        // ensures setting the repartition topic to the name of the
+        // first repartition topic to get merged
+        // this may be an auto-generated name or a user specified name
+        repartitionNodeBuilder.withRepartitionTopic(repartitionTopicName);
 
         return repartitionNodeBuilder.build();
 
@@ -413,8 +423,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return null;
     }
 
+    private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+        return repartitionNodes.iterator().next().repartitionTopic();
+    }
+
     @SuppressWarnings("unchecked")
-    private SerializedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+    private GroupedInternal getRepartitionSerdes(final Collection<OptimizableRepartitionNode> repartitionNodes) {
         Serde keySerde = null;
         Serde valueSerde = null;
 
@@ -432,7 +446,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
 
-        return new SerializedInternal(Serialized.with(keySerde, valueSerde));
+        return new GroupedInternal(Grouped.with(keySerde, valueSerde));
     }
 
     private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,

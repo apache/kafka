@@ -44,10 +44,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private boolean sendOldValues = false;
 
-    KStreamWindowAggregate(final Windows<W> windows,
-                           final String storeName,
-                           final Initializer<Agg> initializer,
-                           final Aggregator<? super K, ? super V, Agg> aggregator) {
+    public KStreamWindowAggregate(final Windows<W> windows,
+                                  final String storeName,
+                                  final Initializer<Agg> initializer,
+                                  final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -57,6 +57,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     @Override
     public Processor<K, V> get() {
         return new KStreamWindowAggregateProcessor();
+    }
+
+    public Windows<W> windows() {
+        return windows;
     }
 
     @Override

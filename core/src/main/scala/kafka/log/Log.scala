@@ -1353,12 +1353,17 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Delete any log segments that have either expired due to time based retention
-   * or because the log size is > retentionSize
+   * If topic deletion is enabled, delete any log segments that have either expired due to time based retention
+   * or because the log size is > retentionSize.
+   *
+   * Whether or not deletion is enabled, delete any log segments that are before the log start offset
    */
   def deleteOldSegments(): Int = {
-    if (!config.delete) return 0
-    deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+    if (config.delete) {
+      deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+    } else {
+      deleteLogStartOffsetBreachedSegments()
+    }
   }
 
   private def deleteRetentionMsBreachedSegments(): Int = {
