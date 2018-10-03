@@ -347,6 +347,9 @@
                     The primary interface to implement for the store is
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code>.  Kafka Streams also has a few extended interfaces such
                     as <code class="docutils literal"><span class="pre">KeyValueStore</span></code>.</p>
+                <p>Note that your customized <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code> implementation also needs to provide the logic on how to restore the state
+                    via the <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateRestoreCallback</span></code> or <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.BatchingStateRestoreCallback</span></code> interface.
+                    Details on how to instantiate these interfaces can be found in the <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/StateStore.html">javadocs</a>.</p>
                 <p>You also need to provide a &#8220;builder&#8221; for the store by implementing the
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.state.StoreBuilder</span></code> interface, which Kafka Streams uses to create instances of
                     your store.</p>
