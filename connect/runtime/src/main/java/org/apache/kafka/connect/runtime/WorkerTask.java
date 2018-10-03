@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -215,6 +216,7 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
+        LoggingContext logCtx = LoggingContext.forTask(id());
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         String savedName = Thread.currentThread().getName();
         try {
@@ -236,6 +238,7 @@ abstract class WorkerTask implements Runnable {
                     releaseResources();
                 } finally {
                     taskMetricsGroup.close();
+                    logCtx.close();
                 }
             }
         }
