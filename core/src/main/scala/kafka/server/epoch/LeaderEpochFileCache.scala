@@ -119,9 +119,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
           // a follower is on the older message format where leader epochs are not recorded
           (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
         } else if (requestedEpoch == latestEpoch) {
-          // The latest epoch is always the current epoch that is still being written to. Followers
-          // should not have any reason to query the latest epoch since truncation always takes place
-          // after the epoch is incremented.
+          // For the leader, the latest epoch is always the current leader epoch that is still being written to.
+          // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
+          // might if it is verifying its committed offset following a group rebalance. In this case, we return
+          // the current log end offset which makes the truncation check work as expected.
           (requestedEpoch, logEndOffset())
         } else {
           val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
