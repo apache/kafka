@@ -58,9 +58,10 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
-    private boolean open;
     private RecordCollector collector;
     private String changelogTopic;
+
+    private volatile boolean open;
 
     public static class Builder implements StoreBuilder<StateStore> {
 
@@ -83,8 +84,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
         @Override
         public StoreBuilder<StateStore> withLoggingEnabled(final Map<String, String> config) {
-            loggingEnabled = true;
-            return this;
+            throw new UnsupportedOperationException();
         }
 
         @Override
