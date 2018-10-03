@@ -377,7 +377,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new String[]{storeName},
+            null,
             new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName),
             false
         );
