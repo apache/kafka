@@ -93,7 +93,7 @@ public class OAuthBearerTokenCallback implements Callback {
      *            the mandatory token to set
      */
     public void token(OAuthBearerToken token) {
-        this.token = Objects.requireNonNull(token);
+        this.token = token;
         this.errorCode = null;
         this.errorDescription = null;
         this.errorUri = null;
