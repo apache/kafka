@@ -243,8 +243,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public boolean isControlBatch() {
-        // Due to KAFKA-7467, we need to check for empty control batches and treat them as non-control batches
-        return (attributes() & CONTROL_FLAG_MASK) > 0 && count() > 0;
+        return (attributes() & CONTROL_FLAG_MASK) > 0;
     }
 
     @Override
