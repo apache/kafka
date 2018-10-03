@@ -88,110 +88,6 @@
         At runtime, the logical topology is instantiated and replicated inside the application for parallel processing (see <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks"><b>Stream Partitions and Tasks</b></a> for details).
     </p>
 
-    <h3><a id="streams_concepts_kstream" href="#streams_concepts_kstream">KStream</a></h3>
-
-    <p>
-        Only the <strong>Kafka Streams DSL</strong> has the notion of a <code>KStream</code>.
-    </p>
-
-    <p>
-        A <strong>KStream</strong> is an abstraction of a <strong>record stream</strong>, where each data record represents a self-contained datum in the unbounded data set. Using the table analogy, data records in a record stream are always interpreted as an &quot;INSERT&quot; -- think: adding more entries to an append-only ledger -- because no record replaces an existing row with the same key. Examples are a credit card transaction, a page view event, or a server log entry.
-    </p>
-
-    <p>
-        To illustrate, let's imagine the following two data records are being sent to the stream:
-    </p>
-
-    <div class="sourcecode">
-        <p>(&quot;alice&quot;, 1) --&gt; (&quot;alice&quot;, 3)</p>
-    </div>
-
-    <p>
-        If your stream processing application were to sum the values per user, it would return <code>4</code> for <code>alice</code>. Why? Because the second data record would not be considered an update of the previous record. Compare this behavior of KStream to <code>KTable</code> below,
-        which would return <code>3</code> for <code>alice</code>.
-    </p>
-
-    <h3><a id="streams_concepts_ktable" href="#streams_concepts_ktable">KTable</a></h3>
-
-    <p>
-        Only the <strong>Kafka Streams DSL</strong> has the notion of a <code>KTable</code>.
-    </p>
-
-    <p>
-        A <strong>KTable</strong> is an abstraction of a <strong>changelog stream</strong>, where each data record represents an update. More precisely, the value in a data record is interpreted as an &quot;UPDATE&quot; of the last value for the same record key, if any (if a corresponding key doesn't exist yet, the update will be considered an INSERT). Using the table analogy, a data record in a changelog stream is interpreted as an UPSERT aka INSERT/UPDATE because any existing row with the same key is overwritten. Also, <code>null</code> values are interpreted in a special way: a record with a <code>null</code> value represents a &quot;DELETE&quot; or tombstone for the record's key.
-    </p>
-    <p>
-        To illustrate, let's imagine the following two data records are being sent to the stream:
-    </p>
-
-    <div class="sourcecode">
-        <p>
-            (&quot;alice&quot;, 1) --&gt; (&quot;alice&quot;, 3)
-        </p>
-    </div>
-
-    <p>
-        If your stream processing application were to sum the values per user, it would return <code>3</code> for <code>alice</code>. Why? Because the second data record would be considered an update of the previous record.
-    </p>
-
-    <p>
-        <strong>Effects of Kafka's log compaction:</strong> Another way of thinking about KStream and KTable is as follows: If you were to store a KTable into a Kafka topic, you'd probably want to enable Kafka's <a href="http://kafka.apache.org/documentation.html#compaction">log compaction</a> feature, e.g. to save storage space.
-    </p>
-
-    <p>
-        However, it would not be safe to enable log compaction in the case of a KStream because, as soon as log compaction would begin purging older data records of the same key, it would break the semantics of the data. To pick up the illustration example again, you'd suddenly get a <code>3</code> for <code>alice</code> instead of a <code>4</code> because log compaction would have removed the <code>(&quot;alice&quot;, 1)</code> data record. Hence log compaction is perfectly safe for a KTable (changelog stream) but it is a mistake for a KStream (record stream).
-    </p>
-
-    <p>
-        We have already seen an example of a changelog stream in the section <strong>streams_concepts_duality</strong>. Another example are change data capture (CDC) records in the changelog of a relational database, representing which row in a database table was inserted, updated, or deleted.
-    </p>
-
-    <p>
-        KTable also provides an ability to look up <em>current</em> values of data records by keys. This table-lookup functionality is available through <strong>join operations</strong> (see also <strong>Joining</strong> in the Developer Guide) as well as through <strong>Interactive Queries</strong>.
-    </p>
-
-    <h3><a id="streams_concepts_globalktable" href="#streams_concepts_globalktable">GlobalKTable</a></h3>
-
-    <p>Only the <strong>Kafka Streams DSL</strong> has the notion of a <strong>GlobalKTable</strong>.</p>
-
-    <p>
-        Like a <strong>KTable</strong>, a <strong>GlobalKTable</strong> is an abstraction of a <strong>changelog stream</strong>, where each data record represents an update.
-    </p>
-
-    <p>
-        A GlobalKTable differs from a KTable in the data that they are being populated with, i.e. which data from the underlying Kafka topic is being read into the respective table. Slightly simplified, imagine you have an input topic with 5 partitions. In your application, you want to read this topic into a table. Also, you want to run your application across 5 application instances for <strong>maximum parallelism</strong>.
-    </p>
-
-    <ul>
-        <li>
-            If you read the input topic into a <strong>KTable</strong>, then the &quot;local&quot; KTable instance of each application instance will be populated with data <strong>from only 1 partition</strong> of the topic's 5 partitions.
-        </li>
-
-        <li>
-            If you read the input topic into a <strong>GlobalKTable</strong>, then the local GlobalKTable instance of each application instance will be populated with data <strong>from all partitions of the topic</strong>.
-        </li>
-    </ul>
-
-    <p>
-        GlobalKTable provides the ability to look up <em>current</em> values of data records by keys. This table-lookup functionality is available through <code class="interpreted-text">join operations</code>.
-    </p>
-    <p>Benefits of global tables:</p>
-
-    <ul>
-        <li>
-            More convenient and/or efficient <strong>joins</strong>: Notably, global tables allow you to perform star joins, they support &quot;foreign-key&quot; lookups (i.e., you can lookup data in the table not just by record key, but also by data in the record values), and they are more efficient when chaining multiple joins. Also, when joining against a global table, the input data does not need to be <strong>co-partitioned</strong>.
-        </li>
-        <li>
-            Can be used to &quot;broadcast&quot; information to all the running instances of your application.
-        </li>
-    </ul>
-
-    <p>Downsides of global tables:</p>
-    <ul>
-        <li>Increased local storage consumption compared to the (partitioned) KTable because the entire topic is tracked.</li>
-        <li>Increased network and Kafka broker load compared to the (partitioned) KTable because the entire topic is read.</li>
-    </ul>
-
     <h3><a id="streams_time" href="#streams_time">Time</a></h3>
 
     <p>
@@ -244,7 +140,7 @@
         In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
     </p>
 
-    <h3 <a id="streams_concepts_windowing" href="streams_concepts_windowing">Windowing</a></h3>
+    <h3> <a id="streams_concepts_windowing" href="streams_concepts_windowing">Windowing</a></h3>
     <p>
         Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
     </p>
