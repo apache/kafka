@@ -42,17 +42,18 @@ private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningS
 /**
   * This class manages the state of each partition being cleaned.
   * LogCleaningState defines the cleaning states that a TopicPartition can be in.
-  * 1. None                    : No cleaning state in a TopicPartition.
-  *                              Valid previous state are None, LogCleaningInProgress and LogCleaningPaused(1)
-  * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when it finishes cleaning
-  *                              or become LogCleaningAborted when there is an abort on this topic partition.
-  *                              Valid previous state is None.
-  * 3. LogCleaningAborted      : The cleaning is aborted. In this state, it can become LogCleaningPaused(1) when abort is finished.
+  * 1. None                    : No cleaning state in a TopicPartition. In this state, it can become LogCleaningInProgress
+  *                              or LogCleaningPaused(1). Valid previous state are None, LogCleaningInProgress and LogCleaningPaused(1)
+  * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when log cleaning is finished
+  *                              or become LogCleaningAborted. Valid previous state is None.
+  * 3. LogCleaningAborted      : The cleaning abort is requested. In this state, it can become LogCleaningPaused(1).
   *                              Valid previous state is LogCleaningInProgress.
-  * 4. LogCleaningPaused(i)    : The cleaning is paused i times. Valid previous state of LogCleaningPaused(1) are LogCleaningAborted,
-  *                              None and LogCleaningPaused(2). LogCleaningPaused(i) can become LogCleaningPaused(i+1) or
-  *                              LogCleaningPaused(i-1). If the end state is LogCleaningPaused(0),
-  *                              the state will be removed and becomes a None State.
+  * 4-a. LogCleaningPaused(1)  : The cleaning is paused once. No log cleaning can be done in this state.
+  *                            : In this state, it can become None or LogCleaningPaused(2).
+  *                            : Valid previous state is None, LogCleaningAborted or LogCleaningPaused(2).
+  * 4-b. LogCleaningPaused(i)  : The cleaning is paused i times where i>= 2. No log cleaning can be done in this state.
+  *                              In this state, it can become LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
+  *                              Valid previous state is LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],

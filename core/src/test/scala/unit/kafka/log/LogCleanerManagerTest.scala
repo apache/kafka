@@ -143,66 +143,42 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
-    * test log retention, topic deletion, and log truncation can handle
-    * pause and resume cleaning on a topic partition correctly.
+    * log with retention in progress should still be picked up for log truncation
     */
   @Test
-  def testLogsRetentionDeletionTruncationHandlePauseAndResumeCleaning(): Unit = {
+  def testLogsWithRetentionInprogressShouldBePickedUpForLogTruncation(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    log.appendAsLeader(records, leaderEpoch = 0)
-    log.roll()
-    log.appendAsLeader(records, leaderEpoch = 0)
-    log.onHighWatermarkIncremented(2L)
+    // log retention starts
+    val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
+    // Log truncation happens due to unclean leader election
+    cleanerManager.abortAndPauseCleaning(log.topicPartition)
+    cleanerManager.resumeCleaning(Seq(log.topicPartition))
+    // log retention finishes and pausedPartitions are resumed
+    cleanerManager.resumeCleaning(pausedPartitions.map(_._1))
 
-    val numOfRun = 100
+    assertEquals(None, cleanerManager.cleaningState(log.topicPartition))
+  }
 
-    def logRetention(): Unit = {
-      for (i <- 0 until numOfRun) {
-        val retetionLogs = cleanerManager.pauseCleaningForNonCompactedPartitions()
-        Thread.`yield`()
-        cleanerManager.resumeCleaning(retetionLogs.map(_._1))
-        Thread.`yield`()
-      }
-    }
+  /**
+    * log with retention in progress should still be picked up for topic deletion
+    */
+  @Test
+  def testLogsWithRetentionInprogressShouldBePickedUpForTopicDeletion(): Unit = {
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
+    val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    def topicDetention(): Unit = {
-      for (i <- 0 until numOfRun) {
-        cleanerManager.abortCleaning(log.topicPartition)
-        Thread.`yield`()
-      }
-    }
+    // log retention starts
+    val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
+    // Broker processes StopReplicaRequest with delete=true
+    cleanerManager.abortCleaning(log.topicPartition)
+    // log retention finishes and pausedPartitions are resumed
+    cleanerManager.resumeCleaning(pausedPartitions.map(_._1))
 
-    // log truncation is mutually exclusive from topic deletion in practice
-    // since topic deletion will stop all fetch threads that perform log truncation.
-    def logTruncation(): Unit = {
-      for (i <- 0 until numOfRun) {
-        cleanerManager.abortAndPauseCleaning(log.topicPartition)
-        Thread.`yield`()
-        cleanerManager.resumeCleaning(Seq(log.topicPartition))
-        Thread.`yield`()
-      }
-    }
-
-    assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
-
-    // run log retention and log truncation in parallel
-    TestUtils.assertConcurrent("Concurrent log race condition test",
-      Seq(logRetention, logTruncation),
-      60000)
-
-    // make sure state is cleared
-    assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
-
-    // run log retention and topic deletion in parallel
-    TestUtils.assertConcurrent("Concurrent log race condition test",
-      Seq(logRetention, topicDetention),
-      60000)
-
-    // make sure state is cleared at the end
-    assertTrue(cleanerManager.cleaningState(log.topicPartition).isEmpty)
+    assertEquals(None, cleanerManager.cleaningState(log.topicPartition))
   }
 
   /**
