@@ -801,7 +801,7 @@ public interface KStream<K, V> {
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
      * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka
-     * if a later operator depends on the newly selected key..
+     * if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
@@ -892,8 +892,8 @@ public interface KStream<K, V> {
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
-     * This topic will be as "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * This topic will be as "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -990,9 +990,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * <p>
@@ -1068,9 +1068,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.

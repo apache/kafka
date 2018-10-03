@@ -389,6 +389,8 @@ class AdminManager(val config: KafkaConfig,
             this.config.dynamicConfig.validate(configProps, perBrokerConfig)
             validateConfigPolicy(ConfigResource.Type.BROKER)
             if (!validateOnly) {
+              if (perBrokerConfig)
+                this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
               adminZkClient.changeBrokerConfig(brokerId,
                 this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
             }
