@@ -540,8 +540,8 @@ object ConsumerGroupCommand extends Logging {
       resetPlanCsv.split("\n")
         .foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
           val CsvRecord(group, topic, partition, offset) = csvReader.readValue[CsvRecord](line)
-          val topicPartition = new TopicPartition(topic, partition.toInt)
-          val offsetAndMetadata = new OffsetAndMetadata(offset.toLong)
+          val topicPartition = new TopicPartition(topic, partition)
+          val offsetAndMetadata = new OffsetAndMetadata(offset)
           val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
           acc.updated(group, dataMap)
         }
