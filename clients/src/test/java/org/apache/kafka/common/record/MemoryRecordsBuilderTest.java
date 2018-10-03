@@ -481,6 +481,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
                 compressionType, TimestampType.LOG_APPEND_TIME, 0L);
@@ -510,49 +515,28 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
+
+        // Transactional markers are skipped when down converting to V1, so exclude them from size
+        verifyRecordsProcessingStats(convertedRecords.recordConversionStats(),
+                3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
+
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
-        List<Record> logRecords = Utils.toList(records.records().iterator());
-
-        switch (compressionType) {
-            case NONE:
-                // Transactional markers are skipped when down converting to V1, so exclude them from size
-                verifyRecordsProcessingStats(convertedRecords.recordConversionStats(),
-                    3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
-
-                assertEquals(3, batches.size());
-                assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(2).timestampType());
-
-                assertEquals(3, logRecords.size());
-                assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
-                assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
-                assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
-                break;
-            case ZSTD:
-                // Downconversion of ZSTD compressed records is disallowed
-                verifyRecordsProcessingStats(convertedRecords.recordConversionStats(),
-                    3, 0, records.sizeInBytes(), sizeExcludingTxnMarkers);
-
-                assertEquals(0, batches.size());
-
-                assertEquals(0, logRecords.size());
-                break;
-            default:
-                // Transactional markers are skipped when down converting to V1, so exclude them from size
-                verifyRecordsProcessingStats(convertedRecords.recordConversionStats(),
-                    3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
-
-                assertEquals(2, batches.size());
-                assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
-
-                assertEquals(3, logRecords.size());
-                assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
-                assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
-                assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
-                break;
+        if (compressionType != CompressionType.NONE) {
+            assertEquals(2, batches.size());
+            assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
+            assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
+        } else {
+            assertEquals(3, batches.size());
+            assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
+            assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
+            assertEquals(TimestampType.CREATE_TIME, batches.get(2).timestampType());
         }
+
+        List<Record> logRecords = Utils.toList(records.records().iterator());
+        assertEquals(3, logRecords.size());
+        assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
+        assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
+        assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
     }
 
     @Test
