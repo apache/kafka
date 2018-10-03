@@ -47,13 +47,12 @@ public interface StateStore {
 
     /**
      * Initializes this state store.
-     *
+     * <p>
      * The implementation of this function must register the root store in the context via the
      * {@link ProcessorContext#register(StateStore, StateRestoreCallback)} function, where the
      * first {@link StateStore} parameter should always be the passed-in {@code root} object, and
      * the second parameter should be an object of user's implementation
      * of the {@link StateRestoreCallback} interface used for restoring the state store from the changelog.
-     *
      * <p>
      * Note that if the state store engine itself supports bulk writes, users can implement another
      * interface {@link BatchingStateRestoreCallback} which extends {@link StateRestoreCallback} to
