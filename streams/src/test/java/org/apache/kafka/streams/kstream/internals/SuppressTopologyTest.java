@@ -60,7 +60,7 @@ public class SuppressTopologyTest {
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [counts])\n" +
         "      --> myname\n" +
         "      <-- KSTREAM-SOURCE-0000000005\n" +
-        "    Processor: myname (stores: [])\n" +
+        "    Processor: myname (stores: [myname-store])\n" +
         "      --> KTABLE-TOSTREAM-0000000006\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KTABLE-TOSTREAM-0000000006 (stores: [])\n" +
@@ -92,17 +92,17 @@ public class SuppressTopologyTest {
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [counts])\n" +
         "      --> KTABLE-SUPPRESS-0000000006\n" +
         "      <-- KSTREAM-SOURCE-0000000005\n" +
-        "    Processor: KTABLE-SUPPRESS-0000000006 (stores: [])\n" +
-        "      --> KTABLE-TOSTREAM-0000000007\n" +
+        "    Processor: KTABLE-SUPPRESS-0000000006 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000007])\n" +
+        "      --> KTABLE-TOSTREAM-0000000008\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
-        "    Processor: KTABLE-TOSTREAM-0000000007 (stores: [])\n" +
-        "      --> KSTREAM-MAP-0000000008\n" +
+        "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+        "      --> KSTREAM-MAP-0000000009\n" +
         "      <-- KTABLE-SUPPRESS-0000000006\n" +
-        "    Processor: KSTREAM-MAP-0000000008 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000009\n" +
-        "      <-- KTABLE-TOSTREAM-0000000007\n" +
-        "    Sink: KSTREAM-SINK-0000000009 (topic: output-suppressed)\n" +
-        "      <-- KSTREAM-MAP-0000000008\n" +
+        "    Processor: KSTREAM-MAP-0000000009 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000010\n" +
+        "      <-- KTABLE-TOSTREAM-0000000008\n" +
+        "    Sink: KSTREAM-SINK-0000000010 (topic: output-suppressed)\n" +
+        "      <-- KSTREAM-MAP-0000000009\n" +
         "\n";
 
     private static final String NAMED_INTERMEDIATE_TOPOLOGY = "Topologies:\n" +
@@ -112,7 +112,7 @@ public class SuppressTopologyTest {
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
         "      --> asdf\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: asdf (stores: [])\n" +
+        "    Processor: asdf (stores: [asdf-store])\n" +
         "      --> KTABLE-TOSTREAM-0000000003\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
         "    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])\n" +
@@ -129,14 +129,14 @@ public class SuppressTopologyTest {
         "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
         "      --> KTABLE-SUPPRESS-0000000003\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
-        "    Processor: KTABLE-SUPPRESS-0000000003 (stores: [])\n" +
-        "      --> KTABLE-TOSTREAM-0000000004\n" +
+        "    Processor: KTABLE-SUPPRESS-0000000003 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000004])\n" +
+        "      --> KTABLE-TOSTREAM-0000000005\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
-        "    Processor: KTABLE-TOSTREAM-0000000004 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000005\n" +
+        "    Processor: KTABLE-TOSTREAM-0000000005 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000006\n" +
         "      <-- KTABLE-SUPPRESS-0000000003\n" +
-        "    Sink: KSTREAM-SINK-0000000005 (topic: output)\n" +
-        "      <-- KTABLE-TOSTREAM-0000000004\n" +
+        "    Sink: KSTREAM-SINK-0000000006 (topic: output)\n" +
+        "      <-- KTABLE-TOSTREAM-0000000005\n" +
         "\n";
 
 
