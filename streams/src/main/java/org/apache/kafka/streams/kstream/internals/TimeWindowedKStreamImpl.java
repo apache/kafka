@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -170,8 +171,8 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
                 supplier = Stores.persistentWindowStore(
                     materialized.storeName(),
-                    retentionPeriod,
-                    windows.size(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.size()),
                     false
                 );
 

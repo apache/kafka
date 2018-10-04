@@ -36,6 +36,7 @@ import org.junit.runner.RunWith;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.time.Instant.ofEpochMilli;
 import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
@@ -101,7 +102,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         init();
 
-        store.fetch(bytesKey, 0, 10);
+        store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
         EasyMock.verify(inner);
     }
 
@@ -111,7 +112,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         init();
 
-        store.fetch(bytesKey, bytesKey, 0, 1);
+        store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
     }
 

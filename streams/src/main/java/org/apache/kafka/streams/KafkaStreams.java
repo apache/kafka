@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
@@ -827,7 +829,9 @@ public class KafkaStreams {
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
+     * @deprecated Use {@link #close(Duration)} instead
      */
+    @Deprecated
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
 
@@ -893,6 +897,22 @@ public class KafkaStreams {
             log.info("Streams client cannot stop completely within the timeout");
             return false;
         }
+    }
+
+    /**
+     * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
+     * threads to join.
+     * A {@code timeout} of 0 means to wait forever.
+     *
+     * @param timeout  how long to wait for the threads to shutdown
+     * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
+     * before all threads stopped
+     * Note that this method must not be called in the {@link StateListener#onChange(State, State)} callback of {@link StateListener}.
+     * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
+     */
+    public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(timeout, "timeout");
+        return close(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**

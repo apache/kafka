@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -52,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 import kafka.utils.MockTime;
 
@@ -148,7 +148,7 @@ public class GlobalThreadShutDownOrderTest {
             }
         }, 10000L, "Has not processed record within 10 seconds");
 
-        kafkaStreams.close(30, TimeUnit.SECONDS);
+        kafkaStreams.close(Duration.ofSeconds(30));
 
         final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);

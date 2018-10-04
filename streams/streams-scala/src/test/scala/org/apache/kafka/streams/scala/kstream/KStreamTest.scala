@@ -18,6 +18,8 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
+import java.time.Duration.ofSeconds
+
 import org.apache.kafka.streams.kstream.JoinWindows
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
@@ -143,7 +145,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
-    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(1000)).to(sinkTopic)
+    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
 

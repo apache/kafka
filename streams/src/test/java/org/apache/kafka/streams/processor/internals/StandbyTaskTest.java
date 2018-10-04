@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.time.Duration.ofMillis;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
@@ -211,7 +212,7 @@ public class StandbyTaskTest {
         }
 
         restoreStateConsumer.seekToBeginning(partition);
-        task.update(partition2, restoreStateConsumer.poll(Duration.ofMillis(100)).records(partition2));
+        task.update(partition2, restoreStateConsumer.poll(ofMillis(100)).records(partition2));
 
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
         final MockKeyValueStore store1 = (MockKeyValueStore) context.getStateMgr().getStore(storeName1);
@@ -239,8 +240,8 @@ public class StandbyTaskTest {
         builder
             .stream(Collections.singleton("topic"), new ConsumedInternal<>())
             .groupByKey()
-            .windowedBy(TimeWindows.of(60_000).grace(0L))
-            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(120_000L));
+            .windowedBy(TimeWindows.of(ofMillis(60_000)).grace(ofMillis(0L)))
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as(storeName).withRetention(ofMillis(120_000L)));
 
         builder.buildAndOptimizeTopology();
 
@@ -484,7 +485,7 @@ public class StandbyTaskTest {
     @Test
     public void shouldInitializeWindowStoreWithoutException() throws IOException {
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
-        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().windowedBy(TimeWindows.of(100)).count();
+        builder.stream(Collections.singleton("topic"), new ConsumedInternal<>()).groupByKey().windowedBy(TimeWindows.of(ofMillis(100))).count();
 
         initializeStandbyStores(builder);
     }

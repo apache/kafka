@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -243,12 +244,14 @@ public class Materialized<K, V, S extends StateStore> {
      * from window-start through window-end, and for the entire grace period.
      *
      * @return itself
+     * @throws IllegalArgumentException if retention is negative or can't be represented as {@code long milliseconds}
      */
-    public Materialized<K, V, S> withRetention(final long retentionMs) {
-        if (retentionMs < 0) {
+    public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(retention, "retention");
+        if (retention.toMillis() < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
-        retention = Duration.ofMillis(retentionMs);
+        this.retention = retention;
         return this;
     }
 }

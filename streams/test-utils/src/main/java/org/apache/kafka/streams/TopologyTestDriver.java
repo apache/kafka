@@ -150,7 +150,7 @@ import java.util.regex.Pattern;
  * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
- * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation} callbacks.
+ * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
  * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
  * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
@@ -489,7 +489,7 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuations}.
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */

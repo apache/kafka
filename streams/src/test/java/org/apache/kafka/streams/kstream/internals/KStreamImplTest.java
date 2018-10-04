@@ -63,6 +63,7 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -162,14 +163,14 @@ public class KStreamImplTest {
             public Integer apply(final Integer value1, final Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), joined);
+        }, JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
         streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(final Integer value1, final Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), joined);
+        }, JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
         stream4.to("topic-5");
 
@@ -383,7 +384,7 @@ public class KStreamImplTest {
             });
         stream.join(kStream,
                     valueJoiner,
-                    JoinWindows.of(windowSize).until(3 * windowSize),
+                    JoinWindows.of(ofMillis(windowSize)).until(3 * windowSize),
                     Joined.with(Serdes.String(),
                                 Serdes.String(),
                                 Serdes.String()))
@@ -418,7 +419,7 @@ public class KStreamImplTest {
         stream.join(
             kStream,
             valueJoiner,
-            JoinWindows.of(windowSize).grace(3L * windowSize),
+            JoinWindows.of(ofMillis(windowSize)).grace(ofMillis(3L * windowSize)),
             Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
         )
               .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
@@ -537,12 +538,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherStreamOnJoin() {
-        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10));
+        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueJoinerOnJoin() {
-        testStream.join(testStream, null, JoinWindows.of(10));
+        testStream.join(testStream, null, JoinWindows.of(ofMillis(10)));
     }
 
     @Test(expected = NullPointerException.class)
@@ -655,12 +656,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
-        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
-        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10), null);
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
     }
     
     @Test

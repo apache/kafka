@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -852,8 +853,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 joinName + "-store",
-                windows.size() + windows.gracePeriodMs(),
-                windows.size(),
+                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                Duration.ofMillis(windows.size()),
                 true
             ),
             keySerde,

@@ -434,7 +434,7 @@ public class SuppressionIntegrationTest {
                     Consumed.with(STRING_SERDE, STRING_SERDE)
             )
             .groupBy((String k1, String v1) -> k1, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(scaledTime(2L)).grace(scaledTime(1L)))
+            .windowedBy(TimeWindows.of(ofMillis(scaledTime(2L))).grace(ofMillis(scaledTime(1L))))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withLoggingDisabled());
 
         valueCounts
