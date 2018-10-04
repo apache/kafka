@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.hamcrest.BaseMatcher;
+import org.hamcrest.Description;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -57,11 +59,11 @@ public final class StreamsTestUtils {
     public static Properties getStreamsConfig(final Serde keyDeserializer,
                                               final Serde valueDeserializer) {
         return getStreamsConfig(
-                UUID.randomUUID().toString(),
-                "localhost:9091",
-                keyDeserializer.getClass().getName(),
-                valueDeserializer.getClass().getName(),
-                new Properties());
+            UUID.randomUUID().toString(),
+            "localhost:9091",
+            keyDeserializer.getClass().getName(),
+            valueDeserializer.getClass().getName(),
+            new Properties());
     }
 
     public static Properties getStreamsConfig(final String applicationId) {
@@ -160,6 +162,29 @@ public final class StreamsTestUtils {
             throw new IllegalStateException("Didn't find metric with name=[" + name + "] and tags=[" + filterTags + "]");
         } else {
             return metric;
+        }
+    }
+
+    public static class IntNumberMatcher extends BaseMatcher<Object> {
+        private final int expected;
+
+        public static IntNumberMatcher isRoughly(final int expected) {
+            return new IntNumberMatcher(expected);
+        }
+
+        private IntNumberMatcher(final int expected) {
+            this.expected = expected;
+        }
+
+        @Override
+        public boolean matches(final Object item) {
+            final Number other = (Number) item;
+            return other.intValue() == expected;
+        }
+
+        @Override
+        public void describeTo(final Description description) {
+            description.appendText("~" + Integer.toString(expected));
         }
     }
 }

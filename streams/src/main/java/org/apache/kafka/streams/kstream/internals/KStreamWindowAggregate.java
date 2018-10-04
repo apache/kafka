@@ -75,6 +75,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
+        private Sensor recordLatenessSensor;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -85,6 +86,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             metrics = (StreamsMetricsImpl) context.metrics();
 
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
+            recordLatenessSensor = Sensors.recordLatenessSensor(internalProcessorContext);
 
             windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
@@ -129,6 +131,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );
                     lateRecordDropSensor.record();
+                    // note: since we add one to the lateness for this reason:
+                    // if the window end is equal to the close time, it is considered late.
+                    // specifically, it is 1ms late. This equates to the expression we use: (close - end + 1)
+                    recordLatenessSensor.record(closeTime - windowEnd + 1);
                 }
             }
         }

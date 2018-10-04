@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
+import java.util.Map;
 
 public class Sensors {
     private Sensors() {}
@@ -36,6 +41,39 @@ public class Sensors {
             "stream-processor-node-metrics",
             metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", context.currentNode().name()),
             "late-record-drop"
+        );
+        return sensor;
+    }
+
+    public static Sensor recordLatenessSensor(final InternalProcessorContext context) {
+        final StreamsMetricsImpl metrics = context.metrics();
+
+        final Sensor sensor = metrics.nodeLevelSensor(
+            context.taskId().toString(),
+            context.currentNode().name(),
+            "record-lateness",
+            Sensor.RecordingLevel.INFO
+        );
+
+        final Map<String, String> tags = metrics.tagMap(
+            "task-id", context.taskId().toString(),
+            "processor-node-id", context.currentNode().name()
+        );
+        sensor.add(
+            new MetricName(
+                "record-lateness-avg",
+                "stream-processor-node-metrics",
+                "The average observed lateness of records.",
+                tags),
+            new Avg()
+        );
+        sensor.add(
+            new MetricName(
+                "record-lateness-max",
+                "stream-processor-node-metrics",
+                "The max observed lateness of records.",
+                tags),
+            new Max()
         );
         return sensor;
     }

@@ -82,6 +82,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
+        private Sensor recordLatenessSensor;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -90,6 +91,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             internalProcessorContext = (InternalProcessorContext) context;
             metrics = (StreamsMetricsImpl) context.metrics();
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
+            recordLatenessSensor = Sensors.recordLatenessSensor(internalProcessorContext);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
@@ -149,6 +151,10 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     key, context().topic(), context().partition(), context().offset(), context().timestamp(), mergedWindow.start(), mergedWindow.end(), closeTime
                 );
                 lateRecordDropSensor.record();
+                // note: since we add one to the lateness for this reason:
+                // if the window end is equal to the close time, it is considered late.
+                // specifically, it is 1ms late. This equates to the expression we use: (close - end + 1)
+                recordLatenessSensor.record(closeTime - mergedWindow.end() + 1);
             }
         }
 
