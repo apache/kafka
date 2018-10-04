@@ -29,7 +29,7 @@ import ReplicaAlterLogDirsThread.FetchRequest
 import ReplicaAlterLogDirsThread.PartitionData
 import kafka.api.Request
 import kafka.server.QuotaFactory.UnboundedQuota
-import kafka.server.epoch.LeaderEpochCache
+import kafka.server.epoch.LeaderEpochFileCache
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
@@ -58,7 +58,7 @@ class ReplicaAlterLogDirsThread(name: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
+  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochFileCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
 
   def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
     var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData)] = null
@@ -148,7 +148,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
     val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (tp, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
-    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
+    val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
