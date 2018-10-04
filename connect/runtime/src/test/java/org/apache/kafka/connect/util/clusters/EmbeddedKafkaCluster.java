@@ -96,7 +96,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop();
     }
 
-    public void start() throws IOException {
+    private void start() throws IOException {
         zookeeper = new EmbeddedZookeeper();
 
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
@@ -252,7 +252,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
         int consumedRecords = 0;
-        try (KafkaConsumer<byte[], byte[]> consumer = createConsumer(topics)) {
+        try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(topics)) {
             for (int i = 0; i < num; i++) {
                 ConsumerRecords<byte[], byte[]> rec = consumer.poll(Duration.ofMillis(duration));
                 if (rec.isEmpty()) {
@@ -272,17 +272,16 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         throw new RuntimeException("Could not find enough records. found " + consumedRecords + ", expected " + n);
     }
 
-    public KafkaConsumer<byte[], byte[]> createConsumer(String... topics) {
-        // Include any unknown worker configs so consumer configs can be set globally on the worker
-        // and through to the task
-        Map<String, Object> props = new HashMap<>();
+    public KafkaConsumer<byte[], byte[]> createConsumer(Map<String, Object> consumerProps) {
 
-        props.put(GROUP_ID_CONFIG, UUID.randomUUID().toString());
-        props.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        Map<String, Object> props = new HashMap<>(consumerProps);
+
+        putIfAbsent(props, GROUP_ID_CONFIG, UUID.randomUUID().toString());
+        putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        putIfAbsent(props, ENABLE_AUTO_COMMIT_CONFIG, "false");
+        putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
+        putIfAbsent(props, KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        putIfAbsent(props, VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         KafkaConsumer<byte[], byte[]> consumer;
         try {
@@ -290,9 +289,22 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         } catch (Throwable t) {
             throw new ConnectException("Failed to create consumer", t);
         }
+        return consumer;
+    }
 
+    public KafkaConsumer<byte[], byte[]> createConsumer() {
+        return createConsumer(Collections.emptyMap());
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(String... topics) {
+        KafkaConsumer<byte[], byte[]> consumer = createConsumer();
         consumer.subscribe(Arrays.asList(topics));
         return consumer;
     }
 
+    private static void putIfAbsent(final Map<String, Object> props, final String propertyKey, final Object propertyValue) {
+        if (!props.containsKey(propertyKey)) {
+            props.put(propertyKey, propertyValue);
+        }
+    }
 }

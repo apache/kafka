@@ -30,6 +30,13 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+
+/**
+ * A simple integration test which brings up Connect, Kafka and ZooKeeper and produces messages
+ * into a topic, and sinks them with a {@link MonitorableSinkConnector}.
+ */
 @Category(IntegrationTest.class)
 public class ConnectIntegrationTest {
 
@@ -70,8 +77,8 @@ public class ConnectIntegrationTest {
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
         Map<String, String> props = new HashMap<>();
-        props.put("connector.class", "MonitorableSink");
-        props.put("task.max", "2");
+        props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
+        props.put(TASKS_MAX_CONFIG, "1");
         props.put("topics", "test-topic");
         props.put("key.converter", StringConverter.class.getName());
         props.put("value.converter", StringConverter.class.getName());

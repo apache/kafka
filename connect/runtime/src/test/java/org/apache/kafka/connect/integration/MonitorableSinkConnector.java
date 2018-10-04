@@ -36,6 +36,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * A connector to be used in integration tests. This class provides methods to find task instances
+ * which are initiated by the embedded connector, and wait for them to consume a desired number of
+ * messages.
+ */
 public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static final String EXPECTED_RECORDS = "expected_records";
@@ -49,12 +54,12 @@ public class MonitorableSinkConnector extends TestSinkConnector {
     public static class Handle {
         private static final int MAX_WAIT_FOR_TASK_DURATION_MS = 60_000;
 
-        private final String taskName;
+        private final String taskId;
         private final AtomicReference<MonitorableSinkTask> taskRef = new AtomicReference<>();
         private final CountDownLatch taskAvailable = new CountDownLatch(1);
 
-        public Handle(String taskName) {
-            this.taskName = taskName;
+        public Handle(String taskId) {
+            this.taskId = taskId;
         }
 
         public void task(MonitorableSinkTask task) {
@@ -65,14 +70,22 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         public MonitorableSinkTask task() {
             try {
-                log.debug("Waiting on task {}", taskName);
+                log.debug("Waiting on task {}", taskId);
                 taskAvailable.await(MAX_WAIT_FOR_TASK_DURATION_MS, TimeUnit.MILLISECONDS);
                 log.debug("Found task!");
             } catch (InterruptedException e) {
-                throw new ConnectException("Could not find task for " + taskName, e);
+                throw new ConnectException("Could not find task for " + taskId, e);
             }
 
             return taskRef.get();
+        }
+
+        @Override
+        public String toString() {
+            return "Handle{" +
+                    "taskId='" + taskId + '\'' +
+                    ", taskAvailable=" + taskAvailable.getCount() +
+                    '}';
         }
     }
 
@@ -104,9 +117,6 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         }
         return configs;
     }
-
-    // [2018-09-25 11:23:34,562] DEBUG Waiting on task simple-conn-0 (org.apache.kafka.connect.integration.MonitorableSinkConnector:68)
-    // [2018-09-25 11:23:36,058] DEBUG Found task! (org.apache.kafka.connect.integration.MonitorableSinkConnector:70)
 
     @Override
     public void stop() {
@@ -148,7 +158,9 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void stop() {
-            log.info("Removing {}", HANDLES.remove(taskId));
+            Handle handle = HANDLES.remove(taskId);
+            handle.taskAvailable.countDown();
+            log.info("Removing {} for taskId {}", handle, taskId);
         }
 
         public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {

@@ -46,6 +46,10 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFF
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
 
+/**
+ * Start an embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster, setup any tmp
+ * directories and clean up them on them.
+ */
 public class EmbeddedConnectCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);

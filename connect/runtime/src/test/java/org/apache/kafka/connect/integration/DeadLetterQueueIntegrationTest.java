@@ -35,6 +35,10 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Start a connector and attempt to sink records, some of which cause one or more stages in
+ * the connector pipeline to fail. The bad records must be found in the dead letter queue.
+ */
 @Category(IntegrationTest.class)
 public class DeadLetterQueueIntegrationTest {
 
@@ -72,12 +76,13 @@ public class DeadLetterQueueIntegrationTest {
         // consume all records from test topic
         log.info("Consuming records from test topic");
         for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
-            log.debug("Consumed record ({}, {}) from topic {}", new String(recs.key()), new String(recs.value()), recs.topic());
+            log.debug("Consumed record (key='{}', value='{}') from topic {}",
+                    new String(recs.key()), new String(recs.value()), recs.topic());
         }
 
         Map<String, String> props = new HashMap<>();
         props.put("connector.class", "MonitorableSink");
-        props.put("task.max", "2");
+        props.put("task.max", "1");
         props.put("topics", "test-topic");
         props.put("key.converter", StringConverter.class.getName());
         props.put("value.converter", StringConverter.class.getName());
