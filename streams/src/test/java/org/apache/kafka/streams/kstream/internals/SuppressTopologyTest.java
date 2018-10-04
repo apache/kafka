@@ -32,6 +32,7 @@ import org.junit.Test;
 
 import java.time.Duration;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
@@ -146,7 +147,7 @@ public class SuppressTopologyTest {
         anonymousNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(5L).grace(5L))
+            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()))
             .toStream()
@@ -164,7 +165,7 @@ public class SuppressTopologyTest {
         namedNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(5L).grace(5L))
+            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()).withName("myname"))
             .toStream()
