@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.time.Duration;
 import java.time.Instant;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -60,10 +59,10 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant from, final Duration duration) throws IllegalArgumentException {
+    public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant from, final Instant to) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondDuration(duration, "duration");
-        return fetch(key, from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(to, "to");
+        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
     }
 
     @Override
@@ -72,11 +71,13 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final Instant fromTime,
-        final Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                           final Bytes to,
+                                                           final Instant fromTime,
+                                                           final Instant toTime) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondDuration(duration, "duration");
-        return fetch(from, to, fromTime.toEpochMilli(), fromTime.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(toTime, "toTime");
+        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
     }
 
     @Override
@@ -90,10 +91,10 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
         ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondDuration(duration, "duration");
-        return fetchAll(from.toEpochMilli(), from.toEpochMilli() + duration.toMillis());
+        ApiUtils.validateMillisecondInstant(to, "to");
+        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
     }
 
     @Override

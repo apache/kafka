@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.time.Duration;
 import java.time.Instant;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -96,7 +95,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public WindowStoreIterator fetch(final Object key, final Instant from, final Duration duration) {
+    public WindowStoreIterator fetch(final Object key, final Instant from, final Instant to) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
@@ -107,8 +106,10 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public KeyValueIterator fetch(final Object from, final Object to, final Instant fromTime,
-        final Duration duration) throws IllegalArgumentException {
+    public KeyValueIterator fetch(final Object from,
+                                  final Object to,
+                                  final Instant fromTime,
+                                  final Instant toTime) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
@@ -124,7 +125,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public KeyValueIterator fetchAll(final Instant from, final Duration duration) {
+    public KeyValueIterator fetchAll(final Instant from, final Instant to) {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }
