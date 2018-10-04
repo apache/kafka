@@ -79,9 +79,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.streamsGraphNode, repartitionNode);
 
-        final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
-                                                                                     funcName,
-                                                                                     aggregateSupplier);
+        final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
+            funcName,
+            new ProcessorParameters<>(aggregateSupplier, funcName),
+            new KeyValueStoreMaterializer<>(materialized).materialize(),
+            false
+        );
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionNode, statefulProcessorNode);
@@ -96,20 +99,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);
-    }
-
-    private <T> StatefulProcessorNode<K, Change<V>> getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
-                                                                             final String functionName,
-                                                                             final ProcessorSupplier<K, Change<V>> aggregateSupplier) {
-
-        final ProcessorParameters<K, Change<V>> aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
-
-        return StatefulProcessorNode
-            .<K, Change<V>>statefulProcessorNodeBuilder()
-            .withNodeName(functionName)
-            .withProcessorParameters(aggregateFunctionProcessorParams)
-            .withStoreBuilder(new KeyValueStoreMaterializer<>(materialized).materialize())
-            .build();
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,
