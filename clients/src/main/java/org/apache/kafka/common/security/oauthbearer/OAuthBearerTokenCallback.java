@@ -90,7 +90,7 @@ public class OAuthBearerTokenCallback implements Callback {
      * Set the token. All error-related values are cleared.
      * 
      * @param token
-     *            the mandatory token to set
+     *            the optional token to set
      */
     public void token(OAuthBearerToken token) {
         this.token = token;

@@ -237,6 +237,14 @@ import org.slf4j.LoggerFactory;
  */
 public class OAuthBearerLoginModule implements LoginModule {
 
+    /**
+     * Login state transitions:
+     *   Initial state: NOT_LOGGED_IN
+     *   login()      : NOT_LOGGED_IN => LOGGED_IN_NOT_COMMITTED
+     *   commit()     : LOGGED_IN_NOT_COMMITTED => COMMITTED
+     *   abort()      : LOGGED_IN_NOT_COMMITTED => NOT_LOGGED_IN
+     *   logout()     : Any state => NOT_LOGGED_IN
+     */
     private enum LoginState {
         NOT_LOGGED_IN,
         LOGGED_IN_NOT_COMMITTED,
@@ -291,11 +299,10 @@ public class OAuthBearerLoginModule implements LoginModule {
         }
 
         identifyToken();
-        if (tokenRequiringCommit != null) {
+        if (tokenRequiringCommit != null)
             identifyExtensions();
-        } else {
+        else
             log.info("Logged in without a token, this login cannot be used to establish client connections");
-        }
 
         loginState = LoginState.LOGGED_IN_NOT_COMMITTED;
         log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
@@ -362,18 +369,16 @@ public class OAuthBearerLoginModule implements LoginModule {
                 }
             }
             log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
-        } else {
+        } else
             log.info("No tokens to logout for this login");
-        }
 
         if (myCommittedExtensions != null) {
             log.info("Logging out my extensions");
             if (subject.getPublicCredentials().removeIf(e -> myCommittedExtensions == e))
                 myCommittedExtensions = null;
             log.info("Done logging out my extensions");
-        } else {
+        } else
             log.info("No extensions to logout for this login");
-        }
 
         loginState = LoginState.NOT_LOGGED_IN;
         return true;
@@ -393,14 +398,10 @@ public class OAuthBearerLoginModule implements LoginModule {
             myCommittedToken = tokenRequiringCommit;
             tokenRequiringCommit = null;
             log.info("Done committing my token; committed token count is now {}", committedTokenCount());
-        } else {
+        } else
             log.info("No tokens to commit, this login cannot be used to establish client connections");
-        }
 
         if (extensionsRequiringCommit != null) {
-            if (myCommittedToken == null)
-                throw new IllegalStateException("Extensions being committed without a token");
-
             subject.getPublicCredentials().add(extensionsRequiringCommit);
             myCommittedExtensions = extensionsRequiringCommit;
             extensionsRequiringCommit = null;
@@ -419,8 +420,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             loginState = LoginState.NOT_LOGGED_IN;
             return true;
         }
-        if (log.isDebugEnabled())
-            log.debug("Nothing here to abort");
+        log.debug("Nothing here to abort");
         return false;
     }
 
