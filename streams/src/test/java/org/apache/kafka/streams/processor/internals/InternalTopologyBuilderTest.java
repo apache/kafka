@@ -787,7 +787,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAllowAddGlobalStoreWithNonKVStore() {
         final StoreBuilder windowStoreBuilder = new MockWindowStoreBuilder("store", false);
-        builder.addGlobalStore((StoreBuilder<WindowStore>) windowStoreBuilder.withLoggingDisabled(),
+        builder.addGlobalStore(windowStoreBuilder.withLoggingDisabled(),
                 "name",
                 null,
                 null,
