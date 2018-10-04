@@ -810,9 +810,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         "is before 0.10.0", topicPartition);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
-                       error == Errors.KAFKA_STORAGE_ERROR ||
-                       error == Errors.UNKNOWN_LEADER_EPOCH ||
-                       error == Errors.FENCED_LEADER_EPOCH) {
+                       error == Errors.KAFKA_STORAGE_ERROR) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);
@@ -972,8 +970,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
-                       error == Errors.FENCED_LEADER_EPOCH ||
-                       error == Errors.UNKNOWN_LEADER_EPOCH ||
                        error == Errors.KAFKA_STORAGE_ERROR) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
