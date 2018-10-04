@@ -17,17 +17,27 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -39,6 +49,8 @@ import static org.junit.Assert.assertEquals;
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
+    private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private final Serde<String> stringSerde = Serdes.String();
 
     // Test builds topology in succesive manner but only graph node not yet processed written to topology
 
@@ -65,6 +77,40 @@ public class StreamsGraphTest {
         assertEquals(expectedFullTopology, builder.build().describe().toString());
 
     }
+
+    @Test
+    public void shouldBeAbleToAddStoresWithStatefulProcessorNodes() {
+
+        final StreamSourceNode<String, String> sourceNode = new StreamSourceNode<>("source", Collections.singletonList("topic"), new ConsumedInternal<>(Consumed.with(Serdes.String(), Serdes.String())));
+
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("store"),
+            Serdes.String(),
+            Serdes.String());
+
+        final ProcessorParameters<String, String> processorParameters = new ProcessorParameters<>(() -> new Processor<String, String>() {
+            @Override
+            public void init(final ProcessorContext context) {
+
+            }
+
+            @Override
+            public void process(final String key, final String value) {
+
+            }
+
+            @Override
+            public void close() {
+
+            }
+        }, "processor");
+        final StatefulProcessorNode<String, String> processorNode = new StatefulProcessorNode<>("node", processorParameters, new String[]{"store"}, storeBuilder, false);
+        sourceNode.addChild(processorNode);
+        builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic");
+
+        processorNode.writeToTopology(builder);
+    }
+
 
     @Test
     public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChange() {
