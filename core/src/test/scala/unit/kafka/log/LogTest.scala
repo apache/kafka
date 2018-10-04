@@ -25,7 +25,7 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
-import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
+import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -287,7 +287,7 @@ class LogTest {
             }
 
             override def recover(producerStateManager: ProducerStateManager,
-                                 leaderEpochCache: Option[LeaderEpochCache]): Int = {
+                                 leaderEpochCache: Option[LeaderEpochFileCache]): Int = {
               recoveredSegments += this
               super.recover(producerStateManager, leaderEpochCache)
             }
@@ -2589,8 +2589,8 @@ class LogTest {
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
-    assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries().size)
-    assertEquals("Epoch entry should be the latest epoch and the leo.", EpochEntry(1, 100), epochCache(log).epochEntries().head)
+    assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries.size)
+    assertEquals("Epoch entry should be the latest epoch and the leo.", EpochEntry(1, 100), epochCache(log).epochEntries.head)
 
     // append some messages to create some segments
     for (_ <- 0 until 100)
@@ -2599,7 +2599,7 @@ class LogTest {
     log.delete()
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
     assertEquals("The number of deleted segments should be zero.", 0, log.deleteOldSegments())
-    assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries().size)
+    assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries.size)
   }
 
   @Test
@@ -2612,12 +2612,12 @@ class LogTest {
     log.appendAsLeader(createRecords, leaderEpoch = 0)
 
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
-    assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries().size)
+    assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries.size)
 
     log.close()
     log.delete()
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
-    assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries().size)
+    assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries.size)
   }
 
   @Test
@@ -2816,7 +2816,7 @@ class LogTest {
     for (i <- records.indices)
       log.appendAsFollower(recordsForEpoch(i))
 
-    assertEquals(42, log.leaderEpochCache.asInstanceOf[LeaderEpochFileCache].latestEpoch())
+    assertEquals(42, log.leaderEpochCache.latestEpoch)
   }
 
   @Test
@@ -2871,19 +2871,24 @@ class LogTest {
 
   @Test
   def shouldTruncateLeaderEpochFileWhenTruncatingLog() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
-    val logConfig = LogTest.createLogConfig(segmentBytes = 10 * createRecords.sizeInBytes)
+    def createRecords(startOffset: Long, epoch: Int): MemoryRecords = {
+      TestUtils.records(Seq(new SimpleRecord("value".getBytes)),
+        baseOffset = startOffset, partitionLeaderEpoch = epoch)
+    }
+
+    val logConfig = LogTest.createLogConfig(segmentBytes = 10 * createRecords(0, 0).sizeInBytes)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
 
-    //Given 2 segments, 10 messages per segment
-    for (epoch <- 1 to 20)
-      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    def append(epoch: Int, startOffset: Long, count: Int): Unit = {
+      for (i <- 0 until count)
+        log.appendAsFollower(createRecords(startOffset + i, epoch))
+    }
 
-    //Simulate some leader changes at specific offsets
-    cache.assign(0, 0)
-    cache.assign(1, 10)
-    cache.assign(2, 16)
+    //Given 2 segments, 10 messages per segment
+    append(epoch = 0, startOffset = 0, count = 10)
+    append(epoch = 1, startOffset = 10, count = 6)
+    append(epoch = 2, startOffset = 16, count = 4)
 
     assertEquals(2, log.numberOfSegments)
     assertEquals(20, log.logEndOffset)
@@ -2935,7 +2940,7 @@ class LogTest {
     assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
 
     // deliberately remove some of the epoch entries
-    leaderEpochCache.clearAndFlushLatest(2)
+    leaderEpochCache.truncateFromEnd(2)
     assertNotEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
     log.close()
 
