@@ -20,12 +20,19 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class Sensors {
+
+    private static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
+
     private Sensors() {}
 
     public static Sensor lateRecordDropSensor(final InternalProcessorContext context) {
@@ -38,7 +45,7 @@ public class Sensors {
         );
         StreamsMetricsImpl.addInvocationRateAndCount(
             sensor,
-            "stream-processor-node-metrics",
+            PROCESSOR_NODE_METRICS_GROUP,
             metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", context.currentNode().name()),
             "late-record-drop"
         );
@@ -72,6 +79,51 @@ public class Sensors {
                 "The max observed lateness of records.",
                 tags),
             new Max()
+        );
+        return sensor;
+    }
+
+    public static Sensor suppressionSensor(final InternalProcessorContext context) {
+        return makeNodeRateAndTotalSensor(context, "intermediate-result-suppression");
+    }
+
+    public static Sensor suppressionEmitSensor(final InternalProcessorContext context) {
+        return makeNodeRateAndTotalSensor(context, "suppression-emit");
+    }
+
+    private static Sensor makeNodeRateAndTotalSensor(final InternalProcessorContext context,
+                                                     final String operation) {
+        final StreamsMetricsImpl metrics = context.metrics();
+
+        final Sensor sensor = metrics.nodeLevelSensor(
+            context.taskId().toString(),
+            context.currentNode().name(),
+            operation,
+            Sensor.RecordingLevel.DEBUG
+        );
+
+        final Map<String, String> tags = metrics.tagMap(
+            "task-id", context.taskId().toString(),
+            "processor-node-id", context.currentNode().name()
+        );
+
+        sensor.add(
+            new MetricName(
+                operation + "-rate",
+                PROCESSOR_NODE_METRICS_GROUP,
+                "The average number of occurrence of " + operation + " operation per second.",
+                tags
+            ),
+            new Rate(TimeUnit.SECONDS, new Sum())
+        );
+        sensor.add(
+            new MetricName(
+                operation + "-total",
+                PROCESSOR_NODE_METRICS_GROUP,
+                "The total number of occurrence of " + operation + " operations.",
+                tags
+            ),
+            new Total()
         );
         return sensor;
     }
