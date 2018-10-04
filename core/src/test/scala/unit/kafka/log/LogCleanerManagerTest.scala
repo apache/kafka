@@ -91,11 +91,10 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   /**
-    * log with retention in progress should not be picked up for compaction and vice versa when log cleanup policy
-    * is changed between "compact" and "delete"
+    * log under cleanup should be ineligible for compaction
     */
   @Test
-  def testLogsWithRetentionInprogressShouldNotPickedUpForCompactionAndViceVersa(): Unit = {
+  def testLogsUnderCleanupIneligibleForCompaction(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
@@ -105,7 +104,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     log.appendAsLeader(records, leaderEpoch = 0)
     log.onHighWatermarkIncremented(2L)
 
-    // simulate retention thread working on the log partition
+    // simulate cleanup thread working on the log partition
     val deletableLog = cleanerManager.pauseCleaningForNonCompactedPartitions()
     assertEquals("should have 1 logs ready to be deleted", 1, deletableLog.size)
 
@@ -118,11 +117,11 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val config = LogConfig(logProps)
     log.config = config
 
-    // log retention inprogress, the log is not available for compaction
+    // log cleanup inprogress, the log is not available for compaction
     val cleanable = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals("should have 0 logs ready to be compacted", 0, cleanable.size)
 
-    // log retention finished, and log can be picked up for compaction
+    // log cleanup finished, and log can be picked up for compaction
     cleanerManager.resumeCleaning(deletableLog.map(_._1))
     val cleanable2 = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals("should have 1 logs ready to be compacted", 1, cleanable2.size)
@@ -132,50 +131,50 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val config2 = LogConfig(logProps)
     log.config = config2
 
-    // compaction in progress, should have 0 log eligible for log retention
+    // compaction in progress, should have 0 log eligible for log cleanup
     val deletableLog2 = cleanerManager.pauseCleaningForNonCompactedPartitions()
     assertEquals("should have 0 logs ready to be deleted", 0, deletableLog2.size)
 
-    // compaction done, should have 1 log eligible for log retention
+    // compaction done, should have 1 log eligible for log cleanup
     cleanerManager.doneDeleting(Seq(cleanable2.get.topicPartition))
     val deletableLog3 = cleanerManager.pauseCleaningForNonCompactedPartitions()
     assertEquals("should have 1 logs ready to be deleted", 1, deletableLog3.size)
   }
 
   /**
-    * log with retention in progress should still be picked up for log truncation
+    * log under cleanup should still be eligible for log truncation
     */
   @Test
-  def testLogsWithRetentionInprogressShouldBePickedUpForLogTruncation(): Unit = {
+  def testConcurrentLogCleanupAndLogTruncation(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    // log retention starts
+    // log cleanup starts
     val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
     // Log truncation happens due to unclean leader election
     cleanerManager.abortAndPauseCleaning(log.topicPartition)
     cleanerManager.resumeCleaning(Seq(log.topicPartition))
-    // log retention finishes and pausedPartitions are resumed
+    // log cleanup finishes and pausedPartitions are resumed
     cleanerManager.resumeCleaning(pausedPartitions.map(_._1))
 
     assertEquals(None, cleanerManager.cleaningState(log.topicPartition))
   }
 
   /**
-    * log with retention in progress should still be picked up for topic deletion
+    * log under cleanup should still be eligible for topic deletion
     */
   @Test
-  def testLogsWithRetentionInprogressShouldBePickedUpForTopicDeletion(): Unit = {
+  def testConcurrentLogCleanupAndTopicDeletion(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    // log retention starts
+    // log cleanup starts
     val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
     // Broker processes StopReplicaRequest with delete=true
     cleanerManager.abortCleaning(log.topicPartition)
-    // log retention finishes and pausedPartitions are resumed
+    // log cleanup finishes and pausedPartitions are resumed
     cleanerManager.resumeCleaning(pausedPartitions.map(_._1))
 
     assertEquals(None, cleanerManager.cleaningState(log.topicPartition))

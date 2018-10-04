@@ -43,7 +43,7 @@ private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningS
   * This class manages the state of each partition being cleaned.
   * LogCleaningState defines the cleaning states that a TopicPartition can be in.
   * 1. None                    : No cleaning state in a TopicPartition. In this state, it can become LogCleaningInProgress
-  *                              or LogCleaningPaused(1). Valid previous state are None, LogCleaningInProgress and LogCleaningPaused(1)
+  *                              or LogCleaningPaused(1). Valid previous state are LogCleaningInProgress and LogCleaningPaused(1)
   * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when log cleaning is finished
   *                              or become LogCleaningAborted. Valid previous state is None.
   * 3. LogCleaningAborted      : The cleaning abort is requested. In this state, it can become LogCleaningPaused(1).
