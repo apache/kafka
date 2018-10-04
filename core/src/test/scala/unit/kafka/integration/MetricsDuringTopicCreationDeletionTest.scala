@@ -81,10 +81,6 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     @volatile var offlinePartitionsCount = offlinePartitionsCountGauge.value
     assert(offlinePartitionsCount == 0)
 
-    val preferredReplicaImbalanceCountGauge = getGauge("PreferredReplicaImbalanceCount")
-    @volatile var preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
-    assert(preferredReplicaImbalanceCount == 0)
-
     // Thread checking the metric continuously
     running = true
     val thread = new Thread(new Runnable {
@@ -95,11 +91,6 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
             if (underReplicatedPartitionCount > 0) {
               running = false
             }
-          }
-
-          preferredReplicaImbalanceCount = preferredReplicaImbalanceCountGauge.value
-          if (preferredReplicaImbalanceCount > 0) {
-             running = false
           }
 
           offlinePartitionsCount = offlinePartitionsCountGauge.value
@@ -119,7 +110,6 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     thread.join
 
     assert(offlinePartitionsCount==0, "OfflinePartitionCount not 0: "+ offlinePartitionsCount)
-    assert(preferredReplicaImbalanceCount==0, "PreferredReplicaImbalanceCount not 0: " + preferredReplicaImbalanceCount)
     assert(underReplicatedPartitionCount==0, "UnderReplicatedPartitionCount not 0: " + underReplicatedPartitionCount)
   }
 
