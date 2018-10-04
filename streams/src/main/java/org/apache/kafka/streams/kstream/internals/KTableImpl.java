@@ -356,13 +356,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
-    public KTable<K, V> suppress(final Suppressed<K> suppressed) {
-        final String name = builder.newProcessorName(SUPPRESS_NAME);
-        final String storeName = builder.newStoreName(SUPPRESS_NAME);
+    public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
+        final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed);
+
+        final String name =
+            suppressedInternal.name() != null ? suppressedInternal.name() : builder.newProcessorName(SUPPRESS_NAME);
+
+        final String storeName =
+            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier =
             () -> new KTableSuppressProcessor<>(
-                buildSuppress(suppressed),
+                suppressedInternal,
                 storeName,
                 keySerde,
                 valSerde == null ? null : new FullChangeSerde<>(valSerde)
@@ -393,7 +398,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    private SuppressedInternal<K> buildSuppress(final Suppressed<K> suppress) {
+    private SuppressedInternal<K> buildSuppress(final Suppressed<? super K> suppress) {
         if (suppress instanceof FinalResultsSuppressionBuilder) {
             final long grace = findAndVerifyWindowGrace(streamsGraphNode);
 
@@ -589,11 +594,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         this.enableSendingOldValues();
         final GroupedInternal<K1, V1> groupedInternal = new GroupedInternal<>(grouped);
         return new KGroupedTableImpl<>(
-                builder,
-                selectName,
-                sourceNodes,
-                groupedInternal,
-                groupByMapNode
+            builder,
+            selectName,
+            sourceNodes,
+            groupedInternal,
+            groupByMapNode
         );
     }
 

@@ -26,30 +26,42 @@ public class SuppressedInternal<K> implements Suppressed<K> {
     private static final Duration DEFAULT_SUPPRESSION_TIME = Duration.ofMillis(Long.MAX_VALUE);
     private static final StrictBufferConfigImpl DEFAULT_BUFFER_CONFIG = (StrictBufferConfigImpl) BufferConfig.unbounded();
 
+    private final String name;
     private final BufferConfigInternal bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
     private final boolean suppressTombstones;
 
-    public SuppressedInternal(final Duration suppressionTime,
+    public SuppressedInternal(final String name,
+                              final Duration suppressionTime,
                               final BufferConfig bufferConfig,
                               final TimeDefinition<K> timeDefinition,
                               final boolean suppressTombstones) {
+        this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefintion.instance() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
         this.suppressTombstones = suppressTombstones;
     }
 
-    BufferConfigInternal getBufferConfig() {
+    @Override
+    public Suppressed<K> withName(final String name) {
+        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, suppressTombstones);
+    }
+
+    public String name() {
+        return name;
+    }
+
+    BufferConfigInternal bufferConfig() {
         return bufferConfig;
     }
 
-    TimeDefinition<K> getTimeDefinition() {
+    TimeDefinition<K> timeDefinition() {
         return timeDefinition;
     }
 
-    Duration getTimeToWaitForMoreEvents() {
+    Duration timeToWaitForMoreEvents() {
         return timeToWaitForMoreEvents == null ? Duration.ZERO : timeToWaitForMoreEvents;
     }
 
@@ -62,22 +74,25 @@ public class SuppressedInternal<K> implements Suppressed<K> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final SuppressedInternal<?> that = (SuppressedInternal<?>) o;
-        return Objects.equals(bufferConfig, that.bufferConfig) &&
-            Objects.equals(getTimeToWaitForMoreEvents(), that.getTimeToWaitForMoreEvents()) &&
-            Objects.equals(getTimeDefinition(), that.getTimeDefinition());
+        return suppressTombstones == that.suppressTombstones &&
+            Objects.equals(name, that.name) &&
+            Objects.equals(bufferConfig, that.bufferConfig) &&
+            Objects.equals(timeToWaitForMoreEvents, that.timeToWaitForMoreEvents) &&
+            Objects.equals(timeDefinition, that.timeDefinition);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(bufferConfig, getTimeToWaitForMoreEvents(), getTimeDefinition());
+        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, suppressTombstones);
     }
 
     @Override
     public String toString() {
-        return "SuppressedInternal{" +
+        return "SuppressedInternal{name='" + name + '\'' +
             ", bufferConfig=" + bufferConfig +
             ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
             ", timeDefinition=" + timeDefinition +
+            ", suppressTombstones=" + suppressTombstones +
             '}';
     }
 }
