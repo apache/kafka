@@ -581,8 +581,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                   FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
                   new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
               } catch {
-                case _: IllegalArgumentException =>
-                  trace(s"Down-converting Zstd compressed records in partition $tp is disallowed. Sending unsupported version response to $clientId.")
+                case e: UnsupportedCompressionTypeException =>
+                  trace("Received unsupported compression type error during down-conversion", e)
                   errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }

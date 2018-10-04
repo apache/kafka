@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -482,8 +483,8 @@ public class MemoryRecordsBuilderTest {
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
         if (compressionType == CompressionType.ZSTD) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic 1");
+            exceptionRule.expect(UnsupportedCompressionTypeException.class);
+            exceptionRule.expectMessage("Down-conversion of zstandard-compressed batches is not supported");
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(512);

@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.IntStream;
 
 /**
  * Encapsulation for holding records that require down-conversion in a lazy, chunked manner (KIP-283). See
@@ -45,6 +44,9 @@ public class LazyDownConversionRecords implements BaseRecords {
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      * @param time The time instance to use
+     *
+     * @throws org.apache.kafka.common.errors.UnsupportedCompressionTypeException If the first batch to down-convert
+     *    has a compression type which we do not support down-conversion for.
      */
     public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset, Time time) {
         this.topicPartition = Objects.requireNonNull(topicPartition);
@@ -60,10 +62,6 @@ public class LazyDownConversionRecords implements BaseRecords {
         java.util.Iterator<ConvertedRecords> it = iterator(0);
         if (it.hasNext()) {
             firstConvertedBatch = it.next();
-            // KIP-110: ZSTD compressed record batch is not allowed to be down-converted.
-            if (firstConvertedBatch.records().batchIterator().peek().compressionType() == CompressionType.ZSTD) {
-                throw new IllegalArgumentException("ZSTD is not allowed to be down-converted.");
-            }
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
             // If there are no messages we got after down-conversion, make sure we are able to send at least an overflow
@@ -168,13 +166,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                     isFirstBatch = false;
                 }
 
-                // KIP-110: ZSTD compressed record batch is not allowed to be down-converted. So, down-convert the batches
-                // only until it is not compressed with ZSTD.
-                int zStdIndex = IntStream.range(0, batches.size())
-                    .filter(i -> batches.get(i).compressionType() == CompressionType.ZSTD)
-                    .findFirst().orElse(batches.size());
-
-                ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches.subList(0, zStdIndex), toMagic, firstOffset, time);
+                ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
                 // During conversion, it is possible that we drop certain batches because they do not have an equivalent
                 // representation in the message format we want to convert to. For example, V0 and V1 message formats
                 // have no notion of transaction markers which were introduced in V2 so they get dropped during conversion.
