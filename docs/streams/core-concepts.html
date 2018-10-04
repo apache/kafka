@@ -140,7 +140,7 @@
         In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
     </p>
 
-    <h3> <a id="streams_concepts_windowing" href="streams_concepts_windowing">Windowing</a></h3>
+    <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
     <p>
         Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
     </p>
