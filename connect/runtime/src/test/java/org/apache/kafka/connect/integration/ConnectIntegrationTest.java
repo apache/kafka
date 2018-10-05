@@ -51,7 +51,7 @@ public class ConnectIntegrationTest {
 
     @Before
     public void setup() throws IOException {
-        connect = new EmbeddedConnectCluster(ConnectIntegrationTest.class);
+        connect = new EmbeddedConnectCluster();
         connect.start();
     }
 

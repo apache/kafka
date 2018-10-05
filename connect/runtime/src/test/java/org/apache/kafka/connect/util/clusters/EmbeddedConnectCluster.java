@@ -21,7 +21,6 @@ import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +33,7 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -66,8 +66,8 @@ public class EmbeddedConnectCluster {
 
     private Connect connect;
 
-    public EmbeddedConnectCluster(Class<?> klass) {
-        this(klass.getName());
+    public EmbeddedConnectCluster() {
+        this(UUID.randomUUID().toString());
     }
 
     public EmbeddedConnectCluster(String name) {
@@ -112,7 +112,7 @@ public class EmbeddedConnectCluster {
     }
 
     public void startConnect() {
-        log.info("Starting Connect cluster with one worker.");
+        log.info("Starting Connect cluster with one worker. clusterName=" + clusterName);
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
