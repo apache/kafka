@@ -219,11 +219,7 @@ public class KafkaStreams {
             long elapsedMs = 0L;
             while (state != targetState) {
                 if (waitMs == 0) {
-                    try {
-                        stateLock.wait();
-                    } catch (final InterruptedException e) {
-                        // it is ok: just move on to the next iteration
-                    }
+                    return false;
                 } else if (waitMs > elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
@@ -824,7 +820,7 @@ public class KafkaStreams {
      * threads to join.
      * A {@code timeout} of 0 means to wait forever.
      *
-     * @param timeout  how long to wait for the threads to shutdown
+     * @param timeout  how long to wait for the threads to shutdown. Can't be negative. If {@code timeout=0} just checking the state and return immediately.
      * @param timeUnit unit of time used for timeout
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
@@ -833,7 +829,11 @@ public class KafkaStreams {
      */
     @Deprecated
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
+        final long timeoutMillis = timeUnit.toMillis(timeout);
+        if (timeoutMillis < 0)
+            throw new IllegalArgumentException("Timeout can't be negative.");
+
+        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMillis);
 
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
@@ -890,7 +890,7 @@ public class KafkaStreams {
             shutdownThread.start();
         }
 
-        if (waitOnState(State.NOT_RUNNING, timeUnit.toMillis(timeout))) {
+        if (waitOnState(State.NOT_RUNNING, timeoutMillis)) {
             log.info("Streams client stopped completely");
             return true;
         } else {
