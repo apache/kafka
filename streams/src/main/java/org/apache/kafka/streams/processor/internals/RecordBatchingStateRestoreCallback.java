@@ -14,33 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 import java.util.Collection;
 
-public class WrappedBatchingStateRestoreCallback implements BatchingStateRestoreCallback {
+public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
+    void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
 
-    private final StateRestoreCallback stateRestoreCallback;
-
-    public WrappedBatchingStateRestoreCallback(final StateRestoreCallback stateRestoreCallback) {
-        this.stateRestoreCallback = stateRestoreCallback;
+    @Override
+    default void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
-    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        for (final KeyValue<byte[], byte[]> record : records) {
-            restore(record.key, record.value);
-        }
-    }
-
-    @Override
-    public void restore(final byte[] key,
-                        final byte[] value) {
-        stateRestoreCallback.restore(key, value);
+    default void restore(final byte[] key, final byte[] value) {
+        throw new UnsupportedOperationException();
     }
 }

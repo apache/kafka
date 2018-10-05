@@ -17,24 +17,25 @@
 
 package kafka.coordinator.group
 
-import java.util.concurrent.{ ConcurrentHashMap, TimeUnit }
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{ DelayedOperationPurgatory, KafkaConfig }
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.utils.Time
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.{ After, Before, Test }
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, Future, Promise, TimeoutException }
+import scala.concurrent.{Await, Future, Promise, TimeoutException}
 
 class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[GroupMember] {
 
@@ -211,7 +212,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1))
+      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId, member.generationId,
           offsets, responseCallback)
     }
@@ -224,7 +225,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   class CommitTxnOffsetsOperation extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1))
+      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
@@ -309,4 +310,5 @@ object GroupCoordinatorConcurrencyTest {
     @volatile var generationId: Int = -1
     def groupId: String = group.groupId
   }
+
 }

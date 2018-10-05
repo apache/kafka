@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -34,6 +33,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 
 public class ProcessorStateManager extends AbstractStateManager {
@@ -130,7 +131,6 @@ public class ProcessorStateManager extends AbstractStateManager {
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
             restoreCallbacks.put(topic, stateRestoreCallback);
-
         } else {
             log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
@@ -138,7 +138,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                                                              checkpointableOffsets.get(storePartition),
                                                              offsetLimit(storePartition),
                                                              store.persistent(),
-                storeName);
+                                                             storeName);
 
             changelogReader.register(restorer);
         }
@@ -173,14 +173,14 @@ public class ProcessorStateManager extends AbstractStateManager {
     }
 
     void updateStandbyStates(final TopicPartition storePartition,
-                             final List<KeyValue<byte[], byte[]>> restoreRecords,
+                             final List<ConsumerRecord<byte[], byte[]>> restoreRecords,
                              final long lastOffset) {
         // restore states from changelog records
-        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreCallbacks.get(storePartition.topic()));
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreCallbacks.get(storePartition.topic()));
 
         if (!restoreRecords.isEmpty()) {
             try {
-                restoreCallback.restoreAll(restoreRecords);
+                restoreCallback.restoreBatch(restoreRecords);
             } catch (final Exception e) {
                 throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
@@ -311,15 +311,6 @@ public class ProcessorStateManager extends AbstractStateManager {
     @Override
     public StateStore getGlobalStore(final String name) {
         return globalStores.get(name);
-    }
-
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback callback) {
-        if (callback instanceof BatchingStateRestoreCallback) {
-            return (BatchingStateRestoreCallback) callback;
-        }
-
-        // TODO: avoid creating a new object for each update call?
-        return new WrappedBatchingStateRestoreCallback(callback);
     }
 
     Collection<TopicPartition> changelogPartitions() {
