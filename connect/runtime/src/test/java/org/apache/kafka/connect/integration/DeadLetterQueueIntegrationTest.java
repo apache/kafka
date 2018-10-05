@@ -97,7 +97,7 @@ public class DeadLetterQueueIntegrationTest {
         props.put("transforms", "failing_transform");
         props.put("transforms.failing_transform.type", FaultyPassthrough.class.getName());
 
-        connect.startConnector("simple-conn", props);
+        connect.configureConnector("simple-conn", props);
 
         MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
 

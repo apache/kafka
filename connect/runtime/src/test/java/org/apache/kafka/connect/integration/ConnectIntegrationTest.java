@@ -84,9 +84,9 @@ public class ConnectIntegrationTest {
         props.put("topics", "test-topic");
         props.put("key.converter", StringConverter.class.getName());
         props.put("value.converter", StringConverter.class.getName());
-        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED/NUM_TOPIC_PARTITIONS));
+        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS));
 
-        connect.startConnector("simple-conn", props);
+        connect.configureConnector("simple-conn", props);
 
         MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
         MonitorableSinkConnector.taskInstances("simple-conn-1").task().awaitRecords(CONSUME_MAX_DURATION_MS);

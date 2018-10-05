@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,25 +136,41 @@ public class EmbeddedConnectCluster extends ExternalResource {
         connect = new ConnectDistributed().startConnect(workerProps);
     }
 
-    public void startConnector(String connName, Map<String, String> connConfig) throws IOException {
+    /**
+     * Configure a connector. If the connector does not already exist, a new one will be created and
+     * the given configuration will be applied to it.
+     *
+     * @param connName   the name of the connector
+     * @param connConfig the intended configuration
+     * @throws IOException          if call to the REST api fails.
+     * @throws ConnectRestException if REST api returns error status
+     */
+    public void configureConnector(String connName, Map<String, String> connConfig) throws IOException {
         String url = String.format("http://%s:%s/connectors/%s/config", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName);
         ObjectMapper mapper = new ObjectMapper();
+        int status;
         try {
             String content = mapper.writeValueAsString(connConfig);
-            int status = executePut(url, content);
-            if (status >= HttpServletResponse.SC_BAD_REQUEST) {
-                throw new IOException("Could not execute PUT request. status=" + status);
-            }
+            status = executePut(url, content);
         } catch (IOException e) {
             log.error("Could not serialize config", e);
-            throw new IOException(e);
+            throw e;
+        }
+        if (status >= HttpServletResponse.SC_BAD_REQUEST) {
+            throw new ConnectRestException(status, "Could not execute PUT request");
         }
     }
 
+    /**
+     * Delete an existing connector.
+     *
+     * @param connName name of the connector to be deleted
+     * @throws IOException if call to the REST api fails.
+     */
     public void deleteConnector(String connName) throws IOException {
         int status = executeDelete(String.format("http://%s:%s/connectors/%s", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName));
         if (status >= HttpServletResponse.SC_BAD_REQUEST) {
-            throw new IOException("Could not execute DELETE request. status=" + status);
+            throw new ConnectRestException(status, "Could not execute DELETE request.");
         }
     }
 
