@@ -114,7 +114,9 @@ public abstract class Connector implements Versioned {
     public abstract List<Map<String, String>> taskConfigs(int maxTasks);
 
     /**
-     * Stop this connector.
+     * Stop this connector. This method is invoked from deleting or pausing connector. Also, default behavior of
+     * {@link #reconfigure(Map<String, String>)} also calls {@link #stop()}.
+     * 
      */
     public abstract void stop();
 
