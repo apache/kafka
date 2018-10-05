@@ -61,6 +61,8 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} If the broker does not have metadata for a topic or partition
  * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
+ * - {@link Errors#UNSUPPORTED_COMPRESSION_TYPE} If a fetched topic is using a compression type which is
+ *     not supported by the fetch request version
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
