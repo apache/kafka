@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,7 +36,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 
 /**
  * A simple integration test which brings up Connect, Kafka and ZooKeeper and produces messages
- * into a topic, and sinks them with a {@link MonitorableSinkConnector}.
+ * into multiple topic-partitions, and sinks them with multiple tasks of a {@link MonitorableSinkConnector}.
  */
 @Category(IntegrationTest.class)
 public class ConnectIntegrationTest {
@@ -43,6 +44,7 @@ public class ConnectIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
+    private static final int NUM_TOPIC_PARTITIONS = 2;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
@@ -65,11 +67,11 @@ public class ConnectIntegrationTest {
     @Test
     public void testProduceConsumeConnector() throws Exception {
         // create test topic
-        connect.kafka().createTopic("test-topic");
+        connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS, 1, Collections.emptyMap());
 
         // produce some strings into test topic
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "simple-message-value-" + i);
+            connect.kafka().produce("test-topic", i % NUM_TOPIC_PARTITIONS, "key", "simple-message-value-" + i);
         }
 
         // consume all records from test topic or fail
@@ -78,15 +80,16 @@ public class ConnectIntegrationTest {
 
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
-        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(TASKS_MAX_CONFIG, "2");
         props.put("topics", "test-topic");
         props.put("key.converter", StringConverter.class.getName());
         props.put("value.converter", StringConverter.class.getName());
-        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED));
+        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED/NUM_TOPIC_PARTITIONS));
 
         connect.startConnector("simple-conn", props);
 
         MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
+        MonitorableSinkConnector.taskInstances("simple-conn-1").task().awaitRecords(CONSUME_MAX_DURATION_MS);
 
         log.debug("Connector read {} records from topic", NUM_RECORDS_PRODUCED);
         connect.deleteConnector("simple-conn");

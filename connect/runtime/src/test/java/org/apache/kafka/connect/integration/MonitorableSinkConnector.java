@@ -152,7 +152,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         public void put(Collection<SinkRecord> records) {
             for (SinkRecord rec : records) {
                 latch.countDown();
-                log.debug("Obtained record: {} at {}", rec.value(), context);
+                log.debug("Obtained record (key='{}' value='{}') at task {}", rec.key(), rec.value(), context);
             }
         }
 

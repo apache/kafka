@@ -214,11 +214,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public void produce(String topic, String value) {
-        produce(topic, null, value);
+        produce(topic, null, null, value);
     }
 
     public void produce(String topic, String key, String value) {
-        producer.send(new ProducerRecord<>(topic, key == null ? null : key.getBytes(), value == null ? null : value.getBytes()));
+        produce(topic, null, key, value);
+    }
+
+    public void produce(String topic, Integer partition, String key, String value) {
+        producer.send(new ProducerRecord<>(topic, partition, key == null ? null : key.getBytes(), value == null ? null : value.getBytes()));
     }
 
     public AdminClient createAdminClient() {
