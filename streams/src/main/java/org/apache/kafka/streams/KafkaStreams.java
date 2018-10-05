@@ -126,7 +126,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public class KafkaStreams {
 
     private static final String JMX_PREFIX = "kafka.streams";
-    private static final int DEFAULT_CLOSE_TIMEOUT = 0;
+    private static final int DEFAULT_CLOSE_TIMEOUT = 30;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
