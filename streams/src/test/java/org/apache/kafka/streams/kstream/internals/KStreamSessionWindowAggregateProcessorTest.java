@@ -366,30 +366,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         assertThat(metrics.metrics().get(dropRate).metricValue(), not(0.0));
 
-        final MetricName latenessMaxMetric = new MetricName(
-            "record-lateness-max",
-            "stream-processor-node-metrics",
-            "The max observed lateness of records.",
-            mkMap(
-                mkEntry("client-id", "test"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "TESTING_NODE")
-            )
-        );
-        assertThat(metrics.metrics().get(latenessMaxMetric).metricValue(), is(11.0));
-
-        final MetricName latenessAvgMetric = new MetricName(
-            "record-lateness-avg",
-            "stream-processor-node-metrics",
-            "The average observed lateness of records.",
-            mkMap(
-                mkEntry("client-id", "test"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "TESTING_NODE")
-            )
-        );
-        assertThat(metrics.metrics().get(latenessAvgMetric).metricValue(), is(10.5));
-
         assertThat(appender.getMessages(), hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0) expiration=[10]"));
         assertThat(appender.getMessages(), hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[1] window=[1,1) expiration=[10]"));
     }

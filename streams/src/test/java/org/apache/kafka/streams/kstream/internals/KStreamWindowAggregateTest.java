@@ -286,7 +286,12 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
             LogCaptureAppender.unregister(appender);
 
-            assertLatenessMetrics(driver, is(7.0), is(1.0), is(1.0));
+            assertLatenessMetrics(
+                driver,
+                is(7.0), // how many events get dropped
+                is(100.0), // k:0 is 100ms late, since its time is 0, but it arrives at stream time 100.
+                is(84.875) // (0 + 100 + 99 + 98 + 97 + 96 + 95 + 94) / 8
+            );
 
             assertThat(appender.getMessages(), hasItems(
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10]",
@@ -336,7 +341,7 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
             LogCaptureAppender.unregister(appender);
 
-            assertLatenessMetrics(driver, is(7.0), is(101.0), isRoughly(15));
+            assertLatenessMetrics(driver, is(7.0), is(194.0), is(97.375));
 
             assertThat(appender.getMessages(), hasItems(
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110]",
@@ -390,8 +395,7 @@ public class KStreamWindowAggregateTest {
             "The max observed lateness of records.",
             mkMap(
                 mkEntry("client-id", "topology-test-driver-virtual-thread"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
+                mkEntry("task-id", "0_0")
             )
         );
         assertThat(driver.metrics().get(latenessMaxMetric).metricValue(), maxLateness);
@@ -402,8 +406,7 @@ public class KStreamWindowAggregateTest {
             "The average observed lateness of records.",
             mkMap(
                 mkEntry("client-id", "topology-test-driver-virtual-thread"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
+                mkEntry("task-id", "0_0")
             )
         );
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);

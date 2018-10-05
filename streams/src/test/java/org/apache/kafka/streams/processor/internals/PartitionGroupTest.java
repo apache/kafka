@@ -17,7 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -65,7 +69,19 @@ public class PartitionGroupTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
-    private final PartitionGroup group = new PartitionGroup(mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)));
+    private final Metrics metrics = new Metrics();
+    private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
+
+    private final PartitionGroup group = new PartitionGroup(
+        mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)),
+        getValueSensor(metrics, lastLatenessValue)
+    );
+
+    private static Sensor getValueSensor(final Metrics metrics, final MetricName metricName) {
+        final Sensor lastRecordedValue = metrics.sensor(metricName.name());
+        lastRecordedValue.add(metricName, new Value());
+        return lastRecordedValue;
+    }
 
     @Test
     public void testTimeTracking() {
@@ -94,6 +110,7 @@ public class PartitionGroupTest {
         assertEquals(3, group.numBuffered(partition1));
         assertEquals(3, group.numBuffered(partition2));
         assertEquals(-1L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         StampedRecord record;
         final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
@@ -109,6 +126,7 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition1));
         assertEquals(3, group.numBuffered(partition2));
         assertEquals(1L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);
@@ -121,6 +139,7 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition1));
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(2L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
@@ -135,6 +154,7 @@ public class PartitionGroupTest {
         assertEquals(4, group.numBuffered(partition1));
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(2L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one record, time should not be advanced
         record = group.nextRecord(info);
@@ -147,6 +167,7 @@ public class PartitionGroupTest {
         assertEquals(3, group.numBuffered(partition1));
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(3L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one record, time should not be advanced
         record = group.nextRecord(info);
@@ -159,6 +180,7 @@ public class PartitionGroupTest {
         assertEquals(3, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
         assertEquals(4L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one more record, now time should be advanced
         record = group.nextRecord(info);
@@ -171,6 +193,7 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
         assertEquals(5L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
@@ -183,6 +206,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
         assertEquals(5L, group.timestamp());
+        assertEquals(3.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
@@ -195,6 +219,7 @@ public class PartitionGroupTest {
         assertEquals(0, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
         assertEquals(5L, group.timestamp());
+        assertEquals(1.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
@@ -207,6 +232,7 @@ public class PartitionGroupTest {
         assertEquals(0, group.numBuffered(partition1));
         assertEquals(0, group.numBuffered(partition2));
         assertEquals(6L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
     }
 }
