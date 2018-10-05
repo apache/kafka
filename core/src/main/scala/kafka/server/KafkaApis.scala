@@ -539,7 +539,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val logConfig = replicaManager.getLogConfig(tp)
 
       if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
-        trace(s"Fetching messages is disabled for Zstd compressed partition $tp. Sending unsupported version response to $clientId.")
+        trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
         errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
         // Down-conversion of the fetched records is needed when the stored magic version is
