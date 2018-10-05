@@ -164,27 +164,4 @@ public final class StreamsTestUtils {
             return metric;
         }
     }
-
-    public static class IntNumberMatcher extends BaseMatcher<Object> {
-        private final int expected;
-
-        public static IntNumberMatcher isRoughly(final int expected) {
-            return new IntNumberMatcher(expected);
-        }
-
-        private IntNumberMatcher(final int expected) {
-            this.expected = expected;
-        }
-
-        @Override
-        public boolean matches(final Object item) {
-            final Number other = (Number) item;
-            return other.intValue() == expected;
-        }
-
-        @Override
-        public void describeTo(final Description description) {
-            description.appendText("~" + Integer.toString(expected));
-        }
-    }
 }
