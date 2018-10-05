@@ -74,10 +74,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -162,10 +159,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testHasRoomForMethod() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
                 TimestampType.CREATE_TIME, 0L);
@@ -454,10 +448,7 @@ public class MemoryRecordsTest {
     @Test
     public void testFilterToBatchDiscard() {
         if (compression != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2) {
-            if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-                exceptionRule.expect(IllegalArgumentException.class);
-                exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-            }
+            expectExceptionWithZStd(compression, magic);
 
             ByteBuffer buffer = ByteBuffer.allocate(2048);
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -509,10 +500,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToAlreadyCompactedLog() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
@@ -654,10 +642,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToWithUndersizedBuffer() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -709,10 +694,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testToString() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         long timestamp = 1000000;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
@@ -744,10 +726,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterTo() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -862,10 +841,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToPreservesLogAppendTime() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         long logAppendTime = System.currentTimeMillis();
 
@@ -911,10 +887,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testNextBatchSize() {
-        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+        expectExceptionWithZStd(compression, magic);
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
@@ -952,6 +925,13 @@ public class MemoryRecordsTest {
             fail("Did not fail with corrupt size");
         } catch (CorruptRecordException e) {
             // Expected exception
+        }
+    }
+
+    private void expectExceptionWithZStd(CompressionType compressionType, byte magic) {
+        if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
         }
     }
 
