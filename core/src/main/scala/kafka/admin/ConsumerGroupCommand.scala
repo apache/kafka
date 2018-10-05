@@ -209,7 +209,9 @@ object ConsumerGroupCommand extends Logging {
           Option(value) match {
             case Some(v) =>
               val offsetMessage = GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(value))
+              val commitTimestamp = offsetMessage.commitTimestamp
               val m = Map(
+                "@timestamp" -> commitTimestamp,
                 "group" -> groupTopicPartition.group,
                 "topic" -> groupTopicPartition.topicPartition.topic(),
                 "partition" -> groupTopicPartition.topicPartition.partition(),
@@ -233,7 +235,13 @@ object ConsumerGroupCommand extends Logging {
           Option(value) match {
             case Some(v) =>
               val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(r.value), Time.SYSTEM)
-              // RLRL val eventTimestamp = groupMetadata.currentStateTimestamp.get
+
+              val eventTimestampInfo = groupMetadata.currentStateTimestamp match {
+                case Some(ts) => Map("@timestamp" -> ts, "kafkaTimestampType" -> "GroupMetadataTime")
+                case None => Map("@timestamp" -> r.timestamp() , "kafkaTimestampType" -> r.timestampType().toString)
+              }
+              val recordTimestampInfo = Map("originalKeyTimestamp" -> r.timestamp(),"originalKeyTimestampType" -> r.timestampType().toString)
+
               val groupMetadataAsMap = {
                 Map(
                   "groupId" -> groupId,
@@ -242,7 +250,7 @@ object ConsumerGroupCommand extends Logging {
                   "currentState" -> groupMetadata.currentState.getClass.getSimpleName,
                   "currentStateTimestamp" -> groupMetadata.currentStateTimestamp.getOrElse(null),
                   "canRebalance" -> groupMetadata.canRebalance
-                )
+                ) ++ eventTimestampInfo ++ recordTimestampInfo
               }
 
               sendAsJsonToAuditLog(ConsumerAuditMessageType.GROUP_METADATA, groupMetadataAsMap)
@@ -296,19 +304,19 @@ object ConsumerGroupCommand extends Logging {
     private val auditRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         partitions.asScala.foreach { tp =>
-          val m = Map("auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
+          val m = Map("@timestamp" -> System.currentTimeMillis(),"auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
           sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_REVOKED,m)
         }
       }
 
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         partitions.asScala.foreach { tp =>
-          val m = Map("auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
+          val m = Map("@timestamp" -> System.currentTimeMillis(),"auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
           sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_ASSIGNED,m)
         }
       }
 
-      def topicPartitionToMap(tp: TopicPartition) = Map("topic" -> tp.topic(),"partition" -> tp.partition())
+      private def topicPartitionToMap(tp: TopicPartition) = Map("topic" -> tp.topic(),"partition" -> tp.partition())
     }
 
     private def sendAsJsonToAuditLog(messageType: ConsumerAuditMessageType, m: Map[String,Any]): Unit = {

@@ -598,7 +598,7 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalatest
-    testCompile libs.slf4jlog4j
+    compile libs.slf4jlog4j
     testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
