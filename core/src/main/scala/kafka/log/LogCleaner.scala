@@ -990,8 +990,9 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
   def onControlBatchRead(controlBatch: RecordBatch): Boolean = {
     consumeAbortedTxnsUpTo(controlBatch.lastOffset)
 
-    if (controlBatch.iterator.hasNext) {
-      val controlRecord = controlBatch.iterator.next()
+    val controlRecordIterator = controlBatch.iterator
+    if (controlRecordIterator.hasNext) {
+      val controlRecord = controlRecordIterator.next()
       val controlType = ControlRecordType.parse(controlRecord.key)
       val producerId = controlBatch.producerId
       controlType match {

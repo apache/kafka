@@ -555,8 +555,9 @@ class GroupMetadataManager(brokerId: Int,
           memRecords.batches.asScala.foreach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
-              if (batch.iterator.hasNext) {
-                val record = batch.iterator.next()
+              val recordIterator = batch.iterator
+              if (recordIterator.hasNext) {
+                val record = recordIterator.next()
                 val controlRecord = ControlRecordType.parse(record.key)
                 if (controlRecord == ControlRecordType.COMMIT) {
                   pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
