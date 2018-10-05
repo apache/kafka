@@ -447,6 +447,16 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  /**
+   * Returns an immutable set of the uncleanable partitions for a given log directory
+   * Only used for testing
+   */
+  private[log] def uncleanablePartitions(logDir: String): Set[TopicPartition] = {
+    var partitions: Set[TopicPartition] = Set()
+    inLock(lock) { partitions ++= uncleanablePartitions.getOrElse(logDir, partitions) }
+    partitions
+  }
+
   def markPartitionUncleanable(logDir: String, partition: TopicPartition): Unit = {
     inLock(lock) {
       uncleanablePartitions.get(logDir) match {
