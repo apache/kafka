@@ -49,12 +49,12 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> gracelessAncestor = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<Object, Object>() {
+                () -> new Processor<String, Long>() {
                     @Override
                     public void init(final ProcessorContext context) {}
 
                     @Override
-                    public void process(final Object key, final Object value) {}
+                    public void process(final String key, final Long value) {}
 
                     @Override
                     public void close() {}
@@ -141,12 +141,12 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<Object, Object>() {
+                () -> new Processor<String, Long>() {
                     @Override
                     public void init(final ProcessorContext context) {}
 
                     @Override
-                    public void process(final Object key, final Object value) {}
+                    public void process(final String key, final Long value) {}
 
                     @Override
                     public void close() {}
