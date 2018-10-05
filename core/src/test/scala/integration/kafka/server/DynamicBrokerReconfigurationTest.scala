@@ -1419,10 +1419,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, _enableAutoCommit.toString)
 
       val consumer = new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
+      consumers += consumer
+
       consumer.subscribe(Collections.singleton(_topic))
       if (_autoOffsetReset == "latest")
         awaitInitialPositions(consumer)
-      consumers += consumer
       consumer
     }
   }
