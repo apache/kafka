@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -251,6 +252,10 @@ public class ProduceRequest extends AbstractRequest {
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain record batches with magic version 2");
+            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
+                throw new InvalidRecordException("Produce requests with version " + version + " are note allowed to " +
+                    "use ZStandard compression");
+            }
 
             if (iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
