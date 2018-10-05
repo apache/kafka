@@ -75,7 +75,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Category({IntegrationTest.class})
 public class SuppressionIntegrationTest {
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
+        1,
+        mkProperties(mkMap()),
+        0L
+    );
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
