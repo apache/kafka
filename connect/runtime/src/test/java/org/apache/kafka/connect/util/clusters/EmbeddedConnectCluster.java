@@ -51,7 +51,7 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STA
  * Start an embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster, setup any tmp
  * directories and clean up them on them.
  */
-public class EmbeddedConnectCluster extends ExternalResource {
+public class EmbeddedConnectCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);
 
@@ -85,25 +85,19 @@ public class EmbeddedConnectCluster extends ExternalResource {
         kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
     }
 
-    public void start() throws IOException {
-        before();
-    }
-
     /**
-     * Stop the connect cluster and the embedded Kafka and
+     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
      */
-    public void stop() {
-        after();
-    }
-
-    @Override
-    protected void before() throws IOException {
+    public void start() throws IOException {
         kafkaCluster.before();
         startConnect();
     }
 
-    @Override
-    protected void after() {
+    /**
+     * Stop the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Clean up any temp directories created locally.
+     */
+    public void stop() {
         try {
             connect.stop();
         } catch (Exception e) {
