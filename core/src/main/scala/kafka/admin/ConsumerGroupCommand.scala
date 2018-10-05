@@ -51,14 +51,14 @@ import scala.util.{Failure, Success, Try}
 
 object ConsumerAuditMessageType extends Enumeration {
   type ConsumerAuditMessageType = Value
-  val GROUP_METADATA,GROUP_OFFSETS,PARTITION_ASSIGNMENT,OFFSET_COMMIT,AUDIT_PARTITION_REVOKED,AUDIT_PARTITION_ASSIGNED = Value
+  val GroupMetadata,GroupOffsets,PartitionAssignment,OffsetCommit,AuditPartitionRevoked,AuditPartitionAssigned = Value
 
 }
 
 
 object AuditType extends Enumeration {
   type AuditType = Value
-  val GROUP_METADATA,OFFSET_COMMITS = Value
+  val GroupMetadata,OffsetCommits = Value
 
   def valueConverter = new ValueConverter[AuditType] {
     override def valueType(): Class[_ <: AuditType] = classOf[AuditType]
@@ -178,8 +178,8 @@ object ConsumerGroupCommand extends Logging {
           val records = auditConsumer.poll(Duration.of(Long.MaxValue,ChronoUnit.MILLIS)).asScala
           for (r <- records) {
             auditType match {
-              case AuditType.GROUP_METADATA => auditGroupMetadataRecord(r)
-              case AuditType.OFFSET_COMMITS => auditOffsetCommitRecord(r)
+              case AuditType.GroupMetadata => auditGroupMetadataRecord(r)
+              case AuditType.OffsetCommits => auditOffsetCommitRecord(r)
             }
           }
         }
@@ -220,7 +220,7 @@ object ConsumerGroupCommand extends Logging {
                 "metadata" -> offsetMessage.metadata,
                 "commitTimestamp" -> offsetMessage.commitTimestamp,
                 "expireTimestamp" -> offsetMessage.expireTimestamp.getOrElse(null))
-              sendAsJsonToAuditLog(ConsumerAuditMessageType.OFFSET_COMMIT, m)
+              sendAsJsonToAuditLog(ConsumerAuditMessageType.OffsetCommit, m)
             case None => //
           }
         case _ => // no-op
@@ -253,7 +253,7 @@ object ConsumerGroupCommand extends Logging {
                 ) ++ eventTimestampInfo ++ recordTimestampInfo
               }
 
-              sendAsJsonToAuditLog(ConsumerAuditMessageType.GROUP_METADATA, groupMetadataAsMap)
+              sendAsJsonToAuditLog(ConsumerAuditMessageType.GroupMetadata, groupMetadataAsMap)
 
               for ((topicPartition, offsetAndMetadata) <- groupMetadata.allOffsets) {
                 val m = groupMetadataAsMap ++ Map(
@@ -263,7 +263,7 @@ object ConsumerGroupCommand extends Logging {
                   "metadata" -> offsetAndMetadata.metadata,
                   "commitTimestamp" -> offsetAndMetadata.commitTimestamp,
                   "expireTimestamp" -> offsetAndMetadata.expireTimestamp.getOrElse(null))
-                sendAsJsonToAuditLog(ConsumerAuditMessageType.GROUP_OFFSETS, m)
+                sendAsJsonToAuditLog(ConsumerAuditMessageType.GroupOffsets, m)
               }
 
               for (memberMetadata <- groupMetadata.allMemberMetadata) {
@@ -280,7 +280,7 @@ object ConsumerGroupCommand extends Logging {
                     "topic" -> pt.topic(),
                     "partition" -> pt.partition(),
                     "userData" -> Base64.getEncoder.encode(assignment.userData()))
-                  sendAsJsonToAuditLog(ConsumerAuditMessageType.PARTITION_ASSIGNMENT, m)
+                  sendAsJsonToAuditLog(ConsumerAuditMessageType.PartitionAssignment, m)
                 }
               }
             case None => //
@@ -305,14 +305,14 @@ object ConsumerGroupCommand extends Logging {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         partitions.asScala.foreach { tp =>
           val m = Map("@timestamp" -> System.currentTimeMillis(),"auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
-          sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_REVOKED,m)
+          sendAsJsonToAuditLog(ConsumerAuditMessageType.AuditPartitionRevoked,m)
         }
       }
 
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         partitions.asScala.foreach { tp =>
           val m = Map("@timestamp" -> System.currentTimeMillis(),"auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
-          sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_ASSIGNED,m)
+          sendAsJsonToAuditLog(ConsumerAuditMessageType.AuditPartitionAssigned,m)
         }
       }
 
@@ -1012,7 +1012,7 @@ object ConsumerGroupCommand extends Logging {
     val auditOpt = parser.accepts("audit","Run a service which emits rebalancing and offset commits information in a machine-readable way")
     val auditTypeOpt = parser.accepts("audit-type","Choose which types of events to audit")
       .availableIf(auditOpt)
-      .withRequiredArg().withValuesConvertedBy(AuditType.valueConverter).defaultsTo(AuditType.GROUP_METADATA)
+      .withRequiredArg().withValuesConvertedBy(AuditType.valueConverter).defaultsTo(AuditType.GroupMetadata)
 
 
     parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt, auditOpt)
