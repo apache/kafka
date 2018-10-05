@@ -130,11 +130,6 @@ class ProduceRequestTest extends BaseRequestTest {
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
 
-    // produce request with version below v7: UNSUPPORTED_COMPRESSION_TYPE error occurs
-    val res0 = sendProduceRequest(leader,
-      new ProduceRequest.Builder(3, 6, -1, 3000, partitionRecords.asJava, null).build())
-    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, res0.responses.asScala.head._2.error)
-
     // produce request with v7: works fine!
     val res1 = sendProduceRequest(leader,
       new ProduceRequest.Builder(7, 7, -1, 3000, partitionRecords.asJava, null).build())
