@@ -1295,7 +1295,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private boolean containsAbortMarker(RecordBatch batch) {
-            if (!batch.isControlBatch())
+            if (!(batch.isControlBatch() && batch.iterator().hasNext()))
                 return false;
 
             Iterator<Record> batchIterator = batch.iterator();
