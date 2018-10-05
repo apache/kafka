@@ -74,7 +74,7 @@ versions += [
   lz4: "1.5.0",
   mavenArtifact: "3.5.4",
   metrics: "2.2.0",
-  mockito: "2.22.0",
+  mockito: "2.23.0",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
   reflections: "0.9.11",
