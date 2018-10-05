@@ -45,7 +45,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @ParameterizedTest
-  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludePassthrough])
   def cleanerTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -86,7 +86,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludePassthrough])
   def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
@@ -131,7 +131,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstdAndPassthrough])
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, codec)
@@ -183,7 +183,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstdAndPassthrough])
   def testCleaningNestedMessagesWithV0AndV1(codec: CompressionType): Unit = {
     val maxMessageSize = 192
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
@@ -221,7 +221,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludePassthrough])
   def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -314,20 +314,26 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val offsets = appendInfo.firstOffset.get.messageOffset to appendInfo.lastOffset
 
     kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
+
   }
 
 }
 
 object LogCleanerParameterizedIntegrationTest {
-
-  class AllCompressions extends ArgumentsProvider {
+  // Passthrough is Linkedin customized version
+  // Current tests does not support them yet
+  class ExcludePassthrough extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
+      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.PASSTHROUGH).map(codec => Arguments.of(codec)))
   }
 
   // zstd compression is not supported with older message formats (i.e supported by V0 and V1)
-  class ExcludeZstd extends ArgumentsProvider {
+  class ExcludeZstdAndPassthrough extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(codec)))
+      java.util.Arrays.stream(
+        CompressionType.values
+          .filter(!Set(CompressionType.ZSTD, CompressionType.PASSTHROUGH).contains(_))
+          .map(codec => Arguments.of(codec))
+      )
   }
 }

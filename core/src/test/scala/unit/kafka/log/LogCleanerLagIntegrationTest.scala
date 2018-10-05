@@ -120,5 +120,5 @@ object LogCleanerLagIntegrationTest {
   }
 
   def parameters: java.util.stream.Stream[Arguments] =
-    java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
+    java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.PASSTHROUGH).map(codec => Arguments.of(codec)))
 }

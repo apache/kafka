@@ -83,6 +83,7 @@ object BrokerCompressionTest {
   def parameters: java.util.stream.Stream[Arguments] = {
     (for (brokerCompression <- BrokerCompressionCodec.brokerCompressionOptions;
          messageCompression <- CompressionType.values
+          if messageCompression != CompressionType.PASSTHROUGH
     ) yield Arguments.of(messageCompression.name, brokerCompression)).asJava.stream()
   }
 }

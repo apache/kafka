@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,8 @@ public class MemoryRecordsTest {
             List<Arguments> arguments = new ArrayList<>();
             for (long firstOffset : asList(0L, 57L))
                 for (CompressionType type: CompressionType.values()) {
+                    if (type == CompressionType.PASSTHROUGH)
+                        continue;
                     List<Byte> magics = type == CompressionType.ZSTD
                             ? Collections.singletonList(RecordBatch.MAGIC_VALUE_V2)
                             : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
@@ -191,6 +194,137 @@ public class MemoryRecordsTest {
 
                 assertEquals(batch.baseOffset() + recordCount - 1, batch.lastOffset());
             }
+        }
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testShallowIteration(Args args) {
+        // Create the record batch
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        byte magic = args.magic;
+        CompressionType compression = args.compression;
+        long firstOffset = args.firstOffset;
+        long pid = args.pid;
+        short epoch = args.epoch;
+
+        int partitionLeaderEpoch = 998;
+
+        MemoryRecordsBuilder builder1 = new MemoryRecordsBuilder(buffer, magic, compression,
+            TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, args.firstSequence, false, false,
+            partitionLeaderEpoch, buffer.limit());
+
+        SimpleRecord[] records = new SimpleRecord[] {
+            new SimpleRecord(0L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(0L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(0L, "c".getBytes(), "3".getBytes()),
+            new SimpleRecord(0L, "d".getBytes(), "4".getBytes())
+        };
+
+        for (SimpleRecord record : records)
+            builder1.append(record);
+
+        // Build MemoryRecords with normal appender
+        MemoryRecords records1 = builder1.build();
+        List<MutableRecordBatch> recordBatches = Utils.toList(records1.batches().iterator());
+
+        // Shallow iterate over the records, if compression is NONE, there should be 4 entries during shallow iteration;
+        // otherwise, there should be only 1 entry
+        int recordCount = 0;
+
+        for (int i = 0; i < recordBatches.size(); i++) {
+            CloseableIterator<Record> iter = recordBatches.get(i).shallowIterator();
+
+            while (iter.hasNext()) {
+                Record curRecord = iter.next();
+                curRecord.ensureValid();
+                recordCount++;
+            }
+        }
+
+        int expectedRecordCount = compression == CompressionType.NONE ?
+            (magic == RecordBatch.MAGIC_VALUE_V2 ? 1 : 4) : 1;
+        assertEquals(expectedRecordCount, recordCount);
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testIteratorWithProducerCompression(Args args) {
+        int partitionLeaderEpoch = 998;
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        byte magic = args.magic;
+        CompressionType compression = args.compression;
+        long firstOffset = args.firstOffset;
+        long pid = args.pid;
+        short epoch = args.epoch;
+        int firstSequence = args.firstSequence;
+
+        MemoryRecordsBuilder builder1 = new MemoryRecordsBuilder(buffer, magic, compression,
+            TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
+            partitionLeaderEpoch, buffer.limit());
+
+        SimpleRecord[] records = new SimpleRecord[] {
+            new SimpleRecord(0L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(0L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(0L, "c".getBytes(), "3".getBytes()),
+            new SimpleRecord(0L, "d".getBytes(), "4".getBytes())
+        };
+
+        for (SimpleRecord record : records)
+            builder1.append(record);
+
+        // Build MemoryRecords with normal appender
+        MemoryRecords records1 = builder1.build();
+
+        List<MutableRecordBatch> recordBatches = Utils.toList(records1.batches().iterator());
+
+        ByteBuffer buffer2 = ByteBuffer.allocate(1024);
+
+        MemoryRecordsBuilder builder2 = new MemoryRecordsBuilder(buffer2, magic, CompressionType.PASSTHROUGH,
+            TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
+            partitionLeaderEpoch, buffer2.limit());
+
+        List<Record> recordList = new ArrayList<>();
+        // Part 1: Shallow iterate over the original record batch and use passthrough to append to new buffer
+        for (RecordBatch currentBatch : recordBatches) {
+            CloseableIterator<Record> currentRecords = currentBatch.shallowIterator();
+            while (currentRecords.hasNext()) {
+                Record curRecord = currentRecords.next();
+                recordList.add(curRecord);
+
+                if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+                    builder2.append(0, null, curRecord.value());
+                } else {
+                    builder2.append(0, null, ((AbstractLegacyRecordBatch) curRecord).outerRecord().buffer());
+                }
+            }
+        }
+
+        MemoryRecords records2 = builder2.build();
+
+        List<MutableRecordBatch> list2 = Utils.toList(records2.batches().iterator());
+
+        // Part 2: the newly produced records should be the same as the original ones
+        for (int i = 0; i < list2.size(); i++) {
+            CloseableIterator<Record> origRecIter = recordBatches.get(i).shallowIterator();
+            CloseableIterator<Record> curRecIter = list2.get(i).shallowIterator();
+
+            while (curRecIter.hasNext()) {
+                Record curRecord = curRecIter.next(), origRecord = origRecIter.next();
+
+                assertEquals(magic == RecordBatch.MAGIC_VALUE_V2 ? firstOffset : 0, curRecord.offset());
+
+                if (magic == RecordBatch.MAGIC_VALUE_V2) {
+                    assertEquals(curRecord, origRecord);
+                } else {
+                    assertEquals(((AbstractLegacyRecordBatch) curRecord).outerRecord().buffer(),
+                                 ((AbstractLegacyRecordBatch) origRecord).outerRecord().buffer());
+                }
+
+                curRecord.ensureValid();
+            }
+
+            assertFalse(origRecIter.hasNext());
         }
     }
 
