@@ -24,6 +24,8 @@ import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
 import static java.time.Duration.ofMillis;
@@ -61,8 +63,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -91,8 +92,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -116,8 +116,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -133,8 +132,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
                 windows, "asdf", null, null, null
             ), "asdf"),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -153,8 +151,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
         graceGrandparent.addChild(statefulParent);
@@ -181,8 +178,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -210,8 +206,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
@@ -226,8 +221,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            null,
-            null,
+            (StoreBuilder<? extends StateStore>) null,
             false
         );
 
