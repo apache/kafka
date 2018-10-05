@@ -38,6 +38,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
@@ -55,6 +56,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -171,7 +173,9 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public String bootstrapServers() {
-        return address(brokers[0]);
+        return Arrays.stream(brokers)
+                .map(this::address)
+                .collect(Collectors.joining(","));
     }
 
     public String address(KafkaServer server) {
