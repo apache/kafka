@@ -32,7 +32,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
 
     public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters processorParameters,
+                                 final ProcessorParameters<K, V> processorParameters,
                                  final String[] storeNames,
                                  final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
                                  final boolean repartitionRequired) {
@@ -75,7 +75,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     public static final class StatefulProcessorNodeBuilder<K, V> {
 
-        private ProcessorParameters processorSupplier;
+        private ProcessorParameters<K, V> processorSupplier;
         private String nodeName;
         private boolean repartitionRequired;
         private String[] storeNames;
@@ -84,7 +84,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         private StatefulProcessorNodeBuilder() {
         }
 
-        public StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorSupplier = processorParameters;
             return this;
         }

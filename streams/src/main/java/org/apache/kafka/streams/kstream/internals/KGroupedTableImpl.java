@@ -47,7 +47,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final String userSpecifiedName;
+    private final String userSpecifiedName;
 
     private final Initializer<Long> countInitializer = () -> 0L;
 
@@ -72,7 +72,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
         final String repartitionTopic = (userSpecifiedName != null ? userSpecifiedName : materialized.storeName())
-                + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+            + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
         final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
 
@@ -98,16 +98,18 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 builder);
     }
 
-    private <T> StatefulProcessorNode getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
-                                                               final String functionName,
-                                                               final ProcessorSupplier<K, Change<V>> aggregateSupplier) {
+    private <T> StatefulProcessorNode<K, Change<V>> getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
+                                                                             final String functionName,
+                                                                             final ProcessorSupplier<K, Change<V>> aggregateSupplier) {
 
         final ProcessorParameters<K, Change<V>> aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
 
-        return StatefulProcessorNode.statefulProcessorNodeBuilder()
+        return StatefulProcessorNode
+            .<K, Change<V>>statefulProcessorNodeBuilder()
             .withNodeName(functionName)
             .withProcessorParameters(aggregateFunctionProcessorParams)
-            .withStoreBuilder(new KeyValueStoreMaterializer<>(materialized).materialize()).build();
+            .withStoreBuilder(new KeyValueStoreMaterializer<>(materialized).materialize())
+            .build();
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,
@@ -164,9 +166,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         }
 
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
-                countInitializer,
-                countAdder,
-                countSubtractor);
+                                                                                        countInitializer,
+                                                                                        countAdder,
+                                                                                        countSubtractor);
 
         return doAggregate(aggregateSupplier, AGGREGATE_NAME, materializedInternal);
     }
