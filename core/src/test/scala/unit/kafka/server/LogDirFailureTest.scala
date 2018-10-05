@@ -183,7 +183,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       {
         try {
-          producer.send(record).get()
+          producer.send(record).get(6000, TimeUnit.MILLISECONDS)
           true
         } catch {
           case e: ExecutionException => {
