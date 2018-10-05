@@ -2041,6 +2041,7 @@ public class KafkaConsumerTest {
         int fetchSize = 1024 * 1024;
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
+        boolean usePassthrough = false;
         int rebalanceTimeoutMs = 60000;
 
         Deserializer<String> keyDeserializer = new StringDeserializer();
@@ -2085,6 +2086,7 @@ public class KafkaConsumerTest {
                 maxPollRecords,
                 checkCrcs,
                 "",
+                usePassthrough,
                 keyDeserializer,
                 valueDeserializer,
                 metadata,

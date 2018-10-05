@@ -686,8 +686,11 @@ public class MemoryRecordsBuilderTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (int bufferOffset : Arrays.asList(0, 15))
-            for (CompressionType compressionType : CompressionType.values())
-                values.add(new Object[] {bufferOffset, compressionType});
+            for (CompressionType compressionType : CompressionType.values()) {
+                if (compressionType == CompressionType.PASSTHROUGH)
+                    continue;
+                values.add(new Object[]{bufferOffset, compressionType});
+            }
         return values;
     }
 

@@ -231,6 +231,16 @@ public interface RecordBatch extends Iterable<Record> {
     CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier);
 
     /**
+     * Return a iterator which does shallow iteration over the record batch, i.e. no decompression.
+     * If the record batch is not compressed, it will also return the entire recordBatch.
+     * 1. For V0/V1, since the record and recordBatch shares the same schema, the behavior is not changed, i.e. it will return the entire
+     *    recordBatch and send it to the producer.
+     * 2. For V2, it will also return the entire recordBatch and later wrap the recordBatch as a single record and send it to producer.
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> shallowIterator();
+
+    /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
      * For magic versions prior to 2, this is always false.
      *

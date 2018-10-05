@@ -341,6 +341,36 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
+    public CloseableIterator<Record> shallowIterator() {
+        return new CloseableIterator<Record>() {
+            private boolean hasNext = true;
+            @Override
+            public void close() {
+
+            }
+
+            @Override
+            public boolean hasNext() {
+                return hasNext;
+            }
+
+            @Override
+            public Record next() {
+                if (!hasNext)
+                    throw new NoSuchElementException();
+                hasNext = false;
+                return DefaultRecord.readAllRecords(sizeInBytes(), attributes(), baseOffset(),
+                    firstTimestamp(), baseSequence(), buffer);
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return compressedIterator(bufferSupplier, false);

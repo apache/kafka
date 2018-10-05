@@ -206,6 +206,12 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
     private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
 
+    /**
+     * <code>enable.shallow.iterator</code>
+     */
+    public static final String ENABLE_SHALLOW_ITERATOR_CONFIG = "enable.shallow.iterator";
+    private static final String ENABLE_SHALLOW_ITERATOR_DOC = "Shallow iterate message batches in the consumer, returning message batches (potentially compressed) instead of individual records";
+
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
@@ -404,6 +410,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         CHECK_CRCS_DOC)
+                                .define(ENABLE_SHALLOW_ITERATOR_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        ENABLE_SHALLOW_ITERATOR_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

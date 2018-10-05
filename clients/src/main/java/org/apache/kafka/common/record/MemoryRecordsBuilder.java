@@ -69,6 +69,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     // Used to append records, may compress data on the fly
     private DataOutputStream appendStream;
     private boolean isTransactional;
+    private boolean usePassthrough = false;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
@@ -109,7 +110,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
         this.magic = magic;
         this.timestampType = timestampType;
-        this.compressionType = compressionType;
         this.baseOffset = baseOffset;
         this.logAppendTime = logAppendTime;
         this.numRecords = 0;
@@ -124,7 +124,15 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
-        this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
+
+        if (compressionType == CompressionType.PASSTHROUGH) {
+            usePassthrough = true;
+            this.compressionType = CompressionType.NONE;
+        } else {
+            this.compressionType = compressionType;
+        }
+
+        this.batchHeaderSizeInBytes = usePassthrough ? 0 : AbstractRecords.recordBatchHeaderSizeInBytes(magic, this.compressionType);
 
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
@@ -317,9 +325,11 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             buffer().position(initialPosition);
             builtRecords = MemoryRecords.EMPTY;
         } else {
-            if (magic > RecordBatch.MAGIC_VALUE_V1)
-                this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.uncompressedRecordsSizeInBytes;
-            else if (compressionType != CompressionType.NONE)
+            if (magic > RecordBatch.MAGIC_VALUE_V1) {
+                if (!usePassthrough) {
+                    this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.uncompressedRecordsSizeInBytes;
+                }
+            } else if (compressionType != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.uncompressedRecordsSizeInBytes;
 
             ByteBuffer buffer = buffer().duplicate();
@@ -419,7 +429,11 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
                 return null;
             } else {
-                return appendLegacyRecord(offset, timestamp, key, value, magic);
+                if (usePassthrough) {
+                    return appendPassthroughLegacyBatch(timestamp, value);
+                } else {
+                    return appendLegacyRecord(offset, timestamp, key, value, magic);
+                }
             }
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
@@ -618,6 +632,31 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
+     * Append an already assembled (and compressed) batch. The offset is always recorded as 0 as the value is
+     * a single complete batch. If multiple batches are appended, they will be handled with request aggregation on
+     * the broker
+     * @param timestamp
+     * @param value
+     * @return crc of the record
+     */
+    public long appendPassthroughLegacyBatch(long timestamp, ByteBuffer value) {
+        try {
+            ensureOpenForRecordAppend();
+            // For passthrough compression (from shallow iterator), the value is a wrapper message
+            LegacyRecord wrapperMessage = new LegacyRecord(value);
+
+            int size = LegacyRecord.recordSize(wrapperMessage.magic(), wrapperMessage.key(), wrapperMessage.value());
+            AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(0L), size);
+
+            long crc = LegacyRecord.write(appendStream, wrapperMessage.magic(), timestamp, wrapperMessage.key(), wrapperMessage.value(), wrapperMessage.compressionType(), timestampType);
+            recordWritten(0L, timestamp, size + Records.LOG_OVERHEAD);
+            return crc;
+        } catch (IOException e) {
+            throw new KafkaException("I/O exception when writing to the legacy append stream, closing", e);
+        }
+    }
+
+    /**
      * Append a record at the next sequential offset.
      * @param record the record to add
      */
@@ -653,12 +692,23 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendWithOffset(nextSequentialOffset(), record);
     }
 
+    /**
+     * Write the entire buffer to `out` as-it-is and return its size
+     */
+    public int writePassthrough(DataOutputStream out,
+        ByteBuffer buffer) throws IOException {
+        int bufferSize = buffer.remaining();
+        Utils.writeTo(out, buffer, bufferSize);
+        return bufferSize;
+    }
+
     private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
                                      Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - firstTimestamp;
-        int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
+        int sizeInBytes = usePassthrough ? writePassthrough(appendStream, value) :
+            DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
         recordWritten(offset, timestamp, sizeInBytes);
     }
 
@@ -756,6 +806,11 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         // We always allow at least one record to be appended (the ByteBufferOutputStream will grow as needed)
         if (numRecords == 0)
             return true;
+
+        // For passthrough V2, ensure one producerBatch only has one DefaultRecordBatch, and since
+        // in this case, DefaultRecordBatch is the value part of a DefaultRecord, so we only allow one record
+        if (magic >= RecordBatch.MAGIC_VALUE_V2 && usePassthrough)
+            return false;
 
         final int recordSize;
         if (magic < RecordBatch.MAGIC_VALUE_V2) {

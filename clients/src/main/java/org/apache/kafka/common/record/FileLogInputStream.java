@@ -158,6 +158,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public CloseableIterator<Record> shallowIterator() {
+            // Not implemented
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public boolean isValid() {
             return loadFullBatch().isValid();
         }

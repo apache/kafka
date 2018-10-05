@@ -56,6 +56,7 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.AbstractLegacyRecordBatch;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.Record;
@@ -103,6 +104,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
+
 
 /**
  * This class manages the fetching process with the brokers.
@@ -139,6 +142,7 @@ public class Fetcher<K, V> implements Closeable {
     private final int maxPollRecords;
     private final boolean checkCrcs;
     private final String clientRackId;
+    private final boolean enableShallowIteration;
     private final ConsumerMetadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
@@ -165,6 +169,7 @@ public class Fetcher<K, V> implements Closeable {
                    int maxPollRecords,
                    boolean checkCrcs,
                    String clientRackId,
+                   boolean enableShallowIteration,
                    Deserializer<K> keyDeserializer,
                    Deserializer<V> valueDeserializer,
                    ConsumerMetadata metadata,
@@ -191,6 +196,7 @@ public class Fetcher<K, V> implements Closeable {
         this.clientRackId = clientRackId;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
+        this.enableShallowIteration = enableShallowIteration;
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
@@ -1302,7 +1308,8 @@ public class Fetcher<K, V> implements Closeable {
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
-            ByteBuffer valueBytes = record.value();
+            ByteBuffer valueBytes = record.hasMagic(MAGIC_VALUE_V2) ? record.value() :
+                (enableShallowIteration ? ((AbstractLegacyRecordBatch) record).outerRecord().buffer() : record.value());
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
@@ -1493,7 +1500,11 @@ public class Fetcher<K, V> implements Closeable {
                         }
                     }
 
-                    records = currentBatch.streamingIterator(decompressionBufferSupplier);
+                    if (enableShallowIteration) {
+                        records = currentBatch.shallowIterator();
+                    } else {
+                        records = currentBatch.streamingIterator(decompressionBufferSupplier);
+                    }
                 } else {
                     Record record = records.next();
                     // skip any records out of range

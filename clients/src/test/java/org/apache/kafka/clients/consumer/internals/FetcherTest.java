@@ -118,6 +118,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -163,6 +164,8 @@ public class FetcherTest {
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
     private Fetcher<?, ?> fetcher;
+
+    private boolean testPassthrough = false;
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -614,6 +617,43 @@ public class FetcherTest {
             assertEquals(0, subscriptions.position(tp0).offset);
         }
     }
+
+    @Test
+    public void testFetchEntireBatchWithShallowIteratorEnabled() {
+        for (byte magic : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            // create compressed batches
+            MemoryRecordsBuilder builder =
+                new MemoryRecordsBuilder(buffer, magic, CompressionType.GZIP, TimestampType.CREATE_TIME,
+                    0L, 10L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false, 0, 1024);
+
+            builder.append(10L, "key".getBytes(), "value".getBytes());
+            builder.append(11L, "key1".getBytes(), "value1".getBytes());
+            builder.append(12L, "key2".getBytes(), "value2".getBytes());
+            builder.append(13L, "key3".getBytes(), "value3".getBytes());
+
+            builder.close();
+            buffer.flip();
+
+            // create new fetcher with shallow iterator enabled and maxPollRecords set to 6
+            testPassthrough = true;
+            buildFetcher(6);
+
+            assignFromUser(singleton(tp0));
+            subscriptions.seek(tp0, 0);
+
+            // normal fetch
+            assertEquals(1, fetcher.sendFetches());
+            client.prepareResponse(fullFetchResponse(tp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+            consumerClient.poll(time.timer(0));
+
+            Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+            List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
+            assertEquals(1, records.size());
+        }
+    }
+
+
 
     @Test
     public void testHeaders() {
@@ -3145,6 +3185,7 @@ public class FetcherTest {
                 2 * numPartitions,
                 true,
                 "",
+                testPassthrough,
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
                 metadata,
@@ -4023,6 +4064,7 @@ public class FetcherTest {
                 maxPollRecords,
                 true, // check crc
                 "",
+                testPassthrough,
                 keyDeserializer,
                 valueDeserializer,
                 metadata,

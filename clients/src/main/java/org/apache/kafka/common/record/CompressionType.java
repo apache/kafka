@@ -133,6 +133,18 @@ public enum CompressionType {
                 throw new KafkaException(e);
             }
         }
+    },
+
+    PASSTHROUGH(5, "passthrough", 1.0f) {
+        @Override
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+            return buffer;
+        }
+
+        @Override
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+            return new ByteBufferInputStream(buffer);
+        }
     };
 
     public final int id;
@@ -178,6 +190,8 @@ public enum CompressionType {
                 return LZ4;
             case 4:
                 return ZSTD;
+            case 5:
+                return PASSTHROUGH;
             default:
                 throw new IllegalArgumentException("Unknown compression type id: " + id);
         }
@@ -194,6 +208,8 @@ public enum CompressionType {
             return LZ4;
         else if (ZSTD.name.equals(name))
             return ZSTD;
+        else if (PASSTHROUGH.name.equals(name))
+            return PASSTHROUGH;
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }

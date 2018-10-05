@@ -797,6 +797,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
                     config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
                     config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
+                    config.getBoolean(ConsumerConfig.ENABLE_SHALLOW_ITERATOR_CONFIG),
                     this.keyDeserializer,
                     this.valueDeserializer,
                     this.metadata,
