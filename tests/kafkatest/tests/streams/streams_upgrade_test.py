@@ -487,9 +487,9 @@ class StreamsUpgradeTest(Test):
                         second_other_processor_found = list(second_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % second_other_processor.LOG_FILE, allow_fail=True))
 
                         if len(processor_found) == 0 or len(first_other_processor_found) == 0 or len(second_other_processor_found) == 0:
-                            print("processor: " + processor_found)
-                            print("first other processor: " + first_other_processor_found)
-                            print("second other processor: " + second_other_processor_found)
+                            print("processor: ", processor_found)
+                            print("first other processor: ", first_other_processor_found)
+                            print("second other processor: ", second_other_processor_found)
 
                             processor_generation = processor_found[len(processor_found) - 1].strip().split()[0]
                             first_other_processor_generation = first_other_processor_found[len(first_other_processor_found) - 1].strip().split()[0]
