@@ -35,10 +35,10 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
@@ -204,7 +204,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topicConfig Additional topic-level configuration settings.
      */
     public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
-        replication = Math.min(replication, brokers.length);
+        if (replication > brokers.length) {
+            throw new InvalidReplicationFactorException("Insufficient brokers ("
+                    + brokers.length + ") for desired replication (" + replication + ")");
+        }
+
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
                 topic, partitions, replication, topicConfig);
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
