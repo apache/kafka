@@ -24,8 +24,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -59,11 +57,11 @@ public final class StreamsTestUtils {
     public static Properties getStreamsConfig(final Serde keyDeserializer,
                                               final Serde valueDeserializer) {
         return getStreamsConfig(
-            UUID.randomUUID().toString(),
-            "localhost:9091",
-            keyDeserializer.getClass().getName(),
-            valueDeserializer.getClass().getName(),
-            new Properties());
+                UUID.randomUUID().toString(),
+                "localhost:9091",
+                keyDeserializer.getClass().getName(),
+                valueDeserializer.getClass().getName(),
+                new Properties());
     }
 
     public static Properties getStreamsConfig(final String applicationId) {
