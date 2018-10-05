@@ -441,7 +441,7 @@ class PartitionStateMachine(config: KafkaConfig,
   Seq[(TopicPartition, Option[LeaderAndIsr], Seq[Int])] = {
     leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
       val assignment = controllerContext.partitionReplicaAssignment(partition)
-      val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+      val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
       val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
       val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment, isr, liveReplicas.toSet, shuttingDownBrokers)
       val newIsr = isr.filter(replica => !controllerContext.shuttingDownBrokerIds.contains(replica))
