@@ -32,7 +32,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
-  private val partitionBrokerIdMap = new mutable.HashMap[TopicPartition, BrokerAndFetcherId]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   this.logIdent = "[" + name + "] "
@@ -74,7 +73,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         removeFetcherForPartitions(removedPartitions.keySet)
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        addOrUpdateFetcherForPartitions(removedPartitions)
+        addFetcherForPartitions(removedPartitions)
       }
     }
     lock synchronized {
@@ -94,8 +93,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // Visible for testing
   private[server] def getFetcher(topicPartition: TopicPartition): Option[T] = {
     lock synchronized {
-      partitionBrokerIdMap.get(topicPartition).flatMap { brokerAndFetcherId =>
-        fetcherThreadMap.get(BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId))
+      val fetcherId = getFetcherId(topicPartition)
+      fetcherThreadMap.values.find { fetcherThread =>
+        fetcherThread.fetchState(topicPartition).isDefined
       }
     }
   }
@@ -121,25 +121,10 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
-  private def addOrUpdateBrokerAndFetcherId(topicPartition: TopicPartition,
-                                            initialFetchState: InitialFetchState): BrokerAndFetcherId = {
-    val updatedBrokerAndFetcherId = BrokerAndFetcherId(initialFetchState.leader, getFetcherId(topicPartition))
-    partitionBrokerIdMap.put(topicPartition, updatedBrokerAndFetcherId).foreach { oldBrokerAndFetcherId =>
-      if (oldBrokerAndFetcherId != updatedBrokerAndFetcherId) {
-        val oldBrokerIdAndFetcherId =  BrokerIdAndFetcherId(oldBrokerAndFetcherId.broker.id, oldBrokerAndFetcherId.fetcherId)
-        fetcherThreadMap.get(oldBrokerIdAndFetcherId).foreach { fetcherThread =>
-          info(s"Removed fetcher for partition $topicPartition from broker ${oldBrokerAndFetcherId.broker}")
-          fetcherThread.removePartitions(Set(topicPartition))
-        }
-      }
-    }
-    updatedBrokerAndFetcherId
-  }
-
-  def addOrUpdateFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
     lock synchronized {
-      val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, initialFetchState) =>
-        addOrUpdateBrokerAndFetcherId(topicPartition, initialFetchState)
+      val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
+        BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
       }
 
       def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): AbstractFetcherThread = {
@@ -165,10 +150,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         val initialOffsetAndEpochs = initialFetchOffsets.map { case (tp, brokerAndInitOffset) =>
           tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch)
         }
-        fetcherThread.addPartitions(initialOffsetAndEpochs)
 
-        info(s"Added or updated fetcher to broker ${brokerAndFetcherId.broker} for " +
-          s"partitions $initialOffsetAndEpochs")
+        fetcherThread.addPartitions(initialOffsetAndEpochs)
+        info(s"Added fetcher to broker ${brokerAndFetcherId.broker} for partitions $initialOffsetAndEpochs")
       }
     }
   }
@@ -177,7 +161,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
-      partitionBrokerIdMap --= partitions
     }
     info(s"Removed fetcher for partitions $partitions")
   }
@@ -205,7 +188,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         fetcher.shutdown()
       }
       fetcherThreadMap.clear()
-      partitionBrokerIdMap.clear()
     }
   }
 }

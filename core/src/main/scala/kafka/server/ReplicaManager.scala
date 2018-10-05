@@ -591,7 +591,7 @@ class ReplicaManager(val config: KafkaConfig,
 
             val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureReplica.highWatermark.messageOffset)
-            replicaAlterLogDirsManager.addOrUpdateFetcherForPartitions(Map(topicPartition -> initialFetchState))
+            replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
           (topicPartition, Errors.NONE)
@@ -1112,7 +1112,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
           }
         }
-        replicaAlterLogDirsManager.addOrUpdateFetcherForPartitions(futureReplicasAndInitialOffset)
+        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -1271,6 +1271,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
 
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.map(_.topicPartition))
       partitionsToMakeFollower.foreach { partition =>
         stateChangeLogger.trace(s"Stopped fetchers as part of become-follower request from controller $controllerId " +
           s"epoch $epoch with correlation id $correlationId for partition ${partition.topicPartition} with leader " +
@@ -1305,7 +1306,7 @@ class ReplicaManager(val config: KafkaConfig,
           val fetchOffset = partition.localReplicaOrException.highWatermark.messageOffset
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
         }.toMap
-        replicaFetcherManager.addOrUpdateFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
 
         partitionsToMakeFollower.foreach { partition =>
           stateChangeLogger.trace(s"Started fetcher to new leader as part of become-follower " +

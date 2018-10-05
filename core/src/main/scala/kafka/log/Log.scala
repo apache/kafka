@@ -38,7 +38,7 @@ import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
@@ -1106,16 +1106,6 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def readUncommitted(startOffset: Long,
-                                   maxLength: Int,
-                                   maxOffset: Option[Long] = None,
-                                   minOneMessage: Boolean = true): FetchDataInfo = {
-    read(startOffset, maxLength,
-      maxOffset = maxOffset,
-      minOneMessage = minOneMessage,
-      includeAbortedTxns = false)
-  }
-
   /**
    * Read messages from the log.
    *
@@ -1338,7 +1328,11 @@ class Log(@volatile var dir: File,
    */
   def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
-      val fetchDataInfo = readUncommitted(offset, maxLength = 1)
+      val fetchDataInfo = read(offset,
+        maxLength = 1,
+        maxOffset = None,
+        minOneMessage = false,
+        includeAbortedTxns = false)
       Some(fetchDataInfo.fetchOffsetMetadata)
     } catch {
       case _: OffsetOutOfRangeException => None

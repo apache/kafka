@@ -43,59 +43,19 @@ class AbstractFetcherManagerTest {
 
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+    EasyMock.expect(fetcher.fetchState(tp))
+      .andReturn(Some(PartitionFetchState(fetchOffset, leaderEpoch, Truncating)))
     EasyMock.expect(fetcher.removePartitions(Set(tp)))
+    EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
 
-    fetcherManager.addOrUpdateFetcherForPartitions(Map(tp -> initialFetchState))
+    fetcherManager.addFetcherForPartitions(Map(tp -> initialFetchState))
     assertEquals(Some(fetcher), fetcherManager.getFetcher(tp))
 
     fetcherManager.removeFetcherForPartitions(Set(tp))
     assertEquals(None, fetcherManager.getFetcher(tp))
 
     EasyMock.verify(fetcher)
-  }
-
-  @Test
-  def testAddOrUpdatePartition(): Unit = {
-    val firstLeaderEndpoint = new BrokerEndPoint(0, "localhost", 9092)
-    val secondLeaderEndpoint = new BrokerEndPoint(1, "localhost", 9093)
-
-    val firstLeaderFetcher = EasyMock.mock(classOf[AbstractFetcherThread])
-    val secondLeaderFetcher = EasyMock.mock(classOf[AbstractFetcherThread])
-
-    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
-      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-        if (sourceBroker == firstLeaderEndpoint)
-          firstLeaderFetcher
-        else
-          secondLeaderFetcher
-      }
-    }
-
-    val tp = new TopicPartition("topic", 0)
-    val initialFetchState = InitialFetchState(
-      leader = firstLeaderEndpoint,
-      currentLeaderEpoch = 15,
-      initOffset = 0L)
-    val updatedFetchState = InitialFetchState(
-      leader = secondLeaderEndpoint,
-      currentLeaderEpoch = 16,
-      initOffset = 0L)
-
-    EasyMock.expect(firstLeaderFetcher.start())
-    EasyMock.expect(firstLeaderFetcher.addPartitions(Map(tp -> OffsetAndEpoch(0L, 15))))
-    EasyMock.expect(firstLeaderFetcher.removePartitions(Set(tp)))
-    EasyMock.replay(firstLeaderFetcher)
-
-    EasyMock.expect(secondLeaderFetcher.start())
-    EasyMock.expect(secondLeaderFetcher.addPartitions(Map(tp -> OffsetAndEpoch(0L, 16))))
-    EasyMock.replay(secondLeaderFetcher)
-
-    fetcherManager.addOrUpdateFetcherForPartitions(Map(tp -> initialFetchState))
-    assertEquals(Some(firstLeaderFetcher), fetcherManager.getFetcher(tp))
-
-    fetcherManager.addOrUpdateFetcherForPartitions(Map(tp -> updatedFetchState))
-    assertEquals(Some(secondLeaderFetcher), fetcherManager.getFetcher(tp))
   }
 
 }

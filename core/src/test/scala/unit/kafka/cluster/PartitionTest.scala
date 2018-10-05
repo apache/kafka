@@ -100,12 +100,6 @@ class PartitionTest {
 
   @Test
   def testMakeLeaderUpdatesEpochCache(): Unit = {
-    val controllerEpoch = 3
-    val leader = brokerId
-    val follower = brokerId + 1
-    val controllerId = brokerId + 3
-    val replicas = List[Integer](leader, follower).asJava
-    val isr = List[Integer](leader, follower).asJava
     val leaderEpoch = 8
 
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
@@ -119,14 +113,11 @@ class PartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
-    assertTrue("Expected makeLeader to succeed",
-      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch,
-        isr, 1, replicas, true), 0))
-
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
     assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
 
-    val epochEndOffset = partition.lastOffsetForLeaderEpoch(leaderEpoch)
+    val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
+      leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
     assertEquals(4, epochEndOffset.endOffset)
     assertEquals(leaderEpoch, epochEndOffset.leaderEpoch)
   }

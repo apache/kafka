@@ -932,7 +932,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * Get the last known offset and epoch of the first prior message to the given epoch.
+   * Find the (exclusive) last offset of the largest epoch less than or equal to the requested epoch.
    *
    * @param currentLeaderEpoch The expected epoch of the current leader (if known)
    * @param leaderEpoch Requested leader epoch

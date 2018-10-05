@@ -157,7 +157,7 @@ class AbstractFetcherThreadTest {
     fetcher.setReplicaState(partition, replicaState)
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
 
-    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 1,
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0,
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes))
     val leaderState = MockFetcherThread.PartitionState(Seq(batch), leaderEpoch = 0, highWatermark = 2L)
@@ -213,7 +213,8 @@ class AbstractFetcherThreadTest {
     val fetcher = new MockFetcherThread
 
     // This test is contrived because it shouldn't be possible to to see unknown leader epoch
-    // in the Fetching state unless the leader had validated the leader epoch while Truncating
+    // in the Fetching state as the leader must validate the follower's epoch when it checks
+    // the truncation offset.
 
     val replicaState = MockFetcherThread.PartitionState(leaderEpoch = 1)
     fetcher.setReplicaState(partition, replicaState)
