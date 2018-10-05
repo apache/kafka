@@ -17,12 +17,13 @@
 
 package kafka.admin
 
+import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 import java.text.{ParseException, SimpleDateFormat}
 import java.time.Duration
-import java.time.temporal.{ChronoUnit, TemporalUnit}
+import java.time.temporal.ChronoUnit
 import java.util
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Base64, Date, Properties}
 import javax.xml.datatype.DatatypeFactory
@@ -32,15 +33,16 @@ import kafka.admin.AuditType.AuditType
 import kafka.admin.ConsumerAuditMessageType.ConsumerAuditMessageType
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.utils._
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -49,7 +51,7 @@ import scala.util.{Failure, Success, Try}
 
 object ConsumerAuditMessageType extends Enumeration {
   type ConsumerAuditMessageType = Value
-  val GROUP_METADATA,GROUP_OFFSETS,PARTITION_ASSIGNMENT,OFFSET_COMMIT = Value
+  val GROUP_METADATA,GROUP_OFFSETS,PARTITION_ASSIGNMENT,OFFSET_COMMIT,AUDIT_PARTITION_REVOKED,AUDIT_PARTITION_ASSIGNED = Value
 
 }
 
@@ -100,7 +102,7 @@ object ConsumerGroupCommand extends Logging {
           printOffsetsToReset(offsetsToReset)
       }
       else if (opts.options.has(opts.auditOpt))
-        consumerGroupService.auditGroups()
+        consumerGroupService.audit()
     } catch {
       case e: Throwable =>
         printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
@@ -151,9 +153,53 @@ object ConsumerGroupCommand extends Logging {
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
-  class AuditService(auditType: AuditType,bootstrapServer: String) {
-    val auditClose = new AtomicBoolean(false)
-    val auditConsumer = createAuditConsumer(bootstrapServer)
+  class AuditService(auditType: AuditType,bootstrapServer: String) extends Logging {
+
+    // TODO Should send all per-group committed offsets to some metric backend
+    // TODO Should periodically ask the brokers to provide per-topic end-offsets, and send them to some metric backend
+
+    private lazy val auditLogger = LoggerFactory.getLogger("consumer_groups_audit_logger")
+
+    private val auditConsumer = createAuditConsumer(bootstrapServer)
+    private val auditConsumerHost = InetAddress.getLocalHost.getCanonicalHostName
+
+    private val auditShutdown = new AtomicBoolean(false)
+    private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
+
+    def run() = {
+      info("Starting audit service")
+
+      addAuditShutdownHook()
+
+      try {
+        info(s"Audit service subscribing to topic ${Topic.GROUP_METADATA_TOPIC_NAME}")
+        auditConsumer.subscribe(List(Topic.GROUP_METADATA_TOPIC_NAME).asJavaCollection, auditRebalanceListener)
+        while (!auditShutdown.get()) {
+          val records = auditConsumer.poll(Duration.of(Long.MaxValue,ChronoUnit.MILLIS)).asScala
+          for (r <- records) {
+            auditType match {
+              case AuditType.GROUP_METADATA => auditGroupMetadataRecord(r)
+              case AuditType.OFFSET_COMMITS => auditOffsetCommitRecord(r)
+            }
+          }
+        }
+      }
+      catch {
+        case e: WakeupException =>
+          info("Audit service woken up")
+          if (!auditShutdown.get()) {
+            error("Woken up not as part of shutdown",e)
+            throw e
+          }
+      }
+      finally {
+        info("Closing audit consumer")
+        auditConsumer.close()
+        info("Signalling that audit consumer loop has been shut down")
+        shutdownLatch.countDown()
+        info("Signalled that audit consumer loop has been shut down")
+      }
+    }
 
     private def auditOffsetCommitRecord(r: ConsumerRecord[Array[Byte], Array[Byte]]): Unit = {
       Option(r.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
@@ -187,7 +233,7 @@ object ConsumerGroupCommand extends Logging {
           Option(value) match {
             case Some(v) =>
               val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(r.value), Time.SYSTEM)
-
+              // RLRL val eventTimestamp = groupMetadata.currentStateTimestamp.get
               val groupMetadataAsMap = {
                 Map(
                   "groupId" -> groupId,
@@ -235,34 +281,6 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    def run() = {
-      // TODO Should send all per-group committed offsets to some metric backend
-      // TODO Should periodically ask the brokers to provide per-topic end-offsets, and send them to some metric backend
-
-      val d = Duration.of(Long.MaxValue,ChronoUnit.MILLIS)
-
-      try {
-        auditConsumer.subscribe(List(Topic.GROUP_METADATA_TOPIC_NAME).asJavaCollection, auditRebalanceListener)
-        while (!auditClose.get()) {
-          val records = auditConsumer.poll(d).asScala
-          for (r <- records) {
-            auditType match {
-              case AuditType.GROUP_METADATA => auditGroupMetadataRecord(r)
-              case AuditType.OFFSET_COMMITS => auditOffsetCommitRecord(r)
-            }
-          }
-        }
-      }
-      catch {
-        case e: WakeupException =>
-          if (!auditClose.get())
-            throw e
-      }
-      finally {
-        auditConsumer.close()
-      }
-    }
-
     private def createAuditConsumer(bootstrapServer: String) = {
       val properties = new Properties()
       val deserializer = (new ByteArrayDeserializer).getClass.getName
@@ -277,21 +295,46 @@ object ConsumerGroupCommand extends Logging {
 
     private val auditRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-        println(s"Audit - Revoked partitions $partitions")
+        partitions.asScala.foreach { tp =>
+          val m = Map("auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
+          sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_REVOKED,m)
+        }
       }
 
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        println(s"Audit - Assigned partitions $partitions")
+        partitions.asScala.foreach { tp =>
+          val m = Map("auditConsumerHost" -> auditConsumerHost,"topic" -> tp.topic(), "partition" -> tp.partition())
+          sendAsJsonToAuditLog(ConsumerAuditMessageType.AUDIT_PARTITION_ASSIGNED,m)
+        }
       }
+
+      def topicPartitionToMap(tp: TopicPartition) = Map("topic" -> tp.topic(),"partition" -> tp.partition())
     }
 
     private def sendAsJsonToAuditLog(messageType: ConsumerAuditMessageType, m: Map[String,Any]): Unit = {
       val messageTypePair = "consumerAuditMessageType" -> messageType.toString
       val jm = JavaConversions.mapAsJavaMap(m + messageTypePair)
       val s = Json.encodeAsString(jm)
-      println(s)
+      auditLogger.info(s)
     }
 
+    private def addAuditShutdownHook() = {
+      Runtime.getRuntime.addShutdownHook(new Thread("auditShutdownThread") {
+        override def run() {
+          info("System is shutting down. Waiting for audit consumer to shut down.")
+          auditShutdown.set(true)
+          auditConsumer.wakeup()
+          try {
+            shutdownLatch.await()
+            info("Audit consumer has been shut down")
+          } catch {
+            case _: InterruptedException =>
+              warn("Audit consumer shutdown has been interrupted during shutdown")
+          }
+
+        }
+      })
+    }
   }
 
   class ConsumerGroupService(val opts: ConsumerGroupCommandOptions) {
