@@ -478,34 +478,6 @@ class StreamsUpgradeTest(Test):
                                            timeout_sec=60,
                                            err_msg="Could not detect FutureStreamsPartitionAssignor in " + str(node.account))
 
-                    generation_synchronized = False
-                    retries = 0
-
-                    while retries < 10:
-                        processor_found = list(node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
-                        first_other_processor_found = list(first_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % first_other_processor.LOG_FILE, allow_fail=True))
-                        second_other_processor_found = list(second_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % second_other_processor.LOG_FILE, allow_fail=True))
-
-                        if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
-                            self.logger.info("processor: " + str(processor_found))
-                            self.logger.info("first other processor: " + str(first_other_processor_found))
-                            self.logger.info("second other processor: " + str(second_other_processor_found))
-
-                            processor_generation = processor_found[len(processor_found) - 1].strip().split()[0]
-                            first_other_processor_generation = first_other_processor_found[len(first_other_processor_found) - 1].strip().split()[0]
-                            second_other_processor_generation = second_other_processor_found[len(second_other_processor_found) - 1].strip().split()[0]
-
-                            if processor_generation == first_other_processor_generation and processor_generation == second_other_processor_generation:
-                                current_generation = processor_generation
-                                generation_synchronized = True
-                                break
-
-                        time.sleep(5)
-                        retries = retries + 1
-
-                    if generation_synchronized == False:
-                        raise Exception("Never saw all three processors have the synchronized generation number")
-
                     if processor == self.leader:
                         self.update_leader()
                     else:
@@ -549,12 +521,34 @@ class StreamsUpgradeTest(Test):
                                            err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
 
                     # version probing should trigger second rebalance
-                    current_generation = current_generation + 1
+                    # now we check that after consecutive rebalances we have synchronized generation
+                    generation_synchronized = False
+                    retries = 0
 
-                    for p in self.processors:
-                        monitors[p].wait_until("Successfully joined group with generation " + str(current_generation),
-                                               timeout_sec=60,
-                                               err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(p.node.account))
+                    while retries < 10:
+                        processor_found = list(node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
+                        first_other_processor_found = list(first_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % first_other_processor.LOG_FILE, allow_fail=True))
+                        second_other_processor_found = list(second_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % second_other_processor.LOG_FILE, allow_fail=True))
+
+                        if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
+                            self.logger.info("processor: " + str(processor_found))
+                            self.logger.info("first other processor: " + str(first_other_processor_found))
+                            self.logger.info("second other processor: " + str(second_other_processor_found))
+
+                            processor_generation = int(processor_found[len(processor_found) - 1].strip().split()[0])
+                            first_other_processor_generation = int(first_other_processor_found[len(first_other_processor_found) - 1].strip().split()[0])
+                            second_other_processor_generation = int(second_other_processor_found[len(second_other_processor_found) - 1].strip().split()[0])
+
+                            if processor_generation == first_other_processor_generation and processor_generation == second_other_processor_generation:
+                                current_generation = processor_generation
+                                generation_synchronized = True
+                                break
+
+                        time.sleep(5)
+                        retries = retries + 1
+
+                    if generation_synchronized == False:
+                        raise Exception("Never saw all three processors have the synchronized generation number")
 
                     if processor == self.leader:
                         self.update_leader()
