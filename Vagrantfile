@@ -43,7 +43,7 @@ ec2_az = nil # Uses set by AWS
 ec2_ami = "ami-905730e8"
 ec2_instance_type = "m3.medium"
 ec2_spot_instance = ENV['SPOT_INSTANCE'] ? ENV['SPOT_INSTANCE'] == 'true' : true
-ec2_spot_max_price = ENV['SPOT_MAX_PRICE'] || "0.266"  # Price for on-demand instance for m3.xlarge
+ec2_spot_max_price = "0.113"  # On-demand price for instance type
 ec2_user = "ubuntu"
 ec2_instance_name_prefix = "kafka-vagrant"
 ec2_security_groups = nil
