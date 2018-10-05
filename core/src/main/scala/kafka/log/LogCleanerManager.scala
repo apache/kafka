@@ -379,6 +379,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case e: KafkaStorageException =>
           error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
       }
+
+      val logUncleanablePartitions = uncleanablePartitions.getOrElse(sourceLogDir.toString, mutable.Set[TopicPartition]())
+      if (logUncleanablePartitions.contains(topicPartition)) {
+        logUncleanablePartitions.remove(topicPartition)
+        markPartitionUncleanable(destLogDir.toString, topicPartition)
+      }
     }
   }
 
@@ -450,15 +456,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           uncleanablePartitions.put(logDir, mutable.Set(partition))
       }
     }
-  }
-
-  /*
-    Returns an immutable set of the uncleanable partitions for a given log directory
-   */
-  def uncleanablePartitions(logDir: String): Set[TopicPartition] = {
-    var partitions: Set[TopicPartition] = Set()
-    inLock(lock) { partitions ++= uncleanablePartitions.getOrElse(logDir, partitions) }
-    partitions
   }
 
   private def isUncleanablePartition(log: Log, topicPartition: TopicPartition): Boolean = {
