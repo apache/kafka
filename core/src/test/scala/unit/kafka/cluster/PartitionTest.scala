@@ -113,7 +113,7 @@ class PartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
     assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
@@ -365,8 +365,10 @@ class PartitionTest {
     assertFetchOffsetError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), fetchOnlyLeader = true)
   }
 
-  private def setupPartitionWithMocks(leaderEpoch: Int, isLeader: Boolean): Partition = {
-    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+
+  private def setupPartitionWithMocks(leaderEpoch: Int,
+                                      isLeader: Boolean,
+                                      log: Log = logManager.getOrCreateLog(topicPartition, logConfig)): Partition = {
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
     val replicaManager = EasyMock.mock(classOf[ReplicaManager])
     val zkClient = EasyMock.mock(classOf[KafkaZkClient])

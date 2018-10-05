@@ -3538,9 +3538,9 @@ class LogTest {
       expectDeletedFiles)
   }
 
-  def readLog(log: Log, startOffset: Long, maxLength: Int,
-              maxOffset: Option[Long] = None,
-              minOneMessage: Boolean = true): FetchDataInfo = {
+  private def readLog(log: Log, startOffset: Long, maxLength: Int,
+                      maxOffset: Option[Long] = None,
+                      minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, maxOffset, minOneMessage, includeAbortedTxns = false)
   }
 
