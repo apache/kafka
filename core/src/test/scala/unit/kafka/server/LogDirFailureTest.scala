@@ -144,7 +144,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }, "Expected the first message", 3000L)
 
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val replica = leaderServer.replicaManager.getReplicaOrException(partition)
+    val replica = leaderServer.replicaManager.localReplicaOrException(partition)
     val logDir = replica.log.get.dir.getParentFile
     CoreUtils.swallow(Utils.delete(logDir), this)
     logDir.createNewFile()
@@ -163,7 +163,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderServer.replicaManager.getReplica(partition).isEmpty)
+    assertTrue(leaderServer.replicaManager.localReplica(partition).isEmpty)
 
     // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
     try {

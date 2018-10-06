@@ -34,7 +34,6 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -1055,7 +1054,7 @@ class LogTest {
     log.appendAsFollower(memoryRecords)
     log.flush()
 
-    val fetchedData = log.readUncommitted(0, Int.MaxValue)
+    val fetchedData = readLog(log, 0, Int.MaxValue)
 
     val origIterator = memoryRecords.batches.iterator()
     for (batch <- fetchedData.records.batches.asScala) {
@@ -1222,18 +1221,18 @@ class LogTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = value), leaderEpoch = 0)
 
     for(i <- values.indices) {
-      val read = log.readUncommitted(i, 100, Some(i+1)).records.batches.iterator.next()
+      val read = readLog(log, i, 100, Some(i+1)).records.batches.iterator.next()
       assertEquals("Offset read should match order appended.", i, read.lastOffset)
       val actual = read.iterator.next()
       assertNull("Key should be null", actual.key)
       assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
     }
     assertEquals("Reading beyond the last message returns nothing.", 0,
-      log.readUncommitted(values.length, 100, None).records.batches.asScala.size)
+      readLog(log, values.length, 100).records.batches.asScala.size)
   }
 
   /**
-   * This test appends a bunch of messages with non-sequential offsets and checks that we can read the correct message
+   * This test appends a bunch of messages with non-sequential offsets and checks that we can an the correct message
    * from any offset less than the logEndOffset including offsets not appended.
    */
   @Test
@@ -1248,7 +1247,7 @@ class LogTest {
       log.appendAsFollower(MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, 0, records(i)))
     for(i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
-      val read = log.readUncommitted(i, 100, None).records.records.iterator.next()
+      val read = readLog(log, i, 100).records.records.iterator.next()
       assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
       assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
     }
@@ -1273,7 +1272,7 @@ class LogTest {
     log.logSegments.head.truncateTo(1)
 
     assertEquals("A read should now return the last message in the log", log.logEndOffset - 1,
-      log.readUncommitted(1, 200, None).records.batches.iterator.next().lastOffset)
+      readLog(log, 1, 200).records.batches.iterator.next().lastOffset)
   }
 
   @Test(expected = classOf[KafkaStorageException])
@@ -1298,16 +1297,17 @@ class LogTest {
     for (i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
       val reads = Seq(
-        log.readUncommitted(i, 1, minOneMessage = true),
-        log.readUncommitted(i, 100, minOneMessage = true),
-        log.readUncommitted(i, 100, Some(10000), minOneMessage = true)
+        readLog(log, i, 1),
+        readLog(log, i, 100),
+        readLog(log, i, 100, Some(10000))
       ).map(_.records.records.iterator.next())
       reads.foreach { read =>
         assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
         assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
       }
 
-      assertEquals(Seq.empty, log.readUncommitted(i, 1, Some(1), minOneMessage = true).records.batches.asScala.toIndexedSeq)
+      val fetchedData = readLog(log, i, 1, Some(1))
+      assertEquals(Seq.empty, fetchedData.records.batches.asScala.toIndexedSeq)
     }
   }
 
@@ -1323,14 +1323,14 @@ class LogTest {
       log.appendAsFollower(MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, 0, records(i)))
 
     for (i <- 50 until messageIds.max) {
-      assertEquals(MemoryRecords.EMPTY, log.readUncommitted(i, 0).records)
+      assertEquals(MemoryRecords.EMPTY, readLog(log, i, maxLength = 0, minOneMessage = false).records)
 
       // we return an incomplete message instead of an empty one for the case below
       // we use this mechanism to tell consumers of the fetch request version 2 and below that the message size is
       // larger than the fetch size
       // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
       // partition
-      val fetchInfo = log.readUncommitted(i, 1)
+      val fetchInfo = readLog(log, i, maxLength = 1, minOneMessage = false)
       assertTrue(fetchInfo.firstEntryIncomplete)
       assertTrue(fetchInfo.records.isInstanceOf[FileRecords])
       assertEquals(1, fetchInfo.records.sizeInBytes)
@@ -1352,24 +1352,24 @@ class LogTest {
     log.appendAsLeader(TestUtils.singletonRecords(value = "42".getBytes), leaderEpoch = 0)
 
     assertEquals("Reading at the log end offset should produce 0 byte read.", 0,
-      log.readUncommitted(1025, 1000).records.sizeInBytes)
+      readLog(log, 1025, 1000).records.sizeInBytes)
 
     try {
-      log.readUncommitted(0, 1000)
+      readLog(log, 0, 1000)
       fail("Reading below the log start offset should throw OffsetOutOfRangeException")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
     }
 
     try {
-      log.readUncommitted(1026, 1000)
+      readLog(log, 1026, 1000)
       fail("Reading at beyond the log end offset should throw OffsetOutOfRangeException")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
     }
 
     assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0,
-      log.readUncommitted(1025, 1000, Some(1024)).records.sizeInBytes)
+      readLog(log, 1025, 1000, Some(1024)).records.sizeInBytes)
   }
 
   /**
@@ -1390,7 +1390,7 @@ class LogTest {
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
     for(i <- 0 until numMessages) {
-      val messages = log.readUncommitted(offset, 1024*1024).records.batches
+      val messages = readLog(log, offset, 1024*1024).records.batches
       val head = messages.iterator.next()
       assertEquals("Offsets not equal", offset, head.lastOffset)
 
@@ -1401,7 +1401,7 @@ class LogTest {
       assertEquals(s"Timestamps not equal at offset $offset", expected.timestamp, actual.timestamp)
       offset = head.lastOffset + 1
     }
-    val lastRead = log.readUncommitted(startOffset = numMessages, maxLength = 1024*1024,
+    val lastRead = readLog(log, startOffset = numMessages, maxLength = 1024*1024,
       maxOffset = Some(numMessages + 1)).records
     assertEquals("Should be no more messages", 0, lastRead.records.asScala.size)
 
@@ -1424,7 +1424,7 @@ class LogTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.GZIP, new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.GZIP, new SimpleRecord("alpha".getBytes), new SimpleRecord("beta".getBytes)), leaderEpoch = 0)
 
-    def read(offset: Int) = log.readUncommitted(offset, 4096).records.records
+    def read(offset: Int) = readLog(log, offset, 4096).records.records
 
     /* we should always get the first message in the compressed set when reading any offset in the set */
     assertEquals("Read at offset 0 should produce 0", 0, read(0).iterator.next().offset)
@@ -1645,7 +1645,7 @@ class LogTest {
     assertTrue("The index should have been rebuilt", log.logSegments.head.offsetIndex.entries > 0)
     assertTrue("The time index should have been rebuilt", log.logSegments.head.timeIndex.entries > 0)
     for(i <- 0 until numMessages) {
-      assertEquals(i, log.readUncommitted(i, 100, None).records.batches.iterator.next().lastOffset)
+      assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
         assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(mockTime.milliseconds + i * 10).get.offset)
       else
@@ -1713,7 +1713,7 @@ class LogTest {
     log = createLog(logDir, logConfig, recoveryPoint = 200L)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
-      assertEquals(i, log.readUncommitted(i, 100, None).records.batches.iterator.next().lastOffset)
+      assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
         assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(mockTime.milliseconds + i * 10).get.offset)
       else
@@ -1919,7 +1919,7 @@ class LogTest {
   def testAppendMessageWithNullPayload() {
     val log = createLog(logDir, LogConfig())
     log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
-    val head = log.readUncommitted(0, 4096, None).records.records.iterator.next()
+    val head = readLog(log, 0, 4096).records.records.iterator.next()
     assertEquals(0, head.offset)
     assertTrue("Message payload should be null.", !head.hasValue)
   }
@@ -2790,7 +2790,7 @@ class LogTest {
 
     //Then leader epoch should be set on messages
     for (i <- records.indices) {
-      val read = log.readUncommitted(i, 100, Some(i+1)).records.batches.iterator.next()
+      val read = readLog(log, i, 100, Some(i+1)).records.batches.iterator.next()
       assertEquals("Should have set leader epoch", 72, read.partitionLeaderEpoch)
     }
   }
@@ -3421,7 +3421,7 @@ class LogTest {
     assertEquals(None, log.firstUnstableOffset.map(_.messageOffset))
 
     // now check that a fetch includes the aborted transaction
-    val fetchDataInfo = log.read(0L, 2048, isolationLevel = IsolationLevel.READ_COMMITTED)
+    val fetchDataInfo = log.read(0L, 2048, maxOffset = None, minOneMessage = true, includeAbortedTxns = true)
     assertEquals(1, fetchDataInfo.abortedTransactions.size)
 
     assertTrue(fetchDataInfo.abortedTransactions.isDefined)
@@ -3536,6 +3536,12 @@ class LogTest {
                               expectDeletedFiles: Boolean = true): Log = {
     LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler,
       expectDeletedFiles)
+  }
+
+  private def readLog(log: Log, startOffset: Long, maxLength: Int,
+                      maxOffset: Option[Long] = None,
+                      minOneMessage: Boolean = true): FetchDataInfo = {
+    log.read(startOffset, maxLength, maxOffset, minOneMessage, includeAbortedTxns = false)
   }
 
 }

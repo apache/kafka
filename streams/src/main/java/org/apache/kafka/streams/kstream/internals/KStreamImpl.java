@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -56,6 +55,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -456,7 +456,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             new ProcessorParameters<>(new KStreamTransform<>(transformerSupplier), name),
             stateStoreNames,
-            null,
             true
         );
 
@@ -491,7 +490,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             new ProcessorParameters<>(new KStreamTransformValues<>(valueTransformerWithKeySupplier), name),
             stateStoreNames,
-            null,
             repartitionRequired
         );
 
@@ -513,7 +511,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             new ProcessorParameters<>(processorSupplier, name),
             stateStoreNames,
-            null,
             repartitionRequired
         );
 

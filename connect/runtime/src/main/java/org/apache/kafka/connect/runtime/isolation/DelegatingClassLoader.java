@@ -94,7 +94,11 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
-        this(pluginPaths, ClassLoader.getSystemClassLoader());
+        // Use as parent the classloader that loaded this class. In most cases this will be the
+        // System classloader. But this choice here provides additional flexibility in managed
+        // environments that control classloading differently (OSGi, Spring and others) and don't
+        // depend on the System classloader to load Connect's classes.
+        this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
     public Set<PluginDesc<Connector>> connectors() {

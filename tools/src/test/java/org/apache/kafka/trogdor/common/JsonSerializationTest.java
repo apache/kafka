@@ -58,12 +58,12 @@ public class JsonSerializationTest {
         verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,
             0, null, null, 0));
         verify(new TopicsSpec());
-        verify(new PartitionsSpec(0, (short) 0, null));
+        verify(new PartitionsSpec(0, (short) 0, null, null));
         Map<Integer, List<Integer>> partitionAssignments = new HashMap<Integer, List<Integer>>();
         partitionAssignments.put(0, Arrays.asList(1, 2, 3));
         partitionAssignments.put(1, Arrays.asList(1, 2, 3));
-        verify(new PartitionsSpec(0, (short) 0, partitionAssignments));
-        verify(new PartitionsSpec(0, (short) 0, null));
+        verify(new PartitionsSpec(0, (short) 0, partitionAssignments, null));
+        verify(new PartitionsSpec(0, (short) 0, null, null));
     }
 
     private <T> void verify(T val1) throws Exception {

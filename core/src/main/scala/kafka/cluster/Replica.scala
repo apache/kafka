@@ -17,8 +17,8 @@
 
 package kafka.cluster
 
-import kafka.log.Log
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.log.{Log, LogOffsetSnapshot}
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -183,6 +183,14 @@ class Replica(val brokerId: Int,
     } else {
       throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
     }
+  }
+
+  def offsetSnapshot: LogOffsetSnapshot = {
+    LogOffsetSnapshot(
+      logStartOffset = logStartOffset,
+      logEndOffset = logEndOffset,
+      highWatermark =  highWatermark,
+      lastStableOffset = lastStableOffset)
   }
 
   override def equals(that: Any): Boolean = that match {

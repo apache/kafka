@@ -779,6 +779,28 @@ object TestUtils extends Logging {
     server.replicaManager.getPartition(new TopicPartition(topic, partitionId)).exists(_.leaderReplicaIfLocal.isDefined)
   }
 
+  def findLeaderEpoch(brokerId: Int,
+                      topicPartition: TopicPartition,
+                      servers: Iterable[KafkaServer]): Int = {
+    val leaderServer = servers.find(_.config.brokerId == brokerId)
+    val leaderPartition = leaderServer.flatMap(_.replicaManager.getPartition(topicPartition))
+      .getOrElse(fail(s"Failed to find expected replica on broker $brokerId"))
+    leaderPartition.getLeaderEpoch
+  }
+
+  def findFollowerId(topicPartition: TopicPartition,
+                     servers: Iterable[KafkaServer]): Int = {
+    val followerOpt = servers.find { server =>
+      server.replicaManager.getPartition(topicPartition) match {
+        case Some(partition) => !partition.leaderReplicaIdOpt.contains(server.config.brokerId)
+        case None => false
+      }
+    }
+    followerOpt
+      .map(_.config.brokerId)
+      .getOrElse(fail(s"Unable to locate follower for $topicPartition"))
+  }
+
   /**
     * Wait until all brokers know about each other.
     *
@@ -828,14 +850,36 @@ object TestUtils extends Logging {
     controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
   }
 
-  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
-                             timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
-    val tp = new TopicPartition(topic, partition)
-    TestUtils.waitUntilTrue(() =>
-      servers.exists { server =>
+  def awaitLeaderChange(servers: Seq[KafkaServer],
+                        tp: TopicPartition,
+                        oldLeader: Int,
+                        timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def newLeaderExists: Option[Int] = {
+      servers.find { server =>
+        server.config.brokerId != oldLeader &&
+          server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
+      s"Did not observe leader change for partition $tp after $timeout ms", waitTime = timeout)
+
+    newLeaderExists.get
+  }
+
+  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer],
+                             tp: TopicPartition,
+                             timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderIfExists: Option[Int] = {
+      servers.find { server =>
         server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
-      }, s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout
-    )
+      }.map(_.config.brokerId)
+    }
+
+    TestUtils.waitUntilTrue(() => leaderIfExists.isDefined,
+      s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout)
+
+    leaderIfExists.get
   }
 
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
