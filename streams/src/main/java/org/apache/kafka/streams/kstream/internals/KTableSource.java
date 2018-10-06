@@ -31,6 +31,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     public final String storeName;
 
     private boolean sendOldValues = false;
+    private boolean shouldMaterialize = false;
 
     public KTableSource(final String storeName) {
         this.storeName = storeName;
@@ -43,6 +44,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     public void enableSendingOldValues() {
         sendOldValues = true;
+    }
+
+    public void materialize() {
+        shouldMaterialize = true;
+    }
+
+    public boolean shouldMaterialize() {
+        return shouldMaterialize;
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {

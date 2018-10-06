@@ -92,7 +92,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             AGGREGATE_NAME,
             materialize(materializedInternal),
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }
@@ -119,7 +119,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             AGGREGATE_NAME,
             materialize(materializedInternal),
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }
@@ -148,7 +148,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             REDUCE_NAME,
             materialize(materializedInternal),
             new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
     }

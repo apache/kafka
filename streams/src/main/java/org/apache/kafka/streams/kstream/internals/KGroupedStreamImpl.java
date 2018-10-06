@@ -189,7 +189,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             functionName,
             new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
             aggregateSupplier,
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde());
     }

@@ -27,15 +27,12 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
     private final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper;
-    private final String queryableName;
     private boolean sendOldValues = false;
 
     KTableMapValues(final KTableImpl<K, ?, V> parent,
-                    final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper,
-                    final String queryableName) {
+                    final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper) {
         this.parent = parent;
         this.mapper = mapper;
-        this.queryableName = queryableName;
     }
 
     @Override
@@ -45,24 +42,20 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     @Override
     public KTableValueGetterSupplier<K, V1> view() {
-        // if the KTable is materialized, use the materialized store to return getter value;
-        // otherwise rely on the parent getter and apply map-values on-the-fly
-        if (queryableName != null) {
-            return new KTableMaterializedValueGetterSupplier<>(queryableName);
-        } else {
-            return new KTableValueGetterSupplier<K, V1>() {
-                final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
+        // always rely on the parent getter and apply mapper on-the-fly,
+        // i.e. only logically materialize the store.
+        return new KTableValueGetterSupplier<K, V1>() {
+            final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-                public KTableValueGetter<K, V1> get() {
-                    return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
-                }
+            public KTableValueGetter<K, V1> get() {
+                return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
+            }
 
-                @Override
-                public String[] storeNames() {
-                    return parentValueGetterSupplier.storeNames();
-                }
-            };
-        }
+            @Override
+            public String[] storeNames() {
+                return parentValueGetterSupplier.storeNames();
+            }
+        };
     }
 
     @Override
@@ -81,30 +74,13 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     }
 
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V1> store;
-        private TupleForwarder<K, V1> tupleForwarder;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            if (queryableName != null) {
-                store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context, sendOldValues), sendOldValues);
-            }
-        }
 
         @Override
         public void process(final K key, final Change<V> change) {
             final V1 newValue = computeValue(key, change.newValue);
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
-            if (queryableName != null) {
-                store.put(key, newValue);
-                tupleForwarder.maybeForward(key, newValue, oldValue);
-            } else {
-                context().forward(key, new Change<>(newValue, oldValue));
-            }
+            context().forward(key, new Change<>(newValue, oldValue));
         }
     }
 

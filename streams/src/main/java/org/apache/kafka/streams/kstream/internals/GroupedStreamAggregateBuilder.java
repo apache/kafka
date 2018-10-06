@@ -67,7 +67,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     <KR, VR> KTable<KR, VR> build(final String functionName,
                                   final StoreBuilder<? extends StateStore> storeBuilder,
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
-                                  final boolean isQueryable,
+                                  final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valSerde) {
 
@@ -99,8 +99,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                 keySerde,
                                 valSerde,
                                 sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
-                                storeBuilder.name(),
-                                isQueryable,
+                                queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);

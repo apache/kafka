@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
+import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -36,7 +37,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
     private final String sourceName;
     private final boolean isGlobalKTable;
 
-    TableSourceNode(final String nodeName,
+    public TableSourceNode(final String nodeName,
                     final String sourceName,
                     final String topic,
                     final ConsumedInternal<K, V> consumedInternal,
@@ -52,10 +53,6 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         this.sourceName = sourceName;
         this.isGlobalKTable = isGlobalKTable;
         this.storeBuilder = storeBuilder;
-    }
-
-    public boolean isGlobalKTable() {
-        return isGlobalKTable;
     }
 
     @Override
@@ -77,6 +74,8 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         final String topicName = getTopicNames().iterator().next();
 
         if (isGlobalKTable) {
+            // TODO: we assume global KTables can only be key-value stores for now.
+            // should be expanded for other types of stores as well.
             topologyBuilder.addGlobalStore((StoreBuilder<KeyValueStore>) storeBuilder,
                                            sourceName,
                                            consumedInternal().timestampExtractor(),
@@ -95,8 +94,12 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
 
             topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
 
-            topologyBuilder.addStateStore(storeBuilder, nodeName());
-            topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
+            // only add state store if the source KTable should be materialized
+            final KTableSource<K, V> kTableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
+            if (kTableSource.shouldMaterialize()) {
+                topologyBuilder.addStateStore(storeBuilder, nodeName());
+                topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
+            }
         }
 
     }
@@ -129,7 +132,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal consumedInternal) {
+        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }
@@ -157,8 +160,6 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
                                          storeBuilder,
                                          processorParameters,
                                          isGlobalKTable);
-
-
         }
     }
 }

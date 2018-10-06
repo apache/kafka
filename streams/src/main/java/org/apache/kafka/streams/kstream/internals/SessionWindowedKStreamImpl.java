@@ -97,7 +97,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 aggregateBuilder.countInitializer,
                 aggregateBuilder.countAggregator,
                 countMerger),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
             materializedInternal.valueSerde());
     }
@@ -132,7 +132,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 reduceAggregator,
                 mergerForAggregator(reduceAggregator)
             ),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
             materializedInternal.valueSerde());
     }
@@ -169,7 +169,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 initializer,
                 aggregator,
                 sessionMerger),
-            materializedInternal.isQueryable(),
+            materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
             materializedInternal.valueSerde());
     }

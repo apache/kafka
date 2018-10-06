@@ -94,8 +94,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 materialized.keySerde(),
                                 materialized.valueSerde(),
                                 Collections.singleton(sourceName),
-                                materialized.storeName(),
-                                materialized.isQueryable(),
+                                materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);

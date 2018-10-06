@@ -40,6 +40,14 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         }
     }
 
+    public boolean isQueryable() {
+        return queriable;
+    }
+
+    public String queryableStoreName() {
+        return queriable ? storeName() : null;
+    }
+
     public String storeName() {
         if (storeSupplier != null) {
             return storeSupplier.name();
@@ -69,10 +77,6 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
 
     public boolean cachingEnabled() {
         return cachingEnabled;
-    }
-
-    public boolean isQueryable() {
-        return queriable;
     }
 
     Duration retention() {
