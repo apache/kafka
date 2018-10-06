@@ -315,7 +315,7 @@ def command_release_announcement_email():
         https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html 
  
 
-        You can download the source and binary release (Scala 2.11 and Scala 2.12) from:        
+        You can download the source and binary release (Scala <VERSIONS>) from:        
         https://kafka.apache.org/downloads#%(release_version)s                
         
         ---------------------------------------------------------------------------------------------------
@@ -379,6 +379,7 @@ def command_release_announcement_email():
     print("Use the above template to send the announcement for the release to the mailing list.")
     print("IMPORTANT: Note that there are still some substitutions that need to be made in the template:")
     print("  - Describe major changes in this release")
+    print("  - Scala versions")
     print("  - Fill in your name in the signature")
     print("  - You will need to use your apache email address to send out the email (otherwise, it won't be delivered to announce@apache.org)")
     print("  - Finally, validate all the links before shipping!")
