@@ -83,7 +83,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
     // Verify that the new config is used for all segments
-    TestUtils.waitUntilTrue(() => log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
+    assertTrue("Log segment size change not applied", log.logSegments.forall(_.size > 1000))
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String) {
