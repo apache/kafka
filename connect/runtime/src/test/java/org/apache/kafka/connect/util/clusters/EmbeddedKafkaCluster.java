@@ -249,24 +249,18 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * Consume at least n records in a given duration or throw an exception.
      *
      * @param n the number of expected records in this topic.
-     * @param maxDuration the max duration to wait for these records.
+     * @param maxDuration the max duration to wait for these records (in milliseconds).
      * @param topics the topics to subscribe and consume records from.
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
-        long num = 1;
-        long duration = maxDuration;
-        // poll in intervals of 250millis.
-        if (duration > 250) {
-            num = 1 + (maxDuration / 250);
-            duration = 250;
-        }
-
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
         int consumedRecords = 0;
         try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(topics)) {
-            for (int i = 0; i < num; i++) {
-                ConsumerRecords<byte[], byte[]> rec = consumer.poll(Duration.ofMillis(duration));
+            final long startMillis = System.currentTimeMillis();
+            long current = startMillis;
+            while (current - startMillis < maxDuration) {
+                ConsumerRecords<byte[], byte[]> rec = consumer.poll(Duration.ofMillis(maxDuration));
                 if (rec.isEmpty()) {
                     continue;
                 }
@@ -278,6 +272,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
                 if (consumedRecords >= n) {
                     return new ConsumerRecords<>(records);
                 }
+                current = System.currentTimeMillis();
             }
         }
 
