@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 
+import kafka.utils.MockTime;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -54,12 +55,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import kafka.utils.MockTime;
-
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -162,7 +162,7 @@ public class RepartitionOptimizingIntegrationTest {
 
         mappedStream.filter((k, v) -> k.equals("A"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
-                  JoinWindows.of(5000),
+                  JoinWindows.of(ofMillis(5000)),
                   Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .to(JOINED_TOPIC);
 
@@ -212,7 +212,7 @@ public class RepartitionOptimizingIntegrationTest {
         assertThat(3, equalTo(processorValueCollector.size()));
         assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
 
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(ofSeconds(5));
     }
 
 
@@ -273,11 +273,11 @@ public class RepartitionOptimizingIntegrationTest {
                                                               + "    Processor: KSTREAM-PROCESSOR-0000000004 (stores: [])\n"
                                                               + "      --> none\n"
                                                               + "      <-- KSTREAM-MAPVALUES-0000000003\n"
-                                                              + "    Sink: KSTREAM-SINK-0000000039 (topic: KSTREAM-MAP-0000000001-optimized-repartition)\n"
+                                                              + "    Sink: KSTREAM-SINK-0000000039 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000006-repartition)\n"
                                                               + "      <-- KSTREAM-FILTER-0000000040\n"
                                                               + "\n"
                                                               + "  Sub-topology: 1\n"
-                                                              + "    Source: KSTREAM-SOURCE-0000000041 (topics: [KSTREAM-MAP-0000000001-optimized-repartition])\n"
+                                                              + "    Source: KSTREAM-SOURCE-0000000041 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000006-repartition])\n"
                                                               + "      --> KSTREAM-FILTER-0000000020, KSTREAM-AGGREGATE-0000000007, KSTREAM-AGGREGATE-0000000014, KSTREAM-FILTER-0000000029\n"
                                                               + "    Processor: KSTREAM-AGGREGATE-0000000007 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000006])\n"
                                                               + "      --> KTABLE-TOSTREAM-0000000011\n"

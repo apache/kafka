@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -31,32 +32,48 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-public abstract class AbstractStream<K> {
+/*
+ * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
+ *
+ * 1) Overridden values via control objects (e.g. Materialized, Serialized, Consumed, etc)
+ * 2) Serdes that can be inferred from the operator itself (e.g. groupBy().count(), where value serde can default to `LongSerde`).
+ * 3) Serde inherited from parent operator if possible (note if the key / value types have been changed, then the corresponding serde cannot be inherited).
+ * 4) Default serde specified in the config.
+ */
+public abstract class AbstractStream<K, V> {
 
-    protected final InternalStreamsBuilder builder;
     protected final String name;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valSerde;
     protected final Set<String> sourceNodes;
     protected final StreamsGraphNode streamsGraphNode;
+    protected final InternalStreamsBuilder builder;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
-    public AbstractStream(final AbstractStream<K> stream) {
-        this.builder = stream.builder;
+    public AbstractStream(final AbstractStream<K, V> stream) {
         this.name = stream.name;
+        this.builder = stream.builder;
+        this.keySerde = stream.keySerde;
+        this.valSerde = stream.valSerde;
         this.sourceNodes = stream.sourceNodes;
         this.streamsGraphNode = stream.streamsGraphNode;
     }
 
-    AbstractStream(final InternalStreamsBuilder builder,
-                   final String name,
+    AbstractStream(final String name,
+                   final Serde<K> keySerde,
+                   final Serde<V> valSerde,
                    final Set<String> sourceNodes,
-                   final StreamsGraphNode streamsGraphNode) {
+                   final StreamsGraphNode streamsGraphNode,
+                   final InternalStreamsBuilder builder) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
 
-        this.builder = builder;
         this.name = name;
+        this.builder = builder;
+        this.keySerde = keySerde;
+        this.valSerde = valSerde;
         this.sourceNodes = sourceNodes;
         this.streamsGraphNode = streamsGraphNode;
     }
@@ -67,7 +84,7 @@ public abstract class AbstractStream<K> {
         return builder.internalTopologyBuilder;
     }
 
-    Set<String> ensureJoinableWith(final AbstractStream<K> other) {
+    Set<String> ensureJoinableWith(final AbstractStream<K, ?> other) {
         final Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(other.sourceNodes);
@@ -121,5 +138,14 @@ public abstract class AbstractStream<K> {
                 };
             }
         };
+    }
+
+    // for testing only
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valSerde;
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -33,7 +34,7 @@ public interface Processor<K, V> {
      * framework may later re-use the processor by calling {@link #init()} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * 
      * @param context the context; may not be null

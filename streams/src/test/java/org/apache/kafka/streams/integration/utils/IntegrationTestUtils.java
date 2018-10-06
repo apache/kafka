@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.api.Request;
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -33,11 +36,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,17 +53,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-
-import kafka.api.Request;
-import kafka.server.KafkaServer;
-import kafka.server.MetadataCache;
-import scala.Option;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -65,6 +69,7 @@ import scala.Option;
 public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
+    private static final long DEFAULT_COMMIT_INTERVAL = 100L;
     public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /*
@@ -109,6 +114,26 @@ public class IntegrationTestUtils {
             if (node.getAbsolutePath().startsWith(tmpDir)) {
                 Utils.delete(new File(node.getAbsolutePath()));
             }
+        }
+    }
+
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final String... topics) {
+        try {
+            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            for (final String topic : topics) {
+                cluster.createTopic(topic, 1, 1);
+            }
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void cleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
+        driver.cleanUp();
+        try {
+            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -174,15 +199,6 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
-                                                                         final Headers headers,
-                                                                         final Long timestamp)
-        throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, headers, timestamp, false);
-    }
-
-    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
-                                                                         final Collection<KeyValue<K, V>> records,
-                                                                         final Properties producerConfig,
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
@@ -212,7 +228,42 @@ public class IntegrationTestUtils {
             producer.flush();
         }
     }
-    
+
+    public static <V, K> void produceSynchronously(final Properties producerConfig,
+                                                    final boolean eos,
+                                                    final String topic,
+                                                    final List<KeyValueTimestamp<K, V>> toProduce) {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            // TODO: test EOS
+            //noinspection ConstantConditions
+            if (false) {
+                producer.initTransactions();
+                producer.beginTransaction();
+            }
+            final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
+            for (final KeyValueTimestamp<K, V> record : toProduce) {
+                final Future<RecordMetadata> f = producer.send(
+                    new ProducerRecord<>(topic, null, record.timestamp(), record.key(), record.value(), null)
+                );
+                futures.add(f);
+            }
+
+            if (eos) {
+                producer.commitTransaction();
+            } else {
+                producer.flush();
+            }
+
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    future.get();
+                } catch (final InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
     public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                                 final Collection<KeyValue<K, V>> records,
                                                                                 final Properties producerConfig,
@@ -227,7 +278,7 @@ public class IntegrationTestUtils {
                 f.get();
                 producer.abortTransaction();
             }
-        }    
+        }
     }
 
     public static <V> void produceValuesSynchronously(final String topic,
@@ -297,7 +348,7 @@ public class IntegrationTestUtils {
                                                                                   final int expectedNumRecords) throws InterruptedException {
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
-    
+
     /**
      * Wait until enough data (key-value records) has been consumed.
      *
@@ -483,6 +534,70 @@ public class IntegrationTestUtils {
 
     }
 
+    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
+                                                final String topic,
+                                                final List<KeyValueTimestamp<String, Long>> expected) {
+
+        final List<ConsumerRecord<String, Long>> results;
+        try {
+            results = IntegrationTestUtils.waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (results.size() != expected.size()) {
+            throw new AssertionError(printRecords(results) + " != " + expected);
+        }
+        final Iterator<KeyValueTimestamp<String, Long>> expectedIterator = expected.iterator();
+        for (final ConsumerRecord<String, Long> result : results) {
+            final KeyValueTimestamp<String, Long> expected1 = expectedIterator.next();
+            try {
+                compareKeyValueTimestamp(result, expected1.key(), expected1.value(), expected1.timestamp());
+            } catch (final AssertionError e) {
+                throw new AssertionError(printRecords(results) + " != " + expected, e);
+            }
+        }
+    }
+
+    private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,
+                                                        final K expectedKey,
+                                                        final V expectedValue,
+                                                        final long expectedTimestamp) {
+        Objects.requireNonNull(record);
+        final K recordKey = record.key();
+        final V recordValue = record.value();
+        final long recordTimestamp = record.timestamp();
+        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with timestamp=" + expectedTimestamp +
+                                                            " but was <" + recordKey + ", " + recordValue + "> with timestamp=" + recordTimestamp);
+        if (recordKey != null) {
+            if (!recordKey.equals(expectedKey)) {
+                throw error;
+            }
+        } else if (expectedKey != null) {
+            throw error;
+        }
+        if (recordValue != null) {
+            if (!recordValue.equals(expectedValue)) {
+                throw error;
+            }
+        } else if (expectedValue != null) {
+            throw error;
+        }
+        if (recordTimestamp != expectedTimestamp) {
+            throw error;
+        }
+    }
+
+    private static <K, V> String printRecords(final List<ConsumerRecord<K, V>> result) {
+        final StringBuilder resultStr = new StringBuilder();
+        resultStr.append("[\n");
+        for (final ConsumerRecord<?, ?> record : result) {
+            resultStr.append("  ").append(record.toString()).append("\n");
+        }
+        resultStr.append("]");
+        return resultStr.toString();
+    }
+
     /**
      * Returns up to `maxMessages` message-values from the topic.
      *
@@ -518,6 +633,15 @@ public class IntegrationTestUtils {
             consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);
         }
         return consumedValues;
+    }
+
+    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
+        driver.start();
+        return driver;
     }
 
     /**

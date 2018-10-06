@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -463,7 +464,7 @@ public class KafkaStreamsTest {
                 System.currentTimeMillis());
 
             assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
-            assertFalse(streams.close(10, TimeUnit.MILLISECONDS));
+            assertFalse(streams.close(Duration.ofMillis(10)));
         } finally {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);

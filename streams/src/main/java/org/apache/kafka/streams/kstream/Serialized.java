@@ -24,7 +24,10 @@ import org.apache.kafka.common.serialization.Serde;
  *
  * @param <K> the key type
  * @param <V> the value type
+ *
+ *  @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.Grouped)} instead
  */
+@Deprecated
 public class Serialized<K, V> {
 
     protected final Serde<K> keySerde;

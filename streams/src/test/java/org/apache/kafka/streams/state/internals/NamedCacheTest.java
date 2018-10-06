@@ -190,7 +190,7 @@ public class NamedCacheTest {
 
         assertEquals(2, flushed.size());
         assertEquals(Bytes.wrap(new byte[] {0}), flushed.get(0).key());
-        assertEquals(headers, flushed.get(0).recordContext().headers());
+        assertEquals(headers, flushed.get(0).entry().context().headers());
         assertArrayEquals(new byte[] {10}, flushed.get(0).newValue());
         assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
         assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());
