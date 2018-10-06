@@ -20,13 +20,13 @@ package kafka.admin
 import java.text.{ParseException, SimpleDateFormat}
 import java.util
 import java.util.{Date, Properties}
-
 import javax.xml.datatype.DatatypeFactory
+
 import joptsimple.{OptionParser, OptionSpec}
 import kafka.utils._
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
@@ -45,9 +45,9 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt,opts.auditOpt).count(opts.options.has)
     if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --audit")
 
     opts.checkArgs()
 
@@ -60,6 +60,8 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupService.describeGroup()
       else if (opts.options.has(opts.deleteOpt))
         consumerGroupService.deleteGroups()
+      else if (opts.options.has(opts.auditOpt))
+        consumerGroupService.audit()
       else if (opts.options.has(opts.resetOffsetsOpt)) {
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
@@ -124,6 +126,15 @@ object ConsumerGroupCommand extends Logging {
 
     // `consumer` is only needed for `describe`, so we instantiate it lazily
     private var consumer: KafkaConsumer[String, String] = _
+
+    def audit() = {
+      val bootstrapServer = opts.options.valueOf(opts.bootstrapServerOpt)
+      val auditType = opts.options.valueOf(opts.auditTypeOpt)
+
+      val auditService = new AuditService(auditType,bootstrapServer)
+
+      auditService.run()
+    }
 
     def listGroups(): List[String] = {
       val result = adminClient.listConsumerGroups(
@@ -773,10 +784,16 @@ object ConsumerGroupCommand extends Logging {
                            .availableIf(describeOpt)
     val stateOpt = parser.accepts("state", StateDoc)
                          .availableIf(describeOpt)
+    val auditOpt = parser.accepts("audit","Run a service which emits rebalancing and offset commits information in a machine-readable way")
+    val auditTypeOpt = parser.accepts("audit-type","Choose which types of events to audit")
+      .availableIf(auditOpt)
+      .withRequiredArg().withValuesConvertedBy(AuditType.valueConverter).defaultsTo(AuditType.GroupMetadata)
 
-    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+
+    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt, auditOpt)
 
     val options = parser.parse(args : _*)
+
 
     val describeOptPresent = options.has(describeOpt)
 
