@@ -230,22 +230,27 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   * Lock all the given directories
-   */
+    * Lock all the given directories
+    */
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
-    dirs.flatMap { dir =>
+    val locks = mutable.ArrayBuffer.empty[FileLock]
+    for (dir <- dirs) {
       try {
         val lock = new FileLock(new File(dir, LockFile))
-        if (!lock.tryLock())
-          throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
+        if (!lock.tryLock()) {
+          lock.destroy()
+          locks.foreach(_.destroy())
+          throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
             ". A Kafka instance in another process or thread is using this directory.")
-        Some(lock)
+        }
+        locks.append(lock)
       } catch {
         case e: IOException =>
+          locks.foreach(_.destroy())
           logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while locking directory $dir", e)
-          None
       }
     }
+    locks
   }
 
   private def addLogToBeDeleted(log: Log): Unit = {
@@ -839,6 +844,7 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
+      removedLog.close()
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)

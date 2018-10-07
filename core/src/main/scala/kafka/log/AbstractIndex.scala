@@ -181,8 +181,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
           val position = mmap.position()
 
           /* Windows won't let us modify the file length while the file is mmapped :-( */
-          if (OperatingSystem.IS_WINDOWS)
+          if (OperatingSystem.IS_WINDOWS) {
+            logger.error("RESIZE")
             safeForceUnmap()
+          }
           raf.setLength(roundedNewSize)
           _length = roundedNewSize
           mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -202,8 +204,35 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    try {
+      if (!OperatingSystem.IS_WINDOWS){
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+      }
+      else {
+        inLock(lock){
+          val position = if (this.mmap == null) 0 else this.mmap.position()
+          logger.error("RENAMING...")
+          if (this.mmap != null) {
+            logger.error("RENAMING... UNMAPPING")
+            forceUnmap()
+            logger.error("RENAMING... UNMAPPED")
+            logger.error(s"RENAMING... MMAP IS NULL? ${mmap == null}")
+          }
+          Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+          val raf = new RandomAccessFile(f, "rw")
+          try {
+            val len = raf.length()
+            this.mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+            this.mmap.position(position)
+          } finally {
+            CoreUtils.swallow(raf.close(), this)
+          }
+        }
+      }
+    }
+    finally {
+      file = f
+    }
   }
 
   /**
@@ -223,12 +252,18 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    *         not exist
    */
   def deleteIfExists(): Boolean = {
+    logger.error(s"DELETEIFEXISTS")
     inLock(lock) {
-      // On JVM, a memory mapping is typically unmapped by garbage collector.
-      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
-      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
-      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
+//      // On JVM, a memory mapping is typically unmapped by garbage collector.
+//      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
+//      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
+//      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       safeForceUnmap()
+////      CoreUtils.swallow(forceUnmap(), this)
+//      logger.error(s"IS MMAP NULL?: ${mmap==null}")
+//      // Accessing unmapped mmap crashes JVM by SEGV.
+//      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
+////      mmap = null
     }
     Files.deleteIfExists(file.toPath)
   }
@@ -251,10 +286,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+    logger.error("CLOSING FILE")
+    closeHandler()
+
+//    if (OperatingSystem.IS_WINDOWS){
+//      closeHandler()
+//    }
   }
 
   def closeHandler(): Unit = {
     inLock(lock) {
+      logger.error("CLOSE HANDLER")
       safeForceUnmap()
     }
   }
@@ -306,6 +348,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   protected def safeForceUnmap(): Unit = {
+    logger.error("SAFEFORCEUNMAP")
     try forceUnmap()
     catch {
       case t: Throwable => error(s"Error unmapping index $file", t)
@@ -316,8 +359,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap() {
-    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
-    finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
+    if (mmap != null) {
+      try {
+        logger.error("TRYING TO UNMAP")
+        MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+        logger.error("UNMAPPED")
+      }
+      finally {
+        logger.error("MAKING MMAP NULL")
+        mmap = null
+      } // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
+    }
   }
 
   /**

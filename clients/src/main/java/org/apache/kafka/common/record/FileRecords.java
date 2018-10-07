@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -29,7 +30,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.GatheringByteChannel;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -218,10 +221,18 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @throws IOException if rename fails.
      */
     public void renameTo(File f) throws IOException {
-        try {
+        if (OperatingSystem.IS_WINDOWS){
+            // Try acquiring the lock without blocking. This method returns
+            // null or throws an exception if the file is already locked.
+            FileLock lock = channel.lock();
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
-        } finally {
-            this.file = f;
+            lock.release();
+        } else {
+            try {
+                Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
+            } finally {
+                this.file = f;
+            }
         }
     }
 
@@ -432,16 +443,20 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            int initFileSize,
                                            boolean preallocate) throws IOException {
         if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
-                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
+            if (fileAlreadyExists) {
+                return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ);
             } else {
-                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                if (preallocate) {
+                    try (RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw")) {
+                        randomAccessFile.setLength(initFileSize);
+                    }
+                    return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ);
+                } else {
+                    return FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
+                }
             }
         } else {
-            return FileChannel.open(file.toPath());
+            return FileChannel.open(file.toPath(), StandardOpenOption.READ);
         }
     }
 
