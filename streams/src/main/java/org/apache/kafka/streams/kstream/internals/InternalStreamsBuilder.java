@@ -112,17 +112,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
 
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
-
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.queryableStoreName());
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, name);
 
         final TableSourceNode<K, V, KeyValueStore<K, V>> tableSourceNode = TableSourceNode.<K, V, KeyValueStore<K, V>>tableSourceNodeBuilder()
             .withNodeName(name)
             .withSourceName(source)
-            .withStoreBuilder(storeBuilder)
+            .withMaterializedInternal(materialized)
             .withConsumedInternal(consumed)
             .withProcessorParameters(processorParameters)
             .withTopic(topic)
@@ -147,15 +145,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         Objects.requireNonNull(materialized, "materialized can't be null");
         // explicitly disable logging for global stores
         materialized.withLoggingDisabled();
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
+        // use store name instead of queryable name to always materialize global table stores
         final String sourceName = newProcessorName(KTableImpl.SOURCE_NAME);
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName());
 
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
         final TableSourceNode<K, V, KeyValueStore<K, V>> tableSourceNode = TableSourceNode.<K, V, KeyValueStore<K, V>>tableSourceNodeBuilder()
-            .withStoreBuilder(storeBuilder)
+            .withMaterializedInternal(materialized)
             .withSourceName(sourceName)
             .withConsumedInternal(consumed)
             .withTopic(topic)
@@ -165,7 +163,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         addGraphNode(root, tableSourceNode);
 
-        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeBuilder.name()), materialized.queryableStoreName());
+        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(materialized.storeName()), materialized.queryableStoreName());
     }
 
     @Override
