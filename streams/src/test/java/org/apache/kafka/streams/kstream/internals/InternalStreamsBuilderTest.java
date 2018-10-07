@@ -126,7 +126,7 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldStillMaterializeSourceKTableIfMaterializedIsntQueryable() {
+    public void shouldNotMaterializeSourceKTableIfNotRequired() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(Materialized.with(null, null));
         materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
@@ -137,12 +137,8 @@ public class InternalStreamsBuilderTest {
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .build(null);
 
-        assertEquals(1, topology.stateStores().size());
-        final String storeName = "prefix-STATE-STORE-0000000000";
-        assertEquals(storeName, topology.stateStores().get(0).name());
-
-        assertEquals(1, topology.storeToChangelogTopic().size());
-        assertEquals("app-id-prefix-STATE-STORE-0000000000-changelog", topology.storeToChangelogTopic().get(storeName));
+        assertEquals(0, topology.stateStores().size());
+        assertEquals(0, topology.storeToChangelogTopic().size());
         assertNull(table1.queryableStoreName());
     }
     

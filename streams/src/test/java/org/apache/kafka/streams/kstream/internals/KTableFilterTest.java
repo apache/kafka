@@ -194,32 +194,6 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testValueGetter() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final String topic1 = "topic1";
-
-        final KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(final String key, final Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(final String key, final Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-
-        doTestValueGetter(builder, table2, table3, topic1);
-    }
-
-    @Test
     public void testQueryableValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -233,8 +207,15 @@ public class KTableFilterTest {
                 public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
-            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store2"));
         final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean test(final String key, final Integer value) {
+                    return (value % 2) == 0;
+                }
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store3"));
+        final KTableImpl<String, Integer, Integer> table4 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
             new Predicate<String, Integer>() {
                 @Override
                 public boolean test(final String key, final Integer value) {
@@ -242,8 +223,9 @@ public class KTableFilterTest {
                 }
             });
 
-        assertEquals("anyStoreNameFilter", table2.queryableStoreName());
-        assertNull(table3.queryableStoreName());
+        assertEquals("store2", table2.queryableStoreName());
+        assertEquals("store3", table3.queryableStoreName());
+        assertNull(table4.queryableStoreName());
 
         doTestValueGetter(builder, table2, table3, topic1);
     }
