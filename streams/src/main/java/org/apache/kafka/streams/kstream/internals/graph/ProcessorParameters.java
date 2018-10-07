@@ -49,8 +49,8 @@ public class ProcessorParameters<K, V> {
     @Override
     public String toString() {
         return "ProcessorParameters{" +
-               "processor class=" + processorSupplier.get().getClass() +
-               ", processor name='" + processorName + '\'' +
-               '}';
+            "processor class=" + processorSupplier.get().getClass() +
+            ", processor name='" + processorName + '\'' +
+            '}';
     }
 }

@@ -308,7 +308,7 @@ class TransactionStateManager(brokerId: Int,
             && inReadLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
-              minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+              minOneMessage = true, includeAbortedTxns = false)
             val memRecords = fetchDataInfo.records match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>

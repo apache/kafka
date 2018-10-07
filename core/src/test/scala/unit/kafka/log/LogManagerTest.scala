@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.util.Properties
 
+import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -128,10 +129,10 @@ class LogManagerTest {
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
     assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
 
     try {
-      log.readUncommitted(0, 1024)
+      readLog(log, 0)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -178,9 +179,9 @@ class LogManagerTest {
     // there should be a log file, two indexes (the txn index is created lazily),
     // the leader epoch checkpoint and two producer snapshot files (one for the active and previous segments)
     assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
     try {
-      log.readUncommitted(0, 1024)
+      readLog(log, 0)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -373,4 +374,9 @@ class LogManagerTest {
     time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
+
+  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+    log.read(offset, maxLength, maxOffset = None, minOneMessage = true, includeAbortedTxns = false)
+  }
+
 }

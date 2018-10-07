@@ -24,6 +24,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -132,7 +133,15 @@ public class ConnectionStressWorker implements TaskWorker {
                     }
                     throttle.increment();
                     long lastTimeMs = throttle.lastTimeMs();
-                    boolean success = attemptConnection(conf, updater);
+                    boolean success = false;
+                    switch (spec.action()) {
+                        case CONNECT:
+                            success = attemptConnection(conf, updater);
+                            break;
+                        case FETCH_METADATA:
+                            success = attemptMetadataFetch(props);
+                            break;
+                    }
                     synchronized (ConnectionStressWorker.this) {
                         totalConnections++;
                         if (!success) {
@@ -184,6 +193,17 @@ public class ConnectionStressWorker implements TaskWorker {
             } catch (IOException e) {
                 return false;
             }
+        }
+
+        private boolean attemptMetadataFetch(Properties conf) {
+            try (AdminClient client = AdminClient.create(conf)) {
+                client.describeCluster().nodes().get();
+            } catch (RuntimeException e) {
+                return false;
+            } catch (Exception e) {
+                return false;
+            }
+            return true;
         }
     }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -1040,13 +1041,13 @@ public class StreamThreadTest {
                 return new Processor<Object, Object>() {
                     @Override
                     public void init(final ProcessorContext context) {
-                        context.schedule(100L, PunctuationType.STREAM_TIME, new Punctuator() {
+                        context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, new Punctuator() {
                             @Override
                             public void punctuate(final long timestamp) {
                                 punctuatedStreamTime.add(timestamp);
                             }
                         });
-                        context.schedule(100L, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+                        context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                             @Override
                             public void punctuate(final long timestamp) {
                                 punctuatedWallClockTime.add(timestamp);
