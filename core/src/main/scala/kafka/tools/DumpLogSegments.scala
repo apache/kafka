@@ -37,12 +37,57 @@ import scala.collection.JavaConverters._
 object DumpLogSegments {
 
   // visible for testing
-  private[tools] val RECORD_INDENT = "|"
+  private[tools] val RecordIndent = "|"
 
   def main(args: Array[String]) {
     val opts = new DumpLogSegmentsOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
     opts.checkArgs()
+
+    val misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]]()
+    val timeIndexDumpErrors = new TimeIndexDumpErrors
+    val nonConsecutivePairsForLogFilesMap = mutable.Map[String, List[(Long, Long)]]()
+
+    for (arg <- opts.files) {
+      val file = new File(arg)
+      println(s"Dumping $file")
+
+      val filename = file.getName
+      val suffix = filename.substring(filename.lastIndexOf("."))
+      suffix match {
+        case Log.LogFileSuffix =>
+          dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
+            opts.maxMessageSize, opts.messageParser)
+        case Log.IndexFileSuffix =>
+          dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
+        case Log.TimeIndexFileSuffix =>
+          dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors, opts.maxMessageSize)
+        case Log.ProducerSnapshotFileSuffix =>
+          dumpProducerIdSnapshot(file)
+        case Log.TxnIndexFileSuffix =>
+          dumpTxnIndex(file)
+        case _ =>
+          System.err.println(s"Ignoring unknown file $file")
+      }
+    }
+
+    misMatchesForIndexFilesMap.foreach { case (fileName, listOfMismatches) =>
+      System.err.println(s"Mismatches in :$fileName")
+      listOfMismatches.foreach { case (indexOffset, logOffset) =>
+        System.err.println(s"  Index offset: $indexOffset, log offset: $logOffset")
+      }
+    }
+
+    timeIndexDumpErrors.printErrors()
+
+    nonConsecutivePairsForLogFilesMap.foreach {
+      case (fileName, listOfNonConsecutivePairs) => {
+        System.err.println("Non-consecutive offsets in :" + fileName)
+        listOfNonConsecutivePairs.foreach(m => {
+          System.err.println("  %d is followed by %d".format(m._1, m._2))
+        })
+      }
+    }
   }
 
   private def dumpTxnIndex(file: File): Unit = {
@@ -71,11 +116,12 @@ object DumpLogSegments {
   }
 
   /* print out the contents of the index */
-  private def dumpIndex(file: File,
-                        indexSanityOnly: Boolean,
-                        verifyOnly: Boolean,
-                        misMatchesForIndexFilesMap: mutable.HashMap[String, List[(Long, Long)]],
-                        maxMessageSize: Int) {
+  // Visible for testing
+  private[tools] def dumpIndex(file: File,
+                               indexSanityOnly: Boolean,
+                               verifyOnly: Boolean,
+                               misMatchesForIndexFilesMap: mutable.Map[String, List[(Long, Long)]],
+                               maxMessageSize: Int) {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
@@ -83,33 +129,36 @@ object DumpLogSegments {
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
-      index.sanityCheck
+      index.sanityCheck()
       println(s"$file passed sanity check.")
       return
     }
 
-    for(i <- 0 until index.entries) {
+    for (i <- 0 until index.entries) {
       val entry = index.entry(i)
+
+      // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+      if (entry.offset == index.baseOffset && i > 0)
+        return
+
       val slice = fileRecords.slice(entry.position, maxMessageSize)
-      val firstRecord = slice.records.iterator.next()
-      if (firstRecord.offset != entry.offset + index.baseOffset) {
+      val firstBatchLastOffset = slice.batches.iterator.next().lastOffset
+      if (firstBatchLastOffset != entry.offset) {
         var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-        misMatchesSeq ::=(entry.offset + index.baseOffset, firstRecord.offset)
+        misMatchesSeq ::= (entry.offset, firstBatchLastOffset)
         misMatchesForIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       }
-      // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-      if(entry.offset == 0 && i > 0)
-        return
       if (!verifyOnly)
-        println("offset: %d position: %d".format(entry.offset + index.baseOffset, entry.position))
+        println(s"offset: ${entry.offset} position: ${entry.position}")
     }
   }
 
-  private def dumpTimeIndex(file: File,
-                            indexSanityOnly: Boolean,
-                            verifyOnly: Boolean,
-                            timeIndexDumpErrors: TimeIndexDumpErrors,
-                            maxMessageSize: Int) {
+  // Visible for testing
+  private[tools] def dumpTimeIndex(file: File,
+                                   indexSanityOnly: Boolean,
+                                   verifyOnly: Boolean,
+                                   timeIndexDumpErrors: TimeIndexDumpErrors,
+                                   maxMessageSize: Int) {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
@@ -119,7 +168,7 @@ object DumpLogSegments {
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
-      timeIndex.sanityCheck
+      timeIndex.sanityCheck()
       println(s"$file passed sanity check.")
       return
     }
@@ -127,17 +176,22 @@ object DumpLogSegments {
     var prevTimestamp = RecordBatch.NO_TIMESTAMP
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
-      val position = index.lookup(entry.offset + timeIndex.baseOffset).position
+
+      // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+      if (entry.offset == timeIndex.baseOffset && i > 0)
+        return
+
+      val position = index.lookup(entry.offset).position
       val partialFileRecords = fileRecords.slice(position, Int.MaxValue)
       val batches = partialFileRecords.batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
-      batches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset) match {
+      batches.find(_.lastOffset >= entry.offset) match {
         case None =>
-          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
+          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset,
             -1.toLong)
-        case Some(batch) if batch.lastOffset != entry.offset + timeIndex.baseOffset =>
-          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset, batch.lastOffset)
+        case Some(batch) if batch.lastOffset != entry.offset =>
+          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset, batch.lastOffset)
         case Some(batch) =>
           for (record <- batch.asScala)
             maxTimestamp = math.max(maxTimestamp, record.timestamp)
@@ -147,13 +201,9 @@ object DumpLogSegments {
 
           if (prevTimestamp >= entry.timestamp)
             timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
-
-          // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-          if (entry.offset == 0 && i > 0)
-            return
       }
       if (!verifyOnly)
-        println("timestamp: %s offset: %s".format(entry.timestamp, timeIndex.baseOffset + entry.offset))
+        println(s"timestamp: ${entry.timestamp} offset: ${entry.offset}")
       prevTimestamp = entry.timestamp
     }
   }
@@ -269,7 +319,7 @@ object DumpLogSegments {
   /* print out the contents of the log */
   private def dumpLog(file: File,
                       printContents: Boolean,
-                      nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Long, Long)]],
+                      nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
                       parser: MessageParser[_, _]) {
@@ -292,7 +342,7 @@ object DumpLogSegments {
           }
           lastOffset = record.offset
 
-          print(s"$RECORD_INDENT offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
+          print(s"$RecordIndent offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
             s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
@@ -341,9 +391,9 @@ object DumpLogSegments {
   }
 
   class TimeIndexDumpErrors {
-    val misMatchesForTimeIndexFilesMap = new mutable.HashMap[String, ArrayBuffer[(Long, Long)]]
-    val outOfOrderTimestamp = new mutable.HashMap[String, ArrayBuffer[(Long, Long)]]
-    val shallowOffsetNotFound = new mutable.HashMap[String, ArrayBuffer[(Long, Long)]]
+    val misMatchesForTimeIndexFilesMap = mutable.Map[String, ArrayBuffer[(Long, Long)]]()
+    val outOfOrderTimestamp = mutable.Map[String, ArrayBuffer[(Long, Long)]]()
+    val shallowOffsetNotFound = mutable.Map[String, ArrayBuffer[(Long, Long)]]()
 
     def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long) {
       val misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
@@ -394,7 +444,7 @@ object DumpLogSegments {
     }
   }
 
-  class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+  private class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
     val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
@@ -423,22 +473,8 @@ object DumpLogSegments {
       "transaction metadata from the __transaction_state topic.")
     options = parser.parse(args : _*)
 
-    def checkArgs() = {
-      CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
-
-      val printDataLog = options.has(printOpt) ||
-        options.has(offsetsOpt) ||
-        options.has(transactionLogOpt) ||
-        options.has(valueDecoderOpt) ||
-        options.has(keyDecoderOpt)
-      val verifyOnly = options.has(verifyOpt)
-      val indexSanityOnly = options.has(indexSanityOpt)
-
-      val files = options.valueOf(filesOpt).split(",")
-      val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
-      val isDeepIteration = options.has(deepIterationOpt) || printDataLog
-
-      val messageParser = if (options.has(offsetsOpt)) {
+    def messageParser: MessageParser[_, _] =
+      if (options.has(offsetsOpt)) {
         new OffsetsMessageParser
       } else if (options.has(transactionLogOpt)) {
         new TransactionLogMessageParser
@@ -447,51 +483,20 @@ object DumpLogSegments {
         val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
-      val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
-      val timeIndexDumpErrors = new TimeIndexDumpErrors
-      val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
 
-      for(arg <- files) {
-        val file = new File(arg)
-        println(s"Dumping $file")
+    lazy val shouldPrintDataLog: Boolean = options.has(printOpt) ||
+      options.has(offsetsOpt) ||
+      options.has(transactionLogOpt) ||
+      options.has(valueDecoderOpt) ||
+      options.has(keyDecoderOpt)
 
-        val filename = file.getName
-        val suffix = filename.substring(filename.lastIndexOf("."))
-        suffix match {
-          case Log.LogFileSuffix =>
-            dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
-          case Log.IndexFileSuffix =>
-            dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
-          case Log.TimeIndexFileSuffix =>
-            dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
-          case Log.ProducerSnapshotFileSuffix =>
-            dumpProducerIdSnapshot(file)
-          case Log.TxnIndexFileSuffix =>
-            dumpTxnIndex(file)
-          case _ =>
-            System.err.println(s"Ignoring unknown file $file")
-        }
-      }
+    lazy val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
+    lazy val verifyOnly: Boolean = options.has(verifyOpt)
+    lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
+    lazy val files = options.valueOf(filesOpt).split(",")
+    lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
 
-      misMatchesForIndexFilesMap.foreach {
-        case (fileName, listOfMismatches) => {
-          System.err.println("Mismatches in :" + fileName)
-          listOfMismatches.foreach(m => {
-            System.err.println("  Index offset: %d, log offset: %d".format(m._1, m._2))
-          })
-        }
-      }
+    def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
-      timeIndexDumpErrors.printErrors()
-
-      nonConsecutivePairsForLogFilesMap.foreach {
-        case (fileName, listOfNonConsecutivePairs) => {
-          System.err.println("Non-consecutive offsets in :" + fileName)
-          listOfNonConsecutivePairs.foreach(m => {
-            System.err.println("  %d is followed by %d".format(m._1, m._2))
-          })
-        }
-      }
-    }
   }
 }
