@@ -115,7 +115,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         // never physically materialize any state stores,
         // when querying, always delegate to the parent materialized store getter
-        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, filterNot);
+        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
