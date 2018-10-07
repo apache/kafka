@@ -570,6 +570,7 @@ public class KafkaStreamsTest {
 
         try {
             th.join(30_000L);
+            assertFalse(th.isAlive());
         } finally {
             streams.close();
         }
