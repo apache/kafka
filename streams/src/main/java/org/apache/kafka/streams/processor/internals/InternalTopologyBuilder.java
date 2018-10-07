@@ -155,7 +155,6 @@ public class InternalTopologyBuilder {
             return users;
         }
 
-        /** Visible for testing */
         public boolean loggingEnabled() {
             return builder.loggingEnabled();
         }
