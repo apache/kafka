@@ -113,9 +113,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                   final boolean filterNot) {
         final String name = builder.newProcessorName(FILTER_NAME);
 
-        // never physically materialize any state stores,
-        // when querying, always delegate to the parent materialized store getter
-        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
+        // only materialize if the state store has queryable name
+        final String queryableName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
+        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, filterNot, queryableName);
 
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
@@ -124,7 +124,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            null,
+            materializedInternal,
             null
         );
 
@@ -137,7 +137,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                 materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
                                 materializedInternal != null && materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : valSerde,
                                 sourceNodes,
-                                materializedInternal != null ? materializedInternal.queryableStoreName() : null,
+                                queryableName,
                                 processorSupplier,
                                 tableNode,
                                 builder);
@@ -181,9 +181,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
-        // never physically materialize any state stores,
-        // when querying, always delegate to the parent materialized store getter
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper);
+        // only materialize if the state store has queryable name
+        final String queryableName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -193,7 +193,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            null,
+            materializedInternal,
             null
         );
 
@@ -207,7 +207,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
             materializedInternal != null ? materializedInternal.valueSerde() : null,
             sourceNodes,
-            materializedInternal != null ? materializedInternal.queryableStoreName() : null,
+            queryableName,
             processorSupplier,
             tableNode,
             builder
