@@ -70,7 +70,7 @@ public final class Coordinator {
      * @param platform      The platform object to use.
      * @param scheduler     The scheduler to use for this Coordinator.
      * @param restServer    The REST server to use.
-     * @param resource      The AgentRestResoure to use.
+     * @param resource      The AgentRestResource to use.
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
                        CoordinatorRestResource resource, long firstWorkerId) {
