@@ -218,9 +218,10 @@ public class KafkaStreams {
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != targetState) {
-                if (newSemantics && waitMs == 0)
-                    return false;
-                else if (!newSemantics && waitMs == 0) {
+                if (waitMs == 0) {
+                    if (newSemantics)
+                        return false;
+
                     try {
                         stateLock.wait();
                     } catch (final InterruptedException e) {
