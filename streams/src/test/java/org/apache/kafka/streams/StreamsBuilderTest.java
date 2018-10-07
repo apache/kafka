@@ -65,7 +65,7 @@ public class StreamsBuilderTest {
 
     @Test
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
-        final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.<Bytes, String>allGoodPredicate());
+        final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.allGoodPredicate());
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -79,15 +79,15 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinMaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic")
-                .filter(MockPredicate.<Bytes, String>allGoodPredicate(), Materialized.<Bytes, String, KeyValueStore<Bytes, byte[]>>as("store"));
+                .filter(MockPredicate.<Bytes, String>allGoodPredicate(), Materialized.as("store"));
         builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
-        assertThat(topology.stateStores().size(), equalTo(2));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
-        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"), equalTo(Collections.singleton("store")));
+        assertThat(topology.stateStores().size(), equalTo(1));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("table-topic-STATE-STORE-0000000000")));
+        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"), equalTo(Collections.singleton("table-topic-STATE-STORE-0000000000")));
     }
 
     @Test

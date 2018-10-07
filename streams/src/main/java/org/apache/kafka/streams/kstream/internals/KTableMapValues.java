@@ -20,7 +20,6 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
 
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
