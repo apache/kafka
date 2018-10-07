@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
@@ -36,7 +35,7 @@ import java.util.Collections;
  */
 public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNode<K, V> {
 
-    private final MaterializedInternal<K, V, S> materializedInternal;
+    private final MaterializedInternal<K, V, ?> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
@@ -45,7 +44,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
                     final String sourceName,
                     final String topic,
                     final ConsumedInternal<K, V> consumedInternal,
-                    final MaterializedInternal<K, V, S> materializedInternal,
+                    final MaterializedInternal<K, V, ?> materializedInternal,
                     final ProcessorParameters<K, V> processorParameters,
                     final boolean isGlobalKTable) {
 
@@ -79,10 +78,11 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
 
         // TODO: we assume source KTables can only be key-value stores for now.
         // should be expanded for other types of stores as well.
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes,byte[]>>) materializedInternal).materialize();
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder =
+            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {
-            topologyBuilder.addGlobalStore((StoreBuilder<KeyValueStore>) storeBuilder,
+            topologyBuilder.addGlobalStore(storeBuilder,
                                            sourceName,
                                            consumedInternal().timestampExtractor(),
                                            consumedInternal().keyDeserializer(),
@@ -101,8 +101,8 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
 
             // only add state store if the source KTable should be materialized
-            final KTableSource<K, V> kTableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
-            if (materializedInternal.queryableStoreName() != null || kTableSource.shouldMaterialize()) {
+            final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
+            if (ktableSource.queryableName() != null) {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
                 topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
             }
@@ -116,7 +116,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         private String sourceName;
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
-        private MaterializedInternal<K, V, S> materializedInternal;
+        private MaterializedInternal<K, V, ?> materializedInternal;
         private ProcessorParameters<K, V> processorParameters;
         private boolean isGlobalKTable = false;
 
@@ -133,7 +133,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withMaterializedInternal(final MaterializedInternal<K, V, S> materializedInternal) {
+        public TableSourceNodeBuilder<K, V, S> withMaterializedInternal(final MaterializedInternal<K, V, ?> materializedInternal) {
             this.materializedInternal = materializedInternal;
             return this;
         }

@@ -92,7 +92,7 @@ public class StreamsBuilderTest {
 
     @Test
     public void shouldAllowJoinUnmaterializedMapValuedKTable() {
-        final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic").mapValues(MockMapper.<String>noOpValueMapper());
+        final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic").mapValues(MockMapper.noOpValueMapper());
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -106,13 +106,13 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinMaterializedMapValuedKTable() {
         final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic")
-                .mapValues(MockMapper.<String>noOpValueMapper(), Materialized.<Bytes, String, KeyValueStore<Bytes, byte[]>>as("store"));
+                .mapValues(MockMapper.noOpValueMapper(), Materialized.as("store"));
         builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
-        assertThat(topology.stateStores().size(), equalTo(2));
+        assertThat(topology.stateStores().size(), equalTo(1));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
         assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003"), equalTo(Collections.singleton("store")));
     }
@@ -266,25 +266,13 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldUseDefaultNodeAndStoreNames() {
+    public void shouldNotMaterializeStoresIfNotRequired() {
         final String topic = "topic";
-        builder.table(topic,
-                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>with(Serdes.Long(), Serdes.String()));
+        builder.table(topic, Materialized.with(Serdes.Long(), Serdes.String()));
 
-        final Iterator<TopologyDescription.Subtopology> subtopologies = builder.build().describe().subtopologies().iterator();
-        final TopologyDescription.Subtopology subtopology = subtopologies.next();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
-        final Iterator<TopologyDescription.Node> nodes = subtopology.nodes().iterator();
-        TopologyDescription.Node node = nodes.next();
-        assertThat(node.name(), equalTo("KSTREAM-SOURCE-0000000001"));
-        node = nodes.next();
-        assertThat(node.name(), equalTo("KTABLE-SOURCE-0000000002"));
-        final Iterator<String> stores = ((TopologyDescription.Processor) node).stores().iterator();
-        assertThat(stores.next(), equalTo(topic + "-STATE-STORE-0000000000"));
-
-        assertFalse(nodes.hasNext());
-        assertFalse(stores.hasNext());
-        assertFalse(subtopologies.hasNext());
+        assertThat(topology.stateStores().size(), equalTo(0));
     }
 
     @Test

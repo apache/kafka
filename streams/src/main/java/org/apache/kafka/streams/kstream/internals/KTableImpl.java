@@ -585,7 +585,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
             // whenever a source ktable is required for getter, it should be materialized
             source.materialize();
-            return new KTableSourceValueGetterSupplier<>(source.storeName);
+            return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
             return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
         } else {
