@@ -220,7 +220,7 @@ public class KafkaStreams {
             while (state != targetState) {
                 if (waitMs == 0) {
                     return false;
-                } else if (waitMs >= elapsedMs) {
+                } else if (waitMs > elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
                         stateLock.wait(remainingMs);
