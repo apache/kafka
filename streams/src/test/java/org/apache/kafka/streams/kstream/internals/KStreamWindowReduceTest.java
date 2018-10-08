@@ -36,6 +36,7 @@ import org.junit.Test;
 
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -58,7 +59,7 @@ public class KStreamWindowReduceTest {
         builder
             .stream("TOPIC", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(500L))
+            .windowedBy(TimeWindows.of(ofMillis(500L)))
             .reduce((value1, value2) -> value1 + "+" + value2);
 
 
@@ -80,7 +81,7 @@ public class KStreamWindowReduceTest {
         builder
             .stream("TOPIC", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(5L).until(100))
+            .windowedBy(TimeWindows.of(ofMillis(5L)).until(100))
             .reduce((value1, value2) -> value1 + "+" + value2)
             .toStream()
             .map((key, value) -> new KeyValue<>(key.toString(), value))

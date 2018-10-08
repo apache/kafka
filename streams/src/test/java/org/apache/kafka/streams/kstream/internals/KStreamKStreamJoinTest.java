@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
@@ -71,7 +72,7 @@ public class KStreamKStreamJoinTest {
                     return value1 + value2;
                 }
             },
-            JoinWindows.of(100),
+            JoinWindows.of(ofMillis(100)),
             Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
         );
 
@@ -101,7 +102,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(100),
+            JoinWindows.of(ofMillis(100)),
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
@@ -204,7 +205,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(100),
+            JoinWindows.of(ofMillis(100)),
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
         final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
@@ -308,7 +309,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(100),
+            JoinWindows.of(ofMillis(100)),
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
@@ -529,7 +530,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(0).after(100),
+            JoinWindows.of(ofMillis(0)).after(ofMillis(100)),
             Joined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String()));
@@ -640,7 +641,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(0).before(100),
+            JoinWindows.of(ofMillis(0)).before(ofMillis(100)),
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import java.time.Instant;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -62,12 +64,26 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @param startMs the window start time
      * @return a new unlimited window that starts at {@code startMs}
      * @throws IllegalArgumentException if the start time is negative
+     * @deprecated Use {@link #startOn(Instant)} instead
      */
+    @Deprecated
     public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
         if (startMs < 0) {
             throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
         }
         return new UnlimitedWindows(startMs);
+    }
+
+    /**
+     * Return a new unlimited window for the specified start timestamp.
+     *
+     * @param start the window start time
+     * @return a new unlimited window that starts at {@code start}
+     * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
+     */
+    public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(start, "start");
+        return startOn(start.toEpochMilli());
     }
 
     @Override
