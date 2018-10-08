@@ -831,6 +831,9 @@ public class KafkaStreams {
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         long timeoutMs = timeUnit.toMillis(timeout);
 
+        log.debug("Stopping Streams client with timeoutMillis = {} ms. You are using deprecated method. " +
+            "Please, consider update your code.", timeoutMs);
+
         if (timeoutMs < 0) {
             timeoutMs = 0;
         } else if (timeoutMs == 0) {
@@ -840,14 +843,7 @@ public class KafkaStreams {
         return close(timeoutMs);
     }
 
-    /**
-     * @param timeoutMs  how long to wait for the threads to shutdown.
-     * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
-     * before all threads stopped
-     */
-    private synchronized boolean close(final long timeoutMs) {
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
-
+    private boolean close(final long timeoutMs) {
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
@@ -927,8 +923,11 @@ public class KafkaStreams {
         ApiUtils.validateMillisecondDuration(timeout, "timeout");
 
         final long timeoutMs = timeout.toMillis();
-        if (timeoutMs < 0)
+        if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
+        }
+
+        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
 
         return close(timeoutMs);
     }
