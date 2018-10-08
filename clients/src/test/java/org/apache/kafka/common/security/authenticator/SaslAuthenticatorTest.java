@@ -93,6 +93,7 @@ import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.Dige
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -1205,6 +1206,40 @@ public class SaslAuthenticatorTest {
         configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
+    }
+
+    /**
+     * Tests OAUTHBEARER client channels without tokens for the server.
+     */
+    @Test
+    public void testValidSaslOauthBearerMechanismWithoutServerTokens() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "OAUTHBEARER");
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("OAUTHBEARER"));
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.singletonMap("unsecuredLoginStringClaim_sub", TestJaasConfig.USERNAME)));
+        saslServerConfigs.put("listener.name.sasl_ssl.oauthbearer." + SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.emptyMap()));
+
+        // Server without a token should start up successfully and authenticate clients.
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, node);
+
+        // Client without a token should fail to connect
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.emptyMap()));
+        createAndCheckClientConnectionFailure(securityProtocol, node);
+
+        // Server with extensions, but without a token should fail to start up since it could indicate a configuration error
+        saslServerConfigs.put("listener.name.sasl_ssl.oauthbearer." + SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.singletonMap("unsecuredLoginExtension_test", "something")));
+        try {
+            createEchoServer(securityProtocol);
+            fail("Server created with invalid login config containing extensions without a token");
+        } catch (Throwable e) {
+            assertTrue("Unexpected exception " + Utils.stackTrace(e), e.getCause() instanceof LoginException);
+        }
     }
 
     /**
