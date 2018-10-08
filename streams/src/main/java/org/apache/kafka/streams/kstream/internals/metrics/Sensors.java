@@ -51,7 +51,7 @@ public class Sensors {
         final Sensor sensor = metrics.taskLevelSensor(
             context.taskId().toString(),
             "record-lateness",
-            Sensor.RecordingLevel.INFO
+            Sensor.RecordingLevel.DEBUG
         );
 
         final Map<String, String> tags = metrics.tagMap(
