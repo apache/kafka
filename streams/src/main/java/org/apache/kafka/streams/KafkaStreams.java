@@ -218,9 +218,7 @@ public class KafkaStreams {
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != targetState) {
-                if (waitMs == 0) {
-                    return false;
-                } else if (waitMs > elapsedMs) {
+                if (waitMs > elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
                         stateLock.wait(remainingMs);
@@ -825,7 +823,7 @@ public class KafkaStreams {
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
-     * @deprecated Use {@link #close(Duration)} instead
+     * @deprecated Use {@link #close(Duration)} instead; note, that {@link #close(Duration)} has different semantics and does not block on zero, e.g., `Duration.ofMillis(0)`.
      */
     @Deprecated
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
