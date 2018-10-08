@@ -123,7 +123,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   }
 
   def codec: CompressionType
-  var ctr = 0
+  private var ctr = 0
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 

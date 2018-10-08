@@ -23,6 +23,7 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.junit.Assert.{assertFalse, assertTrue, fail}
 import org.junit.Test
@@ -39,7 +40,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
-  @Test(timeout = 3000)
+  @Test(timeout = DEFAULT_MAX_WAIT_MS)
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics() {
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
