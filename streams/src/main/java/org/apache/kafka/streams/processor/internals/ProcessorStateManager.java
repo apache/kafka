@@ -19,8 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -33,9 +35,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 public class ProcessorStateManager implements StateManager {
@@ -49,6 +53,7 @@ public class ProcessorStateManager implements StateManager {
     private final String logPrefix;
     private final boolean isStandby;
     private final ChangelogReader changelogReader;
+    private final boolean eosEnabled;
     private final Map<String, StateStore> stores;
     private final Map<String, StateStore> globalStores;
     private final Map<TopicPartition, Long> offsetLimits;
@@ -98,6 +103,7 @@ public class ProcessorStateManager implements StateManager {
         checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointedOffsets = new HashMap<>(checkpoint.read());
 
+        this.eosEnabled = eosEnabled;
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -174,6 +180,61 @@ public class ProcessorStateManager implements StateManager {
             }
         }
         return partitionsAndOffsets;
+    }
+
+    void reinitializeStateStoresForPartitions(final TopicPartition topicPartition,
+                                              final InternalProcessorContext processorContext) {
+        final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
+        final Set<String> storeToBeReinitialized = new HashSet<>();
+        final Map<String, StateStore> storesCopy = new HashMap<>(stores);
+
+        checkpointedOffsets.remove(topicPartition);
+        storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
+
+        if (!eosEnabled) {
+            try {
+                checkpoint.write(checkpointedOffsets);
+            } catch (final IOException fatalException) {
+                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stores, fatalException);
+                throw new StreamsException("Failed to reinitialize stores.", fatalException);
+            }
+        }
+
+        for (final Map.Entry<String, StateStore> entry : storesCopy.entrySet()) {
+            final StateStore stateStore = entry.getValue();
+            final String storeName = stateStore.name();
+            if (storeToBeReinitialized.contains(storeName)) {
+                try {
+                    stateStore.close();
+                } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
+                processorContext.uninitialize();
+                stores.remove(entry.getKey());
+
+                try {
+                    Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
+                } catch (final IOException fatalException) {
+                    log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                    throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+                }
+
+                try {
+                    Utils.delete(new File(baseDir + File.separator + storeName));
+                } catch (final IOException fatalException) {
+                    log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                    throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+                }
+
+                stateStore.init(processorContext, stateStore);
+            }
+        }
+    }
+
+    private Map<String, String> inverseOneToOneMap(final Map<String, String> origin) {
+        final Map<String, String> reversedMap = new HashMap<>();
+        for (final Map.Entry<String, String> entry : origin.entrySet()) {
+            reversedMap.put(entry.getValue(), entry.getKey());
+        }
+        return reversedMap;
     }
 
     List<ConsumerRecord<byte[], byte[]>> updateStandbyStates(final TopicPartition storePartition,

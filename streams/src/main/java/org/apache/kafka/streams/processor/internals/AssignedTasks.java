@@ -50,7 +50,7 @@ class AssignedTasks implements RestoringTasks {
     // IQ may access this map.
     private Map<TaskId, Task> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
-    private Map<TopicPartition, Task> restoringByPartition = new HashMap<>();
+    private Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
     private int committed = 0;
 
 
@@ -122,7 +122,8 @@ class AssignedTasks implements RestoringTasks {
             try {
                 if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    addToRestoring(entry.getValue());
+                    // cast is safe, because StandbyTasks always returns `true` in `initializeStateStores()` above
+                    addToRestoring((StreamTask) entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue(), readyPartitions);
                 }
@@ -278,7 +279,7 @@ class AssignedTasks implements RestoringTasks {
         return false;
     }
 
-    private void addToRestoring(final Task task) {
+    private void addToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
@@ -307,7 +308,7 @@ class AssignedTasks implements RestoringTasks {
     }
 
     @Override
-    public Task restoringTaskFor(final TopicPartition partition) {
+    public StreamTask restoringTaskFor(final TopicPartition partition) {
         return restoringByPartition.get(partition);
     }
 
