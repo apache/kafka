@@ -91,7 +91,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
     /** <code>client.dns.lookup</code> */
-    public static final String CLIENT_DNS_LOOKUP = CommonClientConfigs.CLIENT_DNS_LOOKUP;
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
 
     /**
      * <code>enable.auto.commit</code>
@@ -269,10 +269,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_DNS_LOOKUP,
+                                .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
-                                        ClientDnsLookup.DISABLED.toString(),
-                                        in(ClientDnsLookup.DISABLED.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                                        ClientDnsLookup.DEFAULT.toString(),
+                                        in(ClientDnsLookup.DEFAULT.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)

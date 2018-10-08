@@ -22,7 +22,7 @@ import java.util.Map;
 public enum ClientDnsLookup {
 
     RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve.canonical.bootstrap.servers.only"),
-    DISABLED("disabled");
+    DEFAULT("default");
 
     private String clientDnsLookup;
 
@@ -31,7 +31,7 @@ public enum ClientDnsLookup {
     }
 
     private static final Map<String, ClientDnsLookup> MAP =
-            new HashMap<String, ClientDnsLookup>();
+            new HashMap<>();
 
     static {
         for (ClientDnsLookup type : ClientDnsLookup.values()) {
@@ -48,7 +48,7 @@ public enum ClientDnsLookup {
         if (MAP.containsKey(name)) {
             return MAP.get(name);
         }
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException("Couldn't lookup " + CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG + " parameter");
     }
 
 }

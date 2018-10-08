@@ -49,8 +49,8 @@ public final class ClientUtils {
         try {
             clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
         } catch (IllegalArgumentException e) {
-            log.error("{} isn't a valid value for {}", clientDnsLookup, CommonClientConfigs.CLIENT_DNS_LOOKUP);
-            throw new ConfigException("Invalid value in " + CommonClientConfigs.CLIENT_DNS_LOOKUP);
+            log.error("{} isn't a valid value for {}", clientDnsLookup, CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
+            throw new ConfigException("Invalid value in " + CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
         }
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {

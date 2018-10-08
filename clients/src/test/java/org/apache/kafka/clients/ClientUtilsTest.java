@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
@@ -31,10 +30,6 @@ public class ClientUtilsTest {
 
     @Test
     public void testParseAndValidateAddresses() throws UnknownHostException {
-        String hostAddress = InetAddress.getLocalHost().getHostAddress();
-        InetAddress[] allByName = InetAddress.getAllByName("localhost");
-        System.out.println(allByName[0].getCanonicalHostName());
-        System.out.println(allByName[1].getCanonicalHostName());
         checkWithoutLookup("127.0.0.1:8000");
         checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
@@ -50,17 +45,21 @@ public class ClientUtilsTest {
 
     @Test
     public void testParseAndValidateAddressesWithReverseLookup() {
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("localhost:10000"));
+        checkWithoutLookup("127.0.0.1:8000");
+        checkWithoutLookup("localhost:8080");
+        checkWithoutLookup("[::1]:8000");
+        checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
         assertEquals(2, validatedAddresses.size());
         InetSocketAddress address = validatedAddresses.get(0);
-        assertEquals("127.0.0.1", address.getHostName());
+        assertEquals("93.184.216.34", address.getHostName());
         assertEquals(10000, address.getPort());
     }
 
 
     @Test(expected = ConfigException.class)
     public void testInvalidConfig() {
-        List<InetSocketAddress> validatedAddresses = ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
+        ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
     }
 
 
@@ -75,11 +74,11 @@ public class ClientUtilsTest {
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), "disabled");
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.DEFAULT.toString());
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
-        return ClientUtils.parseAndValidateAddresses(url, "resolve.canonical.bootstrap.servers.only");
+        return ClientUtils.parseAndValidateAddresses(url, ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString());
     }
 
 }

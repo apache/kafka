@@ -412,7 +412,7 @@ public class KafkaAdminClient extends AdminClient {
         this.metadataManager = metadataManager;
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
             config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-            config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP));
+            config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
         metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
         this.metrics = metrics;
         this.client = client;
