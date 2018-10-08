@@ -23,8 +23,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -32,16 +30,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 
 /**
- * A simple integration test which brings up Connect, Kafka and ZooKeeper and produces messages
- * into multiple topic-partitions, and sinks them with multiple tasks of a {@link MonitorableSinkConnector}.
+ * An example integration test that demonstrates how to setup an integration test for Connect.
+ * <p></p>
+ * The following test configures and executes up a sink connector pipeline in a worker, produces messages into
+ * the source topic-partitions, and demonstrates how to check the overall behavior of the pipeline.
  */
 @Category(IntegrationTest.class)
-public class ConnectIntegrationTest {
-
-    private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTest.class);
+public class ExampleConnectIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 2;
@@ -61,37 +62,39 @@ public class ConnectIntegrationTest {
     }
 
     /**
-     * Simple test case to bring up an embedded Connect cluster along a backing Kafka and Zk process.
-     * The test will produce and consume records, and start up a sink connector which will consume these records.
+     * Simple test case to configure and execute an embedded Connect cluster. The test will produce and consume
+     * records, and start up a sink connector which will consume these records.
      */
     @Test
     public void testProduceConsumeConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS, 1, Collections.emptyMap());
 
-        // produce some strings into test topic
+        // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
             connect.kafka().produce("test-topic", i % NUM_TOPIC_PARTITIONS, "key", "simple-message-value-" + i);
         }
 
-        // consume all records from test topic or fail
-        log.info("Consuming records from test topic");
+        // consume all records from the source topic or fail, to ensure that they were correctly produced.
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
+        // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
         props.put(TASKS_MAX_CONFIG, "2");
-        props.put("topics", "test-topic");
-        props.put("key.converter", StringConverter.class.getName());
-        props.put("value.converter", StringConverter.class.getName());
+        props.put(TOPICS_CONFIG, "test-topic");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS));
 
+        // start a sink connector
         connect.configureConnector("simple-conn", props);
 
+        // wait for the connector tasks to consume desired number of records.
         MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
         MonitorableSinkConnector.taskInstances("simple-conn-1").task().awaitRecords(CONSUME_MAX_DURATION_MS);
 
-        log.debug("Connector read {} records from topic", NUM_RECORDS_PRODUCED);
+        // delete connector
         connect.deleteConnector("simple-conn");
     }
 }
