@@ -41,13 +41,15 @@ class DumpLogSegmentsTest {
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
+
   val batches = new ArrayBuffer[Seq[SimpleRecord]]
+  var log: Log = _
 
   @Before
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
-    val log = Log(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+    log = Log(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
@@ -65,12 +67,14 @@ class DumpLogSegmentsTest {
     batches += thirdBatchRecords
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, thirdBatchRecords: _*),
       leaderEpoch = 0)
+
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
     log.flush()
   }
 
   @After
   def tearDown(): Unit = {
+    log.close()
     Utils.delete(tmpDir)
   }
 

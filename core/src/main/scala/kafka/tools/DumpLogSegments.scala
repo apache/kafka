@@ -166,45 +166,51 @@ object DumpLogSegments {
     val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
     val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
 
-    //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
-    if (indexSanityOnly) {
-      timeIndex.sanityCheck()
-      println(s"$file passed sanity check.")
-      return
-    }
-
-    var prevTimestamp = RecordBatch.NO_TIMESTAMP
-    for(i <- 0 until timeIndex.entries) {
-      val entry = timeIndex.entry(i)
-
-      // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-      if (entry.offset == timeIndex.baseOffset && i > 0)
+    try {
+      //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
+      if (indexSanityOnly) {
+        timeIndex.sanityCheck()
+        println(s"$file passed sanity check.")
         return
-
-      val position = index.lookup(entry.offset).position
-      val partialFileRecords = fileRecords.slice(position, Int.MaxValue)
-      val batches = partialFileRecords.batches.asScala
-      var maxTimestamp = RecordBatch.NO_TIMESTAMP
-      // We first find the message by offset then check if the timestamp is correct.
-      batches.find(_.lastOffset >= entry.offset) match {
-        case None =>
-          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset,
-            -1.toLong)
-        case Some(batch) if batch.lastOffset != entry.offset =>
-          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset, batch.lastOffset)
-        case Some(batch) =>
-          for (record <- batch.asScala)
-            maxTimestamp = math.max(maxTimestamp, record.timestamp)
-
-          if (maxTimestamp != entry.timestamp)
-            timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
-
-          if (prevTimestamp >= entry.timestamp)
-            timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
       }
-      if (!verifyOnly)
-        println(s"timestamp: ${entry.timestamp} offset: ${entry.offset}")
-      prevTimestamp = entry.timestamp
+
+      var prevTimestamp = RecordBatch.NO_TIMESTAMP
+      for (i <- 0 until timeIndex.entries) {
+        val entry = timeIndex.entry(i)
+
+        // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+        if (entry.offset == timeIndex.baseOffset && i > 0)
+          return
+
+        val position = index.lookup(entry.offset).position
+        val partialFileRecords = fileRecords.slice(position, Int.MaxValue)
+        val batches = partialFileRecords.batches.asScala
+        var maxTimestamp = RecordBatch.NO_TIMESTAMP
+        // We first find the message by offset then check if the timestamp is correct.
+        batches.find(_.lastOffset >= entry.offset) match {
+          case None =>
+            timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset,
+              -1.toLong)
+          case Some(batch) if batch.lastOffset != entry.offset =>
+            timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset, batch.lastOffset)
+          case Some(batch) =>
+            for (record <- batch.asScala)
+              maxTimestamp = math.max(maxTimestamp, record.timestamp)
+
+            if (maxTimestamp != entry.timestamp)
+              timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
+
+            if (prevTimestamp >= entry.timestamp)
+              timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
+        }
+        if (!verifyOnly)
+          println(s"timestamp: ${entry.timestamp} offset: ${entry.offset}")
+        prevTimestamp = entry.timestamp
+      }
+    } finally {
+      fileRecords.closeHandlers()
+      index.closeHandler()
+      timeIndex.closeHandler()
     }
   }
 
@@ -325,54 +331,56 @@ object DumpLogSegments {
                       parser: MessageParser[_, _]) {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val messageSet = FileRecords.open(file, false)
-    var validBytes = 0L
-    var lastOffset = -1L
+    val fileRecords = FileRecords.open(file, false)
+    try {
+      var validBytes = 0L
+      var lastOffset = -1L
 
-    for (batch <- messageSet.batches.asScala) {
-      printBatchLevel(batch, validBytes)
-      if (isDeepIteration) {
-        for (record <- batch.asScala) {
-          if (lastOffset == -1)
-            lastOffset = record.offset
-          else if (record.offset != lastOffset + 1) {
-            var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-            nonConsecutivePairsSeq ::= (lastOffset, record.offset)
-            nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
-          }
-          lastOffset = record.offset
-
-          print(s"$RecordIndent offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
-            s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
-
-          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
-          } else {
-            print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
-          }
-
-          if (batch.isControlBatch) {
-            val controlTypeId = ControlRecordType.parseTypeId(record.key)
-            ControlRecordType.fromTypeId(controlTypeId) match {
-              case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
-                val endTxnMarker = EndTransactionMarker.deserialize(record)
-                print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
-              case controlType =>
-                print(s" controlType: $controlType($controlTypeId)")
+      for (batch <- fileRecords.batches.asScala) {
+        printBatchLevel(batch, validBytes)
+        if (isDeepIteration) {
+          for (record <- batch.asScala) {
+            if (lastOffset == -1)
+              lastOffset = record.offset
+            else if (record.offset != lastOffset + 1) {
+              var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
+              nonConsecutivePairsSeq ::= (lastOffset, record.offset)
+              nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
             }
-          } else if (printContents) {
-            val (key, payload) = parser.parse(record)
-            key.foreach(key => print(s" key: $key"))
-            payload.foreach(payload => print(s" payload: $payload"))
+            lastOffset = record.offset
+
+            print(s"$RecordIndent offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
+              s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
+
+            if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+              print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+            } else {
+              print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
+            }
+
+            if (batch.isControlBatch) {
+              val controlTypeId = ControlRecordType.parseTypeId(record.key)
+              ControlRecordType.fromTypeId(controlTypeId) match {
+                case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                  val endTxnMarker = EndTransactionMarker.deserialize(record)
+                  print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+                case controlType =>
+                  print(s" controlType: $controlType($controlTypeId)")
+              }
+            } else if (printContents) {
+              val (key, payload) = parser.parse(record)
+              key.foreach(key => print(s" key: $key"))
+              payload.foreach(payload => print(s" payload: $payload"))
+            }
+            println()
           }
-          println()
         }
+        validBytes += batch.sizeInBytes
       }
-      validBytes += batch.sizeInBytes
-    }
-    val trailingBytes = messageSet.sizeInBytes - validBytes
-    if(trailingBytes > 0)
-      println("Found %d invalid bytes at the end of %s".format(trailingBytes, file.getName))
+      val trailingBytes = fileRecords.sizeInBytes - validBytes
+      if (trailingBytes > 0)
+        println(s"Found $trailingBytes invalid bytes at the end of ${file.getName}")
+    } finally fileRecords.closeHandlers()
   }
 
   private def printBatchLevel(batch: FileLogInputStream.FileChannelRecordBatch, accumulativeBytes: Long): Unit = {
