@@ -35,16 +35,11 @@ import scala.collection.JavaConverters.mapAsScalaMapConverter
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
   val codec: CompressionType = CompressionType.LZ4
-  var counter = 0
-  override def incCounter: Int = {
-    counter += 1
-    counter
-  }
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
-  @Test(timeout = 60000)
+  @Test(timeout = 3000)
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics() {
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)

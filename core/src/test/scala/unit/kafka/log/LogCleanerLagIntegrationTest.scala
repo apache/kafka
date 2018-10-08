@@ -44,11 +44,6 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
 
   override def codec: CompressionType = CompressionType.forName(compressionCodecName)
 
-  override def incCounter: Int = {
-    counter += 1
-    counter
-  }
-  var counter = 0
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @Test
@@ -117,7 +112,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
       val count = counter
       log.appendAsLeader(TestUtils.singletonRecords(value = counter.toString.getBytes, codec = codec,
               key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
-      incCounter
+      incCounter()
       (key, count)
     }
   }

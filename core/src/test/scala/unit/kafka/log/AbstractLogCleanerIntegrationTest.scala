@@ -123,8 +123,9 @@ abstract class AbstractLogCleanerIntegrationTest {
   }
 
   def codec: CompressionType
-  def counter: Int
-  def incCounter: Int
+  var ctr = 0
+  def counter: Int = ctr
+  def incCounter(): Unit = ctr += 1
 
   def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
                         startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
@@ -132,7 +133,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       val value = counter.toString
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
-      incCounter
+      incCounter()
       (key, value, appendInfo.firstOffset.get)
     }
   }

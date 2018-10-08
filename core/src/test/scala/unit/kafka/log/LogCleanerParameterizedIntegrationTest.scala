@@ -44,12 +44,6 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
 
   val codec: CompressionType = CompressionType.forName(compressionCodec)
   val time = new MockTime()
-  var counter = 0
-
-  override def incCounter: Int = {
-    counter += 1
-    counter
-  }
 
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
@@ -305,7 +299,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
                                         startKey: Int = 0, magicValue: Byte): Seq[(Int, String, Long)] = {
     val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
-      incCounter
+      incCounter()
       (key, payload)
     }
 
