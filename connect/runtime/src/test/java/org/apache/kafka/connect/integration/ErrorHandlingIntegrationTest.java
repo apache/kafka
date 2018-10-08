@@ -165,13 +165,13 @@ public class ErrorHandlingIntegrationTest {
         static final ConfigDef CONFIG_DEF = new ConfigDef();
 
         /**
-         * an arbitrary id which causes this transformation to fail with a {@link RetriableException}, but succeeds
+         * An arbitrary id which causes this transformation to fail with a {@link RetriableException}, but succeeds
          * on subsequent attempt.
          */
         static final int BAD_RECORD_VAL_RETRIABLE = 4;
 
         /**
-         * an arbitrary id which causes this transformation to fail with a {@link RetriableException}.
+         * An arbitrary id which causes this transformation to fail with a {@link RetriableException}.
          */
         static final int BAD_RECORD_VAL = 7;
 
@@ -179,7 +179,7 @@ public class ErrorHandlingIntegrationTest {
 
         @Override
         public R apply(R record) {
-            String badValRetriable = "val-" + BAD_RECORD_VAL_RETRIABLE;
+            String badValRetriable = "value-" + BAD_RECORD_VAL_RETRIABLE;
             if (badValRetriable.equals(record.value()) && shouldFail) {
                 shouldFail = false;
                 throw new RetriableException("Error when when value='" + badValRetriable
