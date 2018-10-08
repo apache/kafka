@@ -38,7 +38,6 @@ class LogSegmentTest {
   /* create a segment with the given base offset */
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
-                    maxSegmentMs: Int = Int.MaxValue,
                     time: Time = Time.SYSTEM): LogSegment = {
     val ms = FileRecords.open(Log.logFile(logDir, offset))
     val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
@@ -167,10 +166,10 @@ class LogSegmentTest {
 
     val maxSegmentMs = 300000
     val time = new MockTime
-    val seg = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    val seg = createSegment(0, time = time)
     seg.close()
 
-    val reopened = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    val reopened = createSegment(0, time = time)
     assertEquals(0, seg.timeIndex.sizeInBytes)
     assertEquals(0, seg.offsetIndex.sizeInBytes)
 
@@ -180,7 +179,10 @@ class LogSegmentTest {
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
-    val logConfig = LogConfig(Map().asJava)
+    val logConfig = LogConfig(Map(
+      LogConfig.SegmentMsProp -> maxSegmentMs,
+      LogConfig.SegmentBytesProp -> Int.MaxValue
+    ).asJava)
 
     assertFalse(reopened.shouldRoll(logConfig, messagesSize = 1024,
       maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,

@@ -45,8 +45,10 @@ import scala.math._
  * @param log The file records containing log entries
  * @param offsetIndex The offset index
  * @param timeIndex The timestamp index
+ * @param txnIndex The transaction index
  * @param baseOffset A lower bound on the offsets in this segment
  * @param indexIntervalBytes The approximate number of bytes between entries in the index
+ * @param rollJitterMs The maximum random jitter subtracted from the scheduled segment roll time
  * @param time The time instance
  */
 @nonthreadsafe
