@@ -213,21 +213,14 @@ public class KafkaStreams {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnState(final State targetState, final long waitMs, final boolean newSemantics) {
+    private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != targetState) {
                 if (waitMs == 0) {
-                    if (newSemantics)
-                        return false;
-
-                    try {
-                        stateLock.wait();
-                    } catch (final InterruptedException e) {
-                        // it is ok: just move on to the next iteration
-                    }
-                } else if (waitMs > elapsedMs) {
+                    return false;
+                } else if (waitMs >= elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
                         stateLock.wait(remainingMs);
@@ -836,16 +829,23 @@ public class KafkaStreams {
      */
     @Deprecated
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        return close(timeUnit.toMillis(timeout), false);
+        long timeoutMs = timeUnit.toMillis(timeout);
+
+        if (timeoutMs < 0) {
+            timeoutMs = 0;
+        } else if (timeoutMs == 0) {
+            timeoutMs = Long.MAX_VALUE;
+        }
+
+        return close(timeoutMs);
     }
 
     /**
      * @param timeoutMs  how long to wait for the threads to shutdown.
-     * @param newSemantics If {@code true} new semantics used.
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      */
-    private synchronized boolean close(final long timeoutMs, final boolean newSemantics) {
+    private synchronized boolean close(final long timeoutMs) {
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
 
         if (!setState(State.PENDING_SHUTDOWN)) {
@@ -903,7 +903,7 @@ public class KafkaStreams {
             shutdownThread.start();
         }
 
-        if (waitOnState(State.NOT_RUNNING, timeoutMs, newSemantics)) {
+        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
             log.info("Streams client stopped completely");
             return true;
         } else {
@@ -930,7 +930,7 @@ public class KafkaStreams {
         if (timeoutMs < 0)
             throw new IllegalArgumentException("Timeout can't be negative.");
 
-        return close(timeoutMs, true);
+        return close(timeoutMs);
     }
 
     /**
