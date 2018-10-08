@@ -256,7 +256,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
         int consumedRecords = 0;
-        try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(topics)) {
+        try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(Collections.emptyMap(), topics)) {
             final long startMillis = System.currentTimeMillis();
             long current = startMillis;
             while (current - startMillis < maxDuration) {
@@ -280,7 +280,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     public KafkaConsumer<byte[], byte[]> createConsumer(Map<String, Object> consumerProps) {
-
         Map<String, Object> props = new HashMap<>(consumerProps);
 
         putIfAbsent(props, GROUP_ID_CONFIG, UUID.randomUUID().toString());
@@ -299,12 +298,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         return consumer;
     }
 
-    public KafkaConsumer<byte[], byte[]> createConsumer() {
-        return createConsumer(Collections.emptyMap());
-    }
-
-    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(String... topics) {
-        KafkaConsumer<byte[], byte[]> consumer = createConsumer();
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, String... topics) {
+        KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
         consumer.subscribe(Arrays.asList(topics));
         return consumer;
     }
