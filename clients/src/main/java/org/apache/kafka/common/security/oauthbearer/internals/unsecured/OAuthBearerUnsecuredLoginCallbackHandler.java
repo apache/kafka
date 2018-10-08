@@ -183,7 +183,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
         if (moduleOptions.isEmpty()) {
-            log.info("Token not provided, this login cannot be used to establish client connections");
+            log.debug("Token not provided, this login cannot be used to establish client connections");
             callback.token(null);
             return;
         }

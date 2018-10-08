@@ -302,7 +302,7 @@ public class OAuthBearerLoginModule implements LoginModule {
         if (tokenRequiringCommit != null)
             identifyExtensions();
         else
-            log.info("Logged in without a token, this login cannot be used to establish client connections");
+            log.debug("Logged in without a token, this login cannot be used to establish client connections");
 
         loginState = LoginState.LOGGED_IN_NOT_COMMITTED;
         log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
@@ -370,7 +370,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             }
             log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
         } else
-            log.info("No tokens to logout for this login");
+            log.debug("No tokens to logout for this login");
 
         if (myCommittedExtensions != null) {
             log.info("Logging out my extensions");
@@ -378,7 +378,7 @@ public class OAuthBearerLoginModule implements LoginModule {
                 myCommittedExtensions = null;
             log.info("Done logging out my extensions");
         } else
-            log.info("No extensions to logout for this login");
+            log.debug("No extensions to logout for this login");
 
         loginState = LoginState.NOT_LOGGED_IN;
         return true;
@@ -399,7 +399,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             tokenRequiringCommit = null;
             log.info("Done committing my token; committed token count is now {}", committedTokenCount());
         } else
-            log.info("No tokens to commit, this login cannot be used to establish client connections");
+            log.debug("No tokens to commit, this login cannot be used to establish client connections");
 
         if (extensionsRequiringCommit != null) {
             subject.getPublicCredentials().add(extensionsRequiringCommit);
