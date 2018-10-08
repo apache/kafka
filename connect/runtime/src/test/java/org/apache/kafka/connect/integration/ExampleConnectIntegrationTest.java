@@ -52,6 +52,10 @@ public class ExampleConnectIntegrationTest {
 
     @Before
     public void setup() throws IOException {
+        // clean up task status before starting test.
+        MonitorableSinkConnector.cleanHandle("simple-conn-0");
+        MonitorableSinkConnector.cleanHandle("simple-conn-1");
+
         connect = new EmbeddedConnectCluster();
         connect.start();
     }

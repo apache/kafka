@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * A connector to be used in integration tests. This class provides methods to find task instances
@@ -71,7 +72,9 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         public MonitorableSinkTask task() {
             try {
                 log.debug("Waiting on task {}", taskId);
-                taskAvailable.await(MAX_WAIT_FOR_TASK_DURATION_MS, TimeUnit.MILLISECONDS);
+                if (!taskAvailable.await(MAX_WAIT_FOR_TASK_DURATION_MS, TimeUnit.MILLISECONDS)) {
+                    throw new ConnectException("Could not find task '" + taskId + "'.");
+                }
                 log.debug("Found task!");
             } catch (InterruptedException e) {
                 throw new ConnectException("Could not find task for " + taskId, e);
@@ -91,6 +94,13 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static Handle taskInstances(String taskId) {
         return HANDLES.computeIfAbsent(taskId, connName -> new Handle(taskId));
+    }
+
+    public static void cleanHandle(String taskId) {
+        HANDLES.computeIfPresent(taskId, (k, handle) -> {
+            handle.taskAvailable.countDown();
+            return null;
+        });
     }
 
     @Override
@@ -158,9 +168,8 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void stop() {
-            Handle handle = HANDLES.remove(taskId);
-            handle.taskAvailable.countDown();
-            log.info("Removing {} for taskId {}", handle, taskId);
+            cleanHandle(taskId);
+            log.info("Removing handle for taskId {}", taskId);
         }
 
         public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {

@@ -76,6 +76,8 @@ public class ErrorHandlingIntegrationTest {
 
     @Before
     public void setup() throws IOException {
+        // clean up connector status before starting test.
+        MonitorableSinkConnector.cleanHandle("simple-conn-0");
         connect = new EmbeddedConnectCluster();
         connect.start();
     }
@@ -108,21 +110,25 @@ public class ErrorHandlingIntegrationTest {
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(TRANSFORMS_CONFIG, "failing_transform");
+        props.put("transforms.failing_transform.type", FaultyPassthrough.class.getName());
+
         props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(EXPECTED_CORRECT_RECORDS));
 
+        // log all errors, along with message metadata
         props.put(ERRORS_LOG_ENABLE_CONFIG, "true");
-        props.put(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "false");
+        props.put(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
         // produce bad messages into dead letter queue
         props.put(DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC);
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+
         // tolerate all erros
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
-        props.put(TRANSFORMS_CONFIG, "failing_transform");
+
         // retry for up to one second
         props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
-        props.put("transforms.failing_transform.type", FaultyPassthrough.class.getName());
 
         connect.configureConnector("simple-conn", props);
 
