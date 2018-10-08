@@ -251,6 +251,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+    closeHandler()
   }
 
   def closeHandler(): Unit = {
