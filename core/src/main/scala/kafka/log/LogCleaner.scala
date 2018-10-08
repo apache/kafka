@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.collection.{Iterable, Set, mutable}
+import scala.util.control.ControlThrowable
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the "compact" retention strategy.
@@ -293,49 +294,75 @@ class LogCleaner(initialConfig: CleanerConfig,
 
     /**
      * The main loop for the cleaner thread
+     * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
     override def doWork() {
-      cleanOrSleep()
+      val cleaned = cleanFilthiestLog()
+      if (!cleaned)
+        pause(config.backOffMs, TimeUnit.MILLISECONDS)
     }
 
     /**
-     * Clean a log if there is a dirty log available, otherwise sleep for a bit
-     */
-    private def cleanOrSleep() {
-      val cleaned = cleanerManager.grabFilthiestCompactedLog(time) match {
-        case None =>
-          false
-        case Some(cleanable) =>
-          // there's a log, clean it
-          var endOffset = cleanable.firstDirtyOffset
-          try {
-            val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
-            recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
-            endOffset = nextDirtyOffset
-          } catch {
-            case _: LogCleaningAbortedException => // task can be aborted, let it go.
-            case _: KafkaStorageException => // partition is already offline. let it go.
-            case e: IOException =>
-              val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${cleanable.log.dir.getParent} due to IOException"
-              logDirFailureChannel.maybeAddOfflineLogDir(cleanable.log.dir.getParent, msg, e)
-          } finally {
-            cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
-          }
-          true
-      }
-      val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
+      * Cleans a log if there is a dirty log available
+      * @return whether a log was cleaned
+      */
+    private def cleanFilthiestLog(): Boolean = {
+      var currentLog: Option[Log] = None
 
       try {
-        deletable.foreach {
-          case (_, log) =>
-            log.deleteOldSegments()
+        val cleaned = cleanerManager.grabFilthiestCompactedLog(time) match {
+          case None =>
+            false
+          case Some(cleanable) =>
+            // there's a log, clean it
+            currentLog = Some(cleanable.log)
+            cleanLog(cleanable)
+            true
         }
-      } finally {
-        cleanerManager.doneDeleting(deletable.map(_._1))
-      }
+        val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
+        try {
+          deletable.foreach {
+            case (topicPartition, log) =>
+              try {
+                currentLog = Some(log)
+                log.deleteOldSegments()
+              }
+          }
+        } finally  {
+          cleanerManager.doneDeleting(deletable.map(_._1))
+        }
 
-      if (!cleaned)
-        pause(config.backOffMs, TimeUnit.MILLISECONDS)
+        cleaned
+      } catch {
+        case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
+        case e: Exception =>
+          if (currentLog.isEmpty) {
+            throw new IllegalStateException("currentLog cannot be empty on an unexpected exception", e)
+          }
+          val erroneousLog = currentLog.get
+          warn(s"Unexpected exception thrown when cleaning log $erroneousLog. Marking its partition (${erroneousLog.topicPartition}) as uncleanable", e)
+          cleanerManager.markPartitionUncleanable(erroneousLog.dir.getParent, erroneousLog.topicPartition)
+
+          false
+      }
+    }
+
+    private def cleanLog(cleanable: LogToClean): Unit = {
+      var endOffset = cleanable.firstDirtyOffset
+      try {
+        val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
+        recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
+        endOffset = nextDirtyOffset
+      } catch {
+        case _: LogCleaningAbortedException => // task can be aborted, let it go.
+        case _: KafkaStorageException => // partition is already offline. let it go.
+        case e: IOException =>
+          var logDirectory = cleanable.log.dir.getParent
+          val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${logDirectory} due to IOException"
+          logDirFailureChannel.maybeAddOfflineLogDir(logDirectory, msg, e)
+      } finally {
+        cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
+      }
     }
 
     /**
@@ -397,6 +424,18 @@ object LogCleaner {
     LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
     LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
       fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+  }
+
+  /**
+    * Given the first dirty offset and an uncleanable offset, calculates the total cleanable bytes for this log
+    * @return the biggest uncleanable offset and the total amount of cleanable bytes
+    */
+  def calculateCleanableBytes(log: Log, firstDirtyOffset: Long, uncleanableOffset: Long): (Long, Long) = {
+    val firstUncleanableSegment = log.logSegments(uncleanableOffset, log.activeSegment.baseOffset).headOption.getOrElse(log.activeSegment)
+    val firstUncleanableOffset = firstUncleanableSegment.baseOffset
+    val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size.toLong).sum
+
+    (firstUncleanableOffset, cleanableBytes)
   }
 }
 
@@ -951,9 +990,7 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
  */
 private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
-  private[this] val firstUncleanableSegment = log.logSegments(uncleanableOffset, log.activeSegment.baseOffset).headOption.getOrElse(log.activeSegment)
-  val firstUncleanableOffset = firstUncleanableSegment.baseOffset
-  val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size.toLong).sum
+  val (firstUncleanableOffset, cleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes
   val cleanableRatio = cleanableBytes / totalBytes.toDouble
   override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
