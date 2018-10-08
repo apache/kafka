@@ -354,8 +354,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             throw new IllegalStateException(
                     "Cannot call logout() immediately after login(); need to first invoke commit() or abort()");
         if (loginState != LoginState.COMMITTED) {
-            if (log.isDebugEnabled())
-                log.debug("Nothing here to log out");
+            log.debug("Nothing here to log out");
             return false;
         }
         if (myCommittedToken != null) {
@@ -387,8 +386,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     @Override
     public boolean commit() {
         if (loginState != LoginState.LOGGED_IN_NOT_COMMITTED) {
-            if (log.isDebugEnabled())
-                log.debug("Nothing here to commit");
+            log.debug("Nothing here to commit");
             return false;
         }
 
