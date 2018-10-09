@@ -18,7 +18,6 @@ package kafka.log
 
 import java.io.File
 
-import kafka.message.NoCompressionCodec
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
@@ -40,11 +39,7 @@ class LogSegmentTest {
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(Log.logFile(logDir, offset))
-    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
-    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
+    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
@@ -180,28 +175,19 @@ class LogSegmentTest {
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
-    val logConfig = LogConfig(Map(
-      LogConfig.SegmentMsProp -> maxSegmentMs,
-      LogConfig.SegmentBytesProp -> Int.MaxValue
-    ).asJava)
-
-    var rollParams = RollParams(logConfig, getLogAppendInfo(100L), 1024, time.milliseconds())
+    var rollParams = RollParams(maxSegmentMs, Int.MaxValue, RecordBatch.NO_TIMESTAMP, 100L, 1024, time.milliseconds())
     assertFalse(reopened.shouldRoll(rollParams))
 
     // The segment should not be rolled even if maxSegmentMs has been exceeded
     time.sleep(maxSegmentMs + 1)
     assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    rollParams = RollParams(logConfig, getLogAppendInfo(100L), 1024, time.milliseconds())
+    rollParams = RollParams(maxSegmentMs, Int.MaxValue, RecordBatch.NO_TIMESTAMP, 100L, 1024, time.milliseconds())
     assertFalse(reopened.shouldRoll(rollParams))
 
     // But we should still roll the segment if we cannot fit the next offset
-    rollParams = RollParams(logConfig, getLogAppendInfo(Int.MaxValue.toLong + 200), 1024, time.milliseconds())
+    rollParams = RollParams(maxSegmentMs, Int.MaxValue, RecordBatch.NO_TIMESTAMP, Int.MaxValue.toLong + 200L, 1024,
+      time.milliseconds())
     assertTrue(reopened.shouldRoll(rollParams))
-  }
-
-  private def getLogAppendInfo(lastOffset: Long): LogAppendInfo = {
-    LogAppendInfo(None, lastOffset, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
   }
 
   @Test
