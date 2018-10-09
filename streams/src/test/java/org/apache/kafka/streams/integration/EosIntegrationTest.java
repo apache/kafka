@@ -317,7 +317,7 @@ public class EosIntegrationTest {
         // the app is supposed to copy all 40 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         //
-        // the failure gets inject after 20 committed and 30 uncommitted records got received
+        // the failure gets inject after 20 committed and 10 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
@@ -392,7 +392,7 @@ public class EosIntegrationTest {
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
         //
-        // the failure gets inject after 20 committed and 30 uncommitted records got received
+        // the failure gets inject after 20 committed and 10 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
@@ -402,7 +402,7 @@ public class EosIntegrationTest {
             streams.start();
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
 
             final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
             dataBeforeFailure.addAll(committedDataBeforeFailure);

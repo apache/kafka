@@ -24,4 +24,8 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         super(logContext, "standby task");
     }
 
+    void addToRestoring(final StandbyTask task) {
+        throw new UnsupportedOperationException("Standby tasks cannot be restored actively.");
+    }
+
 }
