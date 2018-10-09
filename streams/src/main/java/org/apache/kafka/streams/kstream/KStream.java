@@ -263,6 +263,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -304,6 +305,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -351,6 +353,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -497,7 +500,7 @@ public interface KStream<K, V> {
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
      * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}, the processing progress
      * can be observed and additional periodic actions can be performed.
      *
      * <p>
