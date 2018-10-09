@@ -96,8 +96,8 @@ object GetOffsetShell {
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
     val config = 
-      if (options.valueOf(commandConfigOpt) == "")
-        new Properties
+      if (options.has(commandConfigOpt))
+        new Properties()
       else
         Utils.loadProps(options.valueOf(commandConfigOpt)) 
 
