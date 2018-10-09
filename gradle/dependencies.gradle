@@ -74,6 +74,7 @@ versions += [
   lz4: "1.5.0",
   mavenArtifact: "3.5.4",
   metrics: "2.2.0",
+  mockito: "2.23.0",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
   reflections: "0.9.11",
@@ -125,6 +126,7 @@ libs += [
   log4j: "log4j:log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
+  mockitoCore: "org.mockito:mockito-core:$versions.mockito",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
