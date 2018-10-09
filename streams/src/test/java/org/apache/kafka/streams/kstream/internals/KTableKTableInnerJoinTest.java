@@ -50,7 +50,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
 
@@ -117,31 +116,13 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
         builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, false);
-    }
-
-    @Test
-    public void testSendingOldValues() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
-
-        final KTable<Integer, String> table1;
-        final KTable<Integer, String> table2;
-        final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-
-        table1 = builder.table(topic1, consumed);
-        table2 = builder.table(topic2, consumed);
-        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
-
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, true);
+        doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
 
     @Test
@@ -160,7 +141,7 @@ public class KTableKTableInnerJoinTest {
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
         builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, false);
+        doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
 
     @Test
@@ -184,29 +165,22 @@ public class KTableKTableInnerJoinTest {
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
-    private void doTestSendingOldValues(final StreamsBuilder builder,
-                                        final int[] expectedKeys,
-                                        final KTable<Integer, String> table1,
-                                        final KTable<Integer, String> table2,
-                                        final MockProcessorSupplier<Integer, String> supplier,
-                                        final KTable<Integer, String> joined,
-                                        final boolean sendOldValues) {
+    private void doTestNotSendingOldValues(final StreamsBuilder builder,
+                                           final int[] expectedKeys,
+                                           final KTable<Integer, String> table1,
+                                           final KTable<Integer, String> table2,
+                                           final MockProcessorSupplier<Integer, String> supplier,
+                                           final KTable<Integer, String> joined) {
+
+        assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
+        assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
+        assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
 
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
         final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-        if (!sendOldValues) {
-            assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
-        } else {
-            ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
-            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
-        }
         // push two items to the primary stream. the other table is empty
 
         for (int i = 0; i < 2; i++) {

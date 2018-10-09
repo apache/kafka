@@ -32,12 +32,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private final String storeName;
     private String queryableName;
+    private boolean sendOldValues;
 
     public KTableSource(final String storeName, final String queryableName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
 
         this.storeName = storeName;
         this.queryableName = queryableName;
+        this.sendOldValues = false;
     }
 
     public String queryableName() {
@@ -52,6 +54,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     // when source ktable requires sending old values, we just
     // need to set the queryable name as the store name to enforce materialization
     public void enableSendingOldValues() {
+        this.sendOldValues = true;
         this.queryableName = storeName;
     }
 
@@ -74,7 +77,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             metrics = (StreamsMetricsImpl) context.metrics();
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, true), true);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
             }
         }
 
