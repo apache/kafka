@@ -32,16 +32,19 @@ import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkClientTest {
 
@@ -148,69 +151,41 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void doNotBlockIfPollConditionIsSatisfied() {
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
                 mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
         // expect poll, but with no timeout
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
-
-        EasyMock.replay(mockNetworkClient);
-
-        consumerClient.poll(time.timer(Long.MAX_VALUE), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return false;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        consumerClient.poll(time.timer(Long.MAX_VALUE), () -> false);
+        verify(mockNetworkClient).poll(eq(0L), anyLong());
     }
 
     @Test
     public void blockWhenPollConditionNotSatisfied() {
         long timeout = 4000L;
 
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
                 mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
-
-        EasyMock.replay(mockNetworkClient);
-
-        consumerClient.poll(time.timer(timeout), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return true;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        when(mockNetworkClient.inFlightRequestCount()).thenReturn(1);
+        consumerClient.poll(time.timer(timeout), () -> true);
+        verify(mockNetworkClient).poll(eq(timeout), anyLong());
     }
 
     @Test
     public void blockOnlyForRetryBackoffIfNoInflightRequests() {
         long retryBackoffMs = 100L;
 
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
                 mockNetworkClient, metadata, time, retryBackoffMs, 1000, Integer.MAX_VALUE);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+        when(mockNetworkClient.inFlightRequestCount()).thenReturn(0);
 
-        EasyMock.replay(mockNetworkClient);
+        consumerClient.poll(time.timer(Long.MAX_VALUE), () -> true);
 
-        consumerClient.poll(time.timer(Long.MAX_VALUE), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return true;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        verify(mockNetworkClient).poll(eq(retryBackoffMs), anyLong());
     }
 
     @Test

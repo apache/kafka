@@ -74,7 +74,6 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -115,6 +114,11 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class KafkaConsumerTest {
     private final String topic = "test";
@@ -1846,18 +1850,16 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testCloseWithTimeUnit() {
-        KafkaConsumer consumer = EasyMock.partialMockBuilder(KafkaConsumer.class)
-                .addMockedMethod("close", Duration.class).createMock();
-        consumer.close(Duration.ofSeconds(1));
-        EasyMock.expectLastCall();
-        EasyMock.replay(consumer);
+        KafkaConsumer consumer = mock(KafkaConsumer.class);
+        doCallRealMethod().when(consumer).close(anyLong(), any());
         consumer.close(1, TimeUnit.SECONDS);
-        EasyMock.verify(consumer);
+        verify(consumer).close(Duration.ofSeconds(1));
     }
 
     @Test(expected = InvalidTopicException.class)
-    public void testSubscriptionOnInvalidTopic() throws Exception {
+    public void testSubscriptionOnInvalidTopic() {
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster();
         Node node = cluster.nodes().get(0);
