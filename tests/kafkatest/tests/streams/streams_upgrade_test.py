@@ -526,18 +526,18 @@ class StreamsUpgradeTest(Test):
                     retries = 0
 
                     while retries < 10:
-                        processor_found = list(node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
-                        first_other_processor_found = list(first_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % first_other_processor.LOG_FILE, allow_fail=True))
-                        second_other_processor_found = list(second_other_node.account.ssh_capture("grep \"Successfully joined group with generation\" %s | awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % second_other_processor.LOG_FILE, allow_fail=True))
+                        processor_found = self.extract_generation_from_logs(processor)
+                        first_other_processor_found = self.extract_generation_from_logs(first_other_processor)
+                        second_other_processor_found = self.extract_generation_from_logs(second_other_processor)
 
                         if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
                             self.logger.info("processor: " + str(processor_found))
                             self.logger.info("first other processor: " + str(first_other_processor_found))
                             self.logger.info("second other processor: " + str(second_other_processor_found))
 
-                            processor_generation = int(processor_found[len(processor_found) - 1].strip().split()[0])
-                            first_other_processor_generation = int(first_other_processor_found[len(first_other_processor_found) - 1].strip().split()[0])
-                            second_other_processor_generation = int(second_other_processor_found[len(second_other_processor_found) - 1].strip().split()[0])
+                            processor_generation = self.extract_highest_generation(processor_found)
+                            first_other_processor_generation = self.extract_highest_generation(first_other_processor_found)
+                            second_other_processor_generation = self.extract_highest_generation(second_other_processor_found)
 
                             if processor_generation == first_other_processor_generation and processor_generation == second_other_processor_generation:
                                 current_generation = processor_generation
@@ -559,6 +559,14 @@ class StreamsUpgradeTest(Test):
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
+
+    def extract_generation_from_logs(self, processor):
+        return list(processor.node.account.ssh_capture("""grep "Successfully joined group with generation" %s
+         ... | awk '{for(i=1;i<=NF;i++) {if ($i == "generation") beginning=i+1; if($i== "(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)") ending=i }; 
+         ... for (j=beginning;j<ending;j++) printf $j; printf "\n"}'""" % processor.LOG_FILE, allow_fail=True))
+
+    def extract_highest_generation(self, found_generations):
+        return int(found_generations[-1])
 
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
