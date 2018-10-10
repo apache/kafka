@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 
 /**
@@ -75,13 +74,13 @@ public class ChannelState {
 
     private final State state;
     private final AuthenticationException exception;
-    private final SocketAddress remoteAddress;
+    private final String remoteAddress;
 
     public ChannelState(State state) {
         this(state, null, null);
     }
-
-    public ChannelState(State state, AuthenticationException exception, SocketAddress remoteAddress) {
+    
+    public ChannelState(State state, AuthenticationException exception, String remoteAddress) {
         this.state = state;
         this.exception = exception;
         this.remoteAddress = remoteAddress;
@@ -95,7 +94,7 @@ public class ChannelState {
         return exception;
     }
 
-    public SocketAddress remoteAddress() {
+    public String remoteAddress() {
         return remoteAddress;
     }
 }
