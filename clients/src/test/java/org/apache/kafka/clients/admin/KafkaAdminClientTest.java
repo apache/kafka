@@ -37,6 +37,7 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
@@ -561,6 +562,9 @@ public class KafkaAdminClientTest {
         new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY));
     private static final AclBindingFilter FILTER2 = new AclBindingFilter(new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
         new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY));
+    private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(
+        new ResourcePatternFilter(ResourceType.UNKNOWN, null, PatternType.LITERAL),
+        new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY));
 
     @Test
     public void testDescribeAcls() throws Exception {
@@ -582,6 +586,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
                 new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.<AclBinding>emptySet()));
             TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
+
+            // Test a call where we supply an invalid filter.
+            TestUtils.assertFutureError(env.adminClient().describeAcls(UNKNOWN_FILTER).values(),
+                InvalidRequestException.class);
         }
     }
 
