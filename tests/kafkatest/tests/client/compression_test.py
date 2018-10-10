@@ -60,7 +60,7 @@ class CompressionTest(ProduceConsumeValidateTest):
         Setup: 1 zk, 1 kafka node, 1 topic with partitions=10, replication-factor=1
 
         compression_types parameter gives a list of compression types (or no compression if
-        "none"). Each producer in a VerifiableProducer group (num_producers = 4) will use a
+        "none"). Each producer in a VerifiableProducer group (num_producers = 5) will use a
         compression type from the list based on producer's index in the group.
 
             - Produce messages in the background
