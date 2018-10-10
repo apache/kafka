@@ -175,10 +175,10 @@ object ZkUtils {
         Map(
           "topic" -> tp.topic,
           "partition" -> tp.partition,
-          "replicas" -> replicas
-        )
-      }
-    ))
+          "replicas" -> replicas.asJava
+        ).asJava
+      }.asJava
+    ).asJava)
   }
 }
 
