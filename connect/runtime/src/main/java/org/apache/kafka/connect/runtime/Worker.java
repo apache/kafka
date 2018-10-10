@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -489,6 +490,9 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             Map<String, Object> producerProps = producerConfigs(config);
+            String clientId = Objects.toString(producerProps.get(ProducerConfig.CLIENT_ID_CONFIG), "");
+            if (clientId.isEmpty())
+                producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "connect-producer-" + id);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -502,6 +506,9 @@ public class Worker {
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
 
             Map<String, Object> consumerProps = consumerConfigs(id, config);
+            String clientId = Objects.toString(consumerProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "");
+            if (clientId.isEmpty())
+                consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connect-consumer-" + id);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
