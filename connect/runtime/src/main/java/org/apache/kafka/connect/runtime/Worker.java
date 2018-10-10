@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -97,6 +98,7 @@ public class Worker {
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
     private WorkerConfigTransformer workerConfigTransformer;
+    private final boolean uniqueClientId;
 
     @SuppressWarnings("deprecation")
     public Worker(
@@ -128,6 +130,7 @@ public class Worker {
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);
+        this.uniqueClientId = config.getBoolean(WorkerConfig.UNIQUE_CLIENT_ID_CONFIG);
 
         this.workerConfigTransformer = initConfigTransformer();
 
@@ -489,6 +492,10 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             Map<String, Object> producerProps = producerConfigs(config);
+            if (uniqueClientId) {
+                String clientId = Objects.toString(producerProps.get(ProducerConfig.CLIENT_ID_CONFIG), "");
+                producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, clientId + id);
+            }
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -502,6 +509,10 @@ public class Worker {
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
 
             Map<String, Object> consumerProps = consumerConfigs(id, config);
+            if (uniqueClientId) {
+                String clientId = Objects.toString(consumerProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "");
+                consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId + id);
+            }
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,

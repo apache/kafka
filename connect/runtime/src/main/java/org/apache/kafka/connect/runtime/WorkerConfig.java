@@ -198,6 +198,10 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
+    public static final String UNIQUE_CLIENT_ID_CONFIG = "unique.client.id";
+    protected static final String UNIQUE_CLIENT_ID_DOC =  "If true the task id is appended to the client.id used"
+        + "by each Source or Sink task. This avoids name conflicts on JMX mbeans.";
+
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
             "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
@@ -266,6 +270,7 @@ public class WorkerConfig extends AbstractConfig {
                         null,
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
+                .define(UNIQUE_CLIENT_ID_CONFIG, Type.BOOLEAN, false, Importance.LOW, UNIQUE_CLIENT_ID_DOC)
                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG, Type.LONG,
                         30000, atLeast(0), Importance.LOW,
                         CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
