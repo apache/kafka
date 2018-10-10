@@ -42,7 +42,7 @@ class CompressionTest(ProduceConsumeValidateTest):
         self.num_partitions = 10
         self.timeout_sec = 60
         self.producer_throughput = 1000
-        self.num_producers = 4
+        self.num_producers = 5
         self.messages_per_producer = 1000
         self.num_consumers = 1
 
@@ -53,7 +53,7 @@ class CompressionTest(ProduceConsumeValidateTest):
         # Override this since we're adding services outside of the constructor
         return super(CompressionTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=8)
     @parametrize(compression_types=["snappy","gzip","lz4","zstd","none"])
     def test_compressed_topic(self, compression_types):
         """Test produce => consume => validate for compressed topics
