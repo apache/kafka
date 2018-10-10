@@ -87,6 +87,8 @@ class ConsoleConsumerTest {
 
     verify(consumer, times(messageLimit)).receive()
     verify(formatter, times(messageLimit)).writeTo(any(), any())
+
+    consumer.cleanup()
   }
 
   @Test
@@ -101,13 +103,13 @@ class ConsoleConsumerTest {
     //Simulate an error on System.out after the first record has been printed
     when(printStream.checkError()).thenReturn(true)
 
-    //Test
     ConsoleConsumer.process(-1, formatter, consumer, printStream, true)
 
-    //Verify
     verify(formatter).writeTo(any(), ArgumentMatchers.eq(printStream))
     verify(consumer).receive()
     verify(printStream).checkError()
+
+    consumer.cleanup()
   }
 
   @Test
