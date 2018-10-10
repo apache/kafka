@@ -70,7 +70,7 @@ public class LoggingContextTest {
 
         try (LoggingContext ctx1 = LoggingContext.forConnector(MockSinkConnector.class.getName(), CONNECTOR_NAME)) {
             assertActive(ctx1);
-            assertConnectorType(ctx1, "MockSink");
+            assertConnectorShortClassName(ctx1, "MockSink");
             assertConnectorName(ctx1, CONNECTOR_NAME);
             assertTaskId(ctx1, null);
             assertScope(ctx1, Scope.WORKER);
@@ -80,7 +80,7 @@ public class LoggingContextTest {
             try (LoggingContext ctx2 = LoggingContext.forTask(TASK_ID1)) {
                 assertActive(ctx1);
                 assertActive(ctx2);
-                assertConnectorType(ctx2, null);
+                assertConnectorShortClassName(ctx2, null);
                 assertConnectorName(ctx2, TASK_ID1.connector());
                 assertTaskId(ctx2, TASK_ID1.task());
                 assertScope(ctx2, Scope.TASK);
@@ -91,7 +91,7 @@ public class LoggingContextTest {
                     assertActive(ctx1);
                     assertActive(ctx2);
                     assertActive(ctx3);
-                    assertConnectorType(ctx3, null);
+                    assertConnectorShortClassName(ctx3, null);
                     assertConnectorName(ctx3, null);
                     assertTaskId(ctx3, null);
                     assertScope(ctx3, Scope.OFFSETS);
@@ -101,14 +101,14 @@ public class LoggingContextTest {
 
                 assertActive(ctx1);
                 assertActive(ctx2);
-                assertConnectorType(ctx2, null);
+                assertConnectorShortClassName(ctx2, null);
                 assertConnectorName(ctx2, TASK_ID1.connector());
                 assertTaskId(ctx2, TASK_ID1.task());
                 assertScope(ctx2, Scope.TASK);
                 assertMdc("MockSink", TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
             }
             assertActive(ctx1);
-            assertConnectorType(ctx1, "MockSink");
+            assertConnectorShortClassName(ctx1, "MockSink");
             assertConnectorName(ctx1, CONNECTOR_NAME);
             assertTaskId(ctx1, null);
             assertScope(ctx1, Scope.WORKER);
@@ -132,8 +132,8 @@ public class LoggingContextTest {
         assertEquals("MySink", LoggingContext.shortNameFor("org.apache.something.Other$MySinkTask"));
     }
 
-    protected void assertConnectorType(LoggingContext logContext, String expectedType) {
-        assertEquals(expectedType, logContext.context.get(Parameters.CONNECTOR_TYPE));
+    protected void assertConnectorShortClassName(LoggingContext logContext, String expectedShortClassName) {
+        assertEquals(expectedShortClassName, logContext.context.get(Parameters.CONNECTOR_CLASS));
     }
 
     protected void assertConnectorName(LoggingContext logContext, String expected) {
@@ -148,8 +148,8 @@ public class LoggingContextTest {
         assertEquals(expected == null ? null : expected.value(), context.context.get(Parameters.CONNECTOR_SCOPE));
     }
 
-    protected void assertMdc(String connectorType, String connectorName, Integer taskId, Scope scope) {
-        assertEquals(connectorType, MDC.get(Parameters.CONNECTOR_TYPE));
+    protected void assertMdc(String connectorShortClassName, String connectorName, Integer taskId, Scope scope) {
+        assertEquals(connectorShortClassName, MDC.get(Parameters.CONNECTOR_CLASS));
         assertEquals(connectorName, MDC.get(Parameters.CONNECTOR_NAME));
         assertEquals(taskId == null ? null : Integer.toString(taskId), MDC.get(Parameters.CONNECTOR_TASK));
         assertEquals(scope == null ? null : scope.value(), MDC.get(Parameters.CONNECTOR_SCOPE));

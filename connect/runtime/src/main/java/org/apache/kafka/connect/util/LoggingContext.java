@@ -25,7 +25,7 @@ import java.util.Map;
  * A utility for defining Mapped Diagnostic Context (MDC) for SLF4J logs.
  *
  * <p>Logging contexts may be nested. In this case, the nested context may override some or all of the parameters of the outer context.
- * In these cases, both contexts may be active but the nested context takes priority. It is presumed that the nexted context will be
+ * In these cases, both contexts may be active but the nested context takes priority. It is assumed that the nested context will be
  * stopped before the outer context.
  *
  */
@@ -37,9 +37,9 @@ public final class LoggingContext implements AutoCloseable {
     public static final class Parameters {
 
         /**
-         * The name of the Mapped Diagnostic Context (MDC) key that defines the type of <i>connector</i>.
+         * The name of the Mapped Diagnostic Context (MDC) key that defines shortened class name for the <i>connector</i>.
          */
-        public static final String CONNECTOR_TYPE = "connector.type";
+        public static final String CONNECTOR_CLASS = "connector.class.short";
 
         /**
          * The name of the Mapped Diagnostic Context (MDC) key that defines the name of a <i>connector</i>.
@@ -114,7 +114,7 @@ public final class LoggingContext implements AutoCloseable {
     }
 
     /**
-     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_TYPE connector type} to a shortened name
+     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_CLASS connector class} to a shortened name
      * for the supplied class and the {@link Parameters#CONNECTOR_NAME connector name} to the supplied name.
      *
      * @param connectorClassName the fully qualified or shortened connector class name; may be null
@@ -122,7 +122,7 @@ public final class LoggingContext implements AutoCloseable {
      */
     public static LoggingContext forConnector(String connectorClassName, String connectorName) {
         Map<String, String> context = new HashMap<>();
-        context.put(Parameters.CONNECTOR_TYPE, shortNameFor(connectorClassName));
+        context.put(Parameters.CONNECTOR_CLASS, shortNameFor(connectorClassName));
         context.put(Parameters.CONNECTOR_NAME, connectorName);
         context.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.value());
         return new LoggingContext(context).start();
