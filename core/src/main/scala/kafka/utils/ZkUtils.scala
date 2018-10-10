@@ -169,7 +169,7 @@ object ZkUtils {
   }
 
   def getReassignmentJson(partitionsToBeReassigned: Map[TopicPartition, Seq[Int]]): String = {
-    Json.encodeAsString(Map(
+    Json.legacyEncodeAsString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (tp, replicas) =>
         Map(
