@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -90,7 +91,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic", null));
 
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -229,18 +230,19 @@ public class KStreamTestDriver extends ExternalResource {
     }
 
     private ProcessorRecordContext createRecordContext(final String topicName, final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, topicName);
+        return new ProcessorRecordContext(timestamp, -1, -1, topicName, null);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+            super("KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         }
 
         @Override
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer,
@@ -255,6 +257,7 @@ public class KStreamTestDriver extends ExternalResource {
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Integer partition,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,

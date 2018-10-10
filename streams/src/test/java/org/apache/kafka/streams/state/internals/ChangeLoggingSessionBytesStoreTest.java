@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -47,12 +48,13 @@ public class ChangeLoggingSessionBytesStoreTest {
     private final NoOpRecordCollector collector = new NoOpRecordCollector() {
         @Override
         public <K, V> void send(final String topic,
-                                K key,
-                                V value,
-                                Integer partition,
-                                Long timestamp,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer) {
+                                final K key,
+                                final V value,
+                                final Headers headers,
+                                final Integer partition,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer) {
             sent.put(key, value);
         }
     };

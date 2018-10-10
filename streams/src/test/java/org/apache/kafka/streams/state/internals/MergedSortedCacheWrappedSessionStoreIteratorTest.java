@@ -35,7 +35,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
-        public long segmentId(Bytes key) {
+        public long segmentId(final Bytes key) {
             return 0;
         }
     };

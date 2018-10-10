@@ -35,6 +35,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -221,7 +222,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config) {
+    private final WorkerConfigTransformer configTransformer;
+
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
@@ -232,6 +235,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
+        this.configTransformer = configTransformer;
     }
 
     @Override
@@ -270,7 +274,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(connectorTargetStates),
                     new HashMap<>(taskConfigs),
-                    new HashSet<>(inconsistent)
+                    new HashSet<>(inconsistent),
+                    configTransformer
             );
         }
     }
@@ -410,7 +415,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());

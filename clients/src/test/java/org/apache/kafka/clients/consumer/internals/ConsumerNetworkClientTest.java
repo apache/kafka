@@ -24,6 +24,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
@@ -31,16 +32,19 @@ import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkClientTest {
 
@@ -97,7 +101,7 @@ public class ConsumerNetworkClientTest {
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
 
-        consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
+        consumerClient.awaitPendingRequests(node, time.timer(Long.MAX_VALUE));
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
     }
@@ -126,70 +130,62 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
+    public void testTimeoutUnsentRequest() {
+        // Delay connection to the node so that the request remains unsent
+        client.delayReady(node, 1000);
+
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat(), 500);
+        consumerClient.pollNoWakeup();
+
+        // Ensure the request is pending, but hasn't been sent
+        assertTrue(consumerClient.hasPendingRequests());
+        assertFalse(client.hasInFlightRequests());
+
+        time.sleep(501);
+        consumerClient.pollNoWakeup();
+
+        assertFalse(consumerClient.hasPendingRequests());
+        assertTrue(future.failed());
+        assertTrue(future.exception() instanceof TimeoutException);
+    }
+
+    @Test
     public void doNotBlockIfPollConditionIsSatisfied() {
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
                 mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
         // expect poll, but with no timeout
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
-
-        EasyMock.replay(mockNetworkClient);
-
-        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return false;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        consumerClient.poll(time.timer(Long.MAX_VALUE), () -> false);
+        verify(mockNetworkClient).poll(eq(0L), anyLong());
     }
 
     @Test
     public void blockWhenPollConditionNotSatisfied() {
         long timeout = 4000L;
 
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
                 mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
-
-        EasyMock.replay(mockNetworkClient);
-
-        consumerClient.poll(timeout, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return true;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        when(mockNetworkClient.inFlightRequestCount()).thenReturn(1);
+        consumerClient.poll(time.timer(timeout), () -> true);
+        verify(mockNetworkClient).poll(eq(timeout), anyLong());
     }
 
     @Test
     public void blockOnlyForRetryBackoffIfNoInflightRequests() {
         long retryBackoffMs = 100L;
 
-        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-                mockNetworkClient, metadata, time, retryBackoffMs, 1000L, Integer.MAX_VALUE);
+                mockNetworkClient, metadata, time, retryBackoffMs, 1000, Integer.MAX_VALUE);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+        when(mockNetworkClient.inFlightRequestCount()).thenReturn(0);
 
-        EasyMock.replay(mockNetworkClient);
+        consumerClient.poll(time.timer(Long.MAX_VALUE), () -> true);
 
-        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
-            @Override
-            public boolean shouldBlock() {
-                return true;
-            }
-        });
-
-        EasyMock.verify(mockNetworkClient);
+        verify(mockNetworkClient).poll(eq(retryBackoffMs), anyLong());
     }
 
     @Test
@@ -197,7 +193,7 @@ public class ConsumerNetworkClientTest {
         RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.wakeup();
         try {
-            consumerClient.poll(0);
+            consumerClient.poll(time.timer(0));
             fail();
         } catch (WakeupException e) {
         }
@@ -269,12 +265,12 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void testAwaitForMetadataUpdateWithTimeout() {
-        assertFalse(consumerClient.awaitMetadataUpdate(10L));
+        assertFalse(consumerClient.awaitMetadataUpdate(time.timer(10L)));
     }
 
     @Test
-    public void sendExpiry() throws InterruptedException {
-        long unsentExpiryMs = 10;
+    public void sendExpiry() {
+        int requestTimeoutMs = 10;
         final AtomicBoolean isReady = new AtomicBoolean();
         final AtomicBoolean disconnected = new AtomicBoolean();
         client = new MockClient(time) {
@@ -291,20 +287,20 @@ public class ConsumerNetworkClientTest {
             }
         };
         // Queue first send, sleep long enough for this to expire and then queue second send
-        consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, unsentExpiryMs, Integer.MAX_VALUE);
+        consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, requestTimeoutMs, Integer.MAX_VALUE);
         RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future1.isDone());
 
-        time.sleep(unsentExpiryMs + 1);
+        time.sleep(requestTimeoutMs + 1);
         RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         assertEquals(2, consumerClient.pendingRequestCount());
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertFalse(future2.isDone());
 
         // First send should have expired and second send still pending
-        consumerClient.poll(0);
+        consumerClient.poll(time.timer(0));
         assertTrue(future1.isDone());
         assertFalse(future1.succeeded());
         assertEquals(1, consumerClient.pendingRequestCount());
@@ -325,7 +321,7 @@ public class ConsumerNetworkClientTest {
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         disconnected.set(true);
-        consumerClient.poll(0);
+        consumerClient.poll(time.timer(0));
         assertTrue(future3.isDone());
         assertFalse(future3.succeeded());
         assertEquals(0, consumerClient.pendingRequestCount());

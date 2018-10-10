@@ -72,7 +72,7 @@ public class KStreamKTableJoinTest {
         table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
-        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         driver = new TopologyTestDriver(builder.build(), props, 0L);
 
         processor = supplier.theCapturedProcessor();
@@ -97,7 +97,7 @@ public class KStreamKTableJoinTest {
 
     private void pushNullValueToTable() {
         for (int i = 0; i < 2; i++) {
-            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], null));
+            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], (String) null));
         }
     }
 
@@ -205,7 +205,7 @@ public class KStreamKTableJoinTest {
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftValue() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        driver.pipeInput(recordFactory.create(streamTopic, 1, null));
+        driver.pipeInput(recordFactory.create(streamTopic, 1, (String) null));
         LogCaptureAppender.unregister(appender);
 
         assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());

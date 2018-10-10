@@ -104,7 +104,7 @@ public class StreamsMetadataState {
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
-        for (StreamsMetadata metadata : allMetadata) {
+        for (final StreamsMetadata metadata : allMetadata) {
             if (metadata.stateStoreNames().contains(storeName)) {
                 results.add(metadata);
             }
@@ -154,9 +154,7 @@ public class StreamsMetadataState {
 
         return getStreamsMetadataForKey(storeName,
                                         key,
-                                        new DefaultStreamPartitioner<>(keySerializer,
-                                                                       clusterMetadata,
-                                                                       sourceTopicsInfo.topicWithMostPartitions),
+                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                                         sourceTopicsInfo);
     }
 
@@ -197,7 +195,7 @@ public class StreamsMetadataState {
             return myMetadata;
         }
 
-        SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
+        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
         }
@@ -216,7 +214,7 @@ public class StreamsMetadataState {
     }
 
     private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
-        for (TopicPartition topicPartition : partitionForHost) {
+        for (final TopicPartition topicPartition : partitionForHost) {
             if (topicNames.contains(topicPartition.topic())) {
                 return true;
             }
@@ -230,11 +228,11 @@ public class StreamsMetadataState {
             return;
         }
         final Map<String, List<String>> stores = builder.stateStoreNameToSourceTopics();
-        for (Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
+        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
             final HostInfo key = entry.getKey();
             final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
             final Set<String> storesOnHost = new HashSet<>();
-            for (Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
+            for (final Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
                 final List<String> topicsForStore = storeTopicEntry.getValue();
                 if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
                     storesOnHost.add(storeTopicEntry.getKey());
@@ -254,13 +252,13 @@ public class StreamsMetadataState {
                                                          final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
-        final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (String sourceTopic : sourceTopicsInfo.sourceTopics) {
+        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
-        for (StreamsMetadata streamsMetadata : allMetadata) {
+        for (final StreamsMetadata streamsMetadata : allMetadata) {
             final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
             final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
@@ -291,7 +289,7 @@ public class StreamsMetadataState {
 
         private SourceTopicsInfo(final List<String> sourceTopics) {
             this.sourceTopics = sourceTopics;
-            for (String topic : sourceTopics) {
+            for (final String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
                 if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();

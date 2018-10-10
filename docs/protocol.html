@@ -39,7 +39,7 @@
             <li><a href="#protocol_types">Protocol Primitive Types</a>
             <li><a href="#protocol_grammar">Notes on reading the request format grammars</a>
             <li><a href="#protocol_common">Common Request and Response Structure</a>
-            <li><a href="#protocol_message_sets">Message Sets</a>
+            <li><a href="#protocol_recordbatch">Record Batch</a>
         </ul>
     </li>
     <li><a href="#protocol_constants">Constants</a>
@@ -56,7 +56,7 @@
 
 <h5><a id="protocol_network" href="#protocol_network">Network</a></h5>
 
-<p>Kafka uses a binary protocol over TCP. The protocol defines all apis as request response message pairs. All messages are size delimited and are made up of the following primitive types.</p>
+<p>Kafka uses a binary protocol over TCP. The protocol defines all APIs as request response message pairs. All messages are size delimited and are made up of the following primitive types.</p>
 
 <p>The client initiates a socket connection and then writes a sequence of request messages and reads back the corresponding response message. No handshake is required on connection or disconnection. TCP is happier if you maintain persistent connections used for many requests to amortize the cost of the TCP handshake, but beyond this penalty connecting is pretty cheap.</p>
 
@@ -76,11 +76,11 @@
 
 <p>How can the client find out which topics exist, what partitions they have, and which brokers currently host those partitions so that it can direct its requests to the right hosts? This information is dynamic, so you can't just configure each client with some static mapping file. Instead all Kafka brokers can answer a metadata request that describes the current state of the cluster: what topics there are, which partitions those topics have, which broker is the leader for those partitions, and the host and port information for these brokers.</p>
 
-<p>In other words, the client needs to somehow find one broker and that broker will tell the client about all the other brokers that exist and what partitions they host. This first broker may itself go down so the best practice for a client implementation is to take a list of two or three urls to bootstrap from. The user can then choose to use a load balancer or just statically configure two or three of their kafka hosts in the clients.</p>
+<p>In other words, the client needs to somehow find one broker and that broker will tell the client about all the other brokers that exist and what partitions they host. This first broker may itself go down so the best practice for a client implementation is to take a list of two or three URLs to bootstrap from. The user can then choose to use a load balancer or just statically configure two or three of their Kafka hosts in the clients.</p>
 
 <p>The client does not need to keep polling to see if the cluster has changed; it can fetch metadata once when it is instantiated cache that metadata until it receives an error indicating that the metadata is out of date. This error can come in two forms: (1) a socket error indicating the client cannot communicate with a particular broker, (2) an error code in the response to a request indicating that this broker no longer hosts the partition for which data was requested.</p>
 <ol>
-    <li>Cycle through a list of "bootstrap" kafka urls until we find one we can connect to. Fetch cluster metadata.</li>
+    <li>Cycle through a list of "bootstrap" Kafka URLs until we find one we can connect to. Fetch cluster metadata.</li>
     <li>Process fetch or produce requests, directing them to the appropriate broker based on the topic/partitions they send to or fetch from.</li>
     <li>If we get an appropriate error, refresh the metadata and try again.</li>
 </ol>
@@ -103,7 +103,7 @@
 
 <h5><a id="protocol_batching" href="#protocol_batching">Batching</a></h5>
 
-<p>Our apis encourage batching small things together for efficiency. We have found this is a very significant performance win. Both our API to send messages and our API to fetch messages always work with a sequence of messages not a single message to encourage this. A clever client can make use of this and support an "asynchronous" mode in which it batches together messages sent individually and sends them in larger clumps. We go even further with this and allow the batching across multiple topics and partitions, so a produce request may contain data to append to many partitions and a fetch request may pull data from many partitions all at once.</p>
+<p>Our APIs encourage batching small things together for efficiency. We have found this is a very significant performance win. Both our API to send messages and our API to fetch messages always work with a sequence of messages not a single message to encourage this. A clever client can make use of this and support an "asynchronous" mode in which it batches together messages sent individually and sends them in larger clumps. We go even further with this and allow the batching across multiple topics and partitions, so a produce request may contain data to append to many partitions and a fetch request may pull data from many partitions all at once.</p>
 
 <p>The client implementer can choose to ignore this and send everything one at a time if they like.</p>
 

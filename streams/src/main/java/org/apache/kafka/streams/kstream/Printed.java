@@ -18,9 +18,10 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Objects;
 
 /**
@@ -68,8 +69,8 @@ public class Printed<K, V> {
             throw new TopologyException("filePath can't be an empty string");
         }
         try {
-            return new Printed<>(new FileOutputStream(filePath));
-        } catch (final FileNotFoundException e) {
+            return new Printed<>(Files.newOutputStream(Paths.get(filePath)));
+        } catch (final IOException e) {
             throw new TopologyException("Unable to write stream to file at [" + filePath + "] " + e.getMessage());
         }
     }

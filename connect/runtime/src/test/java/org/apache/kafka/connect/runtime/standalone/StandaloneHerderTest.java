@@ -36,7 +36,9 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerConnector;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -68,6 +70,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -99,6 +102,7 @@ public class StandaloneHerderTest {
 
     private Connector connector;
     @Mock protected Worker worker;
+    @Mock protected WorkerConfigTransformer transformer;
     @Mock private Plugins plugins;
     @Mock
     private PluginClassLoader pluginLoader;
@@ -144,6 +148,9 @@ public class StandaloneHerderTest {
         config.remove(ConnectorConfig.NAME_CONFIG);
 
         Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
@@ -169,6 +176,9 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
 
         Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
@@ -203,6 +213,9 @@ public class StandaloneHerderTest {
         Connector connectorMock = PowerMock.createMock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config, config);
 
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(2);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         // No new connector is created
@@ -325,6 +338,7 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
+
     @Test
     public void testRestartTask() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
@@ -337,7 +351,14 @@ public class StandaloneHerderTest {
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
 
-        worker.startTask(taskId, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        ClusterConfigState configState = new ClusterConfigState(
+                -1,
+                Collections.singletonMap(CONNECTOR_NAME, 1),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
+                Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
+                new HashSet<>());
+        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
@@ -363,7 +384,14 @@ public class StandaloneHerderTest {
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
 
-        worker.startTask(taskId, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        ClusterConfigState configState = new ClusterConfigState(
+                -1,
+                Collections.singletonMap(CONNECTOR_NAME, 1),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
+                Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
+                new HashSet<>());
+        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(false);
 
         PowerMock.replayAll();
@@ -548,6 +576,9 @@ public class StandaloneHerderTest {
         );
         ConfigDef configDef = new ConfigDef();
         configDef.define(key, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "");
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
@@ -597,7 +628,14 @@ public class StandaloneHerderTest {
         EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, connConfig))
             .andReturn(singletonList(generatedTaskProps));
 
-        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        ClusterConfigState configState = new ClusterConfigState(
+                -1,
+                Collections.singletonMap(CONNECTOR_NAME, 1),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
+                Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
+                Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
+                new HashSet<>());
+        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
         EasyMock.expect(herder.connectorTypeForClass(BogusSourceConnector.class.getName()))
@@ -648,6 +686,9 @@ public class StandaloneHerderTest {
             Map<String, String>... configs
     ) {
         // config validation
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         if (shouldCreateConnector) {

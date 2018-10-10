@@ -91,8 +91,14 @@ public class CreateTopicsRequest extends AbstractRequest {
     /* v2 request is the same as v1. Throttle time has been added to the response */
     private static final Schema CREATE_TOPICS_REQUEST_V2 = CREATE_TOPICS_REQUEST_V1;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_TOPICS_REQUEST_V3 = CREATE_TOPICS_REQUEST_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
+        return new Schema[]{CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2,
+            CREATE_TOPICS_REQUEST_V3};
     }
 
     public static final class TopicDetails {
@@ -114,12 +120,12 @@ public class CreateTopicsRequest extends AbstractRequest {
         public TopicDetails(int partitions,
                             short replicationFactor,
                             Map<String, String> configs) {
-            this(partitions, replicationFactor, Collections.<Integer, List<Integer>>emptyMap(), configs);
+            this(partitions, replicationFactor, Collections.emptyMap(), configs);
         }
 
         public TopicDetails(int partitions,
                             short replicationFactor) {
-            this(partitions, replicationFactor, Collections.<String, String>emptyMap());
+            this(partitions, replicationFactor, Collections.emptyMap());
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments,
@@ -128,7 +134,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments) {
-            this(replicasAssignments, Collections.<String, String>emptyMap());
+            this(replicasAssignments, Collections.emptyMap());
         }
 
         @Override
@@ -191,7 +197,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     public static final short NO_REPLICATION_FACTOR = -1;
 
     private CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout, boolean validateOnly, short version) {
-        super(version);
+        super(ApiKeys.CREATE_TOPICS, version);
         this.topics = topics;
         this.timeout = timeout;
         this.validateOnly = validateOnly;
@@ -199,7 +205,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     public CreateTopicsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.CREATE_TOPICS, version);
 
         Object[] requestStructs = struct.getArray(REQUESTS_KEY_NAME);
         Map<String, TopicDetails> topics = new HashMap<>();
@@ -270,6 +276,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             case 1:
                 return new CreateTopicsResponse(topicErrors);
             case 2:
+            case 3:
                 return new CreateTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

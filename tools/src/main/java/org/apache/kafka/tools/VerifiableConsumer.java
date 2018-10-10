@@ -47,6 +47,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -220,7 +221,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumer.subscribe(Collections.singletonList(topic), this);
 
             while (!isFinished()) {
-                ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
 
                 if (!useAutoCommit) {

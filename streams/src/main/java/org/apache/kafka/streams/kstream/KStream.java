@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -189,7 +190,7 @@ public interface KStream<K, V> {
      * The provided {@link ValueMapperWithKey} is applied to each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation (cf.
-     * {@link #transformValues(ValueTransformerSupplier, String...)} for stateful value transformation).
+     * {@link #transformValues(ValueTransformerWithKeySupplier, String...)} for stateful value transformation).
      * <p>
      * The example below counts the number of tokens of key and value strings.
      * <pre>{@code
@@ -316,7 +317,7 @@ public interface KStream<K, V> {
      * stream (value type can be altered arbitrarily).
      * The provided {@link ValueMapperWithKey} is applied to each input record and computes zero or more output values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerSupplier, String...)}
+     * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerWithKeySupplier, String...)}
      * for stateful value transformation).
      * <p>
      * The example below splits input records {@code <Integer:String>}, with key=1, containing sentences as values
@@ -358,6 +359,9 @@ public interface KStream<K, V> {
 
     /**
      * Print the records of this KStream using the options provided by {@link Printed}
+     * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
+     * It <em>SHOULD NOT</em> be used for production usage if performance requirements are concerned.
+     *
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
@@ -416,8 +420,8 @@ public interface KStream<K, V> {
     KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers and
-     * deserializers and producer's {@link DefaultPartitioner}.
+     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
+     * deserializers, and producer's {@link DefaultPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
@@ -439,8 +443,8 @@ public interface KStream<K, V> {
      * This is equivalent to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
      * and {@link StreamsBuilder#stream(String, Consumed) StreamsBuilder#stream(someTopicName, Consumed.with(keySerde, valueSerde))}.
      *
-     * @param topic
-     * @param produced
+     * @param topic     the topic name
+     * @param produced  the options to use when producing to the topic
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      */
     KStream<K, V> through(final String topic,
@@ -461,10 +465,29 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * @param produced    the options to use when producing to the topic
      * @param topic       the topic name
+     * @param produced    the options to use when producing to the topic
      */
     void to(final String topic,
+            final Produced<K, V> produced);
+
+    /**
+     * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
+     * {@link DefaultPartitioner}.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
+     *
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record
+     */
+    void to(final TopicNameExtractor<K, V> topicExtractor);
+
+    /**
+     * Dynamically materialize this stream to topics using the provided {@link Produced} instance.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
+     *
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record
+     * @param produced          the options to use when producing to the topic
+     */
+    void to(final TopicNameExtractor<K, V> topicExtractor,
             final Produced<K, V> produced);
 
     /**
@@ -544,12 +567,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applies to each input
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -613,12 +636,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -747,11 +770,12 @@ public interface KStream<K, V> {
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
      * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later
+     * operator depends on the newly selected key.
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -759,7 +783,7 @@ public interface KStream<K, V> {
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
      * If the last key changing operator changed the key type, it is recommended to use
-     * {@link #groupByKey(Serialized)} instead.
+     * {@link #groupByKey(org.apache.kafka.streams.kstream.Grouped)} instead.
      *
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
@@ -776,11 +800,12 @@ public interface KStream<K, V> {
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
      * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
-     * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka
+     * if a later operator depends on the newly selected key.
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -790,22 +815,58 @@ public interface KStream<K, V> {
      *
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
      * @see #groupBy(KeyValueMapper)
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupByKey(Grouped)} instead
      */
+    @Deprecated
     KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized);
+
+    /**
+     * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
+     * and using the serializers as defined by {@link Grouped}.
+     * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
+     * (cf. {@link KGroupedStream}).
+     * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
+     * <p>
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
+     * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later operator
+     * depends on the newly selected key.
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, &lt;name&gt; is
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name,
+     * and "-repartition" is a fixed suffix.
+     *
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
+     * <p>
+     * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
+     * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
+     * correctly on its key.
+     *
+     * @param  grouped  the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                  and part of the name for a repartition topic if repartitioning is required.
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
+     * @see #groupBy(KeyValueMapper)
+     */
+    KGroupedStream<K, V> groupByKey(final Grouped<K, V> grouped);
 
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
      * <p>
-     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
+     * later operator depends on the newly selected key.
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -826,14 +887,15 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
-     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
+     * later operator depends on the newly selected key.
+     * This topic will be as "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
@@ -845,9 +907,45 @@ public interface KStream<K, V> {
      * @param selector a {@link KeyValueMapper} that computes a new key for grouping
      * @param <KR>     the key type of the result {@link KGroupedStream}
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KStream#groupBy(KeyValueMapper, Grouped)} instead
      */
+    @Deprecated
     <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                        final Serialized<KR, V> serialized);
+
+    /**
+     * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
+     * and {@link Serde}s as specified by {@link Grouped}.
+     * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
+     * (cf. {@link KGroupedStream}).
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
+     * <p>
+     * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a later
+     * operator depends on the newly selected key.
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
+     * <p>
+     * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
+     * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
+     * <p>
+     * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
+     *
+     * @param selector a {@link KeyValueMapper} that computes a new key for grouping
+     * @param grouped  the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                 and part of the name for a repartition topic if repartitioning is required.
+     * @param <KR>     the key type of the result {@link KGroupedStream}
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@code KStream}
+     */
+    <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
+                                       final Grouped<KR, V> grouped);
+
+
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join with default
@@ -892,9 +990,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * <p>
@@ -909,7 +1007,7 @@ public interface KStream<K, V> {
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -927,8 +1025,9 @@ public interface KStream<K, V> {
                                  final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed inner equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
@@ -969,9 +1068,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1052,9 +1151,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1086,8 +1185,9 @@ public interface KStream<K, V> {
                                      final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join}, all records from this stream will
      * produce at least one output record (cf. below).
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
@@ -1132,9 +1232,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1216,9 +1316,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1250,8 +1350,9 @@ public interface KStream<K, V> {
                                       final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
      * least one output record (cf. below).
@@ -1297,9 +1398,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1382,9 +1483,9 @@ public interface KStream<K, V> {
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -1458,9 +1559,9 @@ public interface KStream<K, V> {
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -1540,9 +1641,9 @@ public interface KStream<K, V> {
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -1619,9 +1720,9 @@ public interface KStream<K, V> {
      * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.

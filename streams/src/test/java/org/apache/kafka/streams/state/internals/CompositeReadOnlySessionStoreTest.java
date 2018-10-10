@@ -121,7 +121,7 @@ public class CompositeReadOnlySessionStoreTest {
         try {
             sessionStore.fetch("key");
             fail("Should have thrown InvalidStateStoreException with session store");
-        } catch (InvalidStateStoreException e) { }
+        } catch (final InvalidStateStoreException e) { }
     }
 
     @Test(expected = NullPointerException.class)

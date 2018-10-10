@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -48,11 +49,11 @@ import java.util.Map;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
-    private final Producer<byte[], byte[]> producer;
-    private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
-    private final ProductionExceptionHandler productionExceptionHandler;
     private final Sensor skippedRecordsSensor;
+    private Producer<byte[], byte[]> producer;
+    private final Map<TopicPartition, Long> offsets;
+    private final ProductionExceptionHandler productionExceptionHandler;
 
     private final static String LOG_MESSAGE = "Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task.";
@@ -60,12 +61,10 @@ public class RecordCollectorImpl implements RecordCollector {
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
     private volatile KafkaException sendException;
 
-    public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
-                               final String streamTaskId,
+    public RecordCollectorImpl(final String streamTaskId,
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler,
                                final Sensor skippedRecordsSensor) {
-        this.producer = producer;
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
@@ -74,9 +73,15 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     @Override
+    public void init(final Producer<byte[], byte[]> producer) {
+        this.producer = producer;
+    }
+
+    @Override
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
@@ -86,14 +91,14 @@ public class RecordCollectorImpl implements RecordCollector {
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
             if (partitions.size() > 0) {
-                partition = partitioner.partition(key, value, partitions.size());
+                partition = partitioner.partition(topic, key, value, partitions.size());
             } else {
                 throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
                     " This can happen if the topic does not exist.");
             }
         }
 
-        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
@@ -142,15 +147,16 @@ public class RecordCollectorImpl implements RecordCollector {
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer) {
         checkForException();
-        final byte[] keyBytes = keySerializer.serialize(topic, key);
-        final byte[] valBytes = valueSerializer.serialize(topic, value);
+        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
+        final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
 
-        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
         try {
             producer.send(serializedRecord, new Callback() {
@@ -204,18 +210,26 @@ public class RecordCollectorImpl implements RecordCollector {
                 "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
         } catch (final Exception uncaughtException) {
-            throw new StreamsException(
-                String.format(
-                    EXCEPTION_MESSAGE,
-                    logPrefix,
-                    "an error caught",
-                    key,
-                    value,
-                    timestamp,
-                    topic,
-                    uncaughtException.toString()
-                ),
-                uncaughtException);
+            if (uncaughtException instanceof KafkaException &&
+                uncaughtException.getCause() instanceof ProducerFencedException) {
+                final KafkaException kafkaException = (KafkaException) uncaughtException;
+                // producer.send() call may throw a KafkaException which wraps a FencedException,
+                // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
+                throw (ProducerFencedException) kafkaException.getCause();
+            } else {
+                throw new StreamsException(
+                    String.format(
+                        EXCEPTION_MESSAGE,
+                        logPrefix,
+                        "an error caught",
+                        key,
+                        value,
+                        timestamp,
+                        topic,
+                        uncaughtException.toString()
+                    ),
+                    uncaughtException);
+            }
         }
     }
 
@@ -236,6 +250,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         producer.close();
+        producer = null;
         checkForException();
     }
 

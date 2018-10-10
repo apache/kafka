@@ -20,10 +20,15 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
+
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.HOST;
 import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
@@ -33,32 +38,40 @@ import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 final class RequestUtils {
 
     private RequestUtils() {}
 
-    static Resource resourceFromStructFields(Struct struct) {
+    static ResourcePattern resourcePatternromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME);
-        return new Resource(ResourceType.fromCode(resourceType), name);
+        PatternType patternType = PatternType.fromCode(
+            struct.getOrElse(RESOURCE_PATTERN_TYPE, PatternType.LITERAL.code()));
+        return new ResourcePattern(ResourceType.fromCode(resourceType), name, patternType);
     }
 
-    static void resourceSetStructFields(Resource resource, Struct struct) {
-        struct.set(RESOURCE_TYPE, resource.resourceType().code());
-        struct.set(RESOURCE_NAME, resource.name());
+    static void resourcePatternSetStructFields(ResourcePattern pattern, Struct struct) {
+        struct.set(RESOURCE_TYPE, pattern.resourceType().code());
+        struct.set(RESOURCE_NAME, pattern.name());
+        struct.setIfExists(RESOURCE_PATTERN_TYPE, pattern.patternType().code());
     }
 
-    static ResourceFilter resourceFilterFromStructFields(Struct struct) {
+    static ResourcePatternFilter resourcePatternFilterFromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME_FILTER);
-        return new ResourceFilter(ResourceType.fromCode(resourceType), name);
+        PatternType patternType = PatternType.fromCode(
+            struct.getOrElse(RESOURCE_PATTERN_TYPE_FILTER, PatternType.LITERAL.code()));
+        return new ResourcePatternFilter(ResourceType.fromCode(resourceType), name, patternType);
     }
 
-    static void resourceFilterSetStructFields(ResourceFilter resourceFilter, Struct struct) {
-        struct.set(RESOURCE_TYPE, resourceFilter.resourceType().code());
-        struct.set(RESOURCE_NAME_FILTER, resourceFilter.name());
+    static void resourcePatternFilterSetStructFields(ResourcePatternFilter patternFilter, Struct struct) {
+        struct.set(RESOURCE_TYPE, patternFilter.resourceType().code());
+        struct.set(RESOURCE_NAME_FILTER, patternFilter.name());
+        struct.setIfExists(RESOURCE_PATTERN_TYPE_FILTER, patternFilter.patternType().code());
     }
 
     static AccessControlEntry aceFromStructFields(Struct struct) {
@@ -92,4 +105,16 @@ final class RequestUtils {
         struct.set(OPERATION, filter.operation().code());
         struct.set(PERMISSION_TYPE, filter.permissionType().code());
     }
+
+    static void setLeaderEpochIfExists(Struct struct, Field.Int32 leaderEpochField, Optional<Integer> leaderEpoch) {
+        struct.setIfExists(leaderEpochField, leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH));
+    }
+
+    static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
+        int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+                Optional.empty() : Optional.of(leaderEpoch);
+        return leaderEpochOpt;
+    }
+
 }

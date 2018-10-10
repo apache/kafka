@@ -40,7 +40,7 @@ public class StreamsSmokeTest {
 
         final String propFileName = args[0];
         final String command = args[1];
-        final boolean disableAutoTerminate = args.length > 3;
+        final boolean disableAutoTerminate = args.length > 2;
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
@@ -66,7 +66,7 @@ public class StreamsSmokeTest {
                 if (disableAutoTerminate) {
                     SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, false);
                 } else {
-                    Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
+                    final Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;

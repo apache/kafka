@@ -98,7 +98,7 @@ public class MeteredSessionStoreTest {
 
         metered.put(new Windowed<>(key, new SessionWindow(0, 0)), key);
 
-        final KafkaMetric metric = metric("test.0_0.put-rate");
+        final KafkaMetric metric = metric("put-rate");
         assertTrue(((Double) metric.metricValue()) > 0);
         EasyMock.verify(inner);
     }
@@ -115,8 +115,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("test.0_0.fetch-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -132,8 +132,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("test.0_0.fetch-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -146,8 +146,8 @@ public class MeteredSessionStoreTest {
 
         metered.remove(new Windowed<>(key, new SessionWindow(0, 0)));
 
-        final KafkaMetric metric = metric("test.0_0.remove-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("remove-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -163,8 +163,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("test.0_0.fetch-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -180,16 +180,16 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("test.0_0.fetch-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
     @Test
     public void shouldRecordRestoreTimeOnInit() {
         init();
-        final KafkaMetric metric = metric("test.0_0.restore-rate");
-        assertTrue(metric.value() > 0);
+        final KafkaMetric metric = metric("restore-rate");
+        assertTrue((Double) metric.metricValue() > 0);
     }
 
     @Test(expected = NullPointerException.class)

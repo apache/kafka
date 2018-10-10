@@ -48,8 +48,20 @@ public class DeleteTopicsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(TOPIC_ERROR_CODES_KEY_NAME, new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_TOPICS_RESPONSE_V2 = DELETE_TOPICS_RESPONSE_V1;
+
+    /**
+     * v3 request is the same that as v2. The response is different based on the request version.
+     * In v3 version a TopicDeletionDisabledException is returned
+     */
+    private static final Schema DELETE_TOPICS_RESPONSE_V3 = DELETE_TOPICS_RESPONSE_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};
+        return new Schema[]{DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1,
+            DELETE_TOPICS_RESPONSE_V2, DELETE_TOPICS_RESPONSE_V3};
     }
 
 
@@ -60,6 +72,8 @@ public class DeleteTopicsResponse extends AbstractResponse {
      * INVALID_TOPIC_EXCEPTION(17)
      * TOPIC_AUTHORIZATION_FAILED(29)
      * NOT_CONTROLLER(41)
+     * INVALID_REQUEST(42)
+     * TOPIC_DELETION_DISABLED(73)
      */
     private final Map<String, Errors> errors;
     private final int throttleTimeMs;
@@ -102,6 +116,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -117,5 +132,10 @@ public class DeleteTopicsResponse extends AbstractResponse {
 
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
         return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

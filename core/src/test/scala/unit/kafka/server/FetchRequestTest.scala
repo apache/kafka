@@ -18,17 +18,17 @@ package kafka.server
 
 import java.io.DataInputStream
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
+import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -59,19 +59,20 @@ class FetchRequestTest extends BaseRequestTest {
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes))
+      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+        Optional.empty()))
     }
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
     FetchResponse.parse(response, request.version)
   }
 
   private def initProducer(): Unit = {
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
   @Test
@@ -191,6 +192,42 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NOT_LEADER_FOR_PARTITION, partitionData.error)
   }
 
+  @Test
+  def testCurrentEpochValidation(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+
+    def assertResponseErrorForEpoch(error: Errors, brokerId: Int, leaderEpoch: Optional[Integer]): Unit = {
+      val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      partitionMap.put(topicPartition, new FetchRequest.PartitionData(0L, 0L, 1024, leaderEpoch))
+      val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap).build()
+      val fetchResponse = sendFetchRequest(brokerId, fetchRequest)
+      val partitionData = fetchResponse.responseData.get(topicPartition)
+      assertEquals(error, partitionData.error)
+    }
+
+    // We need a leader change in order to check epoch fencing since the first epoch is 0 and
+    // -1 is treated as having no epoch at all
+    killBroker(firstLeaderId)
+
+    // Check leader error codes
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+    assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch - 1))
+    assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch + 1))
+
+    // Check follower error codes
+    val followerId = TestUtils.findFollowerId(topicPartition, servers)
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
+    assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
+  }
+
   /**
    * Tests that down-conversions dont leak memory. Large down conversions are triggered
    * in the server. The client closes its connection after reading partial data when the
@@ -202,11 +239,11 @@ class FetchRequestTest extends BaseRequestTest {
 
     val msgValueLen = 100 * 1000
     val batchSize = 4 * msgValueLen
-    val propsOverride = new Properties
-    propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, lingerMs = Long.MaxValue,
-      keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      lingerMs = Int.MaxValue,
+      batchSize = batchSize,
+      keySerializer = new StringSerializer,
+      valueSerializer = new ByteArraySerializer)
     val bytes = new Array[Byte](msgValueLen)
     val futures = try {
       (0 to 1000).map { _ =>
@@ -219,7 +256,7 @@ class FetchRequestTest extends BaseRequestTest {
     // batch is not complete, but sent when the producer is closed
     futures.foreach(_.get)
 
-    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[MemoryRecords]] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
         Seq(topicPartition))).build(version)
 
@@ -262,9 +299,12 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
-      lingerMs = 300 * 1000)
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer,
+      lingerMs = 30 * 1000,
+      deliveryTimeoutMs = 60 * 1000)
 
     val topicConfig = Map(LogConfig.MessageFormatVersionProp -> KAFKA_0_11_0_IV2.version)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
@@ -279,17 +319,32 @@ class FetchRequestTest extends BaseRequestTest {
     secondBatchFutures.foreach(_.get)
 
     def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
-      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
-        Seq(topicPartition), Map(topicPartition -> fetchOffset))).build(requestVersion)
-      val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-      val partitionData = fetchResponse.responseData.get(topicPartition)
-      assertEquals(Errors.NONE, partitionData.error)
-      assertTrue(partitionData.highWatermark > 0)
-      val batches = partitionData.records.batches.asScala.toBuffer
-      assertEquals(expectedNumBatches, batches.size)
-      val batch = batches.head
-      assertEquals(expectedMagic, batch.magic)
-      assertEquals(expectedOffset, batch.baseOffset)
+      var batchesReceived = 0
+      var currentFetchOffset = fetchOffset
+      var currentExpectedOffset = expectedOffset
+
+      // With KIP-283, we might not receive all batches in a single fetch request so loop through till we have consumed
+      // all batches we are interested in.
+      while (batchesReceived < expectedNumBatches) {
+        val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
+          Seq(topicPartition), Map(topicPartition -> currentFetchOffset))).build(requestVersion)
+        val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+
+        // validate response
+        val partitionData = fetchResponse.responseData.get(topicPartition)
+        assertEquals(Errors.NONE, partitionData.error)
+        assertTrue(partitionData.highWatermark > 0)
+        val batches = partitionData.records.batches.asScala.toBuffer
+        val batch = batches.head
+        assertEquals(expectedMagic, batch.magic)
+        assertEquals(currentExpectedOffset, batch.baseOffset)
+
+        currentFetchOffset = batches.last.lastOffset + 1
+        currentExpectedOffset += (batches.last.lastOffset - batches.head.baseOffset + 1)
+        batchesReceived += batches.size
+      }
+
+      assertEquals(expectedNumBatches, batchesReceived)
     }
 
     // down conversion to message format 0, batches of 1 message are returned so we receive the exact offset we requested
@@ -317,9 +372,9 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   /**
-    * Test that when an incremental fetch session contains partitions with an error,
-    * those partitions are returned in all incremental fetch requests.
-    */
+   * Test that when an incremental fetch session contains partitions with an error,
+   * those partitions are returned in all incremental fetch requests.
+   */
   @Test
   def testCreateIncrementalFetchWithPartitionsInError(): Unit = {
     def createFetchRequest(topicPartitions: Seq[TopicPartition],
@@ -327,9 +382,9 @@ class FetchRequestTest extends BaseRequestTest {
                            toForget: Seq[TopicPartition]): FetchRequest =
       FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
         createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty))
-          .toForget(toForget.asJava)
-          .metadata(metadata)
-          .build()
+        .toForget(toForget.asJava)
+        .metadata(metadata)
+        .build()
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
     createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
@@ -370,11 +425,124 @@ class FetchRequestTest extends BaseRequestTest {
     assertFalse(resp4.responseData().containsKey(bar0))
   }
 
-  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
+  @Test
+  def testZStdCompressedTopic(): Unit = {
+    // ZSTD compressed topic
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> ZStdCompressionCodec.name)
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
+
+    // Produce messages (v2)
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer)
+    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key1", "value1")).get
+    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key2", "value2")).get
+    producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key3", "value3")).get
+    producer.close()
+
+    // fetch request with version below v10: UNSUPPORTED_COMPRESSION_TYPE error occurs
+    val req0 = new FetchRequest.Builder(0, 9, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+
+    val res0 = sendFetchRequest(leaderId, req0)
+    val data0 = res0.responseData.get(topicPartition)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, data0.error)
+
+    // fetch request with version 10: works fine!
+    val req1= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+    val res1 = sendFetchRequest(leaderId, req1)
+    val data1 = res1.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, data1.error)
+    assertEquals(3, records(data1).size)
+  }
+
+  @Test
+  def testZStdCompressedRecords(): Unit = {
+    // Producer compressed topic
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name,
+      LogConfig.MessageFormatVersionProp -> "2.0.0")
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
+
+    // Produce GZIP compressed messages (v2)
+    val producer1 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      compressionType = GZIPCompressionCodec.name,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer)
+    producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key1", "value1")).get
+    producer1.close()
+    // Produce ZSTD compressed messages (v2)
+    val producer2 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+      compressionType = ZStdCompressionCodec.name,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer)
+    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key2", "value2")).get
+    producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
+      "key3", "value3")).get
+    producer2.close()
+
+    // fetch request with fetch version v1 (magic 0):
+    // gzip compressed record is returned with down-conversion.
+    // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
+    val req0 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+
+    val res0 = sendFetchRequest(leaderId, req0)
+    val data0 = res0.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, data0.error)
+    assertEquals(1, records(data0).size)
+
+    val req1 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
+      .setMaxBytes(800).build()
+
+    val res1 = sendFetchRequest(leaderId, req1)
+    val data1 = res1.responseData.get(topicPartition)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, data1.error)
+
+    // fetch request with fetch version v3 (magic 1):
+    // gzip compressed record is returned with down-conversion.
+    // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
+    val req2 = new FetchRequest.Builder(2, 3, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+
+    val res2 = sendFetchRequest(leaderId, req2)
+    val data2 = res2.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, data2.error)
+    assertEquals(1, records(data2).size)
+
+    val req3 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
+      .setMaxBytes(800).build()
+
+    val res3 = sendFetchRequest(leaderId, req3)
+    val data3 = res3.responseData.get(topicPartition)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, data3.error)
+
+    // fetch request with version 10: works fine!
+    val req4= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+      createPartitionMap(300, Seq(topicPartition), Map.empty))
+      .setMaxBytes(800).build()
+    val res4 = sendFetchRequest(leaderId, req4)
+    val data4 = res4.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, data4.error)
+    assertEquals(3, records(data4).size)
+  }
+
+  private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 
-  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
+  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false
@@ -412,7 +580,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
-    val topics = (0 until numPartitions).map(t => s"topic$t")
+    val topics = (0 until numTopics).map(t => s"topic$t")
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }

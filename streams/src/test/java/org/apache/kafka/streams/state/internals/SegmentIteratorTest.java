@@ -31,6 +31,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
@@ -101,6 +102,19 @@ public class SegmentIteratorTest {
         assertEquals("d", new String(iterator.peekNextKey().get()));
         assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
 
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
+        iterator = new SegmentIterator(Collections.singletonList(segmentOne).iterator(),
+                                       hasNextCondition,
+                                       Bytes.wrap("a".getBytes()),
+                                       Bytes.wrap("z".getBytes()));
+
+
+        iterator.currentIterator = segmentOne.all();
+        segmentOne.close();
         assertFalse(iterator.hasNext());
     }
 

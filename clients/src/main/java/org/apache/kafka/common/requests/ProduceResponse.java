@@ -139,14 +139,23 @@ public class ProduceResponse extends AbstractResponse {
                             LOG_START_OFFSET_FIELD)))))),
             THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema PRODUCE_RESPONSE_V6 = PRODUCE_RESPONSE_V5;
+
+    /**
+     * V7 bumped up to indicate ZStandard capability. (see KIP-110)
+     */
+    private static final Schema PRODUCE_RESPONSE_V7 = PRODUCE_RESPONSE_V6;
 
     public static Schema[] schemaVersions() {
         return new Schema[]{PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3,
-            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5};
+            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5, PRODUCE_RESPONSE_V6, PRODUCE_RESPONSE_V7};
     }
 
     private final Map<TopicPartition, PartitionResponse> responses;
-    private final int throttleTime;
+    private final int throttleTimeMs;
 
     /**
      * Constructor for Version 0
@@ -159,11 +168,11 @@ public class ProduceResponse extends AbstractResponse {
     /**
      * Constructor for the latest version
      * @param responses Produced data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
+     * @param throttleTimeMs Time in milliseconds the response was throttled
      */
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
+    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
         this.responses = responses;
-        this.throttleTime = throttleTime;
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     /**
@@ -185,14 +194,14 @@ public class ProduceResponse extends AbstractResponse {
                 responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset));
             }
         }
-        this.throttleTime = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.PRODUCE.responseSchema(version));
 
-        Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
+        Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupPartitionDataByTopic(responses);
         List<Struct> topicDatas = new ArrayList<>(responseByTopic.size());
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
@@ -220,7 +229,7 @@ public class ProduceResponse extends AbstractResponse {
             topicDatas.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTime);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         return struct;
     }
@@ -229,8 +238,9 @@ public class ProduceResponse extends AbstractResponse {
         return this.responses;
     }
 
-    public int getThrottleTime() {
-        return this.throttleTime;
+    @Override
+    public int throttleTimeMs() {
+        return this.throttleTimeMs;
     }
 
     @Override
@@ -279,4 +289,8 @@ public class ProduceResponse extends AbstractResponse {
         return new ProduceResponse(ApiKeys.PRODUCE.responseSchema(version).read(buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 6;
+    }
 }

@@ -20,25 +20,25 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.util.{HashMap, Random}
 import java.nio.channels.SocketChannel
-import javax.net.ssl._
+import java.util.{HashMap, Random}
 
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
-import kafka.network.RequestChannel.SendAction
+import javax.net.ssl._
 import kafka.security.CredentialProvider
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.scram.internal.ScramMechanism
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
 import org.apache.log4j.Level
 import org.junit.Assert._
@@ -131,7 +131,7 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT, localAddr: InetAddress = null) = {
@@ -214,7 +214,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -228,7 +228,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -307,13 +307,14 @@ class SocketServerTest extends JUnitSuite {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new LogContext()) {
-          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
-          override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
-           selector = testableSelector
-           testableSelector
-        }
+          config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
+          credentialProvider, memoryPool, new LogContext()) {
+            override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+            override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
+             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+             selector = testableSelector
+             testableSelector
+          }
         }
       }
     }
@@ -392,6 +393,93 @@ class SocketServerTest extends JUnitSuite {
     }
     assertTrue(s"Receives not staged for ${org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS} ms", hasStagedReceives)
     request
+  }
+
+  // Prepares test setup for throttled channel tests. throttlingDone controls whether or not throttling has completed
+  // in quota manager.
+  def throttledChannelTestSetUp(socket: Socket, serializedBytes: Array[Byte], noOpResponse: Boolean,
+                                throttlingInProgress: Boolean): RequestChannel.Request = {
+    sendRequest(socket, serializedBytes)
+
+    // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
+    // throttled channel.
+    val request = receiveRequest(server.requestChannel)
+    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val send = new NetworkSend(request.context.connectionId, byteBuffer)
+    def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
+      server.requestChannel.sendResponse(response)
+    }
+    val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val response =
+      if (!noOpResponse)
+        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+      else
+        new RequestChannel.NoOpResponse(request)
+    server.requestChannel.sendResponse(response)
+
+    // Quota manager would call notifyThrottlingDone() on throttling completion. Simulate it if throttleingInProgress is
+    // false.
+    if (!throttlingInProgress)
+      throttledChannel.notifyThrottlingDone()
+
+    request
+  }
+
+  def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+    server.processor(0).openOrClosingChannel(request.context.connectionId)
+
+  @Test
+  def testSendActionResponseWithThrottledChannelWhereThrottlingInProgress() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, false, true)
+
+    // receive response
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
+    // Channel should still be muted.
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testSendActionResponseWithThrottledChannelWhereThrottlingAlreadyDone() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, false, false)
+
+    // receive response
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    // Since throttling is already done, the channel can be unmuted after sending out the response.
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
+    // Channel is now unmuted.
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testNoOpActionResponseWithThrottledChannelWhereThrottlingInProgress() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, true, true)
+
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
+    // Channel should still be muted.
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testNoOpActionResponseWithThrottledChannelWhereThrottlingAlreadyDone() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, true, false)
+
+    // Since throttling is already done, the channel can be unmuted.
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
+    // Channel is now unmuted.
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test
@@ -565,7 +653,8 @@ class SocketServerTest extends JUnitSuite {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, MemoryPool.NONE, new LogContext()) {
+          config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
+          credentialProvider, MemoryPool.NONE, new LogContext()) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -592,7 +681,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, None))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, None, None))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
@@ -610,7 +699,8 @@ class SocketServerTest extends JUnitSuite {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new LogContext()) {
+          config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
+          credentialProvider, memoryPool, new LogContext()) {
           override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
@@ -656,7 +746,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testBrokerSendAfterChannelClosedUpdatesRequestMetrics() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
+    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
@@ -1013,10 +1103,8 @@ class SocketServerTest extends JUnitSuite {
 
     override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
-      new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-        config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new
-            LogContext()) {
-
+      new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
+        config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new LogContext()) {
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
            assertEquals(None, selector)
@@ -1062,7 +1150,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics)
-        extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs,
+        extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
             metrics, time, "socket-server", new HashMap, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Exception]()

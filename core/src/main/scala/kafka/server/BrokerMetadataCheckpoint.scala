@@ -18,8 +18,9 @@
 package kafka.server
 
 import java.io._
-import java.nio.file.Files
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
+
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 
@@ -70,7 +71,7 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
             throw new IOException("Unrecognized version of the server meta.properties file: " + version)
         }
       } catch {
-        case _: FileNotFoundException =>
+        case _: NoSuchFileException =>
           warn("No meta.properties file under dir %s".format(file.getAbsolutePath()))
           None
         case e1: Exception =>

@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
@@ -30,7 +29,7 @@ import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
@@ -140,7 +139,7 @@ class TransactionStateManager(brokerId: Int,
       val now = time.milliseconds()
       inReadLock(stateLock) {
         val transactionalIdByPartition: Map[Int, mutable.Iterable[TransactionalIdCoordinatorEpochAndMetadata]] =
-          transactionMetadataCache.flatMap { case (partition, entry) =>
+          transactionMetadataCache.flatMap { case (_, entry) =>
             entry.metadataPerTransactionalId.filter { case (_, txnMetadata) => txnMetadata.state match {
               case Empty | CompleteCommit | CompleteAbort => true
               case _ => false
@@ -297,7 +296,8 @@ class TransactionStateManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        lazy val buffer = ByteBuffer.allocate(config.transactionLogLoadBufferSize)
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         var currOffset = log.logStartOffset
@@ -308,13 +308,26 @@ class TransactionStateManager(brokerId: Int,
             && inReadLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
-              minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+              minOneMessage = true, includeAbortedTxns = false)
             val memRecords = fetchDataInfo.records match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
+                val sizeInBytes = fileRecords.sizeInBytes
+                val bytesNeeded = Math.max(config.transactionLogLoadBufferSize, sizeInBytes)
+
+                // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
+                if (buffer.capacity < bytesNeeded) {
+                  if (config.transactionLogLoadBufferSize < bytesNeeded)
+                    warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                      s"configured transaction.state.log.load.buffer.size (${config.transactionLogLoadBufferSize} bytes)")
+
+                  buffer = ByteBuffer.allocate(bytesNeeded)
+                } else {
+                  buffer.clear()
+                }
                 buffer.clear()
-                val bufferRead = fileRecords.readInto(buffer, 0)
-                MemoryRecords.readableRecords(bufferRead)
+                fileRecords.readInto(buffer, 0)
+                MemoryRecords.readableRecords(buffer)
             }
 
             memRecords.batches.asScala.foreach { batch =>

@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.kstream.{SessionWindowedKStream => SessionWindowedKStreamJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 
 /**
  * Wraps the Java class SessionWindowedKStream and delegates method calls to the underlying Java object.
@@ -40,54 +40,26 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    *
    * @param initializer    the initializer function
    * @param aggregator     the aggregator function
-   * @param sessionMerger  the merger function
+   * @param merger         the merger function
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
    * the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR,
-    merger: (K, VR, VR) => VR): KTable[Windowed[K], VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator, merger.asMerger)
-
-  /**
-   * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
-   *
-   * @param initializer    the initializer function
-   * @param aggregator     the aggregator function
-   * @param sessionMerger  the merger function
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
-   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
-   * the latest (rolling) aggregate for each key within a window
-   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
-   */
-  def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR,
-    merger: (K, VR, VR) => VR,
-    materialized: Materialized[K, VR, ByteArraySessionStore]): KTable[Windowed[K], VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator, merger.asMerger, materialized)
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(
+    implicit materialized: Materialized[K, VR, ByteArraySessionStore]
+  ): KTable[Windowed[K], VR] =
+    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, merger.asMerger, materialized)
 
   /**
    * Count the number of records in this stream by the grouped key into `SessionWindows`.
    *
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys and `Long` values
    * that represent the latest (rolling) count (i.e., number of records) for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#count`
    */
-  def count(): KTable[Windowed[K], Long] = {
-    val c: KTable[Windowed[K], java.lang.Long] = inner.count()
-    c.mapValues[Long](Long2long _)
-  }
-
-  /**
-   * Count the number of records in this stream by the grouped key into `SessionWindows`.
-   *
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
-   * @return a windowed [[KTable]] that contains "update" records with unmodified keys and `Long` values
-   * that represent the latest (rolling) count (i.e., number of records) for each key within a window
-   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#count`
-   */
-  def count(materialized: Materialized[K, Long, ByteArraySessionStore]): KTable[Windowed[K], Long] = {
+  def count()(implicit materialized: Materialized[K, Long, ByteArraySessionStore]): KTable[Windowed[K], Long] = {
     val c: KTable[Windowed[K], java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArraySessionStore]])
     c.mapValues[Long](Long2long _)
@@ -96,24 +68,14 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
   /**
    * Combine values of this stream by the grouped key into {@link SessionWindows}.
    *
-   * @param reducer           a reducer function that computes a new aggregate result. 
+   * @param reducer           a reducer function that computes a new aggregate result.
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
    * the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V): KTable[Windowed[K], V] =
-    inner.reduce((v1, v2) => reducer(v1, v2))
-
-  /**
-   * Combine values of this stream by the grouped key into {@link SessionWindows}.
-   *
-   * @param reducer           a reducer function that computes a new aggregate result. 
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
-   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
-   * the latest (rolling) aggregate for each key within a window
-   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`
-   */
-  def reduce(reducer: (V, V) => V,
-    materialized: Materialized[K, V, ByteArraySessionStore]): KTable[Windowed[K], V] =
+  def reduce(reducer: (V, V) => V)(
+    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  ): KTable[Windowed[K], V] =
     inner.reduce(reducer.asReducer, materialized)
 }

@@ -57,16 +57,26 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testUnresolvableConnectString(): Unit = {
-    new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time, "testMetricGroup",
-      "testMetricType").close()
+    try {
+      new ZooKeeperClient("some.invalid.hostname.foo.bar.local", zkSessionTimeout, connectionTimeoutMs = 10,
+        Int.MaxValue, time, "testMetricGroup", "testMetricType")
+    } catch {
+      case e: ZooKeeperClientTimeoutException =>
+        assertEquals("ZooKeeper client threads still running", Set.empty,  runningZkSendThreads)
+    }
   }
+
+  private def runningZkSendThreads: collection.Set[String] = Thread.getAllStackTraces.keySet.asScala
+    .filter(_.isAlive)
+    .map(_.getName)
+    .filter(t => t.contains("SendThread()"))
 
   @Test(expected = classOf[ZooKeeperClientTimeoutException])
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 100, Int.MaxValue, time, "testMetricGroup",
+    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 10, Int.MaxValue, time, "testMetricGroup",
       "testMetricType").close()
   }
 

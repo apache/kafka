@@ -22,13 +22,12 @@ import java.nio.file.Files
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
 
@@ -144,10 +143,8 @@ class LogManager(logDirs: Seq[File],
    * </ol>
    */
   private def createAndValidateLogDirs(dirs: Seq[File], initialOfflineDirs: Seq[File]): ConcurrentLinkedQueue[File] = {
-    if(dirs.map(_.getCanonicalPath).toSet.size < dirs.size)
-      throw new KafkaException("Duplicate log directory found: " + dirs.mkString(", "))
-
     val liveLogDirs = new ConcurrentLinkedQueue[File]()
+    val canonicalPaths = mutable.HashSet.empty[String]
 
     for (dir <- dirs) {
       try {
@@ -155,13 +152,21 @@ class LogManager(logDirs: Seq[File],
           throw new IOException(s"Failed to load ${dir.getAbsolutePath} during broker startup")
 
         if (!dir.exists) {
-          info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
+          info(s"Log directory ${dir.getAbsolutePath} not found, creating it.")
           val created = dir.mkdirs()
           if (!created)
-            throw new IOException("Failed to create data directory " + dir.getAbsolutePath)
+            throw new IOException(s"Failed to create data directory ${dir.getAbsolutePath}")
         }
         if (!dir.isDirectory || !dir.canRead)
-          throw new IOException(dir.getAbsolutePath + " is not a readable log directory.")
+          throw new IOException(s"${dir.getAbsolutePath} is not a readable log directory.")
+
+        // getCanonicalPath() throws IOException if a file system query fails or if the path is invalid (e.g. contains
+        // the Nul character). Since there's no easy way to distinguish between the two cases, we treat them the same
+        // and mark the log directory as offline.
+        if (!canonicalPaths.add(dir.getCanonicalPath))
+          throw new KafkaException(s"Duplicate log directory found: ${dirs.mkString(", ")}")
+
+
         liveLogDirs.add(dir)
       } catch {
         case e: IOException =>
@@ -169,7 +174,7 @@ class LogManager(logDirs: Seq[File],
       }
     }
     if (liveLogDirs.isEmpty) {
-      fatal(s"Shutdown broker because none of the specified log dirs from " + dirs.mkString(", ") + " can be created or validated")
+      fatal(s"Shutdown broker because none of the specified log dirs from ${dirs.mkString(", ")} can be created or validated")
       Exit.halt(1)
     }
 
@@ -510,8 +515,10 @@ class LogManager(logDirs: Seq[File],
           if (needToStopCleaner && !isFuture)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
-          if (needToStopCleaner && !isFuture)
-            cleaner.resumeCleaning(topicPartition)
+          if (needToStopCleaner && !isFuture) {
+            cleaner.resumeCleaning(Seq(topicPartition))
+            info(s"Compaction for partition $topicPartition is resumed")
+          }
         }
       }
     }
@@ -539,10 +546,16 @@ class LogManager(logDirs: Seq[File],
         //Abort and pause the cleaning of the log, and resume after truncation is done.
       if (cleaner != null && !isFuture)
         cleaner.abortAndPauseCleaning(topicPartition)
-      log.truncateFullyAndStartAt(newOffset)
-      if (cleaner != null && !isFuture) {
-        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
-        cleaner.resumeCleaning(topicPartition)
+      try {
+        log.truncateFullyAndStartAt(newOffset)
+        if (cleaner != null && !isFuture) {
+          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+        }
+      } finally {
+        if (cleaner != null && !isFuture) {
+          cleaner.resumeCleaning(Seq(topicPartition))
+          info(s"Compaction for partition $topicPartition is resumed")
+        }
       }
       checkpointLogRecoveryOffsetsInDir(log.dir.getParentFile)
     }
@@ -780,7 +793,8 @@ class LogManager(logDirs: Seq[File],
       currentLogs.put(topicPartition, destLog)
       if (cleaner != null) {
         cleaner.alterCheckpointDir(topicPartition, sourceLog.dir.getParentFile, destLog.dir.getParentFile)
-        cleaner.resumeCleaning(topicPartition)
+        cleaner.resumeCleaning(Seq(topicPartition))
+        info(s"Compaction for partition $topicPartition is resumed")
       }
 
       try {
@@ -864,10 +878,38 @@ class LogManager(logDirs: Seq[File],
     debug("Beginning log cleanup...")
     var total = 0
     val startMs = time.milliseconds
-    for(log <- allLogs; if !log.config.compact) {
-      debug("Garbage collecting '" + log.name + "'")
-      total += log.deleteOldSegments()
+
+    // clean current logs.
+    val deletableLogs = {
+      if (cleaner != null) {
+        // prevent cleaner from working on same partitions when changing cleanup policy
+        cleaner.pauseCleaningForNonCompactedPartitions()
+      } else {
+        currentLogs.filter {
+          case (_, log) => !log.config.compact
+        }
+      }
     }
+
+    try {
+      deletableLogs.foreach {
+        case (topicPartition, log) =>
+          debug("Garbage collecting '" + log.name + "'")
+          total += log.deleteOldSegments()
+
+          val futureLog = futureLogs.get(topicPartition)
+          if (futureLog != null) {
+            // clean future logs
+            debug("Garbage collecting future log '" + futureLog.name + "'")
+            total += futureLog.deleteOldSegments()
+          }
+      }
+    } finally {
+      if (cleaner != null) {
+        cleaner.resumeCleaning(deletableLogs.map(_._1))
+      }
+    }
+
     debug("Log cleanup completed. " + total + " files deleted in " +
                   (time.milliseconds - startMs) / 1000 + " seconds")
   }
@@ -878,9 +920,9 @@ class LogManager(logDirs: Seq[File],
   def allLogs: Iterable[Log] = currentLogs.values ++ futureLogs.values
 
   def logsByTopic(topic: String): Seq[Log] = {
-    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, log) =>
+    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, _) =>
       topicPartition.topic() == topic
-    }.map { case (topicPartition, log) => log }
+    }.map { case (_, log) => log }
   }
 
   /**

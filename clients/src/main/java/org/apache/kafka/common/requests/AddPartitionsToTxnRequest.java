@@ -50,8 +50,13 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32)))),
                     "The partitions to add to the transaction."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_PARTITIONS_TO_TXN_REQUEST_V1 = ADD_PARTITIONS_TO_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_PARTITIONS_TO_TXN_REQUEST_V0};
+        return new Schema[]{ADD_PARTITIONS_TO_TXN_REQUEST_V0, ADD_PARTITIONS_TO_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
@@ -97,7 +102,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     private AddPartitionsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch,
                                       List<TopicPartition> partitions) {
-        super(version);
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -105,7 +110,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     public AddPartitionsToTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);
@@ -145,7 +150,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         struct.set(PRODUCER_ID, producerId);
         struct.set(PRODUCER_EPOCH, producerEpoch);
 
-        Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(partitions);
+        Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupPartitionsByTopic(partitions);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
         int i = 0;
         for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {

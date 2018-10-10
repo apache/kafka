@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -36,25 +33,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyDouble;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.anyString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
-
-@RunWith(PowerMockRunner.class)
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
@@ -241,36 +229,25 @@ public class BufferPoolTest {
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(pool.queued(), 0);
     }
-
-    @PrepareForTest({Sensor.class, MetricName.class})
+    
     @Test
     public void testCleanupMemoryAvailabilityOnMetricsException() throws Exception {
-        Metrics mockedMetrics = createNiceMock(Metrics.class);
-        Sensor mockedSensor = createNiceMock(Sensor.class);
-        MetricName metricName = createNiceMock(MetricName.class);
-        MetricName rateMetricName = createNiceMock(MetricName.class);
-        MetricName totalMetricName = createNiceMock(MetricName.class);
+        BufferPool bufferPool = spy(new BufferPool(2, 1, new Metrics(), time, metricGroup));
+        doThrow(new OutOfMemoryError()).when(bufferPool).recordWaitTime(anyLong());
 
-        expect(mockedMetrics.sensor(BufferPool.WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
-
-        mockedSensor.record(anyDouble(), anyLong());
-        expectLastCall().andThrow(new OutOfMemoryError());
-        expect(mockedMetrics.metricName(anyString(), eq(metricGroup), anyString())).andReturn(metricName);
-        expect(mockedSensor.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName))).andReturn(true);
-
-        replay(mockedMetrics, mockedSensor, metricName);
-
-        BufferPool bufferPool = new BufferPool(2, 1, mockedMetrics, time,  metricGroup);
         bufferPool.allocate(1, 0);
         try {
             bufferPool.allocate(2, 1000);
-            assertTrue("Expected oom.", false);
+            fail("Expected oom.");
         } catch (OutOfMemoryError expected) {
         }
         assertEquals(1, bufferPool.availableMemory());
         assertEquals(0, bufferPool.queued());
+        assertEquals(1, bufferPool.unallocatedMemory());
         //This shouldn't timeout
         bufferPool.allocate(1, 0);
+
+        verify(bufferPool).recordWaitTime(anyLong());
     }
 
     private static class BufferPoolAllocator implements Runnable {

@@ -36,12 +36,12 @@ public class FilteredCacheIteratorTest {
 
     private static final CacheFunction IDENTITY_FUNCTION = new CacheFunction() {
         @Override
-        public Bytes key(Bytes cacheKey) {
+        public Bytes key(final Bytes cacheKey) {
             return cacheKey;
         }
 
         @Override
-        public Bytes cacheKey(Bytes key) {
+        public Bytes cacheKey(final Bytes key) {
             return key;
         }
     };

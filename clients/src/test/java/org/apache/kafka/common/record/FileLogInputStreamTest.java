@@ -56,6 +56,9 @@ public class FileLogInputStreamTest {
 
     @Test
     public void testWriteTo() throws IOException {
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+            return;
+
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.withRecords(magic, compression, new SimpleRecord("foo".getBytes())));
             fileRecords.flush();
@@ -81,6 +84,9 @@ public class FileLogInputStreamTest {
 
     @Test
     public void testSimpleBatchIteration() throws IOException {
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+            return;
+
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             SimpleRecord firstBatchRecord = new SimpleRecord(3241324L, "a".getBytes(), "foo".getBytes());
             SimpleRecord secondBatchRecord = new SimpleRecord(234280L, "b".getBytes(), "bar".getBytes());
@@ -106,6 +112,9 @@ public class FileLogInputStreamTest {
     @Test
     public void testBatchIterationWithMultipleRecordsPerBatch() throws IOException {
         if (magic < MAGIC_VALUE_V2 && compression == CompressionType.NONE)
+            return;
+
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -185,6 +194,9 @@ public class FileLogInputStreamTest {
 
     @Test
     public void testBatchIterationIncompleteBatch() throws IOException {
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+            return;
+
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             SimpleRecord firstBatchRecord = new SimpleRecord(100L, "foo".getBytes());
             SimpleRecord secondBatchRecord = new SimpleRecord(200L, "bar".getBytes());
@@ -221,7 +233,7 @@ public class FileLogInputStreamTest {
     }
 
     private void assertProducerData(RecordBatch batch, long producerId, short producerEpoch, int baseSequence,
-                                    boolean isTransactional, SimpleRecord ... records) {
+                                    boolean isTransactional, SimpleRecord... records) {
         assertEquals(producerId, batch.producerId());
         assertEquals(producerEpoch, batch.producerEpoch());
         assertEquals(baseSequence, batch.baseSequence());
@@ -237,7 +249,7 @@ public class FileLogInputStreamTest {
         assertFalse(batch.isTransactional());
     }
 
-    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord ... records) {
+    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord... records) {
         assertEquals(magic, batch.magic());
         assertEquals(compression, batch.compressionType());
 

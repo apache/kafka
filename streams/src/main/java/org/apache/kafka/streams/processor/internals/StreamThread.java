@@ -31,11 +31,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -46,10 +45,12 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -65,12 +66,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class StreamThread extends Thread {
 
-    private final static int UNLIMITED_RECORDS = -1;
-    private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
+    private final static AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -212,7 +211,7 @@ public class StreamThread extends Thread {
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
             } else {
-                updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
+                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
         }
 
@@ -260,12 +259,20 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
+            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+                log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
+                streamThread.shutdown();
+                streamThread.setStateListener(null);
+                return;
+            }
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
-                taskManager.createTasks(assignment);
+                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.code()) {
+                    taskManager.createTasks(assignment);
+                }
             } catch (final Throwable t) {
                 log.error(
                     "Error caught during partition assignment, " +
@@ -299,7 +306,11 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    taskManager.suspendTasksAndState();
+                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
+                    } else {
+                        taskManager.suspendTasksAndState();
+                    }
                 } catch (final Throwable t) {
                     log.error(
                         "Error caught during partition revocation, " +
@@ -426,8 +437,8 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                createProducer(taskId)
-            );
+                () -> createProducer(taskId),
+                streamsMetrics.taskClosedSensor);
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -508,58 +519,56 @@ public class StreamThread extends Thread {
         private final Sensor processTimeSensor;
         private final Sensor punctuateTimeSensor;
         private final Sensor taskCreatedSensor;
-        private final Sensor tasksClosedSensor;
+        private final Sensor taskClosedSensor;
 
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
             final String group = "stream-metrics";
 
             commitTimeSensor = threadLevelSensor("commit-latency", Sensor.RecordingLevel.INFO);
-            commitTimeSensor.add(metrics.metricName("commit-latency-avg", group, "The average commit time in ms", tags()), new Avg());
-            commitTimeSensor.add(metrics.metricName("commit-latency-max", group, "The maximum commit time in ms", tags()), new Max());
-            commitTimeSensor.add(metrics.metricName("commit-rate", group, "The average per-second number of commit calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            commitTimeSensor.add(metrics.metricName("commit-total", group, "The total number of commit calls", tags()), new Count());
+            addAvgMaxLatency(commitTimeSensor, group, tagMap(), "commit");
+            addInvocationRateAndCount(commitTimeSensor, group, tagMap(), "commit");
 
             pollTimeSensor = threadLevelSensor("poll-latency", Sensor.RecordingLevel.INFO);
-            pollTimeSensor.add(metrics.metricName("poll-latency-avg", group, "The average poll time in ms", tags()), new Avg());
-            pollTimeSensor.add(metrics.metricName("poll-latency-max", group, "The maximum poll time in ms", tags()), new Max());
-            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tags()), new Count());
+            addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
+            // can't use addInvocationRateAndCount due to non-standard description string
+            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new CumulativeCount());
 
             processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
-            processTimeSensor.add(metrics.metricName("process-latency-avg", group, "The average process time in ms", tags()), new Avg());
-            processTimeSensor.add(metrics.metricName("process-latency-max", group, "The maximum process time in ms", tags()), new Max());
-            processTimeSensor.add(metrics.metricName("process-rate", group, "The average per-second number of process calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            processTimeSensor.add(metrics.metricName("process-total", group, "The total number of process calls", tags()), new Count());
+            addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
+            addInvocationRateAndCount(processTimeSensor, group, tagMap(), "process");
 
             punctuateTimeSensor = threadLevelSensor("punctuate-latency", Sensor.RecordingLevel.INFO);
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", group, "The average punctuate time in ms", tags()), new Avg());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", group, "The maximum punctuate time in ms", tags()), new Max());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-rate", group, "The average per-second number of punctuate calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            punctuateTimeSensor.add(metrics.metricName("punctuate-total", group, "The total number of punctuate calls", tags()), new Count());
+            addAvgMaxLatency(punctuateTimeSensor, group, tagMap(), "punctuate");
+            addInvocationRateAndCount(punctuateTimeSensor, group, tagMap(), "punctuate");
 
             taskCreatedSensor = threadLevelSensor("task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tags()), new Total());
+            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tagMap()), new Total());
 
-            tasksClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-            tasksClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
-            tasksClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tags()), new Total());
+            taskClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+            taskClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
         }
     }
 
     private final Time time;
-    private final long pollTimeMs;
-    private final long commitTimeMs;
-    private final Object stateLock;
     private final Logger log;
     private final String logPrefix;
+    private final Object stateLock;
+    private final Duration pollTime;
+    private final long commitTimeMs;
+    private final int maxPollTimeMs;
+    private final String originalReset;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
+    private final AtomicInteger assignmentErrorCode;
 
+    private long now;
+    private long lastPollMs;
     private long lastCommitMs;
-    private long timerStartedMs;
-    private final String originalReset;
+    private int numIterations;
     private Throwable rebalanceException = null;
     private boolean processStandbyRecords = false;
     private volatile State state = State.CREATED;
@@ -595,7 +604,8 @@ public class StreamThread extends Thread {
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, userStateRestoreListener, logContext);
+        final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
@@ -648,6 +658,8 @@ public class StreamThread extends Thread {
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, threadClientId);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
+        final AtomicInteger assignmentErrorCode = new AtomicInteger();
+        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -667,7 +679,8 @@ public class StreamThread extends Thread {
             streamsMetrics,
             builder,
             threadClientId,
-            logContext);
+            logContext,
+            assignmentErrorCode);
     }
 
     public StreamThread(final Time time,
@@ -680,7 +693,8 @@ public class StreamThread extends Thread {
                         final StreamsMetricsThreadImpl streamsMetrics,
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
-                        final LogContext logContext) {
+                        final LogContext logContext,
+                        final AtomicInteger assignmentErrorCode) {
         super(threadClientId);
 
         this.stateLock = new Object();
@@ -697,11 +711,22 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
+        this.assignmentErrorCode = assignmentErrorCode;
 
-        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId"))
+                .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
-        updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
+        this.numIterations = 1;
+
+        updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    private static final class InternalConsumerConfig extends ConsumerConfig {
+        private InternalConsumerConfig(final Map<String, Object> props) {
+            super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
+        }
     }
 
     /**
@@ -745,23 +770,29 @@ public class StreamThread extends Thread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     private void runLoop() {
-        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
 
         while (isRunning()) {
             try {
-                recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
+                runOnce();
+                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                    log.info("Version probing detected. Triggering new rebalance.");
+                    enforceRebalance();
+                }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
                     ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
-                // re-subscribe to enforce a rebalance in the next poll call
-                consumer.unsubscribe();
-                consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+                enforceRebalance();
             }
         }
+    }
+
+    private void enforceRebalance() {
+        consumer.unsubscribe();
+        consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
     }
 
     /**
@@ -772,67 +803,114 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     // Visible for testing
-    long runOnce(final long recordsProcessedBeforeCommit) {
-        long processedBeforeCommit = recordsProcessedBeforeCommit;
-
+    void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
 
-        timerStartedMs = time.milliseconds();
+        now = time.milliseconds();
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
             // to unblock the restoration as soon as possible
-            records = pollRequests(0L);
+            records = pollRequests(Duration.ZERO);
+        } else if (state == State.PARTITIONS_REVOKED) {
+            // try to fetch some records with normal poll time
+            // in order to wait long enough to get the join response
+            records = pollRequests(pollTime);
+        } else if (state == State.RUNNING) {
+            // try to fetch some records with normal poll time
+            // in order to get long polling
+            records = pollRequests(pollTime);
+        } else {
+            // any other state should not happen
+            log.error("Unexpected state {} during normal iteration", state);
+            throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
+        }
 
+        final long pollLatency = advanceNowAndComputeLatency();
+
+        if (records != null && !records.isEmpty()) {
+            streamsMetrics.pollTimeSensor.record(pollLatency, now);
+            addRecordsToTasks(records);
+        }
+
+        // only try to initialize the assigned tasks
+        // if the state is still in PARTITION_ASSIGNED after the poll call
+        if (state == State.PARTITIONS_ASSIGNED) {
             if (taskManager.updateNewAndRestoringTasks()) {
                 setState(State.RUNNING);
             }
-        } else {
-            // try to fetch some records if necessary
-            records = pollRequests(pollTimeMs);
+        }
 
-            // if state changed after the poll call,
-            // try to initialize the assigned tasks again
-            if (state == State.PARTITIONS_ASSIGNED) {
-                if (taskManager.updateNewAndRestoringTasks()) {
-                    setState(State.RUNNING);
+        advanceNowAndComputeLatency();
+
+        // TODO: we will process some tasks even if the state is not RUNNING, i.e. some other
+        // tasks are still being restored.
+        if (taskManager.hasActiveRunningTasks()) {
+            /*
+             * Within an iteration, after N (N initialized as 1 upon start up) round of processing one-record-each on the applicable tasks, check the current time:
+             *  1. If it is time to commit, do it;
+             *  2. If it is time to punctuate, do it;
+             *  3. If elapsed time is close to consumer's max.poll.interval.ms, end the current iteration immediately.
+             *  4. If none of the the above happens, increment N.
+             *  5. If one of the above happens, half the value of N.
+             */
+            int processed = 0;
+            long timeSinceLastPoll = 0L;
+
+            do {
+                for (int i = 0; i < numIterations; i++) {
+                    processed = taskManager.process(now);
+
+                    if (processed > 0) {
+                        final long processLatency = advanceNowAndComputeLatency();
+                        streamsMetrics.processTimeSensor.record(processLatency / (double) processed, now);
+
+                        // commit any tasks that have requested a commit
+                        final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+
+                        if (committed > 0) {
+                            final long commitLatency = advanceNowAndComputeLatency();
+                            streamsMetrics.commitTimeSensor.record(commitLatency / (double) committed, now);
+                        }
+                    } else {
+                        // if there is no records to be processed, exit immediately
+                        break;
+                    }
                 }
-            }
+
+                timeSinceLastPoll = Math.max(now - lastPollMs, 0);
+
+                if (maybePunctuate() || maybeCommit()) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
+                    numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                    break;
+                } else if (processed > 0) {
+                    numIterations++;
+                }
+            } while (processed > 0);
         }
 
-        if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
-            streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
-            addRecordsToTasks(records);
-            final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
-            if (totalProcessed > 0) {
-                final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed, timerStartedMs);
-                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(
-                    recordsProcessedBeforeCommit,
-                    totalProcessed,
-                    processLatency,
-                    commitTimeMs);
-            }
-        }
+        // update standby tasks and maybe commit the standby tasks as well
+        maybeUpdateStandbyTasks();
 
-        punctuate();
-        maybeCommit(timerStartedMs);
-        maybeUpdateStandbyTasks(timerStartedMs);
-        return processedBeforeCommit;
+        maybeCommit();
     }
 
     /**
      * Get the next batch of records by polling.
      *
-     * @param pollTimeMs poll time millis parameter for the consumer poll
+     * @param pollTime how long to block in Consumer#poll
      * @return Next batch of records or null if no records available.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final Duration pollTime) {
         ConsumerRecords<byte[], byte[]> records = null;
 
+        lastPollMs = now;
+
         try {
-            records = poll(consumer, pollTimeMs);
+            records = consumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
             resetInvalidOffsets(e);
         }
@@ -901,9 +979,16 @@ public class StreamThread extends Thread {
         for (final TopicPartition partition : records.partitions()) {
             final StreamTask task = taskManager.activeTask(partition);
 
-            if (task.isClosed()) {
+            if (task == null) {
+                log.error(
+                    "Unable to locate active task for received-record partition {}. Current tasks: {}",
+                    partition,
+                    taskManager.toString(">")
+                );
+                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+            } else if (task.isClosed()) {
                 log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                             "Notifying the thread to trigger a new rebalance immediately.", task.id());
                 throw new TaskMigratedException(task);
             }
 
@@ -912,119 +997,64 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Schedule the records processing by selecting which record is processed next. Commits may
-     * happen as records are processed.
-     *
-     * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
-     *                                     if UNLIMITED_RECORDS, then commit is never called
-     * @return Number of records processed since last commit.
-     * @throws TaskMigratedException if committing offsets failed (non-EOS)
-     *                               or if the task producer got fenced (EOS)
-     */
-    private long processAndMaybeCommit(final long recordsProcessedBeforeCommit) {
-
-        long processed;
-        long totalProcessedSinceLastMaybeCommit = 0;
-        // Round-robin scheduling by taking one record from each task repeatedly
-        // until no task has any records left
-        do {
-            processed = taskManager.process();
-            if (processed > 0) {
-                streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, timerStartedMs);
-            }
-            totalProcessedSinceLastMaybeCommit += processed;
-
-            punctuate();
-
-            if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
-                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
-                totalProcessedSinceLastMaybeCommit = 0;
-                maybeCommit(timerStartedMs);
-            }
-            // commit any tasks that have requested a commit
-            final int committed = taskManager.maybeCommitActiveTasks();
-            if (committed > 0) {
-                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
-            }
-        } while (processed != 0);
-
-        return totalProcessedSinceLastMaybeCommit;
-    }
-
-    /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private void punctuate() {
+    private boolean maybePunctuate() {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
-            streamsMetrics.punctuateTimeSensor.record(computeLatency() / (double) punctuated, timerStartedMs);
+            final long punctuateLatency = advanceNowAndComputeLatency();
+            streamsMetrics.punctuateTimeSensor.record(punctuateLatency / (double) punctuated, now);
         }
+
+        return punctuated > 0;
     }
 
     /**
-     * Adjust the number of records that should be processed by scheduler. This avoids
-     * scenarios where the processing time is higher than the commit time.
+     * Try to commit all active tasks owned by this thread.
      *
-     * @param prevRecordsProcessedBeforeCommit Previous number of records processed by scheduler.
-     * @param totalProcessed                   Total number of records processed in this last round.
-     * @param processLatency                   Total processing latency in ms processed in this last round.
-     * @param commitTime                       Desired commit time in ms.
-     * @return An adjusted number of records to be processed in the next round.
-     */
-    private long adjustRecordsProcessedBeforeCommit(final long prevRecordsProcessedBeforeCommit, final long totalProcessed,
-                                                    final long processLatency, final long commitTime) {
-        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
-        // check if process latency larger than commit latency
-        // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
-        // we will never process all records again. This might be an issue if the initial measurement
-        // was off due to a slow start.
-        if (processLatency > 0 && processLatency > commitTime) {
-            // push down
-            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
-                processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
-        } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
-            // push up
-            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("processing latency {} < commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
-                processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
-        }
-
-        return recordsProcessedBeforeCommit;
-    }
-
-    /**
-     * Commit all tasks owned by this thread if specified interval time has elapsed
+     * Visible for testing.
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    void maybeCommit(final long now) {
-        if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
+    boolean maybeCommit() {
+        int committed = 0;
+
+        if (commitTimeMs >= 0 && now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            final int committed = taskManager.commitAll();
+            committed += taskManager.commitAll();
             if (committed > 0) {
-                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+                final long intervalCommitLatency = advanceNowAndComputeLatency();
+                streamsMetrics.commitTimeSensor.record(intervalCommitLatency / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();
-            }
-            if (log.isDebugEnabled()) {
-                log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                    taskManager.activeTaskIds(), taskManager.standbyTaskIds(), timerStartedMs - now);
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
+                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), intervalCommitLatency);
+                }
             }
 
             lastCommitMs = now;
-
             processStandbyRecords = true;
+        } else {
+            final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
+            if (commitPerRequested > 0) {
+                final long requestCommitLatency = advanceNowAndComputeLatency();
+                streamsMetrics.commitTimeSensor.record(requestCommitLatency / (double) committed, now);
+                committed += commitPerRequested;
+            }
         }
+
+        return committed > 0;
     }
 
-    private void maybeUpdateStandbyTasks(final long now) {
+    private void maybeUpdateStandbyTasks() {
         if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
@@ -1043,7 +1073,7 @@ public class StreamThread extends Thread {
                             }
 
                             remaining = task.update(partition, remaining);
-                            if (remaining != null) {
+                            if (!remaining.isEmpty()) {
                                 remainingStandbyRecords.put(partition, remaining);
                             } else {
                                 restoreConsumer.resume(singleton(partition));
@@ -1053,13 +1083,19 @@ public class StreamThread extends Thread {
 
                     standbyRecords = remainingStandbyRecords;
 
-                    log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
+                    }
                 }
                 processStandbyRecords = false;
             }
 
             try {
-                final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 0);
+                // poll(0): Since this is during the normal processing, not during restoration.
+                // We can afford to have slower restore (because we don't wait inside poll for results).
+                // Instead, we want to proceed to the next iteration to call the main consumer#poll()
+                // as soon as possible so as to not be kicked out of the group.
+                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(Duration.ZERO);
 
                 if (!records.isEmpty()) {
                     for (final TopicPartition partition : records.partitions()) {
@@ -1076,7 +1112,7 @@ public class StreamThread extends Thread {
                         }
 
                         final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                        if (remaining != null) {
+                        if (!remaining.isEmpty()) {
                             restoreConsumer.pause(singleton(partition));
                             standbyRecords.put(partition, remaining);
                         }
@@ -1094,11 +1130,14 @@ public class StreamThread extends Thread {
                         throw new TaskMigratedException(task);
                     }
 
-                    log.info("Reinitializing StandbyTask {}", task);
+                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
                 restoreConsumer.seekToBeginning(partitions);
             }
+
+            // update now if the standby restoration indeed executed
+            advanceNowAndComputeLatency();
         }
     }
 
@@ -1108,11 +1147,11 @@ public class StreamThread extends Thread {
      *
      * @return latency
      */
-    private long computeLatency() {
-        final long previousTimeMs = timerStartedMs;
-        timerStartedMs = time.milliseconds();
+    private long advanceNowAndComputeLatency() {
+        final long previous = now;
+        now = time.milliseconds();
 
-        return Math.max(timerStartedMs - previousTimeMs, 0);
+        return Math.max(now - previous, 0);
     }
 
     /**
@@ -1124,8 +1163,6 @@ public class StreamThread extends Thread {
     public void shutdown() {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
-        consumer.wakeup();
-        restoreConsumer.wakeup();
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
@@ -1213,12 +1250,20 @@ public class StreamThread extends Thread {
     }
 
     // the following are for testing only
+    void setNow(final long now) {
+        this.now = now;
+    }
+
     TaskManager taskManager() {
         return taskManager;
     }
 
     Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
         return standbyRecords;
+    }
+
+    int currentNumIterations() {
+        return numIterations;
     }
 
     public Map<MetricName, Metric> producerMetrics() {
@@ -1229,10 +1274,10 @@ public class StreamThread extends Thread {
                 result.putAll(producerMetrics);
             }
         } else {
-            // When EOS is turned on, each task will has its own producer client
+            // When EOS is turned on, each task will have its own producer client
             // and the producer object passed in here will be null. We would then iterate through
             // all the active tasks and add their metrics to the output metrics map.
-            for (StreamTask task: taskManager.activeTasks().values()) {
+            for (final StreamTask task: taskManager.activeTasks().values()) {
                 final Map<MetricName, ? extends Metric> taskProducerMetrics = task.getProducer().metrics();
                 result.putAll(taskProducerMetrics);
             }
@@ -1246,6 +1291,13 @@ public class StreamThread extends Thread {
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         result.putAll(consumerMetrics);
         result.putAll(restoreConsumerMetrics);
+        return result;
+    }
+
+    public Map<MetricName, Metric> adminClientMetrics() {
+        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.getAdminClient().metrics();
+        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
+        result.putAll(adminClientMetrics);
         return result;
     }
 }

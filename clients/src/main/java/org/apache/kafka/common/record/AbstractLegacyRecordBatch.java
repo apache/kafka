@@ -322,6 +322,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new InvalidRecordException("Invalid wrapper magic found in legacy deep record iterator " + wrapperMagic);
 
             CompressionType compressionType = wrapperRecord.compressionType();
+            if (compressionType == CompressionType.ZSTD)
+                throw new InvalidRecordException("Invalid wrapper compressionType found in legacy deep record iterator " + wrapperMagic);
             ByteBuffer wrapperValue = wrapperRecord.value();
             if (wrapperValue == null)
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
