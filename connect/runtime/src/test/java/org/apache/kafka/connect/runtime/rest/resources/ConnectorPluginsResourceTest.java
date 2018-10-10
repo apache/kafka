@@ -52,6 +52,7 @@ import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -195,7 +196,7 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfigWithSingleErrorDueToMissingConnectorClassname() throws Throwable {
         herder.validateConnectorConfig(EasyMock.eq(partialProps));
 
-        PowerMock.expectLastCall().andAnswer(() -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(partialProps);
 
@@ -240,7 +241,7 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfigWithSimpleName() throws Throwable {
         herder.validateConnectorConfig(EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andAnswer(() -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
@@ -281,7 +282,7 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfigWithAlias() throws Throwable {
         herder.validateConnectorConfig(EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andAnswer(() -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
@@ -322,7 +323,7 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfigWithNonExistentName() throws Throwable {
         herder.validateConnectorConfig(EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andAnswer(() -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
@@ -359,7 +360,7 @@ public class ConnectorPluginsResourceTest {
     public void testValidateConfigWithNonExistentAlias() throws Throwable {
         herder.validateConnectorConfig(EasyMock.eq(props));
 
-        PowerMock.expectLastCall().andAnswer(() -> {
+        PowerMock.expectLastCall().andAnswer((IAnswer<ConfigInfos>) () -> {
             ConfigDef connectorConfigDef = ConnectorConfig.configDef();
             List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(props);
 
