@@ -178,9 +178,9 @@
             which you either do manually (see existing SerDes in the previous section) or by leveraging helper functions in
             <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
             such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>.
-            Note, that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
+            Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
             If your serde class has generic types or you use <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>, you can pass your serde only
-            via methods calls (e.g., <code class="docutils literal"><span class="pre">builder.stream("topicName", Consumed.with(...))</span></code>).</li>
+            via methods calls (for example <code class="docutils literal"><span class="pre">builder.stream("topicName", Consumed.with(...))</span></code>).</li>
         </ol>
       </div>
     </div>
