@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package other.kafka
+package kafka
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, StandardOpenOption}
@@ -311,7 +311,7 @@ object ReplicationQuotasTestRig {
     }
 
     def append(message: String): Unit = {
-      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.APPEND)
+      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
       new PrintWriter(stream) {
         append(message)
         close
