@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -27,11 +26,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,7 +38,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static java.util.Collections.singletonMap;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -49,7 +46,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({SourceTaskOffsetCommitter.class})
 public class SourceTaskOffsetCommitterTest extends ThreadedTest {
 
     private final ConcurrentHashMap committers = new ConcurrentHashMap<>();
@@ -97,7 +93,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         committer.schedule(taskId, task);
         assertTrue(taskWrapper.hasCaptured());
         assertNotNull(taskWrapper.getValue());
-        assertEquals(Utils.mkMap(mkEntry(taskId, commitFuture)), committers);
+        assertEquals(singletonMap(taskId, commitFuture), committers);
 
         PowerMock.verifyAll();
     }
