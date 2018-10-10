@@ -31,6 +31,8 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.log.{Log, LogManager, TimestampOffset}
+import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
@@ -534,42 +536,56 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
-      // Down-conversion of the fetched records is needed when the stored magic version is
-      // greater than that supported by the client (as indicated by the fetch request version). If the
-      // configured magic version for the topic is less than or equal to that supported by the version of the
-      // fetch request, we skip the iteration through the records in order to check the magic version since we
-      // know it must be supported. However, if the magic version is changed from a higher version back to a
-      // lower version, this check will no longer be valid and we will fail to down-convert the messages
-      // which were written in the new format prior to the version downgrade.
-      val unconvertedRecords = partitionData.records
       val logConfig = replicaManager.getLogConfig(tp)
-      val downConvertMagic =
-        logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
-            Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
-            Some(RecordBatch.MAGIC_VALUE_V1)
-          else
-            None
-        }
 
-      // For fetch requests from clients, check if down-conversion is disabled for the particular partition
-      if (downConvertMagic.isDefined && !fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
-        trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_VERSION)
+      if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
+        trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
+        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
-        val convertedRecords =
-          downConvertMagic.map { magic =>
-            trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-            // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-            // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
-            // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
-            // client.
-            new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
-          }.getOrElse(unconvertedRecords)
-        new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
-          convertedRecords)
+        // Down-conversion of the fetched records is needed when the stored magic version is
+        // greater than that supported by the client (as indicated by the fetch request version). If the
+        // configured magic version for the topic is less than or equal to that supported by the version of the
+        // fetch request, we skip the iteration through the records in order to check the magic version since we
+        // know it must be supported. However, if the magic version is changed from a higher version back to a
+        // lower version, this check will no longer be valid and we will fail to down-convert the messages
+        // which were written in the new format prior to the version downgrade.
+        val unconvertedRecords = partitionData.records
+        val downConvertMagic =
+          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
+            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+              Some(RecordBatch.MAGIC_VALUE_V0)
+            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+              Some(RecordBatch.MAGIC_VALUE_V1)
+            else
+              None
+          }
+
+        downConvertMagic match {
+          case Some(magic) =>
+            // For fetch requests from clients, check if down-conversion is disabled for the particular partition
+            if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
+              trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
+              errorResponse(Errors.UNSUPPORTED_VERSION)
+            } else {
+              try {
+                trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+                // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
+                // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
+                // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
+                // client.
+                new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+                  FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+              } catch {
+                case e: UnsupportedCompressionTypeException =>
+                  trace("Received unsupported compression type error during down-conversion", e)
+                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+              }
+            }
+          case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+            unconvertedRecords)
+        }
       }
     }
 

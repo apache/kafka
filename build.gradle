@@ -820,6 +820,7 @@ project(':clients') {
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
+    compile libs.zstd
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi

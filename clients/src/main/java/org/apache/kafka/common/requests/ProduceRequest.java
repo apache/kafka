@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -113,9 +114,14 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V6 = PRODUCE_REQUEST_V5;
 
+    /**
+     * V7 bumped up to indicate ZStandard capability. (see KIP-110)
+     */
+    private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -151,12 +157,12 @@ public class ProduceRequest extends AbstractRequest {
             return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId);
         }
 
-        private Builder(short minVersion,
-                        short maxVersion,
-                        short acks,
-                        int timeout,
-                        Map<TopicPartition, MemoryRecords> partitionRecords,
-                        String transactionalId) {
+        public Builder(short minVersion,
+                       short maxVersion,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords,
+                       String transactionalId) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.acks = acks;
             this.timeout = timeout;
@@ -246,6 +252,10 @@ public class ProduceRequest extends AbstractRequest {
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain record batches with magic version 2");
+            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
+                throw new InvalidRecordException("Produce requests with version " + version + " are note allowed to " +
+                    "use ZStandard compression");
+            }
 
             if (iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
@@ -330,6 +340,7 @@ public class ProduceRequest extends AbstractRequest {
             case 4:
             case 5:
             case 6:
+            case 7:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -400,6 +411,7 @@ public class ProduceRequest extends AbstractRequest {
             case 4:
             case 5:
             case 6:
+            case 7:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:
