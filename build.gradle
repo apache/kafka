@@ -820,6 +820,7 @@ project(':clients') {
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
+    compile libs.zstd
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
@@ -829,9 +830,7 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
-    testCompile libs.easymock
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind

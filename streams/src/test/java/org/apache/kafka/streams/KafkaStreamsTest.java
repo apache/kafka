@@ -548,6 +548,34 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void shouldThrowOnNegativeTimeoutForClose() {
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        try {
+            streams.close(Duration.ofMillis(-1L));
+            fail("should not accept negative close parameter");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void shouldNotBlockInCloseForZeroDuration() throws InterruptedException {
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final Thread th = new Thread(() -> streams.close(Duration.ofMillis(0L)));
+
+        th.start();
+
+        try {
+            th.join(30_000L);
+            assertFalse(th.isAlive());
+        } finally {
+            streams.close();
+        }
+    }
+
     private void verifyCleanupStateDir(final String appDir, final File oldTaskDir) throws InterruptedException {
         final File taskDir = new File(appDir, "0_0");
         TestUtils.waitForCondition(
