@@ -140,7 +140,7 @@ public class TopicConfig {
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
-        "This configuration accepts the standard compression codecs ('gzip', 'snappy', lz4). It additionally " +
+        "This configuration accepts the standard compression codecs ('gzip', 'snappy', 'lz4', 'zstd'). It additionally " +
         "accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the " +
         "original compression codec set by the producer.";
 
