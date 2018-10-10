@@ -97,9 +97,9 @@ object GetOffsetShell {
 
     val config = 
       if (options.has(commandConfigOpt))
-        new Properties()
+        Utils.loadProps(options.valueOf(commandConfigOpt))
       else
-        Utils.loadProps(options.valueOf(commandConfigOpt)) 
+        new Properties
 
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
