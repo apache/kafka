@@ -85,6 +85,8 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Instant.ofEpochMilli;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -202,7 +204,7 @@ public class KStreamAggregationIntegrationTest {
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
         groupedStream
-                .windowedBy(TimeWindows.of(500L))
+                .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .reduce(reducer)
                 .toStream()
                 .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
@@ -307,7 +309,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
-        groupedStream.windowedBy(TimeWindows.of(500L))
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(500L)))
                 .aggregate(
                         initializer,
                         aggregator,
@@ -427,7 +429,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
-                .windowedBy(TimeWindows.of(500L))
+                .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .count()
                 .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start()).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
@@ -520,7 +522,7 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SessionWindows.with(sessionGap))
+                .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
                 .count()
                 .toStream()
                 .transform(() -> new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {
@@ -618,7 +620,7 @@ public class KStreamAggregationIntegrationTest {
         final String userSessionsStore = "UserSessionsStore";
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SessionWindows.with(sessionGap))
+                .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
                 .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
                 .toStream()
                 .foreach((key, value) -> {
@@ -705,7 +707,7 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-               .windowedBy(UnlimitedWindows.of().startOn(startTime))
+               .windowedBy(UnlimitedWindows.of().startOn(ofEpochMilli(startTime)))
                .count()
                .toStream()
                .transform(() -> new Transformer<Windowed<String>, Long, KeyValue<Object, Object>>() {

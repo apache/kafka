@@ -27,11 +27,12 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
-import kafka.common.{OffsetAndMetadata, OffsetMetadata}
+import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
+import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
@@ -332,18 +333,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // for version 1 and beyond store offsets in offset manager
 
-        // commit timestamp is always set to now.
         // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
         // expire timestamp is computed differently for v1 and v2.
         //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
-        //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+        //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that
         //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
         //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
         val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+          val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
-            offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+            offset = partitionData.offset,
+            leaderEpoch = partitionData.leaderEpoch,
+            metadata = metadata,
             commitTimestamp = partitionData.timestamp match {
               case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
               case customTimestamp => customTimestamp
@@ -493,10 +495,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val fetchContext = fetchManager.newContext(fetchRequest.metadata(),
-          fetchRequest.fetchData(),
-          fetchRequest.toForget(),
-          fetchRequest.isFromFollower())
+    val fetchContext = fetchManager.newContext(
+      fetchRequest.metadata,
+      fetchRequest.fetchData,
+      fetchRequest.toForget,
+      fetchRequest.isFromFollower)
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -505,7 +508,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-    if (fetchRequest.isFromFollower()) {
+    if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         fetchContext.foreachPartition { (topicPartition, data) =>
@@ -533,42 +536,56 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
-      // Down-conversion of the fetched records is needed when the stored magic version is
-      // greater than that supported by the client (as indicated by the fetch request version). If the
-      // configured magic version for the topic is less than or equal to that supported by the version of the
-      // fetch request, we skip the iteration through the records in order to check the magic version since we
-      // know it must be supported. However, if the magic version is changed from a higher version back to a
-      // lower version, this check will no longer be valid and we will fail to down-convert the messages
-      // which were written in the new format prior to the version downgrade.
-      val unconvertedRecords = partitionData.records
       val logConfig = replicaManager.getLogConfig(tp)
-      val downConvertMagic =
-        logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
-            Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
-            Some(RecordBatch.MAGIC_VALUE_V1)
-          else
-            None
-        }
 
-      // For fetch requests from clients, check if down-conversion is disabled for the particular partition
-      if (downConvertMagic.isDefined && !fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
-        trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_VERSION)
+      if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
+        trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
+        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
-        val convertedRecords =
-          downConvertMagic.map { magic =>
-            trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-            // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-            // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
-            // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
-            // client.
-            new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
-          }.getOrElse(unconvertedRecords)
-        new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
-          convertedRecords)
+        // Down-conversion of the fetched records is needed when the stored magic version is
+        // greater than that supported by the client (as indicated by the fetch request version). If the
+        // configured magic version for the topic is less than or equal to that supported by the version of the
+        // fetch request, we skip the iteration through the records in order to check the magic version since we
+        // know it must be supported. However, if the magic version is changed from a higher version back to a
+        // lower version, this check will no longer be valid and we will fail to down-convert the messages
+        // which were written in the new format prior to the version downgrade.
+        val unconvertedRecords = partitionData.records
+        val downConvertMagic =
+          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
+            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+              Some(RecordBatch.MAGIC_VALUE_V0)
+            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+              Some(RecordBatch.MAGIC_VALUE_V1)
+            else
+              None
+          }
+
+        downConvertMagic match {
+          case Some(magic) =>
+            // For fetch requests from clients, check if down-conversion is disabled for the particular partition
+            if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
+              trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
+              errorResponse(Errors.UNSUPPORTED_VERSION)
+            } else {
+              try {
+                trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+                // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
+                // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
+                // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
+                // client.
+                new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+                  FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+              } catch {
+                case e: UnsupportedCompressionTypeException =>
+                  trace("Received unsupported compression type error during down-conversion", e)
+                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+              }
+            }
+          case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+            unconvertedRecords)
+        }
       }
     }
 
@@ -655,7 +672,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          trace(s"Sending Fetch response with partitions.size=${responseSize}, metadata=${unconvertedFetchResponse.sessionId()}")
+          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
         }
 
         // Send the response immediately.
@@ -745,26 +762,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseMap = authorizedRequestInfo.map {case (topicPartition, partitionData) =>
       try {
-        // ensure leader exists
-        val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-          replicaManager.getLeaderReplicaIfLocal(topicPartition)
-        else
-          replicaManager.getReplicaOrException(topicPartition)
-        val offsets = {
-          val allOffsets = fetchOffsets(replicaManager.logManager,
-            topicPartition,
-            partitionData.timestamp,
-            partitionData.maxNumOffsets)
-          if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID) {
-            allOffsets
-          } else {
-            val hw = localReplica.highWatermark.messageOffset
-            if (allOffsets.exists(_ > hw))
-              hw +: allOffsets.dropWhile(_ > hw)
-            else
-              allOffsets
-          }
-        }
+        val offsets = replicaManager.legacyFetchOffsetsForTimestamp(
+          topicPartition = topicPartition,
+          timestamp = partitionData.timestamp,
+          maxNumOffsets = partitionData.maxNumOffsets,
+          isFromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID,
+          fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
         (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, offsets.map(new JLong(_)).asJava))
       } catch {
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
@@ -800,7 +803,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
 
     val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
-      if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
+      if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
         debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
         (topicPartition, new ListOffsetResponse.PartitionData(Errors.INVALID_REQUEST,
@@ -809,32 +812,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           Optional.empty()))
       } else {
         try {
-          // ensure leader exists
-          val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-            replicaManager.getLeaderReplicaIfLocal(topicPartition)
+          val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID
+          val isolationLevelOpt = if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID)
+            Some(offsetRequest.isolationLevel)
           else
-            replicaManager.getReplicaOrException(topicPartition)
+            None
 
-          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-          val found = if (fromConsumer) {
-            val lastFetchableOffset = offsetRequest.isolationLevel match {
-              case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
-              case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
-            }
-
-            if (partitionData.timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
-            else {
-              def allowed(timestampOffset: TimestampOffset): Boolean =
-                partitionData.timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
-
-              fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
-                .filter(allowed).getOrElse(TimestampOffset.Unknown)
-            }
-          } else {
-            fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
-              .getOrElse(TimestampOffset.Unknown)
-          }
+          val found = replicaManager.fetchOffsetForTimestamp(topicPartition,
+            partitionData.timestamp,
+            isolationLevelOpt,
+            partitionData.currentLeaderEpoch,
+            fetchOnlyFromLeader)
 
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset,
             Optional.empty()))
@@ -843,6 +831,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           // would have received a clear exception and there is no value in logging the entire stack trace for the same
           case e @ (_ : UnknownTopicOrPartitionException |
                     _ : NotLeaderForPartitionException |
+                    _ : UnknownLeaderEpochException |
+                    _ : FencedLeaderEpochException |
                     _ : KafkaStorageException |
                     _ : UnsupportedForMessageFormatException) =>
             debug(s"Offset request with correlation id $correlationId from client $clientId on " +
@@ -861,72 +851,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     responseMap ++ unauthorizedResponseStatus
-  }
-
-  def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    logManager.getLog(topicPartition) match {
-      case Some(log) =>
-        fetchOffsetsBefore(log, timestamp, maxNumOffsets)
-      case None =>
-        if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP || timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-          Seq(0L)
-        else
-          Nil
-    }
-  }
-
-  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long): Option[TimestampOffset] = {
-    replicaManager.getLog(topicPartition) match {
-      case Some(log) =>
-        log.fetchOffsetsByTimestamp(timestamp)
-      case None =>
-        throw new UnknownTopicOrPartitionException(s"$topicPartition does not exist on the broker.")
-    }
-  }
-
-  private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segments = log.logSegments.toBuffer
-    val lastSegmentHasSize = segments.last.size > 0
-
-    val offsetTimeArray =
-      if (lastSegmentHasSize)
-        new Array[(Long, Long)](segments.length + 1)
-      else
-        new Array[(Long, Long)](segments.length)
-
-    for (i <- segments.indices)
-      offsetTimeArray(i) = (math.max(segments(i).baseOffset, log.logStartOffset), segments(i).lastModified)
-    if (lastSegmentHasSize)
-      offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
-
-    var startIndex = -1
-    timestamp match {
-      case ListOffsetRequest.LATEST_TIMESTAMP =>
-        startIndex = offsetTimeArray.length - 1
-      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case _ =>
-        var isFound = false
-        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-        startIndex = offsetTimeArray.length - 1
-        while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= timestamp)
-            isFound = true
-          else
-            startIndex -= 1
-        }
-    }
-
-    val retSize = maxNumOffsets.min(startIndex + 1)
-    val ret = new Array[Long](retSize)
-    for (j <- 0 until retSize) {
-      ret(j) = offsetTimeArray(startIndex)._1
-      startIndex -= 1
-    }
-    // ensure that the returned seq is in descending order of offsets
-    ret.toSeq.sortBy(-_)
   }
 
   private def createTopic(topic: String,
@@ -1908,15 +1832,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def convertTxnOffsets(offsetsMap: immutable.Map[TopicPartition, TxnOffsetCommitRequest.CommittedOffset]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
-    val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
     val currentTimestamp = time.milliseconds
-    val defaultExpireTimestamp = offsetRetention + currentTimestamp
     offsetsMap.map { case (topicPartition, partitionData) =>
-      val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+      val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
       topicPartition -> new OffsetAndMetadata(
-        offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+        offset = partitionData.offset,
+        leaderEpoch = partitionData.leaderEpoch,
+        metadata = metadata,
         commitTimestamp = currentTimestamp,
-        expireTimestamp = Some(defaultExpireTimestamp))
+        expireTimestamp = None)
     }
   }
 

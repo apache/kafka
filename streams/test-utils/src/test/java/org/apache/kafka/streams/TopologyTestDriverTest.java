@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -231,7 +232,7 @@ public class TopologyTestDriverTest {
             initialized = true;
             this.context = context;
             for (final Punctuation punctuation : punctuations) {
-                this.context.schedule(punctuation.intervalMs, punctuation.punctuationType, punctuation.callback);
+                this.context.schedule(Duration.ofMillis(punctuation.intervalMs), punctuation.punctuationType, punctuation.callback);
             }
         }
 
@@ -863,8 +864,8 @@ public class TopologyTestDriverTest {
         @Override
         public void init(final ProcessorContext context) {
             this.context = context;
-            context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, timestamp -> flushStore());
-            context.schedule(10000, PunctuationType.STREAM_TIME, timestamp -> flushStore());
+            context.schedule(Duration.ofMinutes(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> flushStore());
+            context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, timestamp -> flushStore());
             store = (KeyValueStore<String, Long>) context.getStateStore("aggStore");
         }
 

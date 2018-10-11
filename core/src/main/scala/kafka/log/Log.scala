@@ -32,15 +32,15 @@ import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrd
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
-import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{CorruptRecordException, InvalidOffsetException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -107,6 +107,25 @@ case class LogAppendInfo(var firstOffset: Option[Long],
 }
 
 /**
+ * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
+ * of these offsets atomically without the possibility of a leader change affecting their consistency relative
+ * to each other. See [[kafka.cluster.Partition.fetchOffsetSnapshot()]].
+ */
+case class LogOffsetSnapshot(logStartOffset: Long,
+                             logEndOffset: LogOffsetMetadata,
+                             highWatermark: LogOffsetMetadata,
+                             lastStableOffset: LogOffsetMetadata)
+
+/**
+ * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
+ */
+case class LogReadInfo(fetchedData: FetchDataInfo,
+                       highWatermark: Long,
+                       logStartOffset: Long,
+                       logEndOffset: Long,
+                       lastStableOffset: Long)
+
+/**
  * A class used to hold useful metadata about a completed transaction. This is used to build
  * the transaction index after appending to the log.
  *
@@ -123,6 +142,26 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
       s"firstOffset=$firstOffset, " +
       s"lastOffset=$lastOffset, " +
       s"isAborted=$isAborted)"
+  }
+}
+
+/**
+ * A class used to hold params required to decide to rotate a log segment or not.
+ */
+case class RollParams(maxSegmentMs: Long,
+                      maxSegmentBytes: Int,
+                      maxTimestampInMessages: Long,
+                      maxOffsetInMessages: Long,
+                      messagesSize: Int,
+                      now: Long)
+
+object RollParams {
+  def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
+   new RollParams(config.segmentMs,
+     config.segmentSize,
+     appendInfo.maxTimestamp,
+     appendInfo.lastOffset,
+     messagesSize, now)
   }
 }
 
@@ -174,7 +213,7 @@ class Log(@volatile var dir: File,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
-  // The memory mapped buffer for index files of this log will be closed for index files of this log will be closed with either delete() or closeHandlers()
+  // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log
   @volatile private var isMemoryMappedBufferClosed = false
 
@@ -229,7 +268,7 @@ class Log(@volatile var dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
-  @volatile private var _leaderEpochCache: LeaderEpochCache = initializeLeaderEpochCache()
+  @volatile private var _leaderEpochCache: LeaderEpochFileCache = initializeLeaderEpochCache()
 
   locally {
     val startMs = time.milliseconds
@@ -239,12 +278,12 @@ class Log(@volatile var dir: File,
     /* Calculate the offset of the next message */
     nextOffsetMetadata = new LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size)
 
-    _leaderEpochCache.clearAndFlushLatest(nextOffsetMetadata.messageOffset)
+    _leaderEpochCache.truncateFromEnd(nextOffsetMetadata.messageOffset)
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    _leaderEpochCache.clearAndFlushEarliest(logStartOffset)
+    _leaderEpochCache.truncateFromStart(logStartOffset)
 
     // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
     // from scratch.
@@ -296,11 +335,11 @@ class Log(@volatile var dir: File,
 
   def leaderEpochCache = _leaderEpochCache
 
-  private def initializeLeaderEpochCache(): LeaderEpochCache = {
+  private def initializeLeaderEpochCache(): LeaderEpochFileCache = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
-    new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
-      new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel))
+    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
+    new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
   }
 
   /**
@@ -422,7 +461,7 @@ class Log(@volatile var dir: File,
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment,
-                             leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
+                             leaderEpochCache: Option[LeaderEpochFileCache] = None): Int = lock synchronized {
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     rebuildProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
@@ -941,7 +980,7 @@ class Log(@volatile var dir: File,
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset to $newLogStartOffset")
           logStartOffset = newLogStartOffset
-          _leaderEpochCache.clearAndFlushEarliest(logStartOffset)
+          _leaderEpochCache.truncateFromStart(logStartOffset)
           producerStateManager.truncateHead(logStartOffset)
           updateFirstUnstableOffset()
         }
@@ -1087,11 +1126,6 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def readUncommitted(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
-                                   minOneMessage: Boolean = false): FetchDataInfo = {
-    read(startOffset, maxLength, maxOffset, minOneMessage, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
-  }
-
   /**
    * Read messages from the log.
    *
@@ -1099,18 +1133,15 @@ class Log(@volatile var dir: File,
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
-   * @param isolationLevel The isolation level of the fetcher. The READ_UNCOMMITTED isolation level has the traditional
-   *                       read semantics (e.g. consumers are limited to fetching up to the high watermark). In
-   *                       READ_COMMITTED, consumers are limited to fetching up to the last stable offset. Additionally,
-   *                       in READ_COMMITTED, the transaction index is consulted after fetching to collect the list
-   *                       of aborted transactions in the fetch range which the consumer uses to filter the fetched
-   *                       records before they are returned to the user. Note that fetches from followers always use
-   *                       READ_UNCOMMITTED.
+   * @param includeAbortedTxns Whether or not to lookup aborted transactions for fetched data
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
-           isolationLevel: IsolationLevel): FetchDataInfo = {
+  def read(startOffset: Long,
+           maxLength: Int,
+           maxOffset: Option[Long],
+           minOneMessage: Boolean,
+           includeAbortedTxns: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
       trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
 
@@ -1120,7 +1151,7 @@ class Log(@volatile var dir: File,
       val next = currentNextOffsetMetadata.messageOffset
       if (startOffset == next) {
         val abortedTransactions =
-          if (isolationLevel == IsolationLevel.READ_COMMITTED) Some(List.empty[AbortedTransaction])
+          if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
           else None
         return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
           abortedTransactions = abortedTransactions)
@@ -1160,10 +1191,10 @@ class Log(@volatile var dir: File,
         if (fetchInfo == null) {
           segmentEntry = segments.higherEntry(segmentEntry.getKey)
         } else {
-          return isolationLevel match {
-            case IsolationLevel.READ_UNCOMMITTED => fetchInfo
-            case IsolationLevel.READ_COMMITTED => addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
-          }
+          return if (includeAbortedTxns)
+            addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
+          else
+            fetchInfo
         }
       }
 
@@ -1266,13 +1297,62 @@ class Log(@volatile var dir: File,
     }
   }
 
+  def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+    // constant time access while being safe to use with concurrent collections unlike `toArray`.
+    val segments = logSegments.toBuffer
+    val lastSegmentHasSize = segments.last.size > 0
+
+    val offsetTimeArray =
+      if (lastSegmentHasSize)
+        new Array[(Long, Long)](segments.length + 1)
+      else
+        new Array[(Long, Long)](segments.length)
+
+    for (i <- segments.indices)
+      offsetTimeArray(i) = (math.max(segments(i).baseOffset, logStartOffset), segments(i).lastModified)
+    if (lastSegmentHasSize)
+      offsetTimeArray(segments.length) = (logEndOffset, time.milliseconds)
+
+    var startIndex = -1
+    timestamp match {
+      case ListOffsetRequest.LATEST_TIMESTAMP =>
+        startIndex = offsetTimeArray.length - 1
+      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
+        startIndex = 0
+      case _ =>
+        var isFound = false
+        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
+        startIndex = offsetTimeArray.length - 1
+        while (startIndex >= 0 && !isFound) {
+          if (offsetTimeArray(startIndex)._2 <= timestamp)
+            isFound = true
+          else
+            startIndex -= 1
+        }
+    }
+
+    val retSize = maxNumOffsets.min(startIndex + 1)
+    val ret = new Array[Long](retSize)
+    for (j <- 0 until retSize) {
+      ret(j) = offsetTimeArray(startIndex)._1
+      startIndex -= 1
+    }
+    // ensure that the returned seq is in descending order of offsets
+    ret.toSeq.sortBy(-_)
+  }
+
   /**
    * Given a message offset, find its corresponding offset metadata in the log.
    * If the message offset is out of range, return None to the caller.
    */
   def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
-      val fetchDataInfo = readUncommitted(offset, 1)
+      val fetchDataInfo = read(offset,
+        maxLength = 1,
+        maxOffset = None,
+        minOneMessage = false,
+        includeAbortedTxns = false)
       Some(fetchDataInfo.fetchOffsetMetadata)
     } catch {
       case _: OffsetOutOfRangeException => None
@@ -1353,12 +1433,17 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Delete any log segments that have either expired due to time based retention
-   * or because the log size is > retentionSize
+   * If topic deletion is enabled, delete any log segments that have either expired due to time based retention
+   * or because the log size is > retentionSize.
+   *
+   * Whether or not deletion is enabled, delete any log segments that are before the log start offset
    */
   def deleteOldSegments(): Int = {
-    if (!config.delete) return 0
-    deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+    if (config.delete) {
+      deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+    } else {
+      deleteLogStartOffsetBreachedSegments()
+    }
   }
 
   private def deleteRetentionMsBreachedSegments(): Int = {
@@ -1428,7 +1513,7 @@ class Log(@volatile var dir: File,
     val maxTimestampInMessages = appendInfo.maxTimestamp
     val maxOffsetInMessages = appendInfo.lastOffset
 
-    if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
+    if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
@@ -1645,7 +1730,7 @@ class Log(@volatile var dir: File,
             updateLogEndOffset(targetOffset)
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
             this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-            _leaderEpochCache.clearAndFlushLatest(targetOffset)
+            _leaderEpochCache.truncateFromEnd(targetOffset)
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
           true

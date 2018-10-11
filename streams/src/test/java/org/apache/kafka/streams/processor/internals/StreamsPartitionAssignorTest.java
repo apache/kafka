@@ -60,6 +60,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
@@ -961,7 +962,7 @@ public class StreamsPartitionAssignorTest {
                         return null;
                     }
                 },
-                JoinWindows.of(0)
+                JoinWindows.of(ofMillis(0))
             );
 
         final UUID uuid = UUID.randomUUID();

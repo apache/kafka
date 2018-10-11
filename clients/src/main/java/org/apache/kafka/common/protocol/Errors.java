@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.DelegationTokenDisabledException;
 import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
+import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -84,11 +85,13 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -278,7 +281,13 @@ public enum Errors {
             "metadata request was processed.",
             ListenerNotFoundException::new),
     TOPIC_DELETION_DISABLED(73, "Topic deletion is disabled.",
-            TopicDeletionDisabledException::new);
+            TopicDeletionDisabledException::new),
+    FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
+            FencedLeaderEpochException::new),
+    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
+            UnknownLeaderEpochException::new),
+    UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
+            UnsupportedCompressionTypeException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -287,7 +296,10 @@ public enum Errors {
 
     static {
         for (Errors error : Errors.values()) {
-            codeToError.put(error.code(), error);
+            if (codeToError.put(error.code(), error) != null)
+                throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
+                        error + " has already been used");
+
             if (error.exception != null)
                 classToError.put(error.exception.getClass(), error);
         }

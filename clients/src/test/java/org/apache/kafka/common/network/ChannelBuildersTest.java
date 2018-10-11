@@ -25,7 +25,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.net.InetAddress;
@@ -35,13 +34,14 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class ChannelBuildersTest {
 
     @Test
     public void testCreateOldPrincipalBuilder() throws Exception {
-        TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        Authenticator authenticator = EasyMock.mock(Authenticator.class);
+        TransportLayer transportLayer = mock(TransportLayer.class);
+        Authenticator authenticator = mock(Authenticator.class);
 
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, OldPrincipalBuilder.class);

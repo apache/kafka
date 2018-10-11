@@ -54,6 +54,10 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
         return valueSerde;
     }
 
+    public String repartitionTopic() {
+        return repartitionTopic;
+    }
+
     @Override
     Serializer<V> getValueSerializer() {
         return valueSerde != null ? valueSerde.serializer() : null;

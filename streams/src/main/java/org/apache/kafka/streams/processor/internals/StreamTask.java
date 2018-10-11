@@ -274,7 +274,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             transactionInFlight = true;
         }
 
-        processorContext.initialized();
+        processorContext.initialize();
 
         taskInitialized = true;
 

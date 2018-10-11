@@ -34,13 +34,12 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsGraphTest {
 
-    final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
-    
-
+    private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
     // Test builds topology in succesive manner but only graph node not yet processed written to topology
 
@@ -53,7 +52,7 @@ public class StreamsGraphTest {
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
 
 
-        final KStream<String, String> joinedStream = stream.join(streamII, valueJoiner, JoinWindows.of(5000));
+        final KStream<String, String> joinedStream = stream.join(streamII, valueJoiner, JoinWindows.of(ofMillis(5000)));
 
         // build step one
         assertEquals(expectedJoinedTopology, builder.build().describe().toString());
@@ -102,7 +101,7 @@ public class StreamsGraphTest {
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
-        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(5000)).count().toStream().to("windowed-output");
+        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
 
         return builder.build(properties);
 
@@ -118,7 +117,7 @@ public class StreamsGraphTest {
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
 
         mappedKeyStream.groupByKey().count().toStream().to("output");
-        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(5000)).count().toStream().to("windowed-output");
+        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
 
         return builder.build(properties);
 

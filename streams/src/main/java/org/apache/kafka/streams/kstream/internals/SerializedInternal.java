@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Serialized;
 
+@Deprecated
 public class SerializedInternal<K, V> extends Serialized<K, V> {
     public SerializedInternal(final Serialized<K, V> serialized) {
         super(serialized);
