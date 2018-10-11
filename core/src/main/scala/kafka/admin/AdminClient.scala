@@ -39,6 +39,7 @@ import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.config.ClientDnsLookup
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
@@ -452,6 +453,7 @@ object AdminClient {
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       requestTimeoutMs,
+      ClientDnsLookup.DEFAULT,
       time,
       true,
       new ApiVersions,

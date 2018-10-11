@@ -51,6 +51,7 @@ import org.apache.kafka.common.{ClusterResource, Node}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
+import org.apache.kafka.common.config.ClientDnsLookup
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -443,6 +444,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
+          ClientDnsLookup.DEFAULT,
           time,
           false,
           new ApiVersions,

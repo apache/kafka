@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -96,6 +98,8 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
+    private final ClientDnsLookup clientDnsLookup;
+
     private final Time time;
 
     /**
@@ -120,6 +124,7 @@ public class NetworkClient implements KafkaClient {
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
+                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -134,6 +139,7 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -150,6 +156,7 @@ public class NetworkClient implements KafkaClient {
             int socketSendBuffer,
             int socketReceiveBuffer,
             int defaultRequestTimeoutMs,
+            ClientDnsLookup clientDnsLookup,
             Time time,
             boolean discoverBrokerVersions,
             ApiVersions apiVersions,
@@ -165,6 +172,7 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -181,6 +189,7 @@ public class NetworkClient implements KafkaClient {
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
+                         ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -195,6 +204,7 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             clientDnsLookup,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -212,6 +222,7 @@ public class NetworkClient implements KafkaClient {
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int defaultRequestTimeoutMs,
+                          ClientDnsLookup clientDnsLookup,
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
@@ -243,6 +254,7 @@ public class NetworkClient implements KafkaClient {
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
+        this.clientDnsLookup = clientDnsLookup;
     }
 
     /**
@@ -862,12 +874,13 @@ public class NetworkClient implements KafkaClient {
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
         try {
-            log.debug("Initiating connection to node {}", node);
-            this.connectionStates.connecting(nodeConnectionId, now);
+            this.connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
+            InetAddress address = this.connectionStates.currentAddress(nodeConnectionId);
+            log.debug("Initiating connection to node {} using address {}", node, address);
             selector.connect(nodeConnectionId,
-                             new InetSocketAddress(node.host(), node.port()),
-                             this.socketSendBuffer,
-                             this.socketReceiveBuffer);
+                    new InetSocketAddress(address, node.port()),
+                    this.socketSendBuffer,
+                    this.socketReceiveBuffer);
         } catch (IOException e) {
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId, now);
