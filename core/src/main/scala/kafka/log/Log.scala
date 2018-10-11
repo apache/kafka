@@ -1341,6 +1341,13 @@ class Log(@volatile var dir: File,
     ret.toSeq.sortBy(-_)
   }
 
+  def firstOffsetMetadata(): LogOffsetMetadata = {
+    convertToOffsetMetadata(logStartOffset).getOrElse {
+      val firstSegmentBaseOffset = physicalLogStartOffset
+      new LogOffsetMetadata(firstSegmentBaseOffset, firstSegmentBaseOffset, 0)
+    }
+  }
+
   /**
    * Given a message offset, find its corresponding offset metadata in the log.
    * If the message offset is out of range, return None to the caller.
@@ -1800,7 +1807,13 @@ class Log(@volatile var dir: File,
 
   override def toString = "Log(" + dir + ")"
 
-  def physicalLogStartOffset: Long = logSegments.head.baseOffset
+  /**
+   * Get the physical log start offset. Logically, the log starts at Log#logStartOffset and is the view exposed to
+   * consumers. Most components should find logStartOffset sufficient. Use physicalLogStartOffset only for the cases
+   * where
+   * @return
+   */
+  private[log] def physicalLogStartOffset: Long = logSegments.head.baseOffset
 
   def numLogSegments: Int = logSegments.size
 
