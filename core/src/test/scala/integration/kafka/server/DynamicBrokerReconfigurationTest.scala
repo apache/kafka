@@ -355,8 +355,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testDefaultTopicConfig(): Unit = {
-    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
-
     val props = new Properties
     props.put(KafkaConfig.LogSegmentBytesProp, "4000")
     props.put(KafkaConfig.LogRollTimeMillisProp, TimeUnit.HOURS.toMillis(2).toString)
@@ -382,6 +380,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogSegmentBytesProp, "4000"))
 
+    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
+
     // Verify that all broker defaults have been updated
     servers.foreach { server =>
       props.asScala.foreach { case (k, v) =>
@@ -403,7 +403,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     consumerThread.waitForMatchingRecords(record => record.timestampType == TimestampType.LOG_APPEND_TIME)
 
     // Verify that the new config is actually used for new segments of existing logs
-//    TestUtils.waitUntilTrue(() => log.logSegments.exists(_.size > 3000), "Log segment size increase not applied")
+    TestUtils.waitUntilTrue(() => {
+      val numLogSegments = log.numLogSegments
+      log.logEndOffset > 0 && log.size / numLogSegments > 3000
+    }, "Log segment size increase not applied")
 
     // Verify that overridden topic configs are not updated when broker default is updated
     val log2 = servers.head.logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))

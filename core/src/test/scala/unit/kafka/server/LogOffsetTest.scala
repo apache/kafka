@@ -206,42 +206,6 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(0L), consumerOffsets)
   }
 
-  /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
-   * a race condition) */
-//  @Test
-//  def testFetchOffsetsBeforeWithChangingSegmentSize() {
-//    val log = EasyMock.niceMock(classOf[Log])
-//    val logSegment = EasyMock.niceMock(classOf[LogSegment])
-//    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
-//      private val value = new AtomicInteger(0)
-//      def answer: Int = value.getAndIncrement()
-//    })
-//    EasyMock.replay(logSegment)
-//    val logSegments = Seq(logSegment)
-//    EasyMock.expect(log.logSegments).andStubReturn(logSegments)
-//    EasyMock.replay(log)
-//    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
-//  }
-
-  /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
-   * different (simulating a race condition) */
-//  @Test
-//  def testFetchOffsetsBeforeWithChangingSegments() {
-//    val log = EasyMock.niceMock(classOf[Log])
-//    val logSegment = EasyMock.niceMock(classOf[LogSegment])
-//    EasyMock.expect(log.logSegments).andStubAnswer {
-//      new IAnswer[Iterable[LogSegment]] {
-//        def answer = new Iterable[LogSegment] {
-//          override def size = 2
-//          def iterator = Seq(logSegment).iterator
-//        }
-//      }
-//    }
-//    EasyMock.replay(logSegment)
-//    EasyMock.replay(log)
-//    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
-//  }
-
   private def server: KafkaServer = servers.head
 
   private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {

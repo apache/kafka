@@ -1802,6 +1802,8 @@ class Log(@volatile var dir: File,
 
   def physicalLogStartOffset: Long = logSegments.head.baseOffset
 
+  def numLogSegments: Int = logSegments.size
+
   /**
    * This method performs an asynchronous log segment delete by doing the following:
    * <ol>

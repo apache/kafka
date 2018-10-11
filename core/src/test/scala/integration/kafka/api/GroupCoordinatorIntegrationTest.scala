@@ -51,8 +51,9 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logEndOffset > 0), "Commit message not appended in time")
 
-    val fetchedRecords = getGroupMetadataLogOpt.get.read(0, Int.MaxValue, None, false, false)
-    val incorrectCompressionCodecs = fetchedRecords.records.batches.asScala.map(_.compressionType).filter(_ != offsetsTopicCompressionCodec)
+    val records = getGroupMetadataLogOpt.get.read(0, Int.MaxValue, None, false, false).records
+    assertTrue(records.sizeInBytes() > 0)
+    val incorrectCompressionCodecs = records.batches.asScala.map(_.compressionType).filter(_ != offsetsTopicCompressionCodec)
     assertEquals("Incorrect compression codecs should be empty", Seq.empty, incorrectCompressionCodecs)
 
     consumer.close()

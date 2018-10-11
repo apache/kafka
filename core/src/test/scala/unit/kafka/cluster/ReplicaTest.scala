@@ -67,66 +67,6 @@ class ReplicaTest {
     Utils.delete(tmpDir)
   }
 
-//  @Test
-//  def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
-//    val initialHighWatermark = 25L
-//    replica = new Replica(brokerId = 0,
-//      topicPartition = new TopicPartition("foo", 0),
-//      time = time,
-//      initialHighWatermarkValue = initialHighWatermark,
-//      log = Some(log))
-//
-//    assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
-//
-//    val expiredTimestamp = time.milliseconds() - 1000
-//    for (i <- 0 until 100) {
-//      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
-//      log.appendAsLeader(records, leaderEpoch = 0)
-//    }
-//
-//    val initialNumSegments = log.numberOfSegments
-//    log.deleteOldSegments()
-//    assertTrue(log.numberOfSegments < initialNumSegments)
-//    assertTrue(replica.logStartOffset <= initialHighWatermark)
-//  }
-
-//  @Test
-//  def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
-//    val expiredTimestamp = time.milliseconds() - 1000
-//    for (i <- 0 until 100) {
-//      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
-//      log.appendAsLeader(records, leaderEpoch = 0)
-//    }
-//
-//    // ensure we have at least a few segments so the test case is not trivial
-//    assertTrue(log.numberOfSegments > 5)
-//    assertEquals(0L, replica.highWatermark.messageOffset)
-//    assertEquals(0L, replica.logStartOffset)
-//    assertEquals(100L, replica.logEndOffset.messageOffset)
-//
-//    for (hw <- 0 to 100) {
-//      replica.highWatermark = new LogOffsetMetadata(hw)
-//      assertEquals(hw, replica.highWatermark.messageOffset)
-//      log.deleteOldSegments()
-//      assertTrue(replica.logStartOffset <= hw)
-//
-//      // verify that all segments up to the high watermark have been deleted
-//
-//      log.logSegments.headOption.foreach { segment =>
-//        assertTrue(segment.baseOffset <= hw)
-//        assertTrue(segment.baseOffset >= replica.logStartOffset)
-//      }
-//      log.logSegments.tail.foreach { segment =>
-//        assertTrue(segment.baseOffset > hw)
-//        assertTrue(segment.baseOffset >= replica.logStartOffset)
-//      }
-//    }
-//
-//    assertEquals(100L, log.logStartOffset)
-//    assertEquals(1, log.numberOfSegments)
-//    assertEquals(0, log.activeSegment.size)
-//  }
-
   @Test(expected = classOf[OffsetOutOfRangeException])
   def testCannotIncrementLogStartOffsetPastHighWatermark(): Unit = {
     for (i <- 0 until 100) {
