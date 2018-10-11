@@ -55,18 +55,18 @@ public class ClientUtilsTest {
     }
 
     @Test
-    public void testFilterPreferedAddresses() throws UnknownHostException {
+    public void testFilterPreferredAddresses() throws UnknownHostException {
         InetAddress ipv4 = InetAddress.getByName("192.0.0.1");
         InetAddress ipv6 = InetAddress.getByName("::1");
 
         InetAddress[] ipv4First = new InetAddress[]{ipv4, ipv6, ipv4};
-        List<InetAddress> result = ClientUtils.filterPreferedAddresses(ipv4First);
+        List<InetAddress> result = ClientUtils.filterPreferredAddresses(ipv4First);
         assertTrue(result.contains(ipv4));
         assertFalse(result.contains(ipv6));
         assertEquals(2, result.size());
 
         InetAddress[] ipv6First = new InetAddress[]{ipv6, ipv4, ipv4};
-        result = ClientUtils.filterPreferedAddresses(ipv6First);
+        result = ClientUtils.filterPreferredAddresses(ipv6First);
         assertTrue(result.contains(ipv6));
         assertFalse(result.contains(ipv4));
         assertEquals(1, result.size());

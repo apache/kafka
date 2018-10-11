@@ -96,23 +96,23 @@ public final class ClientUtils {
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
         if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
-            return filterPreferedAddresses(addresses);
+            return filterPreferredAddresses(addresses);
         } else {
             return Collections.singletonList(addresses[0]);
         }
     }
 
-    static List<InetAddress> filterPreferedAddresses(InetAddress[] allAddresses) {
-        List<InetAddress> preferedAddresses = new ArrayList<>();
+    static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {
+        List<InetAddress> preferredAddresses = new ArrayList<>();
         Class<? extends InetAddress> clazz = null;
         for (InetAddress address : allAddresses) {
             if (clazz == null) {
                 clazz = address.getClass();
             }
             if (clazz.isInstance(address)) {
-                preferedAddresses.add(address);
+                preferredAddresses.add(address);
             }
         }
-        return preferedAddresses;
+        return preferredAddresses;
     }
 }
