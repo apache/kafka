@@ -170,28 +170,28 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
    */
   def resize(newSize: Int): Boolean = {
+    val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
+    var origin: MappedByteBuffer = null
+
     inLock(lock) {
-      val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
-
       if (_length == roundedNewSize) {
-        false
-      } else {
-        val raf = new RandomAccessFile(file, "rw")
-        try {
-          val position = mmap.position()
-
-          safeForceUnmap()
-          raf.setLength(roundedNewSize)
-          _length = roundedNewSize
-          mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-          _maxEntries = mmap.limit() / entrySize
-          mmap.position(position)
-          true
-        } finally {
-          CoreUtils.swallow(raf.close(), this)
-        }
+        return false
+      }
+      origin = mmap
+      val raf = new RandomAccessFile(file, "rw")
+      try {
+        val position = mmap.position()
+        raf.setLength(roundedNewSize)
+        _length = roundedNewSize
+        mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+        _maxEntries = mmap.limit() / entrySize
+        mmap.position(position)
+      } finally {
+        CoreUtils.swallow(raf.close(), this)
       }
     }
+    CoreUtils.swallow(MappedByteBuffers.unmap(file.getAbsolutePath, origin), this)
+    true
   }
 
   /**
