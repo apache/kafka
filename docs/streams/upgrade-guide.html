@@ -81,7 +81,7 @@
         We've added a new class <code>Grouped</code> and deprecated <code>Serialized</code>.  The intent of adding <code>Grouped</code> is the ability to
         name repartition topics created when performing aggregation operations.  Users can name the potential repartition topic using the
         <code>Grouped#as()</code> method which takes a <code>String</code> and is used as part of the repartition topic name.  The resulting repartition
-        topic name will still follow the pattern of <code>application-id-&gt;name&lt;-repartition</code>.  The <code>Grouped</code> class is now favored over
+        topic name will still follow the pattern of <code>${application-id}-&gt;name&lt;-repartition</code>.  The <code>Grouped</code> class is now favored over
         <code>Serialized</code> in <code>KStream#groupByKey()</code>, <code>KStream#groupBy()</code>, and <code>KTable#groupBy()</code>.
         Note that Kafka Streams does not automatically create repartition topics for aggregation operations.
 
