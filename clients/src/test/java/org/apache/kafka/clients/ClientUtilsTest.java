@@ -57,7 +57,7 @@ public class ClientUtilsTest {
     }
 
 
-    @Test(expected = ConfigException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testInvalidConfig() {
         ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
     }

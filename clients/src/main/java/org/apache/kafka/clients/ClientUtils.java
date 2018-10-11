@@ -45,13 +45,7 @@ public final class ClientUtils {
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
-        ClientDnsLookup clientDnsLookupBehaviour = null;
-        try {
-            clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
-        } catch (IllegalArgumentException e) {
-            log.error("{} isn't a valid value for {}", clientDnsLookup, CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
-            throw new ConfigException("Invalid value in " + CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
-        }
+        ClientDnsLookup clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {
@@ -66,7 +60,7 @@ public final class ClientUtils {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
                             InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
                             if (address.isUnresolved()) {
-                                log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
                             } else {
                                 addresses.add(address);
                             }
@@ -74,7 +68,7 @@ public final class ClientUtils {
                     } else {
                         InetSocketAddress address = new InetSocketAddress(host, port);
                         if (address.isUnresolved()) {
-                            log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                            log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
                         } else {
                             addresses.add(address);
                         }

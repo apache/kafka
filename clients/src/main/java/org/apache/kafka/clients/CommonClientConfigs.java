@@ -42,7 +42,7 @@ public class CommonClientConfigs {
                                                        + "servers (you may want more than one, though, in case a server is down).";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
-    public static final String CLIENT_DNS_LOOKUP_DOC = "To enable client DNS lookups on entries of bootstrap.servers. If the value is resolve.canonical.bootstrap.servers.only each entry will be resolved and expanded into a list of canonical names";
+    public static final String CLIENT_DNS_LOOKUP_DOC = "To enable client DNS lookups on entries of bootstrap.servers. If the value is resolve_canonical_bootstrap_servers_only each entry will be resolved and expanded into a list of canonical names";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";

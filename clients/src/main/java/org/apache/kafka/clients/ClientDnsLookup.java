@@ -21,7 +21,7 @@ import java.util.Map;
 
 public enum ClientDnsLookup {
 
-    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve.canonical.bootstrap.servers.only"),
+    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only"),
     DEFAULT("default");
 
     private String clientDnsLookup;

@@ -46,7 +46,7 @@ public class AdminClientConfig extends AbstractConfig {
     /**
      * <code>client.dns.lookup</code>
      */
-    public static final String CLIENT_DNS_LOOKUP = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     private static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
 
     /**
@@ -112,7 +112,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         Type.LIST,
                                         Importance.HIGH,
                                         BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_DNS_LOOKUP,
+                                .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.DEFAULT.toString(),
                                         in(ClientDnsLookup.DEFAULT.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
