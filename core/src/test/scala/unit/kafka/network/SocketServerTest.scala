@@ -144,13 +144,13 @@ class SocketServerTest extends JUnitSuite {
   def connectAndProcessRequest(s: SocketServer): (Socket, String) = {
     val socket = connect(s)
     val request = sendAndReceiveRequest(socket, s)
-    processRequest(s.requestChannel, request)
+    processRequest(s.dataRequestChannel, request)
     (socket, request.context.connectionId)
   }
 
   def sendAndReceiveRequest(socket: Socket, server: SocketServer): RequestChannel.Request = {
     sendRequest(socket, producerRequestBytes())
-    receiveRequest(server.requestChannel)
+    receiveRequest(server.dataRequestChannel)
   }
 
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
@@ -181,7 +181,7 @@ class SocketServerTest extends JUnitSuite {
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, serializedBytes)
-    processRequest(server.requestChannel)
+    processRequest(server.dataRequestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
   }
 
@@ -212,9 +212,9 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(plainSocket, serializedBytes)
     plainSocket.close()
     for (_ <- 0 until 10) {
-      val request = receiveRequest(server.requestChannel)
+      val request = receiveRequest(server.dataRequestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
+      server.dataRequestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -226,9 +226,9 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 3)
       sendRequest(plainSocket, serializedBytes)
     for (_ <- 0 until 3) {
-      val request = receiveRequest(server.requestChannel)
+      val request = receiveRequest(server.dataRequestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
+      server.dataRequestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -239,7 +239,7 @@ class SocketServerTest extends JUnitSuite {
 
     val requests = sockets.map{socket =>
       sendRequest(socket, serializedBytes)
-      receiveRequest(server.requestChannel)
+      receiveRequest(server.dataRequestChannel)
     }
     requests.zipWithIndex.foreach { case (request, i) =>
       val index = request.context.connectionId.split("-").last
@@ -269,14 +269,14 @@ class SocketServerTest extends JUnitSuite {
       // Connection with no staged receives
       val socket1 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
       sendRequest(socket1, serializedBytes)
-      val request1 = receiveRequest(overrideServer.requestChannel)
+      val request1 = receiveRequest(overrideServer.dataRequestChannel)
       assertTrue("Channel not open", openChannel(request1).nonEmpty)
       assertEquals(openChannel(request1), openOrClosingChannel(request1))
 
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request1).isEmpty, "Failed to close idle channel")
       assertTrue("Channel not removed", openChannel(request1).isEmpty)
-      processRequest(overrideServer.requestChannel, request1)
+      processRequest(overrideServer.dataRequestChannel, request1)
 
       // Connection with staged receives
       val socket2 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
@@ -285,9 +285,9 @@ class SocketServerTest extends JUnitSuite {
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openChannel(request2).isEmpty, "Failed to close idle channel")
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).nonEmpty, "Channel removed without processing staged receives")
-      processRequest(overrideServer.requestChannel, request2) // this triggers a failed send since channel has been closed
+      processRequest(overrideServer.dataRequestChannel, request2) // this triggers a failed send since channel has been closed
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).isEmpty, "Failed to remove channel with failed sends")
-      assertNull("Received request after failed send", overrideServer.requestChannel.receiveRequest(200))
+      assertNull("Received request after failed send", overrideServer.dataRequestChannel.receiveRequest(200))
 
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -304,9 +304,9 @@ class SocketServerTest extends JUnitSuite {
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
-      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
-        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+      override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isControlPlane: Boolean): Processor = {
+        new Processor(id, isControlPlane, time, config.socketRequestMaxBytes, dataRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, memoryPool, new LogContext()) {
             override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
@@ -361,7 +361,7 @@ class SocketServerTest extends JUnitSuite {
       assertSame(channel1, openOrClosingChannel.getOrElse(throw new RuntimeException("Channel not found")))
 
       // Complete request with failed send so that `channel1` is removed from Selector.closingChannels
-      processRequest(overrideServer.requestChannel, request)
+      processRequest(overrideServer.dataRequestChannel, request)
       TestUtils.waitUntilTrue(() => connectionCount == 0 && openOrClosingChannel.isEmpty, "Failed to remove channel with failed send")
 
       // Check that new connections can be created with the same id since `channel1` is no longer in Selector
@@ -380,14 +380,14 @@ class SocketServerTest extends JUnitSuite {
     def sendTwoRequestsReceiveOne(): RequestChannel.Request = {
       sendRequest(socket, requestBytes, flush = false)
       sendRequest(socket, requestBytes, flush = true)
-      receiveRequest(server.requestChannel)
+      receiveRequest(server.dataRequestChannel)
     }
     val (request, hasStagedReceives) = TestUtils.computeUntilTrue(sendTwoRequestsReceiveOne()) { req =>
       val connectionId = req.context.connectionId
       val hasStagedReceives = server.processor(0).numStagedReceives(connectionId) > 0
       if (!hasStagedReceives) {
-        processRequest(server.requestChannel, req)
-        processRequest(server.requestChannel)
+        processRequest(server.dataRequestChannel, req)
+        processRequest(server.dataRequestChannel)
       }
       hasStagedReceives
     }
@@ -403,11 +403,11 @@ class SocketServerTest extends JUnitSuite {
 
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
-    val request = receiveRequest(server.requestChannel)
+    val request = receiveRequest(server.dataRequestChannel)
     val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
     def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
-      server.requestChannel.sendResponse(response)
+      server.dataRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
     val response =
@@ -415,7 +415,7 @@ class SocketServerTest extends JUnitSuite {
         new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
       else
         new RequestChannel.NoOpResponse(request)
-    server.requestChannel.sendResponse(response)
+    server.dataRequestChannel.sendResponse(response)
 
     // Quota manager would call notifyThrottlingDone() on throttling completion. Simulate it if throttleingInProgress is
     // false.
@@ -490,7 +490,7 @@ class SocketServerTest extends JUnitSuite {
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
-    processRequest(server.requestChannel)
+    processRequest(server.dataRequestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
     // make sure the sockets are open
@@ -527,7 +527,7 @@ class SocketServerTest extends JUnitSuite {
     val conn2 = connect()
     val serializedBytes = producerRequestBytes()
     sendRequest(conn2, serializedBytes)
-    val request = server.requestChannel.receiveRequest(2000)
+    val request = server.dataRequestChannel.receiveRequest(2000)
     assertNotNull(request)
   }
 
@@ -555,7 +555,7 @@ class SocketServerTest extends JUnitSuite {
       val conn2 = connect(server)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn2, serializedBytes)
-      val request = server.requestChannel.receiveRequest(2000)
+      val request = server.dataRequestChannel.receiveRequest(2000)
       assertNotNull(request)
 
       // now try to connect from the external facing interface, which should fail
@@ -583,7 +583,7 @@ class SocketServerTest extends JUnitSuite {
       // it should succeed
       val serializedBytes = producerRequestBytes()
       sendRequest(conns.last, serializedBytes)
-      val request = overrideServer.requestChannel.receiveRequest(2000)
+      val request = overrideServer.dataRequestChannel.receiveRequest(2000)
       assertNotNull(request)
 
       // now try one more (should fail)
@@ -627,7 +627,7 @@ class SocketServerTest extends JUnitSuite {
       byteBuffer.get(serializedBytes)
 
       sendRequest(sslSocket, serializedBytes)
-      processRequest(overrideServer.requestChannel)
+      processRequest(overrideServer.dataRequestChannel)
       assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
       sslSocket.close()
     } finally {
@@ -640,7 +640,7 @@ class SocketServerTest extends JUnitSuite {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
-    assertEquals(KafkaPrincipal.ANONYMOUS, receiveRequest(server.requestChannel).session.principal)
+    assertEquals(KafkaPrincipal.ANONYMOUS, receiveRequest(server.dataRequestChannel).session.principal)
   }
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
@@ -650,9 +650,9 @@ class SocketServerTest extends JUnitSuite {
     val serverMetrics = new Metrics
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
-      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
-        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+      override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isControlPlane: Boolean): Processor = {
+        new Processor(id, isControlPlane, time, config.socketRequestMaxBytes, dataRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, MemoryPool.NONE, new LogContext()) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
@@ -668,7 +668,7 @@ class SocketServerTest extends JUnitSuite {
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
 
-      val channel = overrideServer.requestChannel
+      val channel = overrideServer.dataRequestChannel
       val request = receiveRequest(channel)
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
@@ -696,9 +696,9 @@ class SocketServerTest extends JUnitSuite {
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
-      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
-        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+      override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isControlPlane: Boolean): Processor = {
+        new Processor(id, isControlPlane, time, config.socketRequestMaxBytes, dataRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, memoryPool, new LogContext()) {
           override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
@@ -730,7 +730,7 @@ class SocketServerTest extends JUnitSuite {
       socket.close()
 
       // Complete request with socket exception so that the channel is removed from Selector.closingChannels
-      processRequest(overrideServer.requestChannel, request)
+      processRequest(overrideServer.dataRequestChannel, request)
       TestUtils.waitUntilTrue(() => openOrClosingChannel.isEmpty, "Channel not closed after failed send")
       assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
     } finally {
@@ -755,7 +755,7 @@ class SocketServerTest extends JUnitSuite {
       conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
-      val channel = overrideServer.requestChannel
+      val channel = overrideServer.dataRequestChannel
       val request = receiveRequest(channel)
 
       TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.context.connectionId).isEmpty,
@@ -780,10 +780,10 @@ class SocketServerTest extends JUnitSuite {
     server.stopProcessingRequests()
     val version = ApiKeys.PRODUCE.latestVersion
     val version2 = (version - 1).toShort
-    for (_ <- 0 to 1) server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
-    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
-    assertEquals(2, server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
-    server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
+    for (_ <- 0 to 1) server.dataRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
+    server.dataRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
+    assertEquals(2, server.dataRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
+    server.dataRequestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
         s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
@@ -879,7 +879,7 @@ class SocketServerTest extends JUnitSuite {
       sockets.foreach(sendRequest(_, producerRequestBytes()))
 
       testableServer.testableSelector.addFailure(SelectorOperation.Send)
-      sockets.foreach(_ => processRequest(testableServer.requestChannel))
+      sockets.foreach(_ => processRequest(testableServer.dataRequestChannel))
       testableSelector.waitForOperations(SelectorOperation.Send, 2)
       testableServer.waitForChannelClose(testableSelector.allFailedChannels.head, locallyClosed = true)
 
@@ -900,7 +900,7 @@ class SocketServerTest extends JUnitSuite {
 
       val sockets = (1 to 2).map(_ => connect(testableServer))
       sockets.foreach(sendRequest(_, producerRequestBytes()))
-      val requestChannel = testableServer.requestChannel
+      val requestChannel = testableServer.dataRequestChannel
 
       val requests = sockets.map(_ => receiveRequest(requestChannel))
       val failedConnectionId = requests(0).context.connectionId
@@ -933,8 +933,8 @@ class SocketServerTest extends JUnitSuite {
 
       testableSelector.addFailure(SelectorOperation.Send)
       sockets(0).close()
-      processRequest(testableServer.requestChannel, request)
-      processRequest(testableServer.requestChannel) // Also process request from other channel
+      processRequest(testableServer.dataRequestChannel, request)
+      processRequest(testableServer.dataRequestChannel) // Also process request from other channel
       testableSelector.waitForOperations(SelectorOperation.Send, 2)
       testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = true)
 
@@ -957,7 +957,7 @@ class SocketServerTest extends JUnitSuite {
     withTestableServer { testableServer =>
       val sockets = (1 to 2).map(_ => connect(testableServer))
       val testableSelector = testableServer.testableSelector
-      val requestChannel = testableServer.requestChannel
+      val requestChannel = testableServer.dataRequestChannel
 
       testableSelector.cachedCompletedReceives.minPerPoll = 2
       testableSelector.addFailure(SelectorOperation.Mute)
@@ -989,7 +989,7 @@ class SocketServerTest extends JUnitSuite {
       val requests = sockets.map(sendAndReceiveRequest(_, testableServer))
 
       testableSelector.addFailure(SelectorOperation.Unmute)
-      requests.foreach(processRequest(testableServer.requestChannel, _))
+      requests.foreach(processRequest(testableServer.dataRequestChannel, _))
       testableSelector.waitForOperations(SelectorOperation.Unmute, 2)
       testableServer.waitForChannelClose(testableSelector.allFailedChannels.head, locallyClosed = true)
 
@@ -1073,7 +1073,7 @@ class SocketServerTest extends JUnitSuite {
   private def assertProcessorHealthy(testableServer: TestableSocketServer, healthySockets: Seq[Socket] = Seq.empty): Unit = {
     val selector = testableServer.testableSelector
     selector.reset()
-    val requestChannel = testableServer.requestChannel
+    val requestChannel = testableServer.dataRequestChannel
 
     // Check that existing channels behave as expected
     healthySockets.foreach { socket =>
@@ -1101,9 +1101,9 @@ class SocketServerTest extends JUnitSuite {
 
     @volatile var selector: Option[TestableSelector] = None
 
-    override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
-      new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
+    override def newProcessor(id: Int, requestChannel: RequestChannel,connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isControlPlane: Boolean): Processor = {
+      new Processor(id, isControlPlane, time, config.socketRequestMaxBytes, dataRequestChannel, connectionQuotas, config.connectionsMaxIdleMs,
         config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new LogContext()) {
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)

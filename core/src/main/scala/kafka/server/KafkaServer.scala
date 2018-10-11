@@ -113,10 +113,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   val brokerState: BrokerState = new BrokerState
 
-  var apis: KafkaApis = null
+  var dataPlaneApis: KafkaApis = null
+  var controlPlaneApis: KafkaApis = null
   var authorizer: Option[Authorizer] = None
   var socketServer: SocketServer = null
-  var requestHandlerPool: KafkaRequestHandlerPool = null
+  var dataRequestHandlerPool: KafkaRequestHandlerPool = null
+  var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
@@ -291,12 +293,21 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         /* start processing requests */
-        apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
+        dataPlaneApis = new KafkaApis(socketServer.dataRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager)
 
-        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, time,
-          config.numIoThreads)
+        dataRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataRequestChannel, dataPlaneApis, time,
+          config.numIoThreads, "RequestHandlerAvgIdlePercent", false)
+
+        if (config.controlPlaneListenerName.isDefined) {
+          controlPlaneApis = new KafkaApis(socketServer.controlPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
+            kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+            fetchManager, brokerTopicStats, clusterId, time, tokenManager)
+
+          controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannel,
+            controlPlaneApis, time, 1, "ControlPlaneRequestHandlerIdlePercent", true)
+        }
 
         Mx4jLoader.maybeLoad()
 
@@ -573,14 +584,18 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
           CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
-        if (requestHandlerPool != null)
-          CoreUtils.swallow(requestHandlerPool.shutdown(), this)
+        if (dataRequestHandlerPool != null)
+          CoreUtils.swallow(dataRequestHandlerPool.shutdown(), this)
+        if (controlPlaneRequestHandlerPool != null)
+          CoreUtils.swallow(controlPlaneRequestHandlerPool.shutdown(), this)
 
         if (kafkaScheduler != null)
           CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
-        if (apis != null)
-          CoreUtils.swallow(apis.close(), this)
+        if (dataPlaneApis != null)
+          CoreUtils.swallow(dataPlaneApis.close(), this)
+        if (controlPlaneApis != null)
+          CoreUtils.swallow(controlPlaneApis.close(), this)
         CoreUtils.swallow(authorizer.foreach(_.close()), this)
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown(), this)

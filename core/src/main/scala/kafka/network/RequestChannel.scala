@@ -40,6 +40,7 @@ object RequestChannel extends Logging {
   private val requestLogger = Logger("kafka.request.logger")
 
   val RequestQueueSizeMetric = "RequestQueueSize"
+  val ControlPlaneRequestQueueSizeMetric = "ControlPlaneRequestQueueSize"
   val ResponseQueueSizeMetric = "ResponseQueueSize"
   val ProcessorMetricTag = "processor"
 
@@ -272,13 +273,13 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int, val queueSizeMetric: String) extends KafkaMetricsGroup {
   import RequestChannel._
   val metrics = new RequestChannel.Metrics
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
 
-  newGauge(RequestQueueSizeMetric, new Gauge[Int] {
+  newGauge(queueSizeMetric, new Gauge[Int] {
       def value = requestQueue.size
   })
 

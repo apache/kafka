@@ -518,7 +518,7 @@ public class IntegrationTestUtils {
                                                      final long timeout) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             for (final KafkaServer server : servers) {
-                final MetadataCache metadataCache = server.apis().metadataCache();
+                final MetadataCache metadataCache = server.dataPlaneApis().metadataCache();
                 final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
                         metadataCache.getPartitionInfo(topic, partition);
                 if (partitionInfo.isEmpty()) {

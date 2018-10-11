@@ -282,6 +282,7 @@ object KafkaConfig {
   val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
+  val ControlPlaneListenerNameProp = "control.plane.listener.name"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
@@ -540,6 +541,27 @@ object KafkaConfig {
     "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
     "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
     "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). "
+  val ControlPlaneListenerNameDoc = s"On the broker side, the $ControlPlaneListenerNameProp is used to locate an endpoint in the $ListenersProp list, which we will use to listen for connections " +
+    s"from the controller. For example, if a broker's config is:" +
+    """
+listeners=CONTROLLER://192.1.1.8:9091,INTERNAL://192.1.1.8:9092,EXTERNAL://10.1.1.5:9093
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SSL
+control.plane.listener.name=CONTROLLER"""+
+    "\nUpon startup, a broker will bind to the local endpoint 192.1.1.8:9091 with security protocol PLAINTEXT to listen for controller connections.\n" +
+    s"On the controller side, when the controller discovers a broker's published endpoints through Zookeeper, " +
+    s"the $ControlPlaneListenerNameProp is used to locate an endpoint within the published endpoints, which it will use to establish connections with "+
+    "the broker. For example, if a broker's published endpoints list on Zookeeper is" +
+    """
+"endpoints": [
+  "CONTROLLER://broker1.example.com:9091",
+  "INTERNAL://broker1.example.com:9092",
+  "EXTERNAL://host1.example.com:9093"
+]""" +
+    s"\n and the controller's config is\n" +
+    "listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SSL\n" +
+    "control.plane.listener.name=CONTROLLER\n" +
+    "then the controller will use the endpoint broker1.example.com:9091 with security protocol PLAINTEXT to connect to the discovered broker.\n" +
+    "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections."
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
@@ -837,6 +859,7 @@ object KafkaConfig {
       .define(AdvertisedHostNameProp, STRING, null, HIGH, AdvertisedHostNameDoc)
       .define(AdvertisedPortProp, INT, null, HIGH, AdvertisedPortDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
+      .define(ControlPlaneListenerNameProp, STRING, null, HIGH, ControlPlaneListenerNameDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
@@ -1253,6 +1276,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
+  val controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map(_._1)
+  val controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map(_._2)
   def saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion >= KAFKA_0_10_0_IV1
 
@@ -1325,6 +1350,21 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
   }
 
+  // Return the endpoint corresponding to the controller listener name
+  def controlPlaneListener: Option[EndPoint] = {
+    controlPlaneListenerName.flatMap { name =>
+      listeners.filter(endpoint => endpoint.listenerName.value() == name.value()).headOption
+    }
+  }
+
+  // Return the endpoints that are not related to the controller listener name
+  def dataListeners: Seq[EndPoint] = {
+    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
+      case Some(controllerListenerName) => listeners.filterNot(_.listenerName.value() == controllerListenerName)
+      case None => listeners
+    }
+  }
+
   // If the user defined advertised listeners, we use those
   // If he didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
   // If none of these are defined, we'll use the listeners
@@ -1353,6 +1393,18 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         val securityProtocol = getSecurityProtocol(getString(KafkaConfig.InterBrokerSecurityProtocolProp),
           KafkaConfig.InterBrokerSecurityProtocolProp)
         (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    }
+  }
+
+  // If the controller.listener.name config is set, we use its value
+  // Otherwise, the controller listener name will be the same as the inter broker listener name
+  private def getControlPlaneListenerNameAndSecurityProtocol: Option[(ListenerName, SecurityProtocol)] = {
+    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)).map { name =>
+      val controlPlaneListenerName = ListenerName.normalised(name)
+      val controlPlaneSecurityProtocol = listenerSecurityProtocolMap.getOrElse(controlPlaneListenerName,
+        throw new ConfigException(s"Listener with name ${controlPlaneListenerName.value} defined in " +
+          s"${KafkaConfig.ControlPlaneListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
+      (controlPlaneListenerName, controlPlaneSecurityProtocol)
     }
   }
 
@@ -1411,6 +1463,24 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(interBrokerProtocolVersion.recordVersion.value >= recordVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${ApiVersion.minSupportedFor(recordVersion).shortVersion} or higher")
+
+    // validate the controller.listener.name config
+    if (controlPlaneListenerName.isDefined) {
+      require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
+        s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
+          s"Currently they both have the value ${controlPlaneListenerName.get}")
+
+      require(listenerNames.contains(controlPlaneListenerName.get),
+        s"${KafkaConfig.ControlPlaneListenerNameProp} has a value of ${controlPlaneListenerName.get}, " +
+          s"which must be a listener name defined in ${KafkaConfig.ListenersProp}. " +
+          s"The current listener names defined in ${KafkaConfig.ListenersProp} are ${listenerNames.map(_.value).mkString(",")}"
+      )
+      require(advertisedListenerNames.contains(controlPlaneListenerName.get),
+        s"${KafkaConfig.ControlPlaneListenerNameProp} has a value of ${controlPlaneListenerName.get}, " +
+          s"which must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+          s"The current listener names defined in ${KafkaConfig.AdvertisedListenersProp} are ${advertisedListenerNames.map(_.value).mkString(",")}"
+      )
+    }
 
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,

@@ -323,10 +323,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     var activeServers = servers.filter(s => s.config.brokerId != 2)
     // wait for the update metadata request to trickle to the brokers
     TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
+      activeServers.forall(_.dataPlaneApis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
       "Topic test not created after timeout")
     assertEquals(0, partitionsRemaining.size)
-    var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    var partitionStateInfo = activeServers.head.dataPlaneApis.metadataCache.getPartitionInfo(topic,partition).get
     var leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
     assertEquals(0, leaderAfterShutdown)
     assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
@@ -336,16 +336,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     partitionsRemaining = resultQueue.take().get
     assertEquals(0, partitionsRemaining.size)
     activeServers = servers.filter(s => s.config.brokerId == 0)
-    partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    partitionStateInfo = activeServers.head.dataPlaneApis.metadataCache.getPartitionInfo(topic,partition).get
     leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
     assertEquals(0, leaderAfterShutdown)
 
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    assertTrue(servers.forall(_.dataPlaneApis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
     controller.controlledShutdown(0, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
     assertEquals(1, partitionsRemaining.size)
     // leader doesn't change since all the replicas are shut down
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    assertTrue(servers.forall(_.dataPlaneApis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
   }
 
   @Test

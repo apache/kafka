@@ -35,6 +35,7 @@ import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
+import com.yammer.metrics.core.{Metric, MetricName}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -811,7 +812,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneApis.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -831,7 +832,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
-          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
+          val partitionStateOpt = server.dataPlaneApis.metadataCache.getPartitionInfo(topic, partition)
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>
@@ -1410,5 +1411,16 @@ object TestUtils extends Logging {
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
+  }
+
+  def verifyMetricExistence(metricName: String, allMetrics: mutable.Map[MetricName, Metric], shouldExist: Boolean): Unit = {
+    val foundMetrics = allMetrics.filter {
+      k => k._1.getName.equals(metricName)
+    }
+
+    val metricExists = foundMetrics.nonEmpty
+
+    assertTrue(s"The $metricName metric should " + (if (!shouldExist) "not " else "") + "exist.",
+      if (shouldExist) metricExists else !metricExists )
   }
 }

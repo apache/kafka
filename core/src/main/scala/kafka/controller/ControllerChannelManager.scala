@@ -108,14 +108,16 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
-    val brokerNode = broker.node(config.interBrokerListenerName)
+    val controlPlaneListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+    val controlPlaneSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+    val brokerNode = broker.node(controlPlaneListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
-        config.interBrokerSecurityProtocol,
+        controlPlaneSecurityProtocol,
         JaasContext.Type.SERVER,
         config,
-        config.interBrokerListenerName,
+        controlPlaneListenerName,
         config.saslMechanismInterBrokerProtocol,
         config.saslInterBrokerHandshakeRequestEnable
       )

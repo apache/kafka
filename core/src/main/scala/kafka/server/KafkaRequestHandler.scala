@@ -40,6 +40,8 @@ class KafkaRequestHandler(id: Int,
                           apis: KafkaApis,
                           time: Time) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
+  // the requestsHandled counter is defined only for testing
+  var requestsHandled: Long = 0L
   private val shutdownComplete = new CountDownLatch(1)
   @volatile private var stopped = false
 
@@ -67,6 +69,7 @@ class KafkaRequestHandler(id: Int,
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             apis.handle(request)
+            requestsHandled += 1
           } catch {
             case e: FatalExitError =>
               shutdownComplete.countDown()
@@ -96,13 +99,15 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: KafkaApis,
                               time: Time,
-                              numThreads: Int) extends Logging with KafkaMetricsGroup {
+                              numThreads: Int,
+                              requestHandlerAvgIdleMetric: String,
+                              isControlPlane: Boolean) extends Logging with KafkaMetricsGroup {
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
-  private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+  private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetric, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
+  this.logIdent = "[" + (if (isControlPlane) "Control" else "Data") + " Plane Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)
@@ -110,7 +115,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   def createHandler(id: Int): Unit = synchronized {
     runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
-    KafkaThread.daemon("kafka-request-handler-" + id, runnables(id)).start()
+    KafkaThread.daemon((if (isControlPlane) "control" else "data") + "-plane-kafka-request-handler-" + id, runnables(id)).start()
   }
 
   def resizeThreadPool(newSize: Int): Unit = synchronized {

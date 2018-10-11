@@ -231,6 +231,40 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControlPlaneListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9091")
+    props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
+    assertTrue(isValidKafkaConfig(props))
+
+    // verify that there must be an entry for control.plane.listener.name in the listener.security.protocol.map
+    val wrongPropsWithoutSecurityProtocol = new Properties()
+    wrongPropsWithoutSecurityProtocol.putAll(props)
+    wrongPropsWithoutSecurityProtocol.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT")
+    assertFalse(isValidKafkaConfig(wrongPropsWithoutSecurityProtocol))
+
+    // verify that the control.plane.listener.name must be present in the listeners list
+    val propsWithNoControlPlaneEndpointInListeners = new Properties()
+    propsWithNoControlPlaneEndpointInListeners.putAll(props)
+    propsWithNoControlPlaneEndpointInListeners.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092")
+    assertFalse(isValidKafkaConfig(propsWithNoControlPlaneEndpointInListeners))
+
+    // verify that the control.plane.listener.name must be present in the advertised.listeners list
+    val propsWithNoControlPlaneEndpointInAdvertisedListeners = new Properties()
+    propsWithNoControlPlaneEndpointInAdvertisedListeners.putAll(props)
+    propsWithNoControlPlaneEndpointInAdvertisedListeners.put(KafkaConfig.AdvertisedHostNameProp,
+      "PLAINTEXT://localhost:9092")
+    assertFalse(isValidKafkaConfig(propsWithNoControlPlaneEndpointInAdvertisedListeners))
+
+    // verify that the control.plane.listener.name must be different from the inter broker listener name
+    val propsWithIdenticalControlPlaneAndDataPlaneListenerNames = new Properties()
+    propsWithIdenticalControlPlaneAndDataPlaneListenerNames.putAll(props)
+    propsWithIdenticalControlPlaneAndDataPlaneListenerNames.put(KafkaConfig.ControlPlaneListenerNameProp, "PLAINTEXT")
+    assertFalse(isValidKafkaConfig(propsWithIdenticalControlPlaneAndDataPlaneListenerNames))
+  }
+
+  @Test
   def testBadListenerProtocol() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")

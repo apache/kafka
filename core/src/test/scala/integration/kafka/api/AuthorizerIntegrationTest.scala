@@ -611,7 +611,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = createProducer()
     sendRecords(producer, 1, tp)
     removeAllAcls()
-    
+
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeRecords(consumer)
@@ -1452,9 +1452,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   def removeAllAcls() = {
-    servers.head.apis.authorizer.get.getAcls().keys.foreach { resource =>
-      servers.head.apis.authorizer.get.removeAcls(resource)
-      TestUtils.waitAndVerifyAcls(Set.empty[Acl], servers.head.apis.authorizer.get, resource)
+    servers.head.dataPlaneApis.authorizer.get.getAcls().keys.foreach { resource =>
+      servers.head.dataPlaneApis.authorizer.get.removeAcls(resource)
+      TestUtils.waitAndVerifyAcls(Set.empty[Acl], servers.head.dataPlaneApis.authorizer.get, resource)
     }
   }
 
@@ -1507,8 +1507,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def addAndVerifyAcls(acls: Set[Acl], resource: Resource) = {
-    servers.head.apis.authorizer.get.addAcls(acls, resource)
-    TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource) ++ acls, servers.head.apis.authorizer.get, resource)
+    servers.head.dataPlaneApis.authorizer.get.addAcls(acls, resource)
+    TestUtils.waitAndVerifyAcls(servers.head.dataPlaneApis.authorizer.get.getAcls(resource) ++ acls, servers.head.dataPlaneApis.authorizer.get, resource)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
