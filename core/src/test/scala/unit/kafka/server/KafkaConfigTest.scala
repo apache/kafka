@@ -22,6 +22,7 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.message._
+import kafka.metrics.KafkaMetricsConfig
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
@@ -723,6 +724,10 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+
+        //Kafka Yammer metrics reporter configs
+        case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
+        case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 
+import java.time.Duration;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
@@ -51,7 +52,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 @Category({IntegrationTest.class})
 public class KTableSourceTopicRestartIntegrationTest {
@@ -130,7 +130,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
         } finally {
-            streamsOne.close(5, TimeUnit.SECONDS);
+            streamsOne.close(Duration.ofSeconds(5));
         }
     }
 
@@ -155,7 +155,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
         } finally {
-            streamsOne.close(5, TimeUnit.SECONDS);
+            streamsOne.close(Duration.ofSeconds(5));
         }
     }
 
@@ -179,7 +179,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             assertNumberValuesRead(readKeyValues, expectedValues, "Table did not get all values after restart");
         } finally {
-            streamsOne.close(5, TimeUnit.SECONDS);
+            streamsOne.close(Duration.ofSeconds(5));
         }
     }
 

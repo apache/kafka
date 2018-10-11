@@ -113,7 +113,8 @@ object ProducerCompressionTest {
       Array("none"),
       Array("gzip"),
       Array("snappy"),
-      Array("lz4")
+      Array("lz4"),
+      Array("zstd")
     ).asJava
   }
 }

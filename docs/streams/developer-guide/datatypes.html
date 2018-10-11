@@ -142,6 +142,9 @@
           <tr class="row-odd"><td>String</td>
             <td><code class="docutils literal"><span class="pre">Serdes.String()</span></code></td>
           </tr>
+          <tr class="row-even"><td>UUID</td>
+            <td><code class="docutils literal"><span class="pre">Serdes.UUID()</span></code></td>
+          </tr>
           </tbody>
         </table>
         <div class="admonition tip">
@@ -174,7 +177,10 @@
             <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
             which you either do manually (see existing SerDes in the previous section) or by leveraging helper functions in
             <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
-            such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;,</span> <span class="pre">Deserializer&lt;T&gt;)</span></code>.</li>
+            such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>.
+            Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
+            If your serde class has generic types or you use <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>, you can pass your serde only
+            via methods calls (for example <code class="docutils literal"><span class="pre">builder.stream("topicName", Consumed.with(...))</span></code>).</li>
         </ol>
       </div>
     </div>

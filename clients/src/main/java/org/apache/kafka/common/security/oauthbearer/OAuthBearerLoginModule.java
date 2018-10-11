@@ -236,6 +236,21 @@ import org.slf4j.LoggerFactory;
  * @see SaslConfigs#SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC
  */
 public class OAuthBearerLoginModule implements LoginModule {
+
+    /**
+     * Login state transitions:
+     *   Initial state: NOT_LOGGED_IN
+     *   login()      : NOT_LOGGED_IN => LOGGED_IN_NOT_COMMITTED
+     *   commit()     : LOGGED_IN_NOT_COMMITTED => COMMITTED
+     *   abort()      : LOGGED_IN_NOT_COMMITTED => NOT_LOGGED_IN
+     *   logout()     : Any state => NOT_LOGGED_IN
+     */
+    private enum LoginState {
+        NOT_LOGGED_IN,
+        LOGGED_IN_NOT_COMMITTED,
+        COMMITTED
+    }
+
     /**
      * The SASL Mechanism name for OAuth 2: {@code OAUTHBEARER}
      */
@@ -248,6 +263,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     private OAuthBearerToken myCommittedToken = null;
     private SaslExtensions extensionsRequiringCommit = null;
     private SaslExtensions myCommittedExtensions = null;
+    private LoginState loginState;
 
     static {
         OAuthBearerSaslClientProvider.initialize(); // not part of public API
@@ -266,18 +282,30 @@ public class OAuthBearerLoginModule implements LoginModule {
 
     @Override
     public boolean login() throws LoginException {
-        if (tokenRequiringCommit != null)
-            throw new IllegalStateException(String.format(
+        if (loginState == LoginState.LOGGED_IN_NOT_COMMITTED) {
+            if (tokenRequiringCommit != null)
+                throw new IllegalStateException(String.format(
                     "Already have an uncommitted token with private credential token count=%d", committedTokenCount()));
-        if (myCommittedToken != null)
-            throw new IllegalStateException(String.format(
+            else
+                throw new IllegalStateException("Already logged in without a token");
+        }
+        if (loginState == LoginState.COMMITTED) {
+            if (myCommittedToken != null)
+                throw new IllegalStateException(String.format(
                     "Already have a committed token with private credential token count=%d; must login on another login context or logout here first before reusing the same login context",
                     committedTokenCount()));
+            else
+                throw new IllegalStateException("Login has already been committed without a token");
+        }
 
         identifyToken();
-        identifyExtensions();
+        if (tokenRequiringCommit != null)
+            identifyExtensions();
+        else
+            log.debug("Logged in without a token, this login cannot be used to establish client connections");
 
-        log.info("Login succeeded; invoke commit() to commit it; current committed token count={}",
+        loginState = LoginState.LOGGED_IN_NOT_COMMITTED;
+        log.debug("Login succeeded; invoke commit() to commit it; current committed token count={}",
                 committedTokenCount());
         return true;
     }
@@ -292,7 +320,7 @@ public class OAuthBearerLoginModule implements LoginModule {
         }
 
         tokenRequiringCommit = tokenCallback.token();
-        if (tokenRequiringCommit == null) {
+        if (tokenCallback.errorCode() != null) {
             log.info("Login failed: {} : {} (URI={})", tokenCallback.errorCode(), tokenCallback.errorDescription(),
                     tokenCallback.errorUri());
             throw new LoginException(tokenCallback.errorDescription());
@@ -312,7 +340,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             throw new LoginException("An internal error occurred while retrieving SASL extensions from callback handler");
         } catch (UnsupportedCallbackException e) {
             extensionsRequiringCommit = EMPTY_EXTENSIONS;
-            log.info("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
+            log.debug("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
         }
         if (extensionsRequiringCommit ==  null) {
             log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
@@ -322,64 +350,75 @@ public class OAuthBearerLoginModule implements LoginModule {
 
     @Override
     public boolean logout() {
-        if (tokenRequiringCommit != null)
+        if (loginState == LoginState.LOGGED_IN_NOT_COMMITTED)
             throw new IllegalStateException(
                     "Cannot call logout() immediately after login(); need to first invoke commit() or abort()");
-        if (myCommittedToken == null) {
-            if (log.isDebugEnabled())
-                log.debug("Nothing here to log out");
+        if (loginState != LoginState.COMMITTED) {
+            log.debug("Nothing here to log out");
             return false;
         }
-        log.info("Logging out my token; current committed token count = {}", committedTokenCount());
-        for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator(); iterator.hasNext();) {
-            Object privateCredential = iterator.next();
-            if (privateCredential == myCommittedToken) {
-                iterator.remove();
-                myCommittedToken = null;
-                break;
+        if (myCommittedToken != null) {
+            log.trace("Logging out my token; current committed token count = {}", committedTokenCount());
+            for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator(); iterator.hasNext(); ) {
+                Object privateCredential = iterator.next();
+                if (privateCredential == myCommittedToken) {
+                    iterator.remove();
+                    myCommittedToken = null;
+                    break;
+                }
             }
-        }
-        log.info("Done logging out my token; committed token count is now {}", committedTokenCount());
+            log.debug("Done logging out my token; committed token count is now {}", committedTokenCount());
+        } else
+            log.debug("No tokens to logout for this login");
 
-        log.info("Logging out my extensions");
-        if (subject.getPublicCredentials().removeIf(e -> myCommittedExtensions == e))
-            myCommittedExtensions = null;
-        log.info("Done logging out my extensions");
+        if (myCommittedExtensions != null) {
+            log.trace("Logging out my extensions");
+            if (subject.getPublicCredentials().removeIf(e -> myCommittedExtensions == e))
+                myCommittedExtensions = null;
+            log.debug("Done logging out my extensions");
+        } else
+            log.debug("No extensions to logout for this login");
 
+        loginState = LoginState.NOT_LOGGED_IN;
         return true;
     }
 
     @Override
     public boolean commit() {
-        if (tokenRequiringCommit == null) {
-            if (log.isDebugEnabled())
-                log.debug("Nothing here to commit");
+        if (loginState != LoginState.LOGGED_IN_NOT_COMMITTED) {
+            log.debug("Nothing here to commit");
             return false;
         }
 
-        log.info("Committing my token; current committed token count = {}", committedTokenCount());
-        subject.getPrivateCredentials().add(tokenRequiringCommit);
-        myCommittedToken = tokenRequiringCommit;
-        tokenRequiringCommit = null;
-        log.info("Done committing my token; committed token count is now {}", committedTokenCount());
+        if (tokenRequiringCommit != null) {
+            log.trace("Committing my token; current committed token count = {}", committedTokenCount());
+            subject.getPrivateCredentials().add(tokenRequiringCommit);
+            myCommittedToken = tokenRequiringCommit;
+            tokenRequiringCommit = null;
+            log.debug("Done committing my token; committed token count is now {}", committedTokenCount());
+        } else
+            log.debug("No tokens to commit, this login cannot be used to establish client connections");
 
-        subject.getPublicCredentials().add(extensionsRequiringCommit);
-        myCommittedExtensions = extensionsRequiringCommit;
-        extensionsRequiringCommit = null;
+        if (extensionsRequiringCommit != null) {
+            subject.getPublicCredentials().add(extensionsRequiringCommit);
+            myCommittedExtensions = extensionsRequiringCommit;
+            extensionsRequiringCommit = null;
+        }
 
+        loginState = LoginState.COMMITTED;
         return true;
     }
 
     @Override
     public boolean abort() {
-        if (tokenRequiringCommit != null) {
-            log.info("Login aborted");
+        if (loginState == LoginState.LOGGED_IN_NOT_COMMITTED) {
+            log.debug("Login aborted");
             tokenRequiringCommit = null;
             extensionsRequiringCommit = null;
+            loginState = LoginState.NOT_LOGGED_IN;
             return true;
         }
-        if (log.isDebugEnabled())
-            log.debug("Nothing here to abort");
+        log.debug("Nothing here to abort");
         return false;
     }
 

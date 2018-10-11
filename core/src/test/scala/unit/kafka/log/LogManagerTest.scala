@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.util.Properties
 
+import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -128,10 +129,10 @@ class LogManagerTest {
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
     assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
 
     try {
-      log.readUncommitted(0, 1024)
+      readLog(log, 0)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -178,9 +179,9 @@ class LogManagerTest {
     // there should be a log file, two indexes (the txn index is created lazily),
     // the leader epoch checkpoint and two producer snapshot files (one for the active and previous segments)
     assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
     try {
-      log.readUncommitted(0, 1024)
+      readLog(log, 0)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -190,13 +191,26 @@ class LogManagerTest {
   }
 
   /**
-    * Ensures that LogManager only runs on logs with cleanup.policy=delete
+    * Ensures that LogManager doesn't run on logs with cleanup.policy=compact,delete
     * LogCleaner.CleanerThread handles all logs where compaction is enabled.
     */
   @Test
   def testDoesntCleanLogsWithCompactDeletePolicy() {
+    testDoesntCleanLogs(LogConfig.Compact + "," + LogConfig.Delete)
+  }
+
+  /**
+    * Ensures that LogManager doesn't run on logs with cleanup.policy=compact
+    * LogCleaner.CleanerThread handles all logs where compaction is enabled.
+    */
+  @Test
+  def testDoesntCleanLogsWithCompactPolicy() {
+    testDoesntCleanLogs(LogConfig.Compact)
+  }
+
+  private def testDoesntCleanLogs(policy: String) {
     val logProps = new Properties()
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    logProps.put(LogConfig.CleanupPolicyProp, policy)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {
@@ -360,4 +374,9 @@ class LogManagerTest {
     time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
+
+  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+    log.read(offset, maxLength, maxOffset = None, minOneMessage = true, includeAbortedTxns = false)
+  }
+
 }

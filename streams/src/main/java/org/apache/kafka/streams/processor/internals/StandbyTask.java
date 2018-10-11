@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -69,7 +68,7 @@ public class StandbyTask extends AbstractTask {
         log.trace("Initializing state stores");
         registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-        processorContext.initialized();
+        processorContext.initialize();
         taskInitialized = true;
         return true;
     }
@@ -171,12 +170,12 @@ public class StandbyTask extends AbstractTask {
         final long limit = stateMgr.offsetLimit(partition);
 
         long lastOffset = -1L;
-        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
+        final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
         final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
 
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
+                restoreRecords.add(record);
                 lastOffset = record.offset();
                 // ideally, we'd use the stream time at the time of the change logging, but we'll settle for
                 // record timestamp for now.

@@ -17,14 +17,36 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static org.junit.Assert.assertTrue;
+
 public class WindowedSerdesTest {
 
     private final String topic = "sample";
+
+    @Test
+    public void shouldWrapForTimeWindowedSerde() {
+        final Serde<Windowed<String>> serde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        assertTrue(serde.serializer() instanceof TimeWindowedSerializer);
+        assertTrue(serde.deserializer() instanceof TimeWindowedDeserializer);
+        assertTrue(((TimeWindowedSerializer) serde.serializer()).innerSerializer() instanceof StringSerializer);
+        assertTrue(((TimeWindowedDeserializer) serde.deserializer()).innerDeserializer() instanceof StringDeserializer);
+    }
+
+    @Test
+    public void shouldWrapForSessionWindowedSerde() {
+        final Serde<Windowed<String>> serde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
+        assertTrue(serde.serializer() instanceof SessionWindowedSerializer);
+        assertTrue(serde.deserializer() instanceof SessionWindowedDeserializer);
+        assertTrue(((SessionWindowedSerializer) serde.serializer()).innerSerializer() instanceof StringSerializer);
+        assertTrue(((SessionWindowedDeserializer) serde.deserializer()).innerDeserializer() instanceof StringDeserializer);
+    }
 
     @Test
     public void testTimeWindowSerdeFrom() {
@@ -43,5 +65,4 @@ public class WindowedSerdesTest {
         final Windowed<Integer> windowed = sessionWindowedSerde.deserializer().deserialize(topic, bytes);
         Assert.assertEquals(sessionWindowed, windowed);
     }
-
 }

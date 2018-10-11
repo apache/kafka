@@ -44,6 +44,9 @@ public class LazyDownConversionRecords implements BaseRecords {
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      * @param time The time instance to use
+     *
+     * @throws org.apache.kafka.common.errors.UnsupportedCompressionTypeException If the first batch to down-convert
+     *    has a compression type which we do not support down-conversion for.
      */
     public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset, Time time) {
         this.topicPartition = Objects.requireNonNull(topicPartition);
@@ -150,7 +153,7 @@ public class LazyDownConversionRecords implements BaseRecords {
             }
 
             while (batchIterator.hasNext()) {
-                List<RecordBatch> batches = new ArrayList<>();
+                final List<RecordBatch> batches = new ArrayList<>();
                 boolean isFirstBatch = true;
                 long sizeSoFar = 0;
 
@@ -162,6 +165,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                     sizeSoFar += currentBatch.sizeInBytes();
                     isFirstBatch = false;
                 }
+
                 ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
                 // During conversion, it is possible that we drop certain batches because they do not have an equivalent
                 // representation in the message format we want to convert to. For example, V0 and V1 message formats

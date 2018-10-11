@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
@@ -41,8 +45,6 @@ public class ClientUtilsTest {
         assertEquals(10000, onlyAddress.getPort());
     }
 
-
-
     @Test
     public void testParseAndValidateAddressesWithReverseLookup() {
         checkWithoutLookup("127.0.0.1:8000");
@@ -56,12 +58,10 @@ public class ClientUtilsTest {
         assertEquals(10000, address.getPort());
     }
 
-
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidConfig() {
         ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
     }
-
 
     @Test(expected = ConfigException.class)
     public void testNoPort() {
@@ -73,8 +73,45 @@ public class ClientUtilsTest {
         checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999");
     }
 
+    @Test
+    public void testFilterPreferredAddresses() throws UnknownHostException {
+        InetAddress ipv4 = InetAddress.getByName("192.0.0.1");
+        InetAddress ipv6 = InetAddress.getByName("::1");
+
+        InetAddress[] ipv4First = new InetAddress[]{ipv4, ipv6, ipv4};
+        List<InetAddress> result = ClientUtils.filterPreferredAddresses(ipv4First);
+        assertTrue(result.contains(ipv4));
+        assertFalse(result.contains(ipv6));
+        assertEquals(2, result.size());
+
+        InetAddress[] ipv6First = new InetAddress[]{ipv6, ipv4, ipv4};
+        result = ClientUtils.filterPreferredAddresses(ipv6First);
+        assertTrue(result.contains(ipv6));
+        assertFalse(result.contains(ipv4));
+        assertEquals(1, result.size());
+    }
+
+    @Test(expected = UnknownHostException.class)
+    public void testResolveUnknownHostException() throws UnknownHostException {
+        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.DEFAULT);
+    }
+
+    @Test
+    public void testResolveDnsLookup() throws UnknownHostException {
+        assertEquals(1, ClientUtils.resolve("localhost", ClientDnsLookup.DEFAULT).size());
+    }
+
+    @Test
+    public void testResolveDnsLookupAllIps() throws UnknownHostException {
+        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
+    }
+
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
         return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.DEFAULT.toString());
+    }
+  
+    private List<InetSocketAddress> check(String... url) {
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
