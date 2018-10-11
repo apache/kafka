@@ -46,8 +46,11 @@ public class StopReplicaResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
+    private static final Schema STOP_REPLICA_RESPONSE_V1 = STOP_REPLICA_RESPONSE_V0;
+
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {STOP_REPLICA_RESPONSE_V0};
+        return new Schema[] {STOP_REPLICA_RESPONSE_V0, STOP_REPLICA_RESPONSE_V1};
     }
 
     private final Map<TopicPartition, Errors> responses;
@@ -56,6 +59,7 @@ public class StopReplicaResponse extends AbstractResponse {
      * Possible error code:
      *
      * STALE_CONTROLLER_EPOCH (11)
+     * STALE_BROKER_EPOCH (77)
      */
     private final Errors error;
 

@@ -32,7 +32,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
+import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -61,7 +61,7 @@ object KafkaController extends Logging {
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
-                      tokenManager: DelegationTokenManager, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                      tokenManager: DelegationTokenManager, brokerEpoch: BrokerEpoch, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
@@ -637,7 +637,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def initializeControllerContext() {
     // update controller cache with delete topic information
-    controllerContext.liveBrokers = zkClient.getAllBrokersInCluster.toSet
+    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+    controllerContext.liveBrokers = curBrokerAndEpochs.map(_._1).toSet
+    // update broker epoch cache for all live brokers
+    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochsCache(e._1.id) =  e._2)
+    info(s"Initialized broker epochs cache: ${controllerContext.brokerEpochsCache}")
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
@@ -879,7 +883,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  private[controller] def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+  private[controller] def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                                       callback: AbstractResponse => Unit = null) = {
     controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
   }
@@ -1243,25 +1247,48 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      val curBrokers = zkClient.getAllBrokersInCluster.toSet
-      val curBrokerIds = curBrokers.map(_.id)
+      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+      val curBrokerIdAndEpochMap = curBrokerAndEpochs.map(e => (e._1.id, e._2)).toMap
+      val curBrokers = curBrokerAndEpochs.map(_._1).toSet
+      val curBrokerIds = curBrokerIdAndEpochMap.keySet
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+      val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
+        .filter(bid => curBrokerIdAndEpochMap(bid) > controllerContext.brokerEpochsCache(bid))
       val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+      val bouncedBrokers = curBrokers.filter(broker => bouncedBrokerIds(broker.id))
       controllerContext.liveBrokers = curBrokers
       val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
       val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
       val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
+      val bouncedBrokerIdsSorted = bouncedBrokerIds.toSeq.sorted
       info(s"Newly added brokers: ${newBrokerIdsSorted.mkString(",")}, " +
-        s"deleted brokers: ${deadBrokerIdsSorted.mkString(",")}, all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
+        s"deleted brokers: ${deadBrokerIdsSorted.mkString(",")}, " +
+        s"bounced brokers: ${bouncedBrokerIdsSorted.mkString(",")}, " +
+        s"all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
 
       newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+      bouncedBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+      bouncedBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
       deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-      if (newBrokerIds.nonEmpty)
+      if (newBrokerIds.nonEmpty) {
+        newBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
         onBrokerStartup(newBrokerIdsSorted)
-      if (deadBrokerIds.nonEmpty)
+      }
+      if (bouncedBrokerIds.nonEmpty) {
+        onBrokerFailure(bouncedBrokerIdsSorted)
+        bouncedBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        onBrokerStartup(bouncedBrokerIdsSorted)
+      }
+      if (deadBrokerIds.nonEmpty) {
         onBrokerFailure(deadBrokerIdsSorted)
+        deadBrokerIds.foreach(controllerContext.brokerEpochsCache.remove)
+      }
+
+      if (newBrokerIds.nonEmpty || deadBrokerIds.nonEmpty || bouncedBrokerIds.nonEmpty) {
+        info(s"Updated broker epochs cache: ${controllerContext.brokerEpochsCache}")
+      }
     }
   }
 
@@ -1516,7 +1543,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state: ControllerState = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      zkClient.registerBroker(brokerInfo)
+      val curBrokerEpoch = zkClient.registerBroker(brokerInfo)
+      brokerEpoch.update(curBrokerEpoch)
       Reelect.process()
     }
   }

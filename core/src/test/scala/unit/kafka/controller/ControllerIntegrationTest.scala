@@ -450,6 +450,46 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
+  @Test
+  def testControllerDetectsBouncedBrokers(): Unit = {
+    servers = makeServers(2, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
+
+    // Create a topic
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0, 1))
+
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+
+    // Wait until the event thread is idle
+    TestUtils.waitUntilTrue(() => {
+      controller.eventManager.state == ControllerState.Idle
+    }, "Controller event thread is still busy")
+
+    val latch = new CountDownLatch(1)
+
+    // Let the controller event thread await on a latch until broker bounce finishes.
+    // This is used to simulate fast broker bounce
+    controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
+
+    otherBroker.shutdown()
+    otherBroker.awaitShutdown()
+    otherBroker.startup()
+
+    assertEquals(0, otherBroker.replicaManager.partitionCount.value())
+
+    // Release the latch so that controller can process broker change event
+    latch.countDown()
+    TestUtils.waitUntilTrue(() => {
+      otherBroker.replicaManager.partitionCount.value() == 1 &&
+      otherBroker.replicaManager.metadataCache.getAllTopics().size == 1 &&
+      otherBroker.replicaManager.metadataCache.getAliveBrokers.size == 2
+    }, "Broker fail to initialize after restart")
+  }
+
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
@@ -527,8 +567,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
 
-  private def makeServers(numConfigs: Int, autoLeaderRebalanceEnable: Boolean = false, uncleanLeaderElectionEnable: Boolean = false) = {
-    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect)
+  private def makeServers(numConfigs: Int,
+                          autoLeaderRebalanceEnable: Boolean = false,
+                          uncleanLeaderElectionEnable: Boolean = false,
+                          enableControlledShutdown: Boolean = true) = {
+    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)

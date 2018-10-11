@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -41,13 +42,12 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class UpdateMetadataRequest extends AbstractRequest {
-
-    private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
-    private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
+public class UpdateMetadataRequest extends AbstractControlRequest {
+    private static final String TOPIC_STATES_KEY_NAME = "topic_states";
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
     private static final String LIVE_BROKERS_KEY_NAME = "live_brokers";
 
@@ -139,6 +139,21 @@ public class UpdateMetadataRequest extends AbstractRequest {
             new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
             new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The offline replica ids"));
 
+    private static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V5 = new Schema(
+            PARTITION_ID,
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
+            new Field(OFFLINE_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The offline replica ids"));
+
+    // UPDATE_METADATA_REQUEST_TOPIC_STATE_V0 normalizes UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 to
+    // make it more memory efficient
+    private static final Schema UPDATE_METADATA_REQUEST_TOPIC_STATE_V0 = new Schema(TOPIC_NAME,
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V5)));
+
     private static final Schema UPDATE_METADATA_REQUEST_END_POINT_V3 = new Schema(
             new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."),
             new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
@@ -163,22 +178,28 @@ public class UpdateMetadataRequest extends AbstractRequest {
             new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
             new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
+    // UPDATE_METADATA_REQUEST_V5 added a broker_epoch Field. This field specifies the generation of the broker across
+    // bounces. It also introduce UPDATE_METADATA_REQUEST_TOPIC_STATE_V0 to normalize UPDATE_METADATA_REQUEST_PARTITION_STATE_V4
+    // to make the request more memory efficient
+    private static final Schema UPDATE_METADATA_REQUEST_V5 = new Schema(
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(BROKER_EPOCH_KEY_NAME, INT64, "The broker epoch"),
+            new Field(TOPIC_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_TOPIC_STATE_V0)),
+            new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
+
     public static Schema[] schemaVersions() {
         return new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2,
-            UPDATE_METADATA_REQUEST_V3, UPDATE_METADATA_REQUEST_V4};
+            UPDATE_METADATA_REQUEST_V3, UPDATE_METADATA_REQUEST_V4, UPDATE_METADATA_REQUEST_V5};
     }
 
-    public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
-        private final int controllerId;
-        private final int controllerEpoch;
+    public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final Map<TopicPartition, PartitionState> partitionStates;
         private final Set<Broker> liveBrokers;
 
-        public Builder(short version, int controllerId, int controllerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
-            super(ApiKeys.UPDATE_METADATA, version);
-            this.controllerId = controllerId;
-            this.controllerEpoch = controllerEpoch;
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
         }
@@ -192,7 +213,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
                     }
                 }
             }
-            return new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates, liveBrokers);
+            return new UpdateMetadataRequest(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, liveBrokers);
         }
 
         @Override
@@ -201,6 +222,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
+                append(", brokerEpoch=").append(brokerEpoch).
                 append(", partitionStates=").append(partitionStates).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
@@ -223,6 +245,33 @@ public class UpdateMetadataRequest extends AbstractRequest {
             this.offlineReplicas = offlineReplicas;
         }
 
+        private PartitionState(Struct struct) {
+            int controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
+            int leader = struct.getInt(LEADER_KEY_NAME);
+            int leaderEpoch = struct.getInt(LEADER_EPOCH_KEY_NAME);
+
+            Object[] isrArray = struct.getArray(ISR_KEY_NAME);
+            List<Integer> isr = new ArrayList<>(isrArray.length);
+            for (Object r : isrArray)
+                isr.add((Integer) r);
+
+            int zkVersion = struct.getInt(ZK_VERSION_KEY_NAME);
+
+            Object[] replicasArray = struct.getArray(REPLICAS_KEY_NAME);
+            List<Integer> replicas = new ArrayList<>(replicasArray.length);
+            for (Object r : replicasArray)
+                replicas.add((Integer) r);
+
+            this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+
+            this.offlineReplicas = new ArrayList<>();
+            if (struct.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
+                Object[] offlineReplicasArray = struct.getArray(OFFLINE_REPLICAS_KEY_NAME);
+                for (Object r : offlineReplicasArray)
+                    offlineReplicas.add((Integer) r);
+            }
+        }
+
         @Override
         public String toString() {
             return "PartitionState(controllerEpoch=" + basePartitionState.controllerEpoch +
@@ -232,6 +281,17 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 ", zkVersion=" + basePartitionState.zkVersion +
                 ", replicas=" + Arrays.toString(basePartitionState.replicas.toArray()) +
                 ", offlineReplicas=" + Arrays.toString(offlineReplicas.toArray()) + ")";
+        }
+
+        private void setStruct(Struct struct) {
+            struct.set(CONTROLLER_EPOCH_KEY_NAME, basePartitionState.controllerEpoch);
+            struct.set(LEADER_KEY_NAME, basePartitionState.leader);
+            struct.set(LEADER_EPOCH_KEY_NAME, basePartitionState.leaderEpoch);
+            struct.set(ISR_KEY_NAME, basePartitionState.isr.toArray());
+            struct.set(ZK_VERSION_KEY_NAME, basePartitionState.zkVersion);
+            struct.set(REPLICAS_KEY_NAME, basePartitionState.replicas.toArray());
+            if (struct.hasField(OFFLINE_REPLICAS_KEY_NAME))
+                struct.set(OFFLINE_REPLICAS_KEY_NAME, offlineReplicas.toArray());
         }
     }
 
@@ -277,53 +337,38 @@ public class UpdateMetadataRequest extends AbstractRequest {
         }
     }
 
-    private final int controllerId;
-    private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
     private final Set<Broker> liveBrokers;
 
-    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch,
+    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                                   Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        super(ApiKeys.UPDATE_METADATA, version);
-        this.controllerId = controllerId;
-        this.controllerEpoch = controllerEpoch;
+        super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
         this.partitionStates = partitionStates;
         this.liveBrokers = liveBrokers;
     }
 
     public UpdateMetadataRequest(Struct struct, short versionId) {
-        super(ApiKeys.UPDATE_METADATA, versionId);
+        super(ApiKeys.UPDATE_METADATA, struct, versionId);
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
-        for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
-            Struct partitionStateData = (Struct) partitionStateDataObj;
-            String topic = partitionStateData.get(TOPIC_NAME);
-            int partition = partitionStateData.get(PARTITION_ID);
-            int controllerEpoch = partitionStateData.getInt(CONTROLLER_EPOCH_KEY_NAME);
-            int leader = partitionStateData.getInt(LEADER_KEY_NAME);
-            int leaderEpoch = partitionStateData.getInt(LEADER_EPOCH_KEY_NAME);
-
-            Object[] isrArray = partitionStateData.getArray(ISR_KEY_NAME);
-            List<Integer> isr = new ArrayList<>(isrArray.length);
-            for (Object r : isrArray)
-                isr.add((Integer) r);
-
-            int zkVersion = partitionStateData.getInt(ZK_VERSION_KEY_NAME);
-
-            Object[] replicasArray = partitionStateData.getArray(REPLICAS_KEY_NAME);
-            List<Integer> replicas = new ArrayList<>(replicasArray.length);
-            for (Object r : replicasArray)
-                replicas.add((Integer) r);
-
-            List<Integer> offlineReplicas = new ArrayList<>();
-            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
-                Object[] offlineReplicasArray = partitionStateData.getArray(OFFLINE_REPLICAS_KEY_NAME);
-                for (Object r : offlineReplicasArray)
-                    offlineReplicas.add((Integer) r);
+        if (struct.hasField(TOPIC_STATES_KEY_NAME)) {
+            for (Object topicStatesDataObj : struct.getArray(TOPIC_STATES_KEY_NAME)) {
+                Struct topicStatesData = (Struct) topicStatesDataObj;
+                String topic = topicStatesData.get(TOPIC_NAME);
+                for (Object partitionStateDataObj : topicStatesData.getArray(PARTITION_STATES_KEY_NAME)) {
+                    Struct partitionStateData = (Struct) partitionStateDataObj;
+                    int partition = partitionStateData.get(PARTITION_ID);
+                    PartitionState partitionState = new PartitionState(partitionStateData);
+                    partitionStates.put(new TopicPartition(topic, partition), partitionState);
+                }
             }
-
-            PartitionState partitionState =
-                new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, offlineReplicas);
-            partitionStates.put(new TopicPartition(topic, partition), partitionState);
+        } else {
+            for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
+                Struct partitionStateData = (Struct) partitionStateDataObj;
+                String topic = partitionStateData.get(TOPIC_NAME);
+                int partition = partitionStateData.get(PARTITION_ID);
+                PartitionState partitionState = new PartitionState(partitionStateData);
+                partitionStates.put(new TopicPartition(topic, partition), partitionState);
+            }
         }
 
         Set<Broker> liveBrokers = new HashSet<>();
@@ -362,8 +407,6 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 liveBrokers.add(new Broker(brokerId, endPoints, rack));
             }
         }
-        controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
-        controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
         this.partitionStates = partitionStates;
         this.liveBrokers = liveBrokers;
     }
@@ -374,25 +417,38 @@ public class UpdateMetadataRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.UPDATE_METADATA.requestSchema(version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
+        struct.setIfExists(BROKER_EPOCH_KEY_NAME, brokerEpoch);
 
-        List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
-        for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
-            Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
-            TopicPartition topicPartition = entry.getKey();
-            partitionStateData.set(TOPIC_NAME, topicPartition.topic());
-            partitionStateData.set(PARTITION_ID, topicPartition.partition());
-            PartitionState partitionState = entry.getValue();
-            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.basePartitionState.controllerEpoch);
-            partitionStateData.set(LEADER_KEY_NAME, partitionState.basePartitionState.leader);
-            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.basePartitionState.leaderEpoch);
-            partitionStateData.set(ISR_KEY_NAME, partitionState.basePartitionState.isr.toArray());
-            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.basePartitionState.zkVersion);
-            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.basePartitionState.replicas.toArray());
-            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME))
-              partitionStateData.set(OFFLINE_REPLICAS_KEY_NAME, partitionState.offlineReplicas.toArray());
-            partitionStatesData.add(partitionStateData);
+        if (struct.hasField(TOPIC_STATES_KEY_NAME)) {
+            Map<String, Map<Integer, PartitionState>> topicStates = CollectionUtils.groupPartitionDataByTopic(partitionStates);
+            List<Struct> topicStatesData = new ArrayList<>(topicStates.size());
+            for (Map.Entry<String, Map<Integer, PartitionState>> entry : topicStates.entrySet()) {
+                Struct topicStateData = struct.instance(TOPIC_STATES_KEY_NAME);
+                topicStateData.set(TOPIC_NAME, entry.getKey());
+                Map<Integer, PartitionState> partitionMap = entry.getValue();
+                List<Struct> partitionStatesData = new ArrayList<>(partitionMap.size());
+                for (Map.Entry<Integer, PartitionState> partitionEntry : partitionMap.entrySet()) {
+                    Struct partitionStateData = topicStateData.instance(PARTITION_STATES_KEY_NAME);
+                    partitionStateData.set(PARTITION_ID, partitionEntry.getKey());
+                    partitionEntry.getValue().setStruct(partitionStateData);
+                    partitionStatesData.add(partitionStateData);
+                }
+                topicStateData.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
+                topicStatesData.add(topicStateData);
+            }
+            struct.set(TOPIC_STATES_KEY_NAME, topicStatesData.toArray());
+        } else {
+            List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
+            for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
+                Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
+                TopicPartition topicPartition = entry.getKey();
+                partitionStateData.set(TOPIC_NAME, topicPartition.topic());
+                partitionStateData.set(PARTITION_ID, topicPartition.partition());
+                entry.getValue().setStruct(partitionStateData);
+                partitionStatesData.add(partitionStateData);
+            }
+            struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
         }
-        struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
 
         List<Struct> brokersData = new ArrayList<>(liveBrokers.size());
         for (Broker broker : liveBrokers) {
@@ -431,19 +487,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
-        if (versionId <= 4)
+        if (versionId <= 5)
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                 versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
-    }
-
-    public int controllerId() {
-        return controllerId;
-    }
-
-    public int controllerEpoch() {
-        return controllerEpoch;
     }
 
     public Map<TopicPartition, PartitionState> partitionStates() {

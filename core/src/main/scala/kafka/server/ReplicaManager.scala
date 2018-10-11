@@ -143,6 +143,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val brokerTopicStats: BrokerTopicStats,
                      val metadataCache: MetadataCache,
                      logDirFailureChannel: LogDirFailureChannel,
+                     val brokerEpoch: BrokerEpoch,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
@@ -159,9 +160,10 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
+           brokerEpoch: BrokerEpoch,
            threadNamePrefix: Option[String] = None) {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
-      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
+      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, brokerEpoch,
       DelayedOperationPurgatory[DelayedProduce](
         purgatoryName = "Produce", brokerId = config.brokerId,
         purgeInterval = config.producerPurgatoryPurgeIntervalRequests),
@@ -366,11 +368,21 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
       val responseMap = new collection.mutable.HashMap[TopicPartition, Errors]
-      if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
+      if (stopReplicaRequest.controllerEpoch() < controllerEpoch) {
         stateChangeLogger.warn("Received stop replica request from an old controller epoch " +
           s"${stopReplicaRequest.controllerEpoch}. Latest known controller epoch is $controllerEpoch")
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)
       } else {
+        // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
+        // so we will keep the previous behavior and don't reject the request
+        if (stopReplicaRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+          val curBrokerEpoch = brokerEpoch.get
+          if (stopReplicaRequest.brokerEpoch() < curBrokerEpoch) {
+            stateChangeLogger.warn("Received stop replica request from an old broker epoch " +
+              s"${stopReplicaRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch")
+            return (responseMap, Errors.STALE_BROKER_EPOCH)
+          }
+        }
         val partitions = stopReplicaRequest.partitions.asScala
         controllerEpoch = stopReplicaRequest.controllerEpoch
         // First stop fetchers for all partitions, then stop the corresponding replicas
@@ -998,6 +1010,17 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.warn(stateControllerEpochErrorMessage)
         throw new ControllerMovedException(stateChangeLogger.messageWithPrefix(stateControllerEpochErrorMessage))
       } else {
+        // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
+        // so we will keep the previous behavior and don't reject the request
+        if (updateMetadataRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+          val curBrokerEpoch = brokerEpoch.get
+          if (updateMetadataRequest.brokerEpoch() < curBrokerEpoch) {
+            val stateBrokerEpochErrorMessage = "Received update metadata request from an old broker epoch " +
+              s"${updateMetadataRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch"
+            stateChangeLogger.warn(stateBrokerEpochErrorMessage)
+            throw new StaleBrokerEpochException(stateChangeLogger.messageWithPrefix(stateBrokerEpochErrorMessage))
+          }
+        }
         val deletedPartitions = metadataCache.updateMetadata(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
         deletedPartitions
@@ -1020,6 +1043,16 @@ class ReplicaManager(val config: KafkaConfig,
           s"Latest known controller epoch is $controllerEpoch")
         leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
       } else {
+        // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
+        // so we will keep the previous behavior and don't reject the request
+        if (leaderAndIsrRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+          val curBrokerEpoch = brokerEpoch.get
+          if (leaderAndIsrRequest.brokerEpoch() < curBrokerEpoch) {
+            stateChangeLogger.warn("Received LeaderAndIsr request from an old broker epoch " +
+              s"${leaderAndIsrRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch")
+            return leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception)
+          }
+        }
         val responseMap = new mutable.HashMap[TopicPartition, Errors]
         val controllerId = leaderAndIsrRequest.controllerId
         controllerEpoch = leaderAndIsrRequest.controllerEpoch
