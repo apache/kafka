@@ -208,7 +208,7 @@ public class PartitionGroupTest {
 
     }
 
-    public void verifyTimes(final StampedRecord record, final long recordTime, final long streamTime) {
+    private void verifyTimes(final StampedRecord record, final long recordTime, final long streamTime) {
         assertEquals(recordTime, record.timestamp);
         assertEquals(streamTime, group.timestamp());
     }
