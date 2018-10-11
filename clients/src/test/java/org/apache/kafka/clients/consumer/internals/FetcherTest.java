@@ -322,8 +322,6 @@ public class FetcherTest {
         this.fetcher.close(); // should send request to close the session
 
         assertEquals(1, consumerClient.pendingRequestCount(node));
-        assertEquals(0, client.inFlightRequestCount());
-        consumerClient.poll(time.timer(0));
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         FetchRequest sessionCloseReq = (FetchRequest) client.requests().peek().requestBuilder().build();

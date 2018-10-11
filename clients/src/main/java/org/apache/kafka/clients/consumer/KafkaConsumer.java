@@ -2134,6 +2134,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void close(long timeoutMs, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
+
+        long closeStart = time.milliseconds();
         try {
             if (coordinator != null)
                 coordinator.close(time.timer(Math.min(timeoutMs, requestTimeoutMs)));
@@ -2141,7 +2143,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
         }
-        ClientUtils.closeQuietly(fetcher, "fetcher", firstException);
+        long closeTimeoutLeft = timeoutMs - (time.milliseconds() - closeStart);
+        try {
+            if (fetcher != null)
+                fetcher.close(closeTimeoutLeft);
+        } catch (Throwable t) {
+            firstException.compareAndSet(null, t);
+            log.error("Failed to close Fetcher", t);
+        }
         ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
