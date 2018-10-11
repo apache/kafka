@@ -94,7 +94,7 @@ public class SslFactoryTest {
         SSLContext sslContext = sslFactory.sslContext();
         assertNotNull("SSL context not created", sslContext);
         assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
-        assertFalse(sslContext.createSSLEngine("localhost", 0).getUseClientMode());
+        assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         // Verify that context is not recreated on reconfigure() if config and file are not changed
         sslFactory.reconfigure(sslConfig);

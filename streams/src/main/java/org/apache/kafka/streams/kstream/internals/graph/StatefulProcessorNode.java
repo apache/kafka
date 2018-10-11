@@ -32,7 +32,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
 
     /**
-     * Create a node representing a stateful procssor, where the named store has already been registered.
+     * Create a node representing a stateful processor, where the named store has already been registered.
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V> processorParameters,
@@ -48,7 +48,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
 
     /**
-     * Create a node representing a stateful procssor,
+     * Create a node representing a stateful processor,
      * where the store needs to be built and registered as part of building this node.
      */
     public StatefulProcessorNode(final String nodeName,
