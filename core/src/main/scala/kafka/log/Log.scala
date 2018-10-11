@@ -1808,10 +1808,8 @@ class Log(@volatile var dir: File,
   override def toString = "Log(" + dir + ")"
 
   /**
-   * Get the physical log start offset. Logically, the log starts at Log#logStartOffset and is the view exposed to
-   * consumers. Most components should find logStartOffset sufficient. Use physicalLogStartOffset only for the cases
-   * where
-   * @return
+   * Get the physical log start offset, which is the base offset of the first segment. Logically, the log starts at
+   * Log#logStartOffset and is the view exposed to consumers.
    */
   private[log] def physicalLogStartOffset: Long = logSegments.head.baseOffset
 
