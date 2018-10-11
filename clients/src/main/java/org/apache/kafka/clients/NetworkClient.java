@@ -649,6 +649,7 @@ public class NetworkClient implements KafkaClient {
      * @param responses The list of responses to update
      * @param nodeId Id of the node to be disconnected
      * @param now The current time
+     * @param disconnectState The state of the disconnected channel           
      */
     private void processDisconnection(List<ClientResponse> responses,
                                       String nodeId,
@@ -662,15 +663,15 @@ public class NetworkClient implements KafkaClient {
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
                 metadataUpdater.handleAuthenticationFailure(exception);
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, exception.getMessage());
+                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId, disconnectState.remoteAddress(), exception.getMessage());
                 break;
             case AUTHENTICATE:
                 // This warning applies to older brokers which don't provide feedback on authentication failures
-                log.warn("Connection to node {} terminated during authentication. This may indicate " +
-                        "that authentication failed due to invalid credentials.", nodeId);
+                log.warn("Connection to node {} ({}) terminated during authentication. This may indicate " +
+                        "that authentication failed due to invalid credentials.", nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
-                log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
+                log.warn("Connection to node {} ({}) could not be established. Broker may not be available.", nodeId, disconnectState.remoteAddress());
                 break;
             default:
                 break; // Disconnections in other states are logged at debug level in Selector
