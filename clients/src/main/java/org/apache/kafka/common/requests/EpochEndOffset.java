@@ -25,7 +25,6 @@ import java.util.Objects;
 /**
  * The offset, fetched from a leader, for a particular partition.
  */
-
 public class EpochEndOffset {
     public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
     public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;

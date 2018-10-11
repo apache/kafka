@@ -72,12 +72,12 @@ public class DescribeGroupsRequest extends AbstractRequest {
     private final List<String> groupIds;
 
     private DescribeGroupsRequest(List<String> groupIds, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_GROUPS, version);
         this.groupIds = groupIds;
     }
 
     public DescribeGroupsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_GROUPS, version);
         this.groupIds = new ArrayList<>();
         for (Object groupId : struct.getArray(GROUP_IDS_KEY_NAME))
             this.groupIds.add((String) groupId);

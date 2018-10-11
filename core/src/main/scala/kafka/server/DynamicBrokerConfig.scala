@@ -87,6 +87,8 @@ object DynamicBrokerConfig {
     DynamicListenerConfig.ReconfigurableConfigs
   private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp)
 
+  private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
+
   val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
   private val DynamicPasswordConfigs = {
@@ -267,6 +269,27 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
   }
 
+  /**
+   * All config updates through ZooKeeper are triggered through actual changes in values stored in ZooKeeper.
+   * For some configs like SSL keystores and truststores, we also want to reload the store if it was modified
+   * in-place, even though the actual value of the file path and password haven't changed. This scenario alone
+   * is handled here when a config update request using admin client is processed by AdminManager. If any of
+   * the SSL configs have changed, then the update will not be done here, but will be handled later when ZK
+   * changes are processed. At the moment, only listener configs are considered for reloading.
+   */
+  private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
+    reconfigurables
+      .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
+      .foreach {
+        case reconfigurable: ListenerReconfigurable =>
+          val kafkaProps = validatedKafkaProps(newProps, perBrokerConfig = true)
+          val newConfig = new KafkaConfig(kafkaProps.asJava, false, None)
+          processListenerReconfigurable(reconfigurable, newConfig, Collections.emptyMap(), validateOnly = false, reloadOnly = true)
+        case reconfigurable =>
+          trace(s"Files will not be reloaded without config change for $reconfigurable")
+      }
+  }
+
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
    secret.map { secret =>
       new PasswordEncoder(secret,
@@ -355,17 +378,28 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     props
   }
 
-  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
-    validateConfigs(props, perBrokerConfig)
+  /**
+   * Validate the provided configs `propsOverride` and return the full Kafka configs with
+   * the configured defaults and these overrides.
+   *
+   * Note: The caller must acquire the read or write lock before invoking this method.
+   */
+  private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
+    validateConfigs(propsOverride, perBrokerConfig)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
     if (perBrokerConfig) {
       overrideProps(newProps, dynamicDefaultConfigs)
-      overrideProps(newProps, props.asScala)
+      overrideProps(newProps, propsOverride.asScala)
     } else {
-      overrideProps(newProps, props.asScala)
+      overrideProps(newProps, propsOverride.asScala)
       overrideProps(newProps, dynamicBrokerConfigs)
     }
+    newProps
+  }
+
+  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
+    val newProps = validatedKafkaProps(props, perBrokerConfig)
     processReconfiguration(newProps, validateOnly = true)
   }
 
@@ -445,12 +479,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         newConfig.valuesFromThisConfig.keySet.asScala.foreach(customConfigs.remove)
         reconfigurables.foreach {
           case listenerReconfigurable: ListenerReconfigurable =>
-            val listenerName = listenerReconfigurable.listenerName
-            val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
-            val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
-            val updatedKeys = updatedConfigs(newValues, oldValues).keySet
-            if (needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys))
-              processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
+            processListenerReconfigurable(listenerReconfigurable, newConfig, customConfigs, validateOnly, reloadOnly = false)
           case reconfigurable =>
             if (needsReconfiguration(reconfigurable.reconfigurableConfigs, updatedMap.keySet))
               processReconfigurable(reconfigurable, updatedMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
@@ -479,6 +508,21 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private def needsReconfiguration(reconfigurableConfigs: util.Set[String], updatedKeys: Set[String]): Boolean = {
     reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty
+  }
+
+  private def processListenerReconfigurable(listenerReconfigurable: ListenerReconfigurable,
+                                            newConfig: KafkaConfig,
+                                            customConfigs: util.Map[String, Object],
+                                            validateOnly: Boolean,
+                                            reloadOnly:  Boolean): Unit = {
+    val listenerName = listenerReconfigurable.listenerName
+    val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
+    val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
+    val updatedKeys = updatedConfigs(newValues, oldValues).keySet
+    val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys)
+    // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
+    if (reloadOnly != configsChanged)
+      processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
   }
 
   private def processReconfigurable(reconfigurable: Reconfigurable,

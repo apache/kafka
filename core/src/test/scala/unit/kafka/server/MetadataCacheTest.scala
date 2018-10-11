@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.util
+import java.util.Optional
 import util.Arrays.asList
 
 import org.apache.kafka.common.TopicPartition
@@ -44,7 +45,6 @@ class MetadataCacheTest {
   def getTopicMetadata() {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
-
 
     val cache = new MetadataCache(1)
 
@@ -95,6 +95,7 @@ class MetadataCacheTest {
           val leader = partitionMetadata.leader
           val partitionState = topicPartitionStates(new TopicPartition(topic, partitionId))
           assertEquals(partitionState.basePartitionState.leader, leader.id)
+          assertEquals(Optional.of(partitionState.basePartitionState.leaderEpoch), partitionMetadata.leaderEpoch)
           assertEquals(partitionState.basePartitionState.isr, partitionMetadata.isr.asScala.map(_.id).asJava)
           assertEquals(partitionState.basePartitionState.replicas, partitionMetadata.replicas.asScala.map(_.id).asJava)
           val endPoint = endPoints(partitionMetadata.leader.id).find(_.listenerName == listenerName).get

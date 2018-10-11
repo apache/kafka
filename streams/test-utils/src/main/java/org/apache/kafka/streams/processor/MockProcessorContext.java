@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -201,7 +204,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
@@ -377,17 +380,21 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    @Deprecated
     public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
 
         punctuators.add(capturedPunctuator);
 
-        return new Cancellable() {
-            @Override
-            public void cancel() {
-                capturedPunctuator.cancel();
-            }
-        };
+        return capturedPunctuator::cancel;
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(interval, "interval");
+        return schedule(interval.toMillis(), type, callback);
     }
 
     /**
@@ -405,13 +412,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        capturedForwards.add(new CapturedForward(To.all(), new KeyValue(key, value)));
+        forward(key, value, To.all());
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
+        capturedForwards.add(
+            new CapturedForward(
+                to.timestamp == -1 ? to.withTimestamp(timestamp == null ? -1 : timestamp) : to,
+                new KeyValue(key, value)
+            )
+        );
     }
 
     @SuppressWarnings("deprecation")
@@ -501,8 +513,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         // This interface is assumed by state stores that add change-logging.
         // Rather than risk a mysterious ClassCastException during unit tests, throw an explanatory exception.
 
-        throw new UnsupportedOperationException("MockProcessorContext does not provide record collection. " +
-            "For processor unit tests, use an in-memory state store with change-logging disabled. " +
-            "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration.");
+        throw new UnsupportedOperationException(
+            "MockProcessorContext does not provide record collection. " +
+                "For processor unit tests, use an in-memory state store with change-logging disabled. " +
+                "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration."
+        );
     }
 }

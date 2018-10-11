@@ -16,12 +16,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala
+package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.streams.kstream.Materialized
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
+import org.apache.kafka.streams.scala.{ByteArrayKeyValueStore, StreamsBuilder}
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
@@ -122,10 +122,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     val sourceTopic2 = "source2"
     val sinkTopic = "sink"
     val stateStore = "store"
-    val materialized = Materialized
-      .as[String, Long, ByteArrayKeyValueStore](stateStore)
-      .withKeySerde(Serdes.String)
-      .withValueSerde(Serdes.Long)
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
 
     val table1 = builder.stream[String, String](sourceTopic1).groupBy((key, _) => key).count()
     val table2 = builder.stream[String, String](sourceTopic2).groupBy((key, _) => key).count()

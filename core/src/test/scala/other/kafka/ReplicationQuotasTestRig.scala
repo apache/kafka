@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package other.kafka
+package kafka
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, StandardOpenOption}
@@ -265,7 +265,7 @@ object ReplicationQuotasTestRig {
     private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
       val metricName = broker.metrics.metricName("byte-rate", repType.toString)
       if (broker.metrics.metrics.asScala.contains(metricName))
-        broker.metrics.metrics.asScala(metricName).value
+        broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
       else -1
     }
 
@@ -311,7 +311,7 @@ object ReplicationQuotasTestRig {
     }
 
     def append(message: String): Unit = {
-      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.APPEND)
+      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
       new PrintWriter(stream) {
         append(message)
         close

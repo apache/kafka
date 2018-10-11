@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -30,6 +33,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -39,6 +43,8 @@ import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private final CompressionType compressionType;
     private final int bufferOffset;
@@ -52,6 +58,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testWriteEmptyRecordSet() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -207,6 +215,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testCompressionRateV0() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -262,6 +272,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testCompressionRateV1() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V1);
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -293,6 +305,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void buildUsingLogAppendTime() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V1);
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -322,6 +336,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void buildUsingCreateTime() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V1);
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
 
@@ -353,6 +369,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void testAppendedChecksumConsistency() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
             MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compressionType,
@@ -397,6 +415,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void writePastLimit() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V1);
+
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.position(bufferOffset);
 
@@ -442,6 +462,11 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
+        if (compressionType == CompressionType.ZSTD) {
+            exceptionRule.expect(UnsupportedCompressionTypeException.class);
+            exceptionRule.expectMessage("Down-conversion of zstandard-compressed batches is not supported");
+        }
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
                 compressionType, TimestampType.LOG_APPEND_TIME, 0L);
@@ -497,6 +522,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void convertToV1WithMixedV0AndV2Data() {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
                 compressionType, TimestampType.NO_TIMESTAMP_TYPE, 0L);
@@ -571,6 +598,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnBuildWhenAborted() throws Exception {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -588,6 +617,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldResetBufferToInitialPositionOnAbort() throws Exception {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -601,6 +632,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() throws Exception {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -618,6 +651,8 @@ public class MemoryRecordsBuilderTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() throws Exception {
+        expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
+
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
@@ -699,4 +734,10 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
+    private void expectExceptionWithZStd(CompressionType compressionType, byte magic) {
+        if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
+            exceptionRule.expect(IllegalArgumentException.class);
+            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
+        }
+    }
 }

@@ -143,21 +143,21 @@ public class PlainSaslServer implements SaslServer {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
     }
 
     public static class PlainSaslServerFactory implements SaslServerFactory {

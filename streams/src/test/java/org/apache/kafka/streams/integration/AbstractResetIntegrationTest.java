@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -66,6 +67,7 @@ import java.util.concurrent.TimeUnit;
 
 import kafka.tools.StreamsResetter;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -199,7 +201,7 @@ public abstract class AbstractResetIntegrationTest {
 
     void cleanupTest() throws Exception {
         if (streams != null) {
-            streams.close(30, TimeUnit.SECONDS);
+            streams.close(Duration.ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
@@ -526,7 +528,7 @@ public abstract class AbstractResetIntegrationTest {
 
         input.through(INTERMEDIATE_USER_TOPIC)
             .groupByKey()
-            .windowedBy(TimeWindows.of(35).advanceBy(10))
+            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
             .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {

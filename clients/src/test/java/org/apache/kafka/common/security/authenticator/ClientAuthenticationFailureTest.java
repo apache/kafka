@@ -128,7 +128,7 @@ public class ClientAuthenticationFailureTest {
     }
 
     @Test
-    public void testTransactionalProducerWithInvalidCredentials() throws Exception {
+    public void testTransactionalProducerWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1");

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -27,8 +28,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -87,5 +91,28 @@ public final class ClientUtils {
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
                 clientSaslMechanism, true);
+    }
+
+    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+        InetAddress[] addresses = InetAddress.getAllByName(host);
+        if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
+            return filterPreferredAddresses(addresses);
+        } else {
+            return Collections.singletonList(addresses[0]);
+        }
+    }
+
+    static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {
+        List<InetAddress> preferredAddresses = new ArrayList<>();
+        Class<? extends InetAddress> clazz = null;
+        for (InetAddress address : allAddresses) {
+            if (clazz == null) {
+                clazz = address.getClass();
+            }
+            if (clazz.isInstance(address)) {
+                preferredAddresses.add(address);
+            }
+        }
+        return preferredAddresses;
     }
 }

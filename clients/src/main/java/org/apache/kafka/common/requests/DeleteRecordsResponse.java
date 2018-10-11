@@ -136,7 +136,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DELETE_RECORDS.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        Map<String, Map<Integer, PartitionResponse>> responsesByTopic = CollectionUtils.groupDataByTopic(responses);
+        Map<String, Map<Integer, PartitionResponse>> responsesByTopic = CollectionUtils.groupPartitionDataByTopic(responses);
         List<Struct> topicStructArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionResponse>> responsesByTopicEntry : responsesByTopic.entrySet()) {
             Struct topicStruct = struct.instance(TOPICS_KEY_NAME);

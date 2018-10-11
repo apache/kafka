@@ -28,7 +28,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayDeque;
@@ -40,8 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.ensureExtended;
 
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
@@ -59,8 +56,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private final Map<TopicPartition, Long> offsets;
     private final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> consumerGroupOffsets;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> uncommittedConsumerGroupOffsets;
-    private final ExtendedSerializer<K> keySerializer;
-    private final ExtendedSerializer<V> valueSerializer;
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
     private boolean autoComplete;
     private boolean closed;
     private boolean transactionInitialized;
@@ -93,8 +90,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
         this.partitioner = partitioner;
-        this.keySerializer = ensureExtended(keySerializer);
-        this.valueSerializer = ensureExtended(valueSerializer);
+        this.keySerializer = keySerializer;
+        this.valueSerializer = valueSerializer;
         this.offsets = new HashMap<>();
         this.sent = new ArrayList<>();
         this.uncommittedSends = new ArrayList<>();

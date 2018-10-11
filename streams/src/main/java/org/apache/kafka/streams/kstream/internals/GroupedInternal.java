@@ -14,26 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
+package org.apache.kafka.streams.kstream.internals;
 
-public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], StateStore> {
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Grouped;
 
-    private final boolean persistent;
+public class GroupedInternal<K, V> extends Grouped<K, V> {
 
-    public MockStoreBuilder(final String storeName, final boolean persistent) {
-        super(storeName, Serdes.Integer(), Serdes.ByteArray(), new MockTime());
-
-        this.persistent = persistent;
+    GroupedInternal(final Grouped<K, V> grouped) {
+        super(grouped);
     }
 
-    @Override
-    public StateStore build() {
-        return new MockStateStore(name, persistent);
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valueSerde;
+    }
+
+    public String name() {
+        return name;
     }
 }
-

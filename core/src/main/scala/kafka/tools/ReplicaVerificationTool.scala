@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
-import java.util.{Date, Properties}
+import java.util.{Date, Optional, Properties}
 
 import joptsimple.OptionParser
 import kafka.api._
@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.config.ClientDnsLookup
 
 /**
  * For verifying the consistency among replicas.
@@ -389,7 +390,8 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition), 0L, fetchSize))
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+        0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
       forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)
@@ -471,6 +473,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
       consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+      ClientDnsLookup.DEFAULT,
       time,
       false,
       new ApiVersions,

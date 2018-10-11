@@ -92,13 +92,13 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     private DeleteTopicsRequest(Set<String> topics, Integer timeout, short version) {
-        super(version);
+        super(ApiKeys.DELETE_TOPICS, version);
         this.topics = topics;
         this.timeout = timeout;
     }
 
     public DeleteTopicsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DELETE_TOPICS, version);
         Object[] topicsArray = struct.getArray(TOPICS_KEY_NAME);
         Set<String> topics = new HashSet<>(topicsArray.length);
         for (Object topic : topicsArray)

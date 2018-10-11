@@ -79,7 +79,7 @@ import org.slf4j.LoggerFactory;
  * be something other than '{@code scope}'</li>
  * </ul>
  * For example:
- * 
+ *
  * <pre>
  * KafkaClient {
  *      org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule Required
@@ -89,7 +89,7 @@ import org.slf4j.LoggerFactory;
  *      unsecuredLoginExtension_traceId="123";
  * };
  * </pre>
- * 
+ *
  * This class is the default when the SASL mechanism is OAUTHBEARER and no value
  * is explicitly set via either the {@code sasl.login.callback.handler.class}
  * client configuration property or the
@@ -122,7 +122,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
 
     /**
      * For testing
-     * 
+     *
      * @param time
      *            the mandatory time to set
      */
@@ -132,7 +132,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
 
     /**
      * Return true if this instance has been configured, otherwise false
-     * 
+     *
      * @return true if this instance has been configured, otherwise false
      */
     public boolean configured() {
@@ -179,9 +179,17 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         // empty
     }
 
-    private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
+    private void handleTokenCallback(OAuthBearerTokenCallback callback) {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
+        if (moduleOptions.isEmpty()) {
+            log.debug("Token not provided, this login cannot be used to establish client connections");
+            callback.token(null);
+            return;
+        }
+        if (moduleOptions.keySet().stream().noneMatch(name -> !name.startsWith(EXTENSION_PREFIX))) {
+            throw new OAuthBearerConfigException("Extensions provided in login context without a token");
+        }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
         String principalClaimName = principalClaimNameValue != null && !principalClaimNameValue.trim().isEmpty()
                 ? principalClaimNameValue.trim()

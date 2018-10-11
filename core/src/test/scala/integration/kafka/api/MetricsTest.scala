@@ -259,7 +259,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       group: Option[String]): Double = {
     // Use max value of all matching metrics since Selector metrics are recorded for each Processor
     verifyKafkaMetric(name, metrics, entity, group) { matchingMetrics =>
-      matchingMetrics.foldLeft(0.0)((max, metric) => Math.max(max, metric.value))
+      matchingMetrics.foldLeft(0.0)((max, metric) => Math.max(max, metric.metricValue.asInstanceOf[Double]))
     }
   }
 

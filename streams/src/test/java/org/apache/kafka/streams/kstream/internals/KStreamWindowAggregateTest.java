@@ -47,6 +47,7 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -70,7 +71,7 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
@@ -128,7 +129,7 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
@@ -137,7 +138,7 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String()));
 
         table2.toStream().process(supplier);
@@ -232,7 +233,7 @@ public class KStreamWindowAggregateTest {
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.toStringInstance("+"),
@@ -257,7 +258,7 @@ public class KStreamWindowAggregateTest {
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5).until(100))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).until(100))
             .aggregate(
                 () -> "",
                 MockAggregator.toStringInstance("+"),
@@ -316,7 +317,7 @@ public class KStreamWindowAggregateTest {
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10).advanceBy(5).grace(90L))
+            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).grace(ofMillis(90L)))
             .aggregate(
                 () -> "",
                 MockAggregator.toStringInstance("+"),

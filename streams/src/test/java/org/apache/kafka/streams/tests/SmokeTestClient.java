@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,7 +41,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
@@ -82,7 +82,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(5));
         // do not remove these printouts since they are needed for health scripts
         if (!uncaughtException) {
             System.out.println("SMOKE-TEST-CLIENT-CLOSED");
@@ -129,7 +129,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             data.groupByKey(Serialized.with(stringSerde, intSerde));
 
         groupedData
-            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(1)))
+            .windowedBy(TimeWindows.of(Duration.ofDays(1)))
             .aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
@@ -154,7 +154,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         groupedData
-            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
             .aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
@@ -179,7 +179,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         groupedData
-            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
             .aggregate(
                 new Initializer<Long>() {
                     public Long apply() {
@@ -202,7 +202,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // cnt
         groupedData
-            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("uwin-cnt"))
             .toStream(new Unwindow<String, Long>())
             .to("cnt", Produced.with(stringSerde, longSerde));
@@ -252,7 +252,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-                streamsClient.close(30, TimeUnit.SECONDS);
+                streamsClient.close(Duration.ofSeconds(30));
             }
         });
 

@@ -57,6 +57,8 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -187,8 +189,8 @@ public class InternalTopicIntegrationTest {
 
         textLines.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy(MockMapper.selectValueMapper())
-            .windowedBy(TimeWindows.of(1000).grace(0L))
-            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountWindows").withRetention(2_000L));
+            .windowedBy(TimeWindows.of(ofSeconds(1L)).grace(ofMillis(0L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountWindows").withRetention(ofSeconds(2L)));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
         streams.start();

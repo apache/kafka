@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Before;
@@ -45,7 +45,7 @@ public class StateRestorerTest {
 
     @Test
     public void shouldCallRestoreOnRestoreCallback() {
-        restorer.restore(Collections.singletonList(KeyValue.pair(new byte[0], new byte[0])));
+        restorer.restore(Collections.singletonList(new ConsumerRecord<>("", 0, 0L, new byte[0], new byte[0])));
         assertThat(callback.restored.size(), equalTo(1));
     }
 

@@ -70,7 +70,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return bytesStore.fetchAll(timeFrom, timeTo);
     }
-    
+
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

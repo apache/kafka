@@ -17,11 +17,13 @@
 package org.apache.kafka.common;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * A topic name and partition number
  */
 public final class TopicPartition implements Serializable {
+    private static final long serialVersionUID = -613627415771699627L;
 
     private int hash = 0;
     private final int partition;
@@ -47,7 +49,7 @@ public final class TopicPartition implements Serializable {
         final int prime = 31;
         int result = 1;
         result = prime * result + partition;
-        result = prime * result + ((topic == null) ? 0 : topic.hashCode());
+        result = prime * result + Objects.hashCode(topic);
         this.hash = result;
         return result;
     }
@@ -61,14 +63,7 @@ public final class TopicPartition implements Serializable {
         if (getClass() != obj.getClass())
             return false;
         TopicPartition other = (TopicPartition) obj;
-        if (partition != other.partition)
-            return false;
-        if (topic == null) {
-            if (other.topic != null)
-                return false;
-        } else if (!topic.equals(other.topic))
-            return false;
-        return true;
+        return partition == other.partition && Objects.equals(topic, other.topic);
     }
 
     @Override

@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.DelegationTokenDisabledException;
 import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
+import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -84,11 +85,13 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -111,12 +114,12 @@ import java.util.function.Function;
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request,",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request.",
             UnknownServerException::new),
     NONE(0, null, message -> null),
     OFFSET_OUT_OF_RANGE(1, "The requested offset is not within the range of offsets maintained by the server.",
             OffsetOutOfRangeException::new),
-    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.",
+    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, has a null key for a compacted topic, or is otherwise corrupt.",
             CorruptRecordException::new),
     UNKNOWN_TOPIC_OR_PARTITION(3, "This server does not host this topic-partition.",
             UnknownTopicOrPartitionException::new),
@@ -159,8 +162,8 @@ public enum Errors {
     ILLEGAL_GENERATION(22, "Specified group generation id is not valid.",
             IllegalGenerationException::new),
     INCONSISTENT_GROUP_PROTOCOL(23,
-            "The group member's supported protocols are incompatible with those of existing members" +
-                " or first group member tried to join with empty protocol type or empty protocol list.",
+            "The group member's supported protocols are incompatible with those of existing members " +
+            "or first group member tried to join with empty protocol type or empty protocol list.",
             InconsistentGroupProtocolException::new),
     INVALID_GROUP_ID(24, "The configured groupId is invalid.",
             InvalidGroupIdException::new),
@@ -201,8 +204,8 @@ public enum Errors {
     NOT_CONTROLLER(41, "This is not the correct controller for this cluster.",
             NotControllerException::new),
     INVALID_REQUEST(42, "This most likely occurs because of a request being malformed by the " +
-                "client library or the message was sent to an incompatible broker. See the broker logs " +
-                "for more details.",
+            "client library or the message was sent to an incompatible broker. See the broker logs " +
+            "for more details.",
             InvalidRequestException::new),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43, "The message format version on the broker does not support the request.",
             UnsupportedForMessageFormatException::new),
@@ -221,10 +224,10 @@ public enum Errors {
             "its transactional id.",
             InvalidPidMappingException::new),
     INVALID_TRANSACTION_TIMEOUT(50, "The transaction timeout is larger than the maximum value allowed by " +
-                "the broker (as configured by transaction.max.timeout.ms).",
+            "the broker (as configured by transaction.max.timeout.ms).",
             InvalidTxnTimeoutException::new),
     CONCURRENT_TRANSACTIONS(51, "The producer attempted to update a transaction " +
-                "while another concurrent operation on the same transaction was ongoing.",
+            "while another concurrent operation on the same transaction was ongoing.",
             ConcurrentTransactionsException::new),
     TRANSACTION_COORDINATOR_FENCED(52, "Indicates that the transaction coordinator sending a WriteTxnMarker " +
             "is no longer the current coordinator for a given producer.",
@@ -278,7 +281,13 @@ public enum Errors {
             "metadata request was processed.",
             ListenerNotFoundException::new),
     TOPIC_DELETION_DISABLED(73, "Topic deletion is disabled.",
-            TopicDeletionDisabledException::new);
+            TopicDeletionDisabledException::new),
+    FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
+            FencedLeaderEpochException::new),
+    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
+            UnknownLeaderEpochException::new),
+    UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
+            UnsupportedCompressionTypeException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -287,7 +296,10 @@ public enum Errors {
 
     static {
         for (Errors error : Errors.values()) {
-            codeToError.put(error.code(), error);
+            if (codeToError.put(error.code(), error) != null)
+                throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
+                        error + " has already been used");
+
             if (error.exception != null)
                 classToError.put(error.exception.getClass(), error);
         }

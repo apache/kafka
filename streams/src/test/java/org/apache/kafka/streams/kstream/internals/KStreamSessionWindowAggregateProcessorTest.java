@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -69,7 +70,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final KStreamSessionWindowAggregate<String, String, Long> sessionAggregator =
         new KStreamSessionWindowAggregate<>(
-            SessionWindows.with(GAP_MS),
+            SessionWindows.with(ofMillis(GAP_MS)),
             STORE_NAME,
             initializer,
             aggregator,
@@ -106,7 +107,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, GAP_MS * 3),
+        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
                                                                                                  Serdes.String(),
                                                                                                  Serdes.Long())
             .withLoggingDisabled();
@@ -322,7 +323,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
-            SessionWindows.with(10L).grace(10L),
+            SessionWindows.with(ofMillis(10L)).grace(ofMillis(10L)),
             STORE_NAME,
             initializer,
             aggregator,

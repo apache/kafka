@@ -99,7 +99,7 @@ class ReplicationQuotaManagerTest {
 
   def rate(metrics: Metrics): Double = {
     val metricName = metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
-    val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
+    val leaderThrottledRate = metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
     leaderThrottledRate
   }
 

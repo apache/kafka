@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
@@ -33,12 +34,12 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldSetWindowStartTime() {
-        assertEquals(anyStartTime, UnlimitedWindows.of().startOn(anyStartTime).startMs);
+        assertEquals(anyStartTime, UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime)).startMs);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void startTimeMustNotBeNegative() {
-        UnlimitedWindows.of().startOn(-1);
+        UnlimitedWindows.of().startOn(ofEpochMilli(-1));
     }
 
     @Test
@@ -54,7 +55,7 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
-        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
@@ -62,7 +63,7 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
-        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
         final long timestamp = w.startMs + 1;
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertEquals(1, matchedWindows.size());
@@ -71,7 +72,7 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
-        final UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
+        final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
         final long timestamp = w.startMs - 1;
         final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
@@ -81,13 +82,13 @@ public class UnlimitedWindowsTest {
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
         verifyEquality(UnlimitedWindows.of(), UnlimitedWindows.of());
 
-        verifyEquality(UnlimitedWindows.of().startOn(1), UnlimitedWindows.of().startOn(1));
+        verifyEquality(UnlimitedWindows.of().startOn(ofEpochMilli(1)), UnlimitedWindows.of().startOn(ofEpochMilli(1)));
 
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
-        verifyInEquality(UnlimitedWindows.of().startOn(9), UnlimitedWindows.of().startOn(1));
+        verifyInEquality(UnlimitedWindows.of().startOn(ofEpochMilli(9)), UnlimitedWindows.of().startOn(ofEpochMilli(1)));
     }
 
 }

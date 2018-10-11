@@ -448,7 +448,7 @@
             <pre>    sasl.kerberos.service.name=kafka</pre>
 
         </ol></li>
-        <li><h5><a id="security_sasl_kerberos_clientconfig" href="#security_kerberos_sasl_clientconfig">Configuring Kafka Clients</a></h5>
+        <li><h5><a id="security_sasl_kerberos_clientconfig" href="#security_sasl_kerberos_clientconfig">Configuring Kafka Clients</a></h5>
             To configure SASL authentication on the clients:
             <ol>
                 <li>
@@ -1018,7 +1018,7 @@
     <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
     Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
-    One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
+    One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
     <pre>super.users=User:Bob;User:Alice</pre>
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in server.properties like the following.
     <pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
@@ -1076,6 +1076,18 @@
             <td>Configuration</td>
         </tr>
         <tr>
+            <td>--bootstrap-server</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster. Only one of --bootstrap-server or --authorizer option must be specified.</td>
+            <td></td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
+            <td>--command-config</td>
+            <td>A property file containing configs to be passed to Admin Client. This option can only be used with --bootstrap-server option.</td>
+            <td></td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
             <td>--cluster</td>
             <td>Indicates to the script that the user is trying to interact with acls on the singular cluster resource.</td>
             <td></td>
@@ -1107,13 +1119,19 @@
         </tr>
         <tr>
             <td>--allow-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --allow-principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
         <tr>
             <td>--deny-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. <br>You can specify multiple --deny-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --deny-principal in a single command.</td>
+            <td></td>
+            <td>Principal</td>
+        </tr>
+        <tr>
+            <td>--principal</td>
+            <td>Principal is in PrincipalType:name format that will be used along with --list option. Default PrincipalType string "User" is case sensitive. This will list the ACLs for the specified principal. <br>You can specify multiple --principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
@@ -1199,7 +1217,17 @@
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </pre>
                 Note that for consumer option we must also specify the consumer group.
                 In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
-        </ul>
+
+        <li><b>AdminClient API based acl management</b><br>
+            Users having Alter permission on ClusterResource can use AdminClient API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
+            All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
+
+            <pre class="brush: bash;">
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic</pre></li>
+
+    </ul>
 
     <h3><a id="security_rolling_upgrade" href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></h3>
         You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:

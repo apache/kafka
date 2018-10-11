@@ -89,7 +89,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final ProcessorRecordContext current = context.recordContext();
         try {
-            context.setRecordContext(entry.recordContext());
+            context.setRecordContext(entry.entry().context());
             if (flushListener != null) {
                 V oldValue = null;
                 if (sendOldValues) {
