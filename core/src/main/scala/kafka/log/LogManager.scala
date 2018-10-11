@@ -606,7 +606,7 @@ class LogManager(logDirs: Seq[File],
     } {
       try {
         val logStartOffsets = partitionToLog.filter { case (_, log) =>
-          log.logStartOffset > log.logSegments.head.baseOffset
+          log.logStartOffset > log.physicalLogStartOffset
         }.mapValues(_.logStartOffset)
         checkpoint.write(logStartOffsets)
       } catch {

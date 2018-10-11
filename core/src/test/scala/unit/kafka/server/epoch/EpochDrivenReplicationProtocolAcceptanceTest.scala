@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.Deserializer
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -367,7 +368,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     printSegments()
 
     def crcSeq(broker: KafkaServer, partition: Int = 0): Seq[Long] = {
-      val batches = getLog(broker, partition).activeSegment.read(0, None, Integer.MAX_VALUE)
+      val batches = getLog(broker, partition).read(0, Integer.MAX_VALUE, None, false, false)
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
@@ -386,10 +387,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def printSegments(): Unit = {
-    info("Broker0:")
-    DumpLogSegments.main(Seq("--files", getLogFile(brokers(0), 0).getCanonicalPath).toArray)
-    info("Broker1:")
-    DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
+//    info("Broker0:")
+//    DumpLogSegments.main(Seq("--files", getLogFile(brokers(0), 0).getCanonicalPath).toArray)
+//    info("Broker1:")
+//    DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
   }
 
   private def startConsumer(): KafkaConsumer[Array[Byte], Array[Byte]] = {
@@ -440,7 +441,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
-    getLog(leader, partition).activeSegment.read(0, None, Integer.MAX_VALUE)
+    val fetchOffset =
+      if (offset == -1)
+        getLog(leader, partition).fetchOffsetsByTimestamp(offset).get.offset
+      else
+        offset
+    getLog(leader, partition).read(fetchOffset, Integer.MAX_VALUE, None, true, false)
       .records.batches().asScala.toSeq.last
   }
 

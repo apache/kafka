@@ -210,39 +210,6 @@ class Log(@volatile var dir: File,
   import kafka.log.Log._
 
   this.logIdent = s"[Log partition=$topicPartition, dir=${dir.getParent}] "
-
-  /* A lock that guards all modifications to the log */
-  private val lock = new Object
-  // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
-  // After memory mapped buffer is closed, no disk IO operation should be performed for this log
-  @volatile private var isMemoryMappedBufferClosed = false
-
-  /* last time it was flushed */
-  private val lastFlushedTime = new AtomicLong(time.milliseconds)
-
-  def initFileSize: Int = {
-    if (config.preallocate)
-      config.segmentSize
-    else
-      0
-  }
-
-  def updateConfig(updatedKeys: Set[String], newConfig: LogConfig): Unit = {
-    if ((updatedKeys.contains(LogConfig.RetentionMsProp)
-      || updatedKeys.contains(LogConfig.MessageTimestampDifferenceMaxMsProp))
-      && topicPartition.partition == 0  // generate warnings only for one partition of each topic
-      && newConfig.retentionMs < newConfig.messageTimestampDifferenceMaxMs)
-      warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
-        s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
-        s"This may result in frequent log rolling.")
-    this.config = newConfig
-  }
-
-  private def checkIfMemoryMappedBufferClosed(): Unit = {
-    if (isMemoryMappedBufferClosed)
-      throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
-  }
-
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
@@ -270,6 +237,20 @@ class Log(@volatile var dir: File,
 
   @volatile private var _leaderEpochCache: LeaderEpochFileCache = initializeLeaderEpochCache()
 
+  /* A lock that guards all modifications to the log */
+  private val lock = new Object
+  // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
+  // After memory mapped buffer is closed, no disk IO operation should be performed for this log
+  @volatile private var isMemoryMappedBufferClosed = false
+
+  /* last time it was flushed */
+  private val lastFlushedTime = new AtomicLong(time.milliseconds)
+
+  private val tags = {
+    val maybeFutureTag = if (isFuture) Map("is-future" -> "true") else Map.empty[String, String]
+    Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
+  }
+
   locally {
     val startMs = time.milliseconds
 
@@ -293,11 +274,6 @@ class Log(@volatile var dir: File,
 
     info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
-  }
-
-  private val tags = {
-    val maybeFutureTag = if (isFuture) Map("is-future" -> "true") else Map.empty[String, String]
-    Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
   newGauge("NumLogSegments",
@@ -330,8 +306,31 @@ class Log(@volatile var dir: File,
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
+  private[log] def initFileSize: Int = {
+    if (config.preallocate)
+      config.segmentSize
+    else
+      0
+  }
+
+  def updateConfig(updatedKeys: Set[String], newConfig: LogConfig): Unit = {
+    if ((updatedKeys.contains(LogConfig.RetentionMsProp)
+      || updatedKeys.contains(LogConfig.MessageTimestampDifferenceMaxMsProp))
+      && topicPartition.partition == 0  // generate warnings only for one partition of each topic
+      && newConfig.retentionMs < newConfig.messageTimestampDifferenceMaxMs)
+      warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
+        s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
+        s"This may result in frequent log rolling.")
+    this.config = newConfig
+  }
+
+  private def checkIfMemoryMappedBufferClosed(): Unit = {
+    if (isMemoryMappedBufferClosed)
+      throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
+  }
+
   /** The name of this log */
-  def name  = dir.getName()
+  def name = dir.getName()
 
   def leaderEpochCache = _leaderEpochCache
 
@@ -696,7 +695,7 @@ class Log(@volatile var dir: File,
    * The number of segments in the log.
    * Take care! this is an O(n) operation.
    */
-  def numberOfSegments: Int = segments.size
+  private[log] def numberOfSegments: Int = segments.size
 
   /**
    * Close this log.
@@ -1300,7 +1299,7 @@ class Log(@volatile var dir: File,
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segments = logSegments.toBuffer
+    val segments = logSegments(logStartOffset, logEndOffset).toBuffer
     val lastSegmentHasSize = segments.last.size > 0
 
     val offsetTimeArray =
@@ -1438,7 +1437,7 @@ class Log(@volatile var dir: File,
    *
    * Whether or not deletion is enabled, delete any log segments that are before the log start offset
    */
-  def deleteOldSegments(): Int = {
+  private[log] def deleteOldSegments(): Int = {
     if (config.delete) {
       deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
     } else {
@@ -1490,7 +1489,7 @@ class Log(@volatile var dir: File,
   /**
    * The offset of the next message that will be appended to the log
    */
-  def logEndOffset: Long = nextOffsetMetadata.messageOffset
+  def logEndOffset: Long = logEndOffsetMetadata.messageOffset
 
   /**
    * Roll the log over to a new empty log segment if necessary.
@@ -1610,7 +1609,7 @@ class Log(@volatile var dir: File,
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flush(offset: Long) : Unit = {
+  private[log] def flush(offset: Long) : Unit = {
     maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
       if (offset <= this.recoveryPoint)
         return
@@ -1646,7 +1645,7 @@ class Log(@volatile var dir: File,
    *
    * Return the minimum snapshots offset that was retained.
    */
-  def deleteSnapshotsAfterRecoveryPointCheckpoint(): Long = {
+  private[log] def deleteSnapshotsAfterRecoveryPointCheckpoint(): Long = {
     val minOffsetToRetain = minSnapshotsOffsetToRetain
     producerStateManager.deleteSnapshotsBefore(minOffsetToRetain)
     minOffsetToRetain
@@ -1779,18 +1778,18 @@ class Log(@volatile var dir: File,
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment = segments.lastEntry.getValue
+  private[log] def activeSegment = segments.lastEntry.getValue
 
   /**
    * All the log segments in this log ordered from oldest to newest
    */
-  def logSegments: Iterable[LogSegment] = segments.values.asScala
+  private[log] def logSegments: Iterable[LogSegment] = segments.values.asScala
 
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset)
    */
-  def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
+  private[log] def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     lock synchronized {
       val view = Option(segments.floorKey(from)).map { floor =>
         segments.subMap(floor, to)
@@ -1800,6 +1799,8 @@ class Log(@volatile var dir: File,
   }
 
   override def toString = "Log(" + dir + ")"
+
+  def physicalLogStartOffset: Long = logSegments.head.baseOffset
 
   /**
    * This method performs an asynchronous log segment delete by doing the following:
@@ -1920,7 +1921,7 @@ class Log(@volatile var dir: File,
    * @param segment The segment to add
    */
   @threadsafe
-  def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
+  private[log] def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {

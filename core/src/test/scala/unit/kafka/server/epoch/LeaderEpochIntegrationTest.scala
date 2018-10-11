@@ -238,22 +238,17 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     }, "Epoch didn't change")
   }
 
-  private  def messagesHaveLeaderEpoch(broker: KafkaServer, expectedLeaderEpoch: Int, minOffset: Int): Boolean = {
+  private def messagesHaveLeaderEpoch(broker: KafkaServer, expectedLeaderEpoch: Int, minOffset: Int): Boolean = {
     var result = true
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)
       val leo = broker.getLogManager().getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
-          if (segment.read(minOffset, None, Integer.MAX_VALUE) == null) {
-            false
-          } else {
-            segment.read(minOffset, None, Integer.MAX_VALUE)
-              .records.batches().iterator().asScala.forall(
-              expectedLeaderEpoch == _.partitionLeaderEpoch()
-            )
-          }
-        }
+        val records = broker.getLogManager().getLog(tp).get.read(minOffset, Int.MaxValue, None, true, false).records
+        if (records.sizeInBytes() > 0)
+          records.batches.iterator.asScala.forall(expectedLeaderEpoch == _.partitionLeaderEpoch())
+        else
+          false
       }
     }
     result

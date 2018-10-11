@@ -497,7 +497,7 @@ private[log] object LogCleanerManager extends Logging {
 
     // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
     // reset to the log starting offset and log the error
-    val logStartOffset = log.logSegments.head.baseOffset
+    val logStartOffset = log.physicalLogStartOffset
     val firstDirtyOffset = {
       val offset = lastCleanOffset.getOrElse(logStartOffset)
       if (offset < logStartOffset) {

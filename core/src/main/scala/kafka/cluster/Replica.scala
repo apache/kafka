@@ -176,7 +176,7 @@ class Replica(val brokerId: Int,
     if (isLocal) {
       highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset).getOrElse {
         log.get.convertToOffsetMetadata(logStartOffset).getOrElse {
-          val firstSegmentOffset = log.get.logSegments.head.baseOffset
+          val firstSegmentOffset = log.get.physicalLogStartOffset
           new LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
         }
       }
