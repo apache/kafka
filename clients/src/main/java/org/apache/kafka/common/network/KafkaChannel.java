@@ -134,7 +134,8 @@ public class KafkaChannel {
         } catch (AuthenticationException e) {
             // Clients are notified of authentication exceptions to enable operations to be terminated
             // without retries. Other errors are handled as network exceptions in Selector.
-            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e, remoteAddress.toString());
+            String remoteDesc = remoteAddress != null ? remoteAddress.toString() : null;
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e, remoteDesc);
             if (authenticating) {
                 delayCloseOnAuthenticationFailure();
                 throw new DelayedResponseAuthenticationException(e);
@@ -149,7 +150,7 @@ public class KafkaChannel {
         disconnected = true;
         if (state == ChannelState.NOT_CONNECTED && remoteAddress != null) {
             //if we captured the remote address we can provide more information
-            state = new ChannelState(ChannelState.State.NOT_CONNECTED, null, remoteAddress.toString());
+            state = new ChannelState(ChannelState.State.NOT_CONNECTED, remoteAddress.toString());
         }
         transportLayer.disconnect();
     }
@@ -173,8 +174,10 @@ public class KafkaChannel {
         if (connected) {
             if (ready()) {
                 state = ChannelState.READY;
+            } else if (remoteAddress != null) {
+                state = new ChannelState(ChannelState.State.AUTHENTICATE, remoteAddress.toString());
             } else {
-                state = new ChannelState(ChannelState.State.AUTHENTICATE, null, remoteAddress.toString());
+                state = ChannelState.AUTHENTICATE;
             }
         }
         return connected;
