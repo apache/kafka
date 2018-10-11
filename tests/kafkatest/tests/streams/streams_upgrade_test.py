@@ -562,8 +562,8 @@ class StreamsUpgradeTest(Test):
 
     def extract_generation_from_logs(self, processor):
         return list(processor.node.account.ssh_capture("""grep "Successfully joined group with generation" %s
-         ... | awk '{for(i=1;i<=NF;i++) {if ($i == "generation") beginning=i+1; if($i== "(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)") ending=i }; 
-         ... for (j=beginning;j<ending;j++) printf $j; printf "\n"}'""" % processor.LOG_FILE, allow_fail=True))
+          | awk '{for(i=1;i<=NF;i++) {if ($i == "generation") beginning=i+1; if($i== "(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)") ending=i }; 
+          for (j=beginning;j<ending;j++) printf $j; printf "\n"}'""" % processor.LOG_FILE, allow_fail=True))
 
     def extract_highest_generation(self, found_generations):
         return int(found_generations[-1])
