@@ -404,7 +404,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Verify that the new config is actually used for new segments of existing logs
     TestUtils.waitUntilTrue(() => {
-      val numLogSegments = log.numLogSegments
+      val numLogSegments = log.numberOfSegments
       log.logEndOffset > 0 && log.size / numLogSegments > 3000
     }, "Log segment size increase not applied")
 

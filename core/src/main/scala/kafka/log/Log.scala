@@ -695,7 +695,7 @@ class Log(@volatile var dir: File,
    * The number of segments in the log.
    * Take care! this is an O(n) operation.
    */
-  private[log] def numberOfSegments: Int = segments.size
+  def numberOfSegments: Int = segments.size
 
   /**
    * Close this log.
@@ -1812,8 +1812,6 @@ class Log(@volatile var dir: File,
    * Log#logStartOffset and is the view exposed to consumers.
    */
   private[log] def physicalLogStartOffset: Long = logSegments.head.baseOffset
-
-  def numLogSegments: Int = logSegments.size
 
   /**
    * This method performs an asynchronous log segment delete by doing the following:
