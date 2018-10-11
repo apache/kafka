@@ -36,6 +36,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -1547,7 +1548,7 @@ public class FetcherTest {
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                1000, 1000, 64 * 1024, 64 * 1024, 1000,
+                1000, 1000, 64 * 1024, 64 * 1024, 1000,  ClientDnsLookup.DEFAULT,
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
         short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
