@@ -387,10 +387,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def printSegments(): Unit = {
-//    info("Broker0:")
-//    DumpLogSegments.main(Seq("--files", getLogFile(brokers(0), 0).getCanonicalPath).toArray)
-//    info("Broker1:")
-//    DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
+    info("Broker0:")
+    DumpLogSegments.main(Seq("--files", getLogFile(brokers(0), 0).getCanonicalPath).toArray)
+    info("Broker1:")
+    DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
   }
 
   private def startConsumer(): KafkaConsumer[Array[Byte], Array[Byte]] = {
@@ -440,13 +440,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     getLog(broker, 0).leaderEpochCache.asInstanceOf[LeaderEpochFileCache]
   }
 
-  private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
-    val fetchOffset =
-      if (offset == -1)
-        getLog(leader, partition).fetchOffsetsByTimestamp(offset).get.offset
-      else
-        offset
-    getLog(leader, partition).read(fetchOffset, Integer.MAX_VALUE, None, true, false)
+  private def latestRecord(leader: KafkaServer, partition: Int = 0): RecordBatch = {
+    getLog(leader, partition).read(0, Integer.MAX_VALUE, None, true, false)
       .records.batches().asScala.toSeq.last
   }
 
