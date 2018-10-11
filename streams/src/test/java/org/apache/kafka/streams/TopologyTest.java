@@ -861,7 +861,6 @@ public class TopologyTest {
             .count();
         final TopologyDescription describe = builder.build().describe();
 
-        System.out.println(describe);
         assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
