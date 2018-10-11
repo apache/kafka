@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.server.{ConfigEntityName, KafkaConfig}
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
@@ -30,7 +30,7 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer

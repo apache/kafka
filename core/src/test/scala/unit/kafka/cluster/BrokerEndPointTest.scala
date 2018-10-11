@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 
 import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
 import org.junit.Test
@@ -180,37 +180,37 @@ class BrokerEndPointTest {
   @Test
   def testEndpointFromUri(): Unit = {
     var connectionString = "PLAINTEXT://localhost:9092"
-    var endpoint = EndPoint.createEndPoint(connectionString, None)
+    var endpoint = EndPoint.parse(connectionString)
     assertEquals("localhost", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals("PLAINTEXT://localhost:9092", endpoint.connectionString)
     // KAFKA-3719
     connectionString = "PLAINTEXT://local_host:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
+    endpoint = EndPoint.parse(connectionString)
     assertEquals("local_host", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals("PLAINTEXT://local_host:9092", endpoint.connectionString)
     // also test for default bind
     connectionString = "PLAINTEXT://:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertNull(endpoint.host)
+    endpoint = EndPoint.parse(connectionString)
+    assertEquals("", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals( "PLAINTEXT://:9092", endpoint.connectionString)
     // also test for ipv6
     connectionString = "PLAINTEXT://[::1]:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
+    endpoint = EndPoint.parse(connectionString)
     assertEquals("::1", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals("PLAINTEXT://[::1]:9092", endpoint.connectionString)
     // test for ipv6 with % character
     connectionString = "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
+    endpoint = EndPoint.parse(connectionString)
     assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092", endpoint.connectionString)
     // test hostname
     connectionString = "PLAINTEXT://MyHostname:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
+    endpoint = EndPoint.parse(connectionString)
     assertEquals("MyHostname", endpoint.host)
     assertEquals(9092, endpoint.port)
     assertEquals("PLAINTEXT://MyHostname:9092", endpoint.connectionString)

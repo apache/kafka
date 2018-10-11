@@ -19,7 +19,7 @@ package kafka.cluster
 
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 /**
@@ -40,7 +40,7 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
     s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull}"
 
   def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
-    this(id, Seq(EndPoint(host, port, listenerName, protocol)), None)
+    this(id, Seq(new EndPoint(host, port, listenerName, protocol)), None)
   }
 
   def this(bep: BrokerEndPoint, listenerName: ListenerName, protocol: SecurityProtocol) = {

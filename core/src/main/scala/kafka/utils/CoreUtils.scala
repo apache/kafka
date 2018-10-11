@@ -27,9 +27,9 @@ import java.util.{Base64, Properties, UUID}
 import javax.management._
 
 import scala.collection._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import kafka.cluster.EndPoint
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, Utils}
 import org.slf4j.event.Level
@@ -306,7 +306,7 @@ object CoreUtils extends Logging {
 
     val endPoints = try {
       val listenerList = parseCsvList(listeners)
-      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+      listenerList.map(EndPoint.parse(_, securityProtocolMap.asJava))
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

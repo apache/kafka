@@ -21,13 +21,13 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.security.auth._
 import kafka.server.ConfigType
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}

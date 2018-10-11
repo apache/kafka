@@ -22,7 +22,7 @@ import java.util.Properties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.Resource.Separator
@@ -32,7 +32,7 @@ import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
@@ -220,7 +220,10 @@ object BrokerIdZNode {
                 new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
               })
             val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
-            listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
+            securityProtocolMap match {
+              case None  => listeners.map(EndPoint.parse(_))
+              case Some(m) => listeners.map(EndPoint.parse(_, m.asJava))
+            }
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])

@@ -22,14 +22,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.api._
 import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
@@ -235,7 +235,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         val nodes = new java.util.HashMap[ListenerName, Node]
         val endPoints = new mutable.ArrayBuffer[EndPoint]
         broker.endPoints.asScala.foreach { ep =>
-          endPoints += EndPoint(ep.host, ep.port, ep.listenerName, ep.securityProtocol)
+          endPoints += new EndPoint(ep.host, ep.port, ep.listenerName, ep.securityProtocol)
           nodes.put(ep.listenerName, new Node(broker.id, ep.host, ep.port))
         }
         aliveBrokers(broker.id) = Broker(broker.id, endPoints, Option(broker.rack))

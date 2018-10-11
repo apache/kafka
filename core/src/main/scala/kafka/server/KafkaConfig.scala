@@ -21,7 +21,6 @@ import java.util
 import java.util.{Collections, Properties}
 
 import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1}
-import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{EndPoint, ListenerName}
 import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
@@ -66,9 +65,10 @@ object Defaults {
   val Port = 9092
   val HostName: String = new String("")
 
-  val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
-    s"${listenerName.value}:${securityProtocol.name}"
-  }.mkString(",")
+  val ListenerSecurityProtocolMap: String = EndPoint.DEFAULT_SECURITY_PROTOCOL_MAP.
+    asScala.map { case (listenerName, securityProtocol) =>
+      s"${listenerName.value}:${securityProtocol.name}"
+    }.mkString(",")
 
   val SocketSendBufferBytes: Int = 100 * 1024
   val SocketReceiveBufferBytes: Int = 100 * 1024

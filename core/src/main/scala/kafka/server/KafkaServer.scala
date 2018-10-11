@@ -385,19 +385,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
-    val listeners = config.advertisedListeners.map { endpoint =>
-      if (endpoint.port == 0)
-        endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
-      else
-        endpoint
+    val updatedEndpoints = config.advertisedListeners.map { endpoint =>
+      val port = if (endpoint.port == 0) {
+        socketServer.boundPort(endpoint.listenerName)
+      } else {
+        endpoint.port
+      }
+      val host = if (endpoint.host.trim.isEmpty) {
+        InetAddress.getLocalHost.getCanonicalHostName
+      } else {
+        endpoint.host
+      }
+      new EndPoint(host, port, endpoint.listenerName, endpoint.securityProtocol)
     }
-
-    val updatedEndpoints = listeners.map(endpoint =>
-      if (endpoint.host == null || endpoint.host.trim.isEmpty)
-        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-      else
-        endpoint
-    )
 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
     BrokerInfo(Broker(config.brokerId, updatedEndpoints, config.rack), config.interBrokerProtocolVersion, jmxPort)
