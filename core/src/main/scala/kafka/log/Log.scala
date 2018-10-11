@@ -1299,7 +1299,7 @@ class Log(@volatile var dir: File,
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segments = logSegments(logStartOffset, logEndOffset).toBuffer
+    val segments = logSegments(logStartOffset, logEndOffset + 1).toBuffer
     val lastSegmentHasSize = segments.last.size > 0
 
     val offsetTimeArray =
