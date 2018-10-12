@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Serialized => SerializedJ}
-
+@deprecated
 object Serialized {
 
   /**

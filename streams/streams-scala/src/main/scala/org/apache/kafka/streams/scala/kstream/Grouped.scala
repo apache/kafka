@@ -39,9 +39,9 @@ object Grouped {
    * Construct a `Grouped` instance with the provided key and value [[Serde]]s.
    * If the [[Serde]] params are `null` the default serdes defined in the configs will be used.
    *
-   * @param name the name used as part of a potential repartition topic
    * @tparam K the key type
    * @tparam V the value type
+   * @param name the name used as part of a potential repartition topic
    * @param keySerde   keySerde that will be used to materialize a stream
    * @param valueSerde valueSerde that will be used to materialize a stream
    * @return a new instance of [[Grouped]] configured with the provided serdes
