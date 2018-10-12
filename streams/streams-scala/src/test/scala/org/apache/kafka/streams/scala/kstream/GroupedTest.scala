@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.scala.kstream
 
+import org.apache.kafka.streams.kstream.internals.GroupedInternal
 import org.apache.kafka.streams.scala.Serdes
 import org.apache.kafka.streams.scala.Serdes._
 import org.junit.runner.RunWith
@@ -25,23 +25,24 @@ import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
 
 @RunWith(classOf[JUnitRunner])
-class JoinedTest extends FlatSpec with Matchers {
+class GroupedTest extends FlatSpec with Matchers {
 
-  "Create a Joined" should "create a Joined with Serdes" in {
-    val joined: Joined[String, Long, Int] = Joined.`with`[String, Long, Int]
+  "Create a Grouped" should "create a Grouped with Serdes" in {
+    val grouped: Grouped[String, Long] = Grouped.`with`[String, Long]
 
-    joined.keySerde.getClass shouldBe Serdes.String.getClass
-    joined.valueSerde.getClass shouldBe Serdes.Long.getClass
-    joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
+    val internalGrouped = new GroupedInternal[String, Long](grouped)
+    internalGrouped.keySerde.getClass shouldBe Serdes.String.getClass
+    internalGrouped.valueSerde.getClass shouldBe Serdes.Long.getClass
   }
 
-  "Create a Joined" should "create a Joined with Serdes and repartition topic name" in {
+  "Create a Grouped with repartition topic name" should "create a Grouped with Serdes, and repartition topic name" in {
     val repartitionTopicName = "repartition-topic"
-    val joined: Joined[String, Long, Int] = Joined.`with`(repartitionTopicName)
+    val grouped: Grouped[String, Long] = Grouped.`with`(repartitionTopicName)
 
-    joined.keySerde.getClass shouldBe Serdes.String.getClass
-    joined.valueSerde.getClass shouldBe Serdes.Long.getClass
-    joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
-    joined.name() shouldBe repartitionTopicName
+    val internalGrouped = new GroupedInternal[String, Long](grouped)
+    internalGrouped.keySerde.getClass shouldBe Serdes.String.getClass
+    internalGrouped.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalGrouped.name() shouldBe repartitionTopicName
   }
+
 }

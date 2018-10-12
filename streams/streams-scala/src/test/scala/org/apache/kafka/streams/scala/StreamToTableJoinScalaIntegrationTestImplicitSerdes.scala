@@ -40,8 +40,8 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
   @Test def testShouldCountClicksPerRegion(): Unit = {
 
-    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced,
-    // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
+    // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Grouped, Produced,
+    // Consumed and Joined instances. So all APIs below that accept Grouped, Produced, Consumed or Joined will
     // get these instances automatically
     import Serdes._
 
@@ -85,8 +85,6 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     import org.apache.kafka.streams.kstream.{KStream => KStreamJ, KTable => KTableJ, _}
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
 
-    import collection.JavaConverters._
-
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
     streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
@@ -122,7 +120,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-      .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
+      .groupByKey(Grouped.`with`(Serdes.String, Serdes.JavaLong))
       .reduce {
         new Reducer[JLong] {
           def apply(v1: JLong, v2: JLong) = v1 + v2

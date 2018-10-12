@@ -21,17 +21,7 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.streams.kstream.{
-  KeyValueMapper,
-  Reducer,
-  Transformer,
-  TransformerSupplier,
-  ValueJoiner,
-  ValueMapper,
-  KGroupedStream => KGroupedStreamJ,
-  KStream => KStreamJ,
-  KTable => KTableJ
-}
+import org.apache.kafka.streams.kstream.{KeyValueMapper, Reducer, Transformer, TransformerSupplier, ValueJoiner, ValueMapper, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ}
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
@@ -191,7 +181,7 @@ class TopologyTest extends JUnitSuite {
 
       // Compute the total per region by summing the individual click counts per region.
       val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-        .groupByKey(Serialized.`with`[String, JLong])
+        .groupByKey(Grouped.`with`[String, JLong])
         .reduce {
           new Reducer[JLong] {
             def apply(v1: JLong, v2: JLong) = v1 + v2
