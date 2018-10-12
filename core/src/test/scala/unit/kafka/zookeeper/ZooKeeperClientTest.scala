@@ -23,6 +23,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDow
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -43,7 +44,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
-    cleanMetricsRegistry()
+    TestUtils.cleanMetricsRegistry()
     super.setUp()
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
       Time.SYSTEM, "testMetricGroup", "testMetricType")
@@ -635,11 +636,6 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
     assertEquals(None, gaugeValue("SessionState"))
     assertEquals(States.CLOSED, zooKeeperClient.connectionState)
-  }
-
-  private def cleanMetricsRegistry() {
-    val metrics = Metrics.defaultRegistry
-    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)

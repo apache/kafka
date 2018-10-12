@@ -35,7 +35,7 @@ import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
-import com.yammer.metrics.core.{Metric, MetricName}
+import com.yammer.metrics.Metrics
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1413,8 +1413,9 @@ object TestUtils extends Logging {
     total.toLong
   }
 
-  def verifyMetricExistence(metricName: String, allMetrics: mutable.Map[MetricName, Metric], shouldExist: Boolean): Unit = {
-    val foundMetrics = allMetrics.filter {
+  def verifyMetricExistence(metricName: String, shouldExist: Boolean): Unit = {
+    val metrics = Metrics.defaultRegistry
+    val foundMetrics = metrics.allMetrics.asScala.filter {
       k => k._1.getName.equals(metricName)
     }
 
@@ -1422,5 +1423,10 @@ object TestUtils extends Logging {
 
     assertTrue(s"The $metricName metric should " + (if (!shouldExist) "not " else "") + "exist.",
       if (shouldExist) metricExists else !metricExists )
+  }
+
+  def cleanMetricsRegistry() {
+    val metrics = Metrics.defaultRegistry
+    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
   }
 }

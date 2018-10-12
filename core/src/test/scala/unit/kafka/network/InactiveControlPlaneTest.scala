@@ -1,13 +1,11 @@
 package kafka.network
 
-import java.util.Properties
-
 import com.yammer.metrics.{Metrics => YammerMetrics}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 
@@ -21,6 +19,12 @@ class InactiveControlPlaneTest extends KafkaServerTestHarness {
     */
   override def generateConfigs: Seq[KafkaConfig] =
     TestUtils.createBrokerConfigs(numNodes, zkConnect, enableDeleteTopic=true).map(KafkaConfig.fromProps(_))
+
+  @Before
+  override def setUp(): Unit = {
+    TestUtils.cleanMetricsRegistry()
+    super.setUp()
+  }
 
   /**
     * the control plane metrics should not exist when the control.plane.listener.name is not set
@@ -36,8 +40,7 @@ class InactiveControlPlaneTest extends KafkaServerTestHarness {
         s.controlPlaneRequestHandlerPool == null)
     }
 
-    val allMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-    testedMetrics.foreach { metric => TestUtils.verifyMetricExistence(metric, allMetrics, false)}
+    testedMetrics.foreach { metric => TestUtils.verifyMetricExistence(metric, false)}
   }
 
 }

@@ -273,13 +273,13 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int, val queueSizeMetric: String) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int, val requestQueueSizeMetric: String) extends KafkaMetricsGroup {
   import RequestChannel._
   val metrics = new RequestChannel.Metrics
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
 
-  newGauge(queueSizeMetric, new Gauge[Int] {
+  newGauge(requestQueueSizeMetric, new Gauge[Int] {
       def value = requestQueue.size
   })
 

@@ -2,7 +2,6 @@ package kafka.network
 
 import java.util.Properties
 
-import com.yammer.metrics.{Metrics => YammerMetrics}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -48,7 +47,6 @@ class ControlPlaneTest extends KafkaServerTestHarness {
       }
     }
 
-    val allMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-    testedMetrics.foreach { metric => TestUtils.verifyMetricExistence(metric, allMetrics, true)}
+    testedMetrics.foreach { metric => TestUtils.verifyMetricExistence(metric, true)}
   }
 }
