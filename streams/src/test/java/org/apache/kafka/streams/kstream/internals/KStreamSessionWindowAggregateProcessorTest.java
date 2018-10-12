@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -55,7 +54,9 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -110,7 +111,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
                                                                                                  Serdes.String(),
                                                                                                  Serdes.Long())
-            .withLoggingDisabled();
+                                                                            .withLoggingDisabled();
 
         if (enableCaching) {
             storeBuilder.withCachingEnabled();
@@ -335,9 +336,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setStreamTime(20);
         context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
         processor.process("A", "1");
+        context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
+        processor.process("A", "1");
         LogCaptureAppender.unregister(appender);
 
-        final Metric dropMetric = metrics.metrics().get(new MetricName(
+        final MetricName dropMetric = new MetricName(
             "late-record-drop-total",
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
@@ -346,8 +349,24 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
-        ));
-        assertEquals(1.0, dropMetric.metricValue());
+        );
+
+        assertThat(metrics.metrics().get(dropMetric).metricValue(), is(2.0));
+
+        final MetricName dropRate = new MetricName(
+            "late-record-drop-rate",
+            "stream-processor-node-metrics",
+            "The average number of occurrence of late-record-drop operations.",
+            mkMap(
+                mkEntry("client-id", "test"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("processor-node-id", "TESTING_NODE")
+            )
+        );
+
+        assertThat((Double) metrics.metrics().get(dropRate).metricValue(), greaterThan(0.0));
+
         assertThat(appender.getMessages(), hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0) expiration=[10]"));
+        assertThat(appender.getMessages(), hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[1] window=[1,1) expiration=[10]"));
     }
 }

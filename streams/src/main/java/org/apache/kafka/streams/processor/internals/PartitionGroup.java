@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -38,6 +39,7 @@ import java.util.Set;
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
+    private final Sensor recordLatenessSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
@@ -61,9 +63,10 @@ public class PartitionGroup {
         }
     }
 
-    PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues) {
+    PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues, final Sensor recordLatenessSensor) {
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
         this.partitionQueues = partitionQueues;
+        this.recordLatenessSensor = recordLatenessSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
@@ -95,7 +98,12 @@ public class PartitionGroup {
                 }
 
                 // always update the stream time to the record's timestamp yet to be processed if it is larger
-                streamTime = Math.max(streamTime, record.timestamp);
+                if (record.timestamp > streamTime) {
+                    streamTime = record.timestamp;
+                    recordLatenessSensor.record(0);
+                } else {
+                    recordLatenessSensor.record(streamTime - record.timestamp);
+                }
             }
         }
 
