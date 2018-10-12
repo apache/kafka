@@ -148,11 +148,11 @@
 
     <p>
         We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
-        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Prior to 2.1 The status quo now for building a Kafka Steams topology with
-        the DSL is Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by passing in the <code>java.util.Properties</code> instance with a
+        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
+        the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by passing in the <code>java.util.Properties</code> instance with a
         <code>StreamsBuilder#build</code> call Kafka Streams can now optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
         config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
-        reusing the source topic as the changelog topic introduced in Kafka Streams 2.0, the topology may be optimized to merge redundant repartition topics into one
+        reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
         repartition topic, when the repartition topics are the result of a key-changing operation (i.e <code>KStream#selectKey</code>, <code>KStream#map</code>,
         <code>KStream#transform</code> etc.).  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not attempt
         to optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
