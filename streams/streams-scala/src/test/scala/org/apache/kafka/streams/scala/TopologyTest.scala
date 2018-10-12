@@ -21,7 +21,17 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.streams.kstream.{KeyValueMapper, Reducer, Transformer, TransformerSupplier, ValueJoiner, ValueMapper, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ}
+import org.apache.kafka.streams.kstream.{
+  KeyValueMapper,
+  Reducer,
+  Transformer,
+  TransformerSupplier,
+  ValueJoiner,
+  ValueMapper,
+  KGroupedStream => KGroupedStreamJ,
+  KStream => KStreamJ,
+  KTable => KTableJ
+}
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
