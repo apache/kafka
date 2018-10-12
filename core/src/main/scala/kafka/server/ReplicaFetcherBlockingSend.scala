@@ -30,7 +30,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
 import scala.collection.JavaConverters._
-import ClientDnsLookup
+import org.apache.kafka.clients.ClientDnsLookup
 
 trait BlockingSend {
 

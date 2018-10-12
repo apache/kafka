@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
-import ClientDnsLookup
+import org.apache.kafka.clients.ClientDnsLookup
 
 /**
  * For verifying the consistency among replicas.
