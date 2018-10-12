@@ -34,16 +34,15 @@
     </div>
 
     <p>
-        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code and config accordingly, because there are some minor non-compatible API changes since older
-        releases (the code changes are expected to be minimal, please see below for the details),
-        (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
-        For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
+        Upgrading from any older version to 2.1.0 is possible: (1) if you are upgrading from 2.0.x to 2.1.0 then a single rolling bounce is needed to swap in the new jar,
+        (2) if you are upgrading from older versions than 2.0.x in the online mode, you would need two rolling bounces where
+        the first rolling bounce phase you need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade to new version 2.0.0</li>
         <li> bounce each instance of your application once </li>
-        <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+        <li> prepare your newly deployed 2.1.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
     <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to 2.0.0 in offline mode require the following steps: </p>
