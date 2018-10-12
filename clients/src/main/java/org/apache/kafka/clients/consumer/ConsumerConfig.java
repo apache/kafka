@@ -269,7 +269,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
+                                .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.DEFAULT.toString(),
                                         in(ClientDnsLookup.DEFAULT.toString(),

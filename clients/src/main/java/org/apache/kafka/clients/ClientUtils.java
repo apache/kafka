@@ -61,7 +61,7 @@ public final class ClientUtils {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
                             InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
                             if (address.isUnresolved()) {
-                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname [} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
                             } else {
                                 addresses.add(address);
                             }
