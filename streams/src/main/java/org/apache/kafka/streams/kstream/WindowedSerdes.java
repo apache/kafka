@@ -24,30 +24,23 @@ public class WindowedSerdes {
     static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
-            super(new TimeWindowedSerializer<T>(), new TimeWindowedDeserializer<T>());
+            super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
         }
 
         public TimeWindowedSerde(final Serde<T> inner) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
         }
-    }
 
-
-    static public class TimeWindowedChangelogSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
-        // Default constructor needed for reflection object creation
-        public TimeWindowedChangelogSerde() {
-            super(new TimeWindowedChangelogSerializer<T>(), new TimeWindowedChangelogDeserializer<T>());
-        }
-
-        public TimeWindowedChangelogSerde(final Serde<T> inner, final long windowSize) {
-            super(new TimeWindowedChangelogSerializer<>(inner.serializer()), new TimeWindowedChangelogDeserializer<>(inner.deserializer(), windowSize));
+        // This constructor is used for deserializing windowed changelog input topic.
+        public TimeWindowedSerde(final Serde<T> inner, final long windowSize, final boolean isChangelogTopic) {
+            super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer(), windowSize, isChangelogTopic));
         }
     }
 
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
-            super(new SessionWindowedSerializer<T>(), new SessionWindowedDeserializer<T>());
+            super(new SessionWindowedSerializer<>(), new SessionWindowedDeserializer<>());
         }
 
         public SessionWindowedSerde(final Serde<T> inner) {
@@ -63,10 +56,11 @@ public class WindowedSerdes {
     }
 
     /**
-     * Construct a {@code TimeWindowedChangelogSerde} object for the specified inner class type and window size.
+     * Construct a {@code TimeWindowedSerde} object to deserialize changelog topic
+     * for the specified inner class type and window size.
      */
-    static public <T> Serde<Windowed<T>> timeWindowedChangelogSerdeFrom(final Class<T> type, long windowSize) {
-        return new TimeWindowedChangelogSerde<>(Serdes.serdeFrom(type), windowSize);
+    static public <T> Serde<Windowed<T>> timeWindowedChangelogSerdeFrom(final Class<T> type, final long windowSize) {
+        return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize, true);
     }
 
     /**
