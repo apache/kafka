@@ -39,7 +39,7 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.{Set, mutable}
-import org.apache.kafka.common.config.ClientDnsLookup
+import ClientDnsLookup
 
 
 object ControllerChannelManager {
