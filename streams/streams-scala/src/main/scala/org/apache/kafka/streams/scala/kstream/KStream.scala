@@ -374,12 +374,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * // to the groupByKey call
    * }}}
    *
-   * @param serialized the instance of Grouped that gives the serdes
+   * @param grouped the instance of Grouped that gives the serdes
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`
    */
-  def groupByKey(implicit serialized: Grouped[K, V]): KGroupedStream[K, V] =
-    inner.groupByKey(serialized)
+  def groupByKey(implicit grouped: Grouped[K, V]): KGroupedStream[K, V] =
+    inner.groupByKey(grouped)
 
   /**
    * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
@@ -412,8 +412,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupBy`
    */
-  def groupBy[KR](selector: (K, V) => KR)(implicit serialized: Grouped[KR, V]): KGroupedStream[KR, V] =
-    inner.groupBy(selector.asKeyValueMapper, serialized)
+  def groupBy[KR](selector: (K, V) => KR)(implicit grouped: Grouped[KR, V]): KGroupedStream[KR, V] =
+    inner.groupBy(selector.asKeyValueMapper, grouped)
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with
