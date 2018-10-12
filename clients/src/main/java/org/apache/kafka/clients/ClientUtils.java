@@ -47,7 +47,7 @@ public final class ClientUtils {
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
-        ClientDnsLookup clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
+        ClientDnsLookup clientDnsLookupBehaviour = ClientDnsLookup.forConfig(clientDnsLookup);
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {

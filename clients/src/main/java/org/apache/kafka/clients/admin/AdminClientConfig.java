@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ClientDnsLookup;
@@ -113,12 +112,6 @@ public class AdminClientConfig extends AbstractConfig {
                                         Type.LIST,
                                         Importance.HIGH,
                                         BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_DNS_LOOKUP_CONFIG,
-                                        Type.STRING,
-                                        ClientDnsLookup.DEFAULT.toString(),
-                                        in(ClientDnsLookup.DEFAULT.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
-                                        Importance.MEDIUM,
-                                        CLIENT_DNS_LOOKUP_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(-1), Importance.MEDIUM, SEND_BUFFER_DOC)
@@ -175,7 +168,9 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.DEFAULT.toString(),
-                                        in(ClientDnsLookup.DEFAULT.toString(), ClientDnsLookup.USE_ALL_DNS_IPS.toString()),
+                                        in(ClientDnsLookup.DEFAULT.toString(),
+                                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 // security support

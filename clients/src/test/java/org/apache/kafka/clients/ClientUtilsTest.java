@@ -109,10 +109,6 @@ public class ClientUtilsTest {
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
         return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.DEFAULT.toString());
     }
-  
-    private List<InetSocketAddress> check(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
-    }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
         return ClientUtils.parseAndValidateAddresses(url, ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString());
