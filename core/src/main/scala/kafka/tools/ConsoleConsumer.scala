@@ -66,9 +66,8 @@ object ConsoleConsumer extends Logging {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
-    // partition & offset is honoured only when group-id not passed.
     val consumerWrapper =
-      if (!conf.groupIdPassed && conf.partitionArg.isDefined)
+      if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
       else
         new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
